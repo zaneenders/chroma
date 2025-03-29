@@ -83,7 +83,7 @@ struct Entry: Block {
         self.longRunningTask()
       }
     }
-    Nested(text: $message)
+    Nested(text: $message, count: $count)
   }
 
   // This is an example of a basic async task and update to the UI to display
@@ -104,8 +104,12 @@ struct Entry: Block {
 /// or update based on another value.
 struct Nested: Block {
   @Binding var text: String
+  @Binding var count: Int
   var layer: some Block {
     "Nested[text: \(text)]"
+    for i in 0..<count {
+      "\(i)"
+    }
   }
 }
 
