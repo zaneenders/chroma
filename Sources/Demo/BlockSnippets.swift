@@ -71,6 +71,13 @@ struct SelectionBlock: Block {
   }
 }
 
+// Nested Update Block has a bug.
+struct NestedAsyncUpdate: Block {
+  var layer: some Block {
+    AsyncUpdateStateUpdate()
+  }
+}
+
 // Simple example of asynchronously updating the state from a
 struct AsyncUpdateStateUpdate: Block {
   static let delay = 100
