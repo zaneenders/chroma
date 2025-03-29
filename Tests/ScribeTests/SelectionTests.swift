@@ -47,38 +47,42 @@ struct SelectionTests {
       &renderer,
       expected: [
         "Job running: ready", "[Zane was here :1]", "Nested[text: Hello#]", "Hello, I am Scribe.!",
+        "0",
       ])
     container.moveDown()
     container.expectState(
       &renderer,
       expected: [
         "Zane was here :1", "[Job running: ready]", "Nested[text: Hello#]", "Hello, I am Scribe.!",
+        "0",
       ])
     container.action(.lowercaseI)
     container.expectState(
       &renderer,
       expected: [
         "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-        "Hello, I am Scribe.!",
+        "Hello, I am Scribe.!", "0",
       ])
     try await Task.sleep(for: .seconds(0.5))
     container.expectState(
       &renderer,
       expected: [
         "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-        "Hello, I am Scribe.!",
+        "Hello, I am Scribe.!", "0",
       ])
     try await Task.sleep(for: .seconds(1))
     container.expectState(
       &renderer,
       expected: [
         "Zane was here :1", "[Job running: ready]", "Nested[text: ready]", "Hello, I am Scribe.!",
+        "0",
       ])
     container.moveUp()
     container.expectState(
       &renderer,
       expected: [
         "[Zane was here :1]", "Job running: ready", "Nested[text: ready]", "Hello, I am Scribe.!",
+        "0",
       ])
 
   }
