@@ -315,6 +315,30 @@ struct SelectionTests {
     try await Task.sleep(for: .milliseconds(secondPause))
     container.expectState(&renderer, expected: ["[ready]"])
   }
+
+  @Test func selectNestedAsyncUpdateStateUpdate() async throws {
+
+    let firstPause = AsyncUpdateStateUpdate.delay / 2
+    let secondPause = AsyncUpdateStateUpdate.delay
+
+    var container = ScribeController(NestedAsyncUpdate())
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["[ready]"])
+
+    // Move in
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[ready]"])
+
+    // Action
+    container.action(.lowercaseI)
+    container.expectState(&renderer, expected: ["[running]"])
+
+    try await Task.sleep(for: .milliseconds(firstPause))
+    container.expectState(&renderer, expected: ["[running]"])
+
+    try await Task.sleep(for: .milliseconds(secondPause))
+    container.expectState(&renderer, expected: ["[ready]"])
+  }
 }
 
 // Helper functions to make creating test easier.

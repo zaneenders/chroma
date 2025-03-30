@@ -15,7 +15,7 @@ struct Demo: Scribe {
   // Entry point of your AST
   var window: some Window {
     TerminalWindow {
-      Entry()
+      NestedAsyncUpdate()
     }
     // Adds Mode to @Environment to be accessed through out the Block layers.
     .environment(Mode())
@@ -116,6 +116,7 @@ struct Nested: Block {
 /// An example of a Heap allocated reference type object. If you are new to
 /// Swift you can have the mental model that class's are reference types
 /// located on the heap.
+@Tracking
 final class HeapObject {
   var message = "Hello, I am Scribe."
 }
