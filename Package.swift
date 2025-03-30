@@ -31,6 +31,10 @@ let package = Package(
     .package(
       url: "https://github.com/apple/swift-crypto.git",
       from: "3.12.2"),
+    // Marcos
+    .package(
+      url: "https://github.com/swiftlang/swift-syntax.git",
+      from: "600.0.1"),
   ],
   targets: [
     // MARK: Executable Targets
@@ -44,6 +48,7 @@ let package = Package(
     .target(
       name: "Scribe",
       dependencies: [
+        "TrackingMacros",
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "SystemPackage", package: "swift-system"),
         .product(name: "Logging", package: "swift-log"),
@@ -57,6 +62,15 @@ let package = Package(
         "Scribe",
       ],
       swiftSettings: swiftSettings),
+    // MARK: Macros
+    .macro(
+      name: "TrackingMacros",
+      dependencies: [
+        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+      ],
+      swiftSettings: swiftSettings
+    ),
   ]
 )
 

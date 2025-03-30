@@ -25,6 +25,7 @@ public struct ScribeController: ~Copyable {
     var action = ActionWalker(state: state, input: code)
     let l2Tree = block.optimizeTree()
     action.walk(l2Tree)
+    block.saveSave()
     self.state = action.state
   }
 }

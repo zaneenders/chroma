@@ -44,7 +44,10 @@ extension Block {
     } else if let tupleArray = self as? any TupleBlocks {
       return makeGroup(from: tupleArray._children)
     } else {
-      return .group([self.layer.toL1Element()])
+      self.updateTracker(Tracker.shared)
+      self.restoreState(nodeKey: "\(self)", Tracker.shared)  // BUG better node key
+      let r: L1Element = .group([self.layer.toL1Element()])
+      return r
     }
   }
 
@@ -54,5 +57,22 @@ extension Block {
       group.append(child.toL1Element())
     }
     return .group(group)
+  }
+
+  func saveSave() {
+    if self as? String != nil {
+      ()
+    } else if self as? Text != nil {
+      ()
+    } else if let inputBlock = self as? any InputBlock {
+      inputBlock.layer.saveSave()
+    } else if let arrayBlock = self as? any ArrayBlocks {
+      arrayBlock._children.forEach { $0.saveSave() }
+    } else if let tupleArray = self as? any TupleBlocks {
+      tupleArray._children.forEach { $0.saveSave() }
+    } else {
+      self.saveState(nodeKey: "\(self)", Tracker.shared)  // BUG better node key
+      self.layer.saveSave()
+    }
   }
 }
