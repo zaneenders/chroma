@@ -1,21 +1,16 @@
 /// The ``_ArrayBlock`` is the result of a `for <something> in <container>`.
-public struct _ArrayBlock<Element: Block>: Block, ArrayBlocks {
-  let children: [Element]
+public struct _ArrayBlock<Element: Block>: Block, BlockGroup  {
+  let _children: [Element]
 
   init(_ children: [Element]) {
-    self.children = children
+    self._children = children
   }
 }
 
-@MainActor
-protocol ArrayBlocks {
-  var _children: [any Block] { get }
-}
-
 extension _ArrayBlock {
-  var _children: [any Block] {
+  var children: [any Block] {
     var out: [any Block] = []
-    for child in children {
+    for child in _children {
       out.append(child)
     }
     return out

@@ -1,3 +1,15 @@
+@MainActor
+protocol StateProtocol {
+  var storage: any StorageProtocol { get }
+}
+
+@MainActor
+protocol StorageProtocol<Value> {
+  associatedtype Value = Any
+  var _stored: any Sendable { get nonmutating set }
+  var box: Box<Value> { get nonmutating set }
+}
+
 @propertyWrapper
 @MainActor
 public struct State<Value: Sendable>: StateProtocol {
@@ -60,26 +72,13 @@ extension State {
       }
     }
   }
-
-}
-
-@MainActor
-protocol StateProtocol {
-  var storage: any StorageProtocol { get }
-}
-
-@MainActor
-protocol StorageProtocol<Value> {
-  associatedtype Value = Any
-  var _stored: any Sendable { get nonmutating set }
-  var box: Box<Value> { get nonmutating set }
 }
 
 final class Box<Value> {
 
+  var value: Value
+
   init(_ value: Value) {
     self.value = value
   }
-
-  var value: Value
 }

@@ -1,22 +1,21 @@
 /// Composed of N many child ``Block``s.
-public struct _TupleBlock<each Component: Block>: Block, TupleBlocks {
-  let children: (repeat each Component)
+public struct _TupleBlock<each Component: Block>: Block, BlockGroup  {
+  let _children: (repeat each Component)
 
   init(_ child: repeat each Component) {
-    self.children = (repeat each child)
+    self._children = (repeat each child)
   }
 }
 
 @MainActor
-protocol TupleBlocks<Component> {
-  associatedtype Component
-  var _children: [any Block] { get }
+protocol BlockGroup {
+  var children: [any Block] { get }
 }
 
 extension _TupleBlock {
-  var _children: [any Block] {
+  var children: [any Block] {
     var out: [any Block] = []
-    for child in repeat (each children) {
+    for child in repeat (each _children) {
       out.append(child)
     }
     return out

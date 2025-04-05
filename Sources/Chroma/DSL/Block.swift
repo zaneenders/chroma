@@ -19,87 +19,41 @@ extension Never: Block {
 }
 
 extension Block {
-  @available(*, unavailable, message: "Moving towards parseTree")
-  func optimizeTree(action: Bool) -> L2Element {
-    self.toL1Element(action: action)
-      .toL2Element()
-      .flatten()
-  }
-}
-
-extension Block {
-  /// Convert a ``Block`` structure into an Element structure. This is to
-  /// simplify the tree structure in order to flatten the tree for more
-  /// ergonomic movements over the tree.
-  /// moves ArrayBlocks and TupleBlocks into the same group ``[Element]`` type.
-  /// - Returns: A reshaped ``Block`` tree in the form of an Element tree.
-  func toL1Element(action: Bool) -> L1Element {
-    if let str = self as? String {
-      return .text(str)
-    } else if let text = self as? Text {
-      return .text(text.text)
-    } else if let inputBlock = self as? any InputBlock {
-      return .input(inputBlock.layer.toL1Element(action: action), handler: inputBlock.handler)
-    } else if let arrayBlock = self as? any ArrayBlocks {
-      return makeGroup(from: arrayBlock._children, action: action)
-    } else if let tupleArray = self as? any TupleBlocks {
-      return makeGroup(from: tupleArray._children, action: action)
-    } else {
-      self.restoreState(nodeKey: "\(self)")
-      let group: L1Element = .group([self.layer.toL1Element(action: action)])
-      if action {
-        self.saveState(nodeKey: "\(self)")
-      }
-      return group
-    }
-  }
-}
-
-extension Block {
   /*
   This function is a more flattend out version of optimizeTree as we need to flatten out those calls
   into one function to handle nested state correctly.
   */
   func parseTree(action: Bool, selected: String) -> L2Element {
+    let l2: L2Element
     if let str = self as? String {
-      return .text(str, nil)
+      l2 = .text(str, nil)
     } else if let text = self as? Text {
-      return .text(text.text, nil)
+      l2 = .text(text.text, nil)
     } else if let inputBlock = self as? any InputBlock {
-      let inner = inputBlock.layer.parseTree(action: action, selected: selected)
-      let l2: L2Element = .text(inputBlock.wrapped, inputBlock.handler)
-      return l2
-    } else if let arrayBlock = self as? any ArrayBlocks {
-      return _makeGroup(from: arrayBlock._children, action: action, selected: selected).flatten()
-    } else if let tupleArray = self as? any TupleBlocks {
-      return _makeGroup(from: tupleArray._children, action: action, selected: selected).flatten()
+      // TODO: if selected && action, call handler.
+      l2 = .text(inputBlock.wrapped, inputBlock.handler)
+    } else if let group = self as? any BlockGroup {
+      l2 = makeGroup(from: group.children, action: action, selected: selected).flatten()
     } else {
-      // self.restoreState(nodeKey: "\(self)")
+      //TODO: self.restoreState(nodeKey: "\(self)")
       let group: L2Element = .group([self.layer.parseTree(action: action, selected: selected)])
         .flatten()
       /*
+         TODO:
       if action {
         self.saveState(nodeKey: "\(self)")
       }*/
-      return group
+      l2 = group
     }
+    return l2
   }
 }
 
 @MainActor
-private func _makeGroup(from children: [any Block], action: Bool, selected: String) -> L2Element {
+private func makeGroup(from children: [any Block], action: Bool, selected: String) -> L2Element {
   var group: [L2Element] = []
   for child in children {
     group.append(child.parseTree(action: action, selected: selected))
-  }
-  return .group(group)
-}
-
-@MainActor
-private func makeGroup(from children: [any Block], action: Bool) -> L1Element {
-  var group: [L1Element] = []
-  for child in children {
-    group.append(child.toL1Element(action: action))
   }
   return .group(group)
 }
