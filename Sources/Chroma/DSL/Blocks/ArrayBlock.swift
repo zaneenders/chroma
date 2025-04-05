@@ -1,5 +1,5 @@
 /// The ``_ArrayBlock`` is the result of a `for <something> in <container>`.
-public struct _ArrayBlock<Element: Block>: Block, BlockGroup  {
+public struct _ArrayBlock<Element: Block>: Block, BlockGroup {
   let _children: [Element]
 
   init(_ children: [Element]) {

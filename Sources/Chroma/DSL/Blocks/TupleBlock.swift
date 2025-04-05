@@ -1,5 +1,5 @@
 /// Composed of N many child ``Block``s.
-public struct _TupleBlock<each Component: Block>: Block, BlockGroup  {
+public struct _TupleBlock<each Component: Block>: Block, BlockGroup {
   let _children: (repeat each Component)
 
   init(_ child: repeat each Component) {

@@ -23,7 +23,7 @@ extension Block {
   This function is a more flattend out version of optimizeTree as we need to flatten out those calls
   into one function to handle nested state correctly.
   */
-  func parseTree(action: Bool, selected: String) -> L2Element {
+  func parseTree(action: Bool, _ walker: inout some L2ElementWalker) -> L2Element {
     let l2: L2Element
     if let str = self as? String {
       l2 = .text(str, nil)
@@ -33,27 +33,24 @@ extension Block {
       // TODO: if selected && action, call handler.
       l2 = .text(inputBlock.wrapped, inputBlock.handler)
     } else if let group = self as? any BlockGroup {
-      l2 = makeGroup(from: group.children, action: action, selected: selected).flatten()
+      var l2Children: [L2Element] = []
+      for child in group.children {
+        l2Children.append(child.parseTree(action: action, &walker))
+      }
+      return .group(l2Children).flatten()
     } else {
       //TODO: self.restoreState(nodeKey: "\(self)")
-      let group: L2Element = .group([self.layer.parseTree(action: action, selected: selected)])
+      let group: L2Element = .group([self.layer.parseTree(action: action, &walker)])
         .flatten()
       /*
          TODO:
       if action {
         self.saveState(nodeKey: "\(self)")
       }*/
-      l2 = group
+      return group
     }
+    // Call the walking function on the resulting l2 element.
+    l2._walk(&walker)
     return l2
   }
-}
-
-@MainActor
-private func makeGroup(from children: [any Block], action: Bool, selected: String) -> L2Element {
-  var group: [L2Element] = []
-  for child in children {
-    group.append(child.parseTree(action: action, selected: selected))
-  }
-  return .group(group)
 }
