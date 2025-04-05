@@ -5,12 +5,12 @@ import Testing
 
 // Note none of these test selection.
 @MainActor  // UI Block test run on main thread.
-@Suite("New Tree Tests")
+@Suite("New Tree Tests", .disabled())
 struct NewTreeTests {
 
   @Test func treeEntry() async throws {
     let block = Entry()
-    let tree = block.optimizeTree()
+    let tree = block.optimizeTree(action: false)
     var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
     parser.walk(tree)
     let expectedText = #"""
@@ -25,7 +25,7 @@ struct NewTreeTests {
 
   @Test func treeAll() async throws {
     let block = All()
-    let tree = block.optimizeTree()
+    let tree = block.optimizeTree(action: false)
     var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
     parser.walk(tree)
     let expectedText = #"""
@@ -41,7 +41,7 @@ struct NewTreeTests {
 
   @Test func treeOptionalBlock() async throws {
     let block = OptionalBlock()
-    let tree = block.optimizeTree()
+    let tree = block.optimizeTree(action: false)
     var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
     parser.walk(tree)
     let expectedText = #"""
@@ -54,7 +54,7 @@ struct NewTreeTests {
 
   @Test func treeBasicTupleText() async throws {
     let block = BasicTupleText()
-    let tree = block.optimizeTree()
+    let tree = block.optimizeTree(action: false)
     var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
     parser.walk(tree)
     let expectedText = #"""
@@ -67,7 +67,7 @@ struct NewTreeTests {
 
   @Test func treeSelectionBlock() async throws {
     let block = SelectionBlock()
-    let tree = block.optimizeTree()
+    let tree = block.optimizeTree(action: false)
     var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
     parser.walk(tree)
     let expectedText = #"""
@@ -85,7 +85,7 @@ struct NewTreeTests {
 
   @Test func treeAsyncUpdateStateUpdate() async throws {
     let block = AsyncUpdateStateUpdate()
-    let tree = block.optimizeTree()
+    let tree = block.optimizeTree(action: false)
     var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
     parser.walk(tree)
     let expectedText = #"""

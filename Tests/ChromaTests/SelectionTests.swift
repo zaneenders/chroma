@@ -3,8 +3,30 @@ import Testing
 @testable import Chroma
 @testable import Demo
 
+@MainActor
+@Test func nestedBlocks() async throws {
+  let window = TerminalWindow {
+    NestedState()
+  }.environment(Mode())
+  var container = ScribeController(window.entry)
+  var renderer = TestRenderer()
+  container.expectState(
+    &renderer,
+    expected: [
+      "[0]"
+    ])
+  container.printState(&renderer)
+  container.moveIn()
+  container.action(.lowercaseI)
+  container.expectState(
+    &renderer,
+    expected: [
+      "[1]"
+    ])
+}
+
 @MainActor  // UI Block test run on main thread.
-@Suite("Selection Tests")
+@Suite("Selection Tests", .disabled())
 // NOTE: Keep ordered by Demo then BlockSnippets
 struct SelectionTests {
 

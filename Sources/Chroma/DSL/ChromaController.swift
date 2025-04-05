@@ -8,7 +8,7 @@ public struct ChromaController: ~Copyable {
   init(_ block: consuming some Block) {
     self.block = block
     var l2Parser = InitialWalk(state: state)
-    let l2Tree = self.block.optimizeTree()
+    let l2Tree = self.block.optimizeTree(action: false)
     l2Parser.walk(l2Tree)
     self.state = l2Parser.state
   }
@@ -23,7 +23,7 @@ public struct ChromaController: ~Copyable {
   /// - Parameter code: the input received from the user.
   mutating func action(_ code: AsciiKeyCode) {
     var action = ActionWalker(state: state, input: code)
-    let l2Tree = block.optimizeTree()
+    let l2Tree = block.optimizeTree(action: true)
     action.walk(l2Tree)
     self.state = action.state
   }
@@ -36,7 +36,7 @@ extension ChromaController {
   public mutating func up() {
     Log.debug("MoveUp")
     var move = MoveUpWalker(state: state)
-    let l2Tree = block.optimizeTree()
+    let l2Tree = block.optimizeTree(action: false)
     move.walk(l2Tree)
     self.state = move.state
   }
@@ -44,7 +44,7 @@ extension ChromaController {
   public mutating func down() {
     Log.debug("MoveDown")
     var move = MoveDownWalker(state: state)
-    let l2Tree = block.optimizeTree()
+    let l2Tree = block.optimizeTree(action: false)
     move.walk(l2Tree)
     self.state = move.state
   }
@@ -52,7 +52,7 @@ extension ChromaController {
   public mutating func `in`() {
     Log.debug("MoveIn")
     var move = MoveInWalker(state: state)
-    let l2Tree = block.optimizeTree()
+    let l2Tree = block.optimizeTree(action: false)
     move.walk(l2Tree)
     self.state = move.state
   }
@@ -60,7 +60,7 @@ extension ChromaController {
   public mutating func out() {
     Log.debug("MoveOut")
     var move = MoveOutWalker(state: state)
-    let l2Tree = block.optimizeTree()
+    let l2Tree = block.optimizeTree(action: false)
     move.walk(l2Tree)
     self.state = move.state
   }

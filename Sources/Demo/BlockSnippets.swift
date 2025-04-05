@@ -71,6 +71,25 @@ struct SelectionBlock: Block {
   }
 }
 
+// Test nested state
+struct NestedState: Block {
+  var layer: some Block {
+    Nested()
+  }
+
+  struct Nested: Block {
+    @State var count: Int = 0
+    var layer: some Block {
+      "\(count)".bind { selected, code in
+        if selected && code == .lowercaseI {
+          Log.warning("Clicked")
+          count += 1
+        }
+      }
+    }
+  }
+}
+
 // Simple example of asynchronously updating the state from a
 struct AsyncUpdateStateUpdate: Block {
   static let delay = 100

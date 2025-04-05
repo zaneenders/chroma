@@ -6,7 +6,7 @@ extension TerminalRenderer: Renderer {
   func view(_ block: borrowing some Block, with state: BlockState) {
     let before = clock.now
     let size = Self.size
-    let tree = block.optimizeTree()
+    let tree = block.optimizeTree(action: false)
     var walker = L2ElementRender(state: state, width: size.x, height: size.y)
     walker.walk(tree)
     Self.write(frame: walker.ascii)

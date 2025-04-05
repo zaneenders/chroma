@@ -19,8 +19,8 @@ extension Never: Block {
 }
 
 extension Block {
-  func optimizeTree() -> L2Element {
-    self.toL1Element()
+  func optimizeTree(action: Bool) -> L2Element {
+    self.toL1Element(action: action)
       .toL2Element()
       .flatten()
   }
@@ -32,26 +32,30 @@ extension Block {
   /// ergonomic movements over the tree.
   /// moves ArrayBlocks and TupleBlocks into the same group ``[Element]`` type.
   /// - Returns: A reshaped ``Block`` tree in the form of an Element tree.
-  func toL1Element() -> L1Element {
+  func toL1Element(action: Bool) -> L1Element {
     if let str = self as? String {
       return .text(str)
     } else if let text = self as? Text {
       return .text(text.text)
     } else if let inputBlock = self as? any InputBlock {
-      return .input(inputBlock.layer.toL1Element(), handler: inputBlock.handler)
+      return .input(inputBlock.layer.toL1Element(action: action), handler: inputBlock.handler)
     } else if let arrayBlock = self as? any ArrayBlocks {
-      return makeGroup(from: arrayBlock._children)
+      return makeGroup(from: arrayBlock._children, action: action)
     } else if let tupleArray = self as? any TupleBlocks {
-      return makeGroup(from: tupleArray._children)
+      return makeGroup(from: tupleArray._children, action: action)
     } else {
-      return .group([self.layer.toL1Element()])
+      // restore state
+      return .group([self.layer.toL1Element(action: action)])
+      if action {
+        // save steat
+      }
     }
   }
 
-  private func makeGroup(from children: [any Block]) -> L1Element {
+  private func makeGroup(from children: [any Block], action: Bool) -> L1Element {
     var group: [L1Element] = []
     for child in children {
-      group.append(child.toL1Element())
+      group.append(child.toL1Element(action: action))
     }
     return .group(group)
   }
