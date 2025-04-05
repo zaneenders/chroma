@@ -8,7 +8,7 @@ struct TestRenderer: Renderer {
     selected = state.selected ?? ""
     var walker = TestWalker(state: state)
     walker.textObjects = [:]
-    walker.walk(block.optimizeTree(action: false))
+    walker.walk(block.parseTree(action: false, selected: selected))
     previousWalker = walker
   }
 }

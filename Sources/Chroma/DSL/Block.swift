@@ -19,6 +19,7 @@ extension Never: Block {
 }
 
 extension Block {
+  @available(*, unavailable, message: "Moving towards parseTree")
   func optimizeTree(action: Bool) -> L2Element {
     self.toL1Element(action: action)
       .toL2Element()
@@ -52,12 +53,53 @@ extension Block {
       return group
     }
   }
+}
 
-  private func makeGroup(from children: [any Block], action: Bool) -> L1Element {
-    var group: [L1Element] = []
-    for child in children {
-      group.append(child.toL1Element(action: action))
+extension Block {
+  /*
+  This function is a more flattend out version of optimizeTree as we need to flatten out those calls
+  into one function to handle nested state correctly.
+  */
+  func parseTree(action: Bool, selected: String) -> L2Element {
+    if let str = self as? String {
+      return .text(str, nil)
+    } else if let text = self as? Text {
+      return .text(text.text, nil)
+    } else if let inputBlock = self as? any InputBlock {
+      let inner = inputBlock.layer.parseTree(action: action, selected: selected)
+      let l2: L2Element = .text(inputBlock.wrapped, inputBlock.handler)
+      return l2
+    } else if let arrayBlock = self as? any ArrayBlocks {
+      return _makeGroup(from: arrayBlock._children, action: action, selected: selected).flatten()
+    } else if let tupleArray = self as? any TupleBlocks {
+      return _makeGroup(from: tupleArray._children, action: action, selected: selected).flatten()
+    } else {
+      // self.restoreState(nodeKey: "\(self)")
+      let group: L2Element = .group([self.layer.parseTree(action: action, selected: selected)])
+        .flatten()
+      /*
+      if action {
+        self.saveState(nodeKey: "\(self)")
+      }*/
+      return group
     }
-    return .group(group)
   }
+}
+
+@MainActor
+private func _makeGroup(from children: [any Block], action: Bool, selected: String) -> L2Element {
+  var group: [L2Element] = []
+  for child in children {
+    group.append(child.parseTree(action: action, selected: selected))
+  }
+  return .group(group)
+}
+
+@MainActor
+private func makeGroup(from children: [any Block], action: Bool) -> L1Element {
+  var group: [L1Element] = []
+  for child in children {
+    group.append(child.toL1Element(action: action))
+  }
+  return .group(group)
 }

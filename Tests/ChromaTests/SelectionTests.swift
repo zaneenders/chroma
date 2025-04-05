@@ -5,8 +5,8 @@ import Testing
 
 @MainActor
 @Test func nestedBlocks() async throws {
+  let block = NestedState()
   let window = TerminalWindow {
-    NestedState()
   }.environment(Mode())
   var container = ChromaController(window.entry)
   var renderer = TestRenderer()
