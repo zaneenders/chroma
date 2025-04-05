@@ -8,7 +8,7 @@ import Testing
   let window = TerminalWindow {
     NestedState()
   }.environment(Mode())
-  var container = ScribeController(window.entry)
+  var container = ChromaController(window.entry)
   var renderer = TestRenderer()
   container.expectState(
     &renderer,

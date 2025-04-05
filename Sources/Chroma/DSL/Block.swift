@@ -44,11 +44,12 @@ extension Block {
     } else if let tupleArray = self as? any TupleBlocks {
       return makeGroup(from: tupleArray._children, action: action)
     } else {
-      // restore state
-      return .group([self.layer.toL1Element(action: action)])
+      self.restoreState(nodeKey: "\(self)")
+      let group: L1Element = .group([self.layer.toL1Element(action: action)])
       if action {
-        // save steat
+        self.saveState(nodeKey: "\(self)")
       }
+      return group
     }
   }
 

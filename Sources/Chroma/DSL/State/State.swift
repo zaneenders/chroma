@@ -1,21 +1,22 @@
-/// The @``State`` type is a hack around swift mutability semantics allowing
-/// computed variables like ``Block/component`` to mutate there containing structs.
-@MainActor  // This forces ``State``
 @propertyWrapper
-public struct State<Value> {
-
-  private let storage: Storage
+@MainActor
+public struct State<Value: Sendable>: StateProtocol {
+  private let _storage: Storage
 
   public init(wrappedValue: Value) {
-    self.storage = Storage(wrappedValue)
+    self._storage = Storage(wrappedValue)
+  }
+
+  var storage: any StorageProtocol {
+    _storage
   }
 
   public var wrappedValue: Value {
     get {
-      storage.value
+      _storage.value
     }
     nonmutating set {
-      storage.value = newValue
+      _storage.value = newValue
     }
   }
 
@@ -28,12 +29,57 @@ public struct State<Value> {
         self.wrappedValue = newValue
       })
   }
+}
 
+extension State {
   @MainActor
-  private final class Storage {
-    var value: Value
+  final class Storage: StorageProtocol {
+
+    var box: Box<Value>
+
     init(_ value: Value) {
-      self.value = value
+      self.box = Box(value)
+    }
+
+    var _stored: any Sendable {
+      get {
+        box.value
+      }
+      set {
+        box.value = newValue as! Value
+      }
+    }
+
+    var value: Value
+    {
+      get {
+        box.value
+      }
+      set {
+        box.value = newValue
+      }
     }
   }
+
+}
+
+@MainActor
+protocol StateProtocol {
+  var storage: any StorageProtocol { get }
+}
+
+@MainActor
+protocol StorageProtocol<Value> {
+  associatedtype Value = Any
+  var _stored: any Sendable { get nonmutating set }
+  var box: Box<Value> { get nonmutating set }
+}
+
+final class Box<Value> {
+
+  init(_ value: Value) {
+    self.value = value
+  }
+
+  var value: Value
 }
