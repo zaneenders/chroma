@@ -1,7 +1,7 @@
 import Testing
 
+@testable import Chroma
 @testable import Demo
-@testable import Scribe
 
 // Note none of these test selection.
 @MainActor  // UI Block test run on main thread.
@@ -14,7 +14,7 @@ struct NewTreeTests {
     var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
     parser.walk(tree)
     let expectedText = #"""
-      Hello, I am Scribe.
+      Hello, I am Chroma.
       Zane was here :0
       Job running: ready
       Nested[text: Hello]
@@ -113,8 +113,8 @@ struct Window {
   }
 
   private mutating func place(_ text: String, _ index: Int, selected: Bool) {
-    let fg: Chroma.Color
-    let bg: Chroma.Color
+    let fg: Shell.Color
+    let bg: Shell.Color
     if selected {
       fg = .yellow
       bg = .purple

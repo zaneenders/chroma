@@ -1,4 +1,4 @@
-import Scribe
+import Chroma
 
 /**
 This file contains other examples and snippets. Mostly used for testing but provides a

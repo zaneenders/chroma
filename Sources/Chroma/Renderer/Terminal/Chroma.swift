@@ -1,7 +1,7 @@
 typealias ANSIString = String
 
-extension Chroma.Color {
-  static func random() -> Chroma.Color {
+extension Shell.Color {
+  static func random() -> Shell.Color {
     let colors = Self.allCases
     let r = Int.random(in: 0..<colors.count)
     for (i, color) in colors.enumerated() {
@@ -14,7 +14,7 @@ extension Chroma.Color {
 }
 
 /// A wrapper to help make printing color to the terminal easier.
-enum Chroma {
+enum Shell {
 
   enum TerminalColor {
     case reset

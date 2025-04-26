@@ -23,7 +23,7 @@ RUN swift build --swift-sdk x86_64-swift-linux-musl -c release
 WORKDIR /staging
 
 # Copy executable to staging.
-RUN cp "$(swift build --package-path /build --swift-sdk x86_64-swift-linux-musl -c release --show-bin-path)/scribe" ./
+RUN cp "$(swift build --package-path /build --swift-sdk x86_64-swift-linux-musl -c release --show-bin-path)/chroma" ./
 
 # Base docker image for minium dependencies.
 FROM scratch
@@ -34,4 +34,4 @@ WORKDIR /app
 # Copy executable from staging.
 COPY --from=build /staging /app
 
-ENTRYPOINT ["./scribe"]
+ENTRYPOINT ["./chroma"]

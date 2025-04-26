@@ -1,7 +1,7 @@
 @MainActor
 /// Encapsulates the sate of the system. Primarily the block tree structure
 /// and information about which block is selected.
-public struct ScribeController: ~Copyable {
+public struct ChromaController: ~Copyable {
   private let block: any Block
   private var state = BlockState()
 
@@ -31,7 +31,7 @@ public struct ScribeController: ~Copyable {
 
 // MARK: Movement
 // TODO don't make BlockContainer public, abstract with a protocol.
-extension ScribeController {
+extension ChromaController {
 
   public mutating func up() {
     Log.debug("MoveUp")

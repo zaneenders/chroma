@@ -3,15 +3,15 @@ import CompilerPluginSupport
 import PackageDescription
 
 let package = Package(
-  name: "scribe",
+  name: "chroma",
   platforms: [
     .macOS("15.0")
   ],
   products: [
-    .executable(name: "scribe", targets: ["Demo"]),
+    .executable(name: "chroma", targets: ["Demo"]),
     .library(
-      name: "Scribe",
-      targets: ["Scribe"]),
+      name: "Chroma",
+      targets: ["Chroma"]),
   ],
   dependencies: [
     /*
@@ -37,12 +37,12 @@ let package = Package(
     .executableTarget(
       name: "Demo",
       dependencies: [
-        "Scribe"
+        "Chroma"
       ],
       swiftSettings: swiftSettings),
     // MARK: Targets
     .target(
-      name: "Scribe",
+      name: "Chroma",
       dependencies: [
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "SystemPackage", package: "swift-system"),
@@ -51,10 +51,10 @@ let package = Package(
       swiftSettings: swiftSettings),
     // MARK: Test Targets
     .testTarget(
-      name: "ScribeTests",
+      name: "ChromaTests",
       dependencies: [
         "Demo",
-        "Scribe",
+        "Chroma",
       ],
       swiftSettings: swiftSettings),
   ]

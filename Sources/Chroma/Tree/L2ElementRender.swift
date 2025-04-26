@@ -70,8 +70,8 @@ struct L2ElementRender: L2SelectionWalker {
   }
 
   private mutating func place(_ text: String, _ index: Int, selected: Bool) {
-    let fg: Chroma.Color
-    let bg: Chroma.Color
+    let fg: Shell.Color
+    let bg: Shell.Color
     if selected {
       seenSelected = true
       fg = .yellow

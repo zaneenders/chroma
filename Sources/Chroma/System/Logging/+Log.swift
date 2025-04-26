@@ -6,7 +6,7 @@ func enableLogging(
   file_path: FilePath, logLevel: Logger.Level, tracing: Bool, write_to_file: Bool
 ) {
   LoggingSystem.bootstrap { _ in
-    ScribeLogging(
+    ChromaLogging(
       file_path: file_path, logLevel: logLevel, tracing: tracing, write_to_file: write_to_file)
   }
 }
@@ -21,7 +21,7 @@ public enum Log {
   @TaskLocal
   static var id: UInt128 = UInt128.random(in: UInt128.min..<UInt128.max)
 
-  private static let logger = Logger(label: "scribe")
+  private static let logger = Logger(label: "chroma")
 
   public static func trace(
     _ message: @autoclosure () -> Logger.Message,

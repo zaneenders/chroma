@@ -1,7 +1,7 @@
 import Testing
 
+@testable import Chroma
 @testable import Demo
-@testable import Scribe
 
 @MainActor  // UI Block test run on main thread.
 @Suite("Selection Tests")
@@ -12,12 +12,12 @@ struct SelectionTests {
     let window = TerminalWindow {
       Entry()
     }.environment(Mode())
-    var container = ScribeController(window.entry)
+    var container = ChromaController(window.entry)
     var renderer = TestRenderer()
     container.expectState(
       &renderer,
       expected: [
-        "[Hello, I am Scribe.]", "[Job running: ready]", "[Nested[text: Hello]]",
+        "[Hello, I am Chroma.]", "[Job running: ready]", "[Nested[text: Hello]]",
         "[Zane was here :0]",
       ])
 
@@ -25,35 +25,35 @@ struct SelectionTests {
     container.expectState(
       &renderer,
       expected: [
-        "[Hello, I am Scribe.]", "Job running: ready", "Nested[text: Hello]", "Zane was here :0",
+        "[Hello, I am Chroma.]", "Job running: ready", "Nested[text: Hello]", "Zane was here :0",
       ])
 
     container.action(.lowercaseI)
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :0", "Nested[text: Hello#]", "[Hello, I am Scribe.!]", "Job running: ready",
+        "Zane was here :0", "Nested[text: Hello#]", "[Hello, I am Chroma.!]", "Job running: ready",
       ])
 
     container.moveDown()
     container.expectState(
       &renderer,
       expected: [
-        "[Zane was here :0]", "Nested[text: Hello#]", "Hello, I am Scribe.!", "Job running: ready",
+        "[Zane was here :0]", "Nested[text: Hello#]", "Hello, I am Chroma.!", "Job running: ready",
       ])
 
     container.action(.lowercaseE)
     container.expectState(
       &renderer,
       expected: [
-        "Job running: ready", "[Zane was here :1]", "Nested[text: Hello#]", "Hello, I am Scribe.!",
+        "Job running: ready", "[Zane was here :1]", "Nested[text: Hello#]", "Hello, I am Chroma.!",
         "0",
       ])
     container.moveDown()
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :1", "[Job running: ready]", "Nested[text: Hello#]", "Hello, I am Scribe.!",
+        "Zane was here :1", "[Job running: ready]", "Nested[text: Hello#]", "Hello, I am Chroma.!",
         "0",
       ])
     container.action(.lowercaseI)
@@ -61,27 +61,27 @@ struct SelectionTests {
       &renderer,
       expected: [
         "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-        "Hello, I am Scribe.!", "0",
+        "Hello, I am Chroma.!", "0",
       ])
     try await Task.sleep(for: .seconds(0.5))
     container.expectState(
       &renderer,
       expected: [
         "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-        "Hello, I am Scribe.!", "0",
+        "Hello, I am Chroma.!", "0",
       ])
     try await Task.sleep(for: .seconds(1))
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :1", "[Job running: ready]", "Nested[text: ready]", "Hello, I am Scribe.!",
+        "Zane was here :1", "[Job running: ready]", "Nested[text: ready]", "Hello, I am Chroma.!",
         "0",
       ])
     container.moveUp()
     container.expectState(
       &renderer,
       expected: [
-        "[Zane was here :1]", "Job running: ready", "Nested[text: ready]", "Hello, I am Scribe.!",
+        "[Zane was here :1]", "Job running: ready", "Nested[text: ready]", "Hello, I am Chroma.!",
         "0",
       ])
 
@@ -91,7 +91,7 @@ struct SelectionTests {
     let window = TerminalWindow {
       Entry()
     }.environment(Mode())
-    var container = ScribeController(window.entry)
+    var container = ChromaController(window.entry)
     var renderer = TestRenderer()
     container.moveIn()
     container.moveIn()
@@ -101,19 +101,19 @@ struct SelectionTests {
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :0", "Job running: ready", "[Nested[text: Hello]]", "Hello, I am Scribe.",
+        "Zane was here :0", "Job running: ready", "[Nested[text: Hello]]", "Hello, I am Chroma.",
       ])
     container.moveUp()
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :0", "[Job running: ready]", "Nested[text: Hello]", "Hello, I am Scribe.",
+        "Zane was here :0", "[Job running: ready]", "Nested[text: Hello]", "Hello, I am Chroma.",
       ])
   }
 
   @Test func selectAll() async throws {
     let block = All()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[A]", "[Button]", "[Here]", "[Was]", "[Zane]"])
     // Move in
@@ -127,7 +127,7 @@ struct SelectionTests {
 
   @Test func selectOptionalBlock() async throws {
     let block = OptionalBlock()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
       &renderer, expected: ["[Hello]", "[OptionalBlock(idk: Optional(\"Hello\"))]"])
@@ -136,7 +136,7 @@ struct SelectionTests {
   // Test up and down logic.
   @Test func selectBasicTupleBindedText() async throws {
     let block = BasicTupleBindedText()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[Hello]", "[Zane]", "[Enders]"])
     container.moveIn()
@@ -156,14 +156,14 @@ struct SelectionTests {
 
   @Test func selectBasicTupleText() async throws {
     let block = BasicTupleText()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
   }
 
   @Test func selectBasicTupleTextMoveIn() async throws {
     let block = BasicTupleText()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
     container.moveIn()
@@ -174,7 +174,7 @@ struct SelectionTests {
 
   @Test func selectBasicTupleTextMoveInAndOut() async throws {
     let block = BasicTupleText()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
     container.moveIn()
@@ -188,7 +188,7 @@ struct SelectionTests {
 
   @Test func selectBasicTupleTextMoveInDownOut() async throws {
     let block = BasicTupleText()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
     container.moveIn()
@@ -202,7 +202,7 @@ struct SelectionTests {
 
   @Test func selectBasicTupleTextMoveInDownUpOut() async throws {
     let block = BasicTupleText()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
     container.moveIn()
@@ -218,7 +218,7 @@ struct SelectionTests {
 
   @Test func selectSelectionBlockDontMoveDown() async throws {
     let block = SelectionBlock()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
       &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
@@ -231,7 +231,7 @@ struct SelectionTests {
 
   @Test func selectSelectionBlock() async throws {
     let block = SelectionBlock()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
       &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
@@ -297,7 +297,7 @@ struct SelectionTests {
     let secondPause = AsyncUpdateStateUpdate.delay
 
     let block = AsyncUpdateStateUpdate()
-    var container = ScribeController(block)
+    var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(&renderer, expected: ["[ready]"])
 
@@ -318,7 +318,7 @@ struct SelectionTests {
 }
 
 // Helper functions to make creating test easier.
-extension ScribeController {
+extension ChromaController {
   mutating func moveUp() {
     up()
   }

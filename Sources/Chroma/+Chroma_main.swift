@@ -1,14 +1,14 @@
-extension Scribe {
+extension Chroma {
   // The "main" function and main UI event loop of Scribe for now.
   public static func main() async {
-    let scribe = self.init()
+    let chroma = self.init()
     enableLogging(
-      file_path: scribe.logPath, logLevel: scribe.logLevel, tracing: false, write_to_file: true)
-    clearLog(scribe.logPath)
+      file_path: chroma.logPath, logLevel: chroma.logLevel, tracing: false, write_to_file: true)
+    clearLog(chroma.logPath)
 
     var renderer = TerminalRenderer()
 
-    var block_container = ScribeController(scribe.window.entry)
+    var block_container = ChromaController(chroma.window.entry)
 
     // Background render loop.
     let renderingLoop = Task {
@@ -23,7 +23,7 @@ extension Scribe {
       }
     }
 
-    let listener: InputListener = scribe.window.listener
+    let listener: InputListener = chroma.window.listener
 
     do {
       input_loop: for try await byte in renderer.input {

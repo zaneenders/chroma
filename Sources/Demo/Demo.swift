@@ -1,14 +1,14 @@
+import Chroma
 import Logging  // import for overloading the log level.
-import Scribe
 import SystemPackage  // import for optional logPath overload
 
 @main
-/// The entry and configuration point of your ``Scribe``.
-struct Demo: Scribe {
+/// The entry and configuration point of your ``Chroma``.
+struct Demo: Chroma {
   // Both of the following overloads can be removed or changed.
 
   // Optional overload for the logPath
-  let logPath: FilePath = FilePath("scribe.log")
+  let logPath: FilePath = FilePath("chroma.log")
   // Optional overload for the logLevel
   let logLevel: Logger.Level = .debug
 
@@ -49,7 +49,7 @@ struct Demo: Scribe {
 ///          │                │                  │               │
 ///       String           String             String          String
 ///          │                │                  │               │
-/// Hello, I am Scribe. Zane was here :0 Job running: ready    Hello
+/// Hello, I am Chroma. Zane was here :0 Job running: ready    Hello
 struct Entry: Block {
   @Environment(Mode.self) var inputMode
   let storage = HeapObject()
@@ -117,7 +117,7 @@ struct Nested: Block {
 /// Swift you can have the mental model that class's are reference types
 /// located on the heap.
 final class HeapObject {
-  var message = "Hello, I am Scribe."
+  var message = "Hello, I am Chroma."
 }
 
 enum RunningState {
