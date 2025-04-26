@@ -1,4 +1,4 @@
-@testable import Scribe
+@testable import Chroma
 
 struct TestRenderer: Renderer {
   var selected = ""

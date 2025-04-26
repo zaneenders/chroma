@@ -1,11 +1,11 @@
 import Logging
 import SystemPackage
 
-/// The ``Scribe`` protocol is the starting point of your configuration, you
+/// The ``Chroma`` protocol is the starting point of your configuration, you
 /// can pass in your ``Block`` structure to the ``entry`` field and optional
 /// update the other parameters as you like.
 @MainActor
-public protocol Scribe {
+public protocol Chroma {
   init()
   associatedtype MainWindow: Window
   @WindowBuilder var window: MainWindow { get }
@@ -20,14 +20,14 @@ public protocol Scribe {
 }
 
 /// Default configuration.
-extension Scribe {
+extension Chroma {
   // Default log path
   public var logPath: FilePath {
     /*
-    TODO set this to a .scribe directory in the user home directory that we
-    will setup regardless if you are developing scribe or not.
+    TODO set this to a .Chroma directory in the user home directory that we
+    will setup regardless if you are developing Chroma or not.
     */
-    FilePath("scribe.log")
+    FilePath("chroma.log")
   }
   // Outputs log
   public var logLevel: Logger.Level {

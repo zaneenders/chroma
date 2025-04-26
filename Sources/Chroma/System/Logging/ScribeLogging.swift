@@ -2,7 +2,7 @@ import Foundation
 import Logging
 import SystemPackage
 
-struct ScribeLogging: LogHandler {
+struct ChromaLogging: LogHandler {
 
   let file_path: FilePath
   var logLevel: Logger.Level
@@ -90,7 +90,7 @@ struct ScribeLogging: LogHandler {
   }
 
   private func terminal(_ level: Logger.Level, _ message: Logger.Message) {
-    let color: Chroma.Color
+    let color: Shell.Color
     switch level {
     case .trace:
       color = .default
@@ -107,7 +107,7 @@ struct ScribeLogging: LogHandler {
     case .critical:
       color = .red
     }
-    print(Chroma.wrap("\(message)", color, .default))
+    print(Shell.wrap("\(message)", color, .default))
   }
 
   private func tracing(_ level: Logger.Level, _ message: Logger.Message) {

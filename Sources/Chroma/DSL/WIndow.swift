@@ -5,7 +5,7 @@ public protocol Window {
   @BlockParser var entry: EntryBlock { get }
 }
 
-/// The Default ``Window`` implementation for setting up state for Scribe.
+/// The Default ``Window`` implementation for setting up state for Chroma.
 /// Other ``Window`` types may be added in the future.
 public struct TerminalWindow<B: Block>: Window {
 
@@ -57,7 +57,7 @@ extension TerminalWindow {
   }
 }
 
-public typealias InputListener = (AsciiKeyCode, inout ScribeController) -> AsciiKeyCode?
+public typealias InputListener = (AsciiKeyCode, inout ChromaController) -> AsciiKeyCode?
 extension TerminalWindow {
   public func register(_ listener: @escaping InputListener) -> Self {
     TerminalWindow(self.block, listener: listener)
