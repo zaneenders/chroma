@@ -12,7 +12,7 @@ struct ActionWalker: L2ElementWalker {
   mutating func beforeGroup(_ group: [any Block]) {}
   mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {}
   mutating func beforeChild() -> Bool { false }
-  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool {
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     false
   }
   mutating func walkText(_ text: String, _ handler: InputHandler?) {

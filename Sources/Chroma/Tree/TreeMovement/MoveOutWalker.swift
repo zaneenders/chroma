@@ -23,7 +23,7 @@ struct MoveOutWalker: L2ElementWalker {
     appendPath(siblings: group.count - 1)
   }
   mutating func beforeChild() -> Bool { false }
-  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool {
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     false
   }
   mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {

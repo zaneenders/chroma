@@ -95,7 +95,7 @@ struct SelectionTests {
     let block = BasicTupleText()
     var container = ChromaController(block)
     var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
     container.moveIn()
     container.moveIn()
     container.expectState(&renderer, expected: ["[Hello]", "Zane"])
@@ -104,7 +104,7 @@ struct SelectionTests {
     container.moveUp()
     container.expectState(&renderer, expected: ["[Hello]", "Zane"])
     container.moveOut()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
   }
 
   @Test func selectEntry() async throws {

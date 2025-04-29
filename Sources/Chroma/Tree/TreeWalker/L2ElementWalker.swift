@@ -7,5 +7,5 @@ protocol L2ElementWalker {
   mutating func beforeChild() -> Bool
   ///
   /// - Returns: true to break out of the child_loop
-  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool
 }

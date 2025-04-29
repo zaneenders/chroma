@@ -35,11 +35,15 @@ extension Block {
       let ourHash = walker.currentHash
       walker.beforeGroup(group.children)
       child_loop: for (index, child) in group.children.enumerated() {
-        walker.beforeChild()
+        if walker.beforeChild() {
+          break child_loop
+        }
         walker.currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
         child.parseTree(action: action, &walker)
         if walker.afterChild(
-          nextChildHash: hash(contents: "\(ourHash)\(#function)\(index + 1)"), index: index,
+          nextChildHash: hash(contents: "\(ourHash)\(#function)\(index + 1)"),
+          prevChildHash: hash(contents: "\(ourHash)\(#function)\(index - 1)"),
+          index: index,
           childCount: group.children.count)
         {
           break child_loop
@@ -53,9 +57,13 @@ extension Block {
       let ourHash = walker.currentHash
       walker.currentHash = hash(contents: "\(ourHash)\(#function)\(0)")
       walker.beforeGroup([self.layer])
-      walker.beforeChild()
+      let skip = walker.beforeChild()
       self.layer.parseTree(action: action, &walker)
-      _ = walker.afterChild(nextChildHash: hash(contents: "\(ourHash)\(#function)\(1)"), index: 0, childCount: 1)
+      _ = walker.afterChild(
+        // is this even valid here?
+        nextChildHash: hash(contents: "\(ourHash)\(#function)\(1)"),
+        prevChildHash: hash(contents: "\(ourHash)\(#function)\(-1)"),
+        index: 0, childCount: 1)
       walker.afterGroup(ourHash: ourHash, [self.layer])
       walker.currentHash = ourHash
       if action {

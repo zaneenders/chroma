@@ -35,7 +35,7 @@ struct MoveInWalker: L2ElementWalker {
     }
   }
   mutating func beforeChild() -> Bool { false }
-  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool {
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     switch mode {
     case .findingSelected:
       ()

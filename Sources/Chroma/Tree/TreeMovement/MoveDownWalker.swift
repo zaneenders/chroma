@@ -39,7 +39,7 @@ struct MoveDownWalker: L2ElementWalker {
     }
     return false
   }
-  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool {
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     switch mode {
     case .foundSelected:
       guard path.count < selectedDepth else {
