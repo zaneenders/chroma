@@ -38,7 +38,10 @@ extension Block {
         walker.beforeChild()
         walker.currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
         child.parseTree(action: action, &walker)
-        if walker.afterChild() {
+        if walker.afterChild(
+          nextChildHash: hash(contents: "\(ourHash)\(#function)\(index + 1)"), index: index,
+          childCount: group.children.count)
+        {
           break child_loop
         }
       }
@@ -52,7 +55,7 @@ extension Block {
       walker.beforeGroup([self.layer])
       walker.beforeChild()
       self.layer.parseTree(action: action, &walker)
-      _ = walker.afterChild()
+      _ = walker.afterChild(nextChildHash: hash(contents: "\(ourHash)\(#function)\(1)"), index: 0, childCount: 1)
       walker.afterGroup(ourHash: ourHash, [self.layer])
       walker.currentHash = ourHash
       if action {

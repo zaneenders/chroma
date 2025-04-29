@@ -24,8 +24,8 @@ struct MoveUpWalker: L2ElementWalker {
 
   mutating func beforeGroup(_ group: [any Block]) {}
   mutating func afterGroup(_ group: [any Block]) {}
-  mutating func beforeChild() {}
-  mutating func afterChild() -> Bool {
+  mutating func beforeChild() -> Bool { false }
+  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool {
     false
   }
   mutating func walkText(_ text: String, _ binding: InputHandler?) {

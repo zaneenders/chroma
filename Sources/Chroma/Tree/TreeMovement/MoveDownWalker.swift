@@ -4,7 +4,6 @@ enum SelectedPathNode {
 }
 
 struct MoveDownWalker: L2ElementWalker {
-
   private let startingSelection: Hash
   private(set) var state: BlockState
   var currentHash: Hash = hash(contents: "0")
@@ -26,70 +25,55 @@ struct MoveDownWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
-  mutating func beforeGroup(_ group: [any Block]) {}
-  mutating func afterGroup(_ group: [any Block]) {}
-  mutating func beforeChild() {}
-  mutating func afterChild() -> Bool {
-    false
+  mutating func beforeGroup(_ group: [any Block]) {
+    appendPath(siblings: group.count - 1)
   }
-  mutating func walkText(_ text: String, _ binding: InputHandler?) {
-    appendPath(siblings: 0)
-    path.removeLast()
-  }
-
-  mutating func beforeGroup(_ group: [L2Element]) {
-
-  }
-
-  mutating func walkGroup(_ group: [L2Element]) {
-    let ourHash = currentHash
-    beforeGroup(group)
-    child_loop: for (index, element) in group.enumerated() {
-      switch mode {
-      case .foundSelected:
-        ()
-      case .lookingForSelected:
-        ()
-      case .updatedSelected:
-        break child_loop
-      }
-      currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
-      switch element {
-      case .group(let innerGroup):
-        walkGroup(innerGroup)
-      case let .text(txt, binding):
-        walkText(txt, binding)
-      }
-      switch mode {
-      case .foundSelected:
-        guard path.count < selectedDepth else {
-          break child_loop
-        }
-        switch path.last! {
-        case let .layer(siblings: count):
-          if count > 0 {  // has siblings
-            guard index + 1 < group.count else {
-              break child_loop
-            }
-            state.selected = hash(contents: "\(ourHash)\(#function)\(index + 1)")
-            mode = .updatedSelected
-            break child_loop
-          }
-        case .selected:
-          // we need to go back up a layer before doing anything.
-          break child_loop
-        }
-      case .lookingForSelected:
-        ()
-      case .updatedSelected:
-        break child_loop
-      }
+  mutating func beforeChild() -> Bool {
+    switch mode {
+    case .foundSelected:
+      ()
+    case .lookingForSelected:
+      ()
+    case .updatedSelected:
+      return true
     }
-    currentHash = ourHash
-    // afterGroup(ourHash: ourHash, group)
+    return false
+  }
+  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool {
+    switch mode {
+    case .foundSelected:
+      guard path.count < selectedDepth else {
+        return true
+      }
+      switch path.last! {
+      case let .layer(siblings: count):
+        if count > 0 {  // has siblings
+          guard index + 1 < childCount else {
+            return true
+          }
+          // state.selected = hash(contents: "\(ourHash)\(#function)\(index + 1)")
+          state.selected = nextChildHash
+          mode = .updatedSelected
+          return true
+        }
+      case .selected:
+        // we need to go back up a layer before doing anything.
+        return true
+      }
+    case .lookingForSelected:
+      ()
+    case .updatedSelected:
+      return true
+    }
+    return false
   }
 
   mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {
+    path.removeLast()
+  }
+
+  mutating func walkText(_ text: String, _ binding: InputHandler?) {
+    appendPath(siblings: 0)
     path.removeLast()
   }
 

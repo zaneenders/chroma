@@ -4,8 +4,8 @@ protocol L2ElementWalker {
   mutating func walkText(_ text: String, _ binding: InputHandler?)
   mutating func beforeGroup(_ group: [any Block])
   mutating func afterGroup(ourHash: Hash, _ group: [any Block])
-  mutating func beforeChild()
+  mutating func beforeChild() -> Bool
   ///
   /// - Returns: true to break out of the child_loop
-  mutating func afterChild() -> Bool
+  mutating func afterChild(nextChildHash: Hash, index: Int, childCount: Int) -> Bool
 }
