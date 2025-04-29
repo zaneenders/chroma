@@ -38,6 +38,12 @@ struct SelectionTests {
       expected: [
         "[1]"
       ])
+    container.moveOut()
+    container.expectState(
+      &renderer,
+      expected: [
+        "1"
+      ])
   }
 
   @Test func selectEntry() async throws {

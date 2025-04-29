@@ -19,34 +19,14 @@ struct MoveOutWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
-  mutating func beforeGroup(_ group: [any Block]) {}
-  mutating func afterGroup(_ group: [any Block]) {}
+  mutating func beforeGroup(_ group: [any Block]) {
+    appendPath(siblings: group.count - 1)
+  }
   mutating func beforeChild() {}
   mutating func afterChild() -> Bool {
     false
   }
-  mutating func walkText(_ text: String, _ binding: InputHandler?) {
-    appendPath(siblings: 0)
-    // No updates to be made here best case found selected.
-    path.removeLast()
-  }
-
-  mutating func beforeGroup(_ group: [L2Element]) {
-    appendPath(siblings: group.count - 1)
-  }
-
-  mutating func walkGroup(_ group: [L2Element]) {
-    let ourHash = currentHash
-    beforeGroup(group)
-    for (index, element) in group.enumerated() {
-      currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
-      switch element {
-      case .group(let innerGroup):
-        walkGroup(innerGroup)
-      case let .text(txt, binding):
-        walkText(txt, binding)
-      }
-    }
+  mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {
     switch mode {
     case .findingSelected:
       ()
@@ -59,11 +39,11 @@ struct MoveOutWalker: L2ElementWalker {
     case .selectionUpdated:
       ()
     }
-    currentHash = ourHash
-    afterGroup(group)
+    path.removeLast()
   }
-
-  mutating func afterGroup(_ group: [L2Element]) {
+  mutating func walkText(_ text: String, _ binding: InputHandler?) {
+    appendPath(siblings: 0)
+    // No updates to be made here best case found selected.
     path.removeLast()
   }
 

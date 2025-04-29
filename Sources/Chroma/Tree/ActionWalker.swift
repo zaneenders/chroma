@@ -10,7 +10,7 @@ struct ActionWalker: L2ElementWalker {
   }
 
   mutating func beforeGroup(_ group: [any Block]) {}
-  mutating func afterGroup(_ group: [any Block]) {}
+  mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {}
   mutating func beforeChild() {}
   mutating func afterChild() -> Bool {
     false

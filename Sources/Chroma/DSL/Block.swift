@@ -42,7 +42,7 @@ extension Block {
           break child_loop
         }
       }
-      walker.afterGroup(group.children)
+      walker.afterGroup(ourHash: ourHash, group.children)
       walker.currentHash = ourHash
       return
     } else {
@@ -53,7 +53,7 @@ extension Block {
       walker.beforeChild()
       self.layer.parseTree(action: action, &walker)
       _ = walker.afterChild()
-      walker.afterGroup([self.layer])
+      walker.afterGroup(ourHash: ourHash, [self.layer])
       walker.currentHash = ourHash
       if action {
         self.saveState(nodeKey: "\(self)")

@@ -46,7 +46,7 @@ struct MoveInWalker: L2ElementWalker {
     }
     return false
   }
-  mutating func afterGroup(_ group: [any Block]) {
+  mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {
     path.removeLast()
   }
   mutating func walkText(_ text: String, _ binding: InputHandler?) {

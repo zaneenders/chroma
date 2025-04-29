@@ -86,10 +86,10 @@ struct MoveDownWalker: L2ElementWalker {
       }
     }
     currentHash = ourHash
-    afterGroup(group)
+    // afterGroup(ourHash: ourHash, group)
   }
 
-  mutating func afterGroup(_ group: [L2Element]) {
+  mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {
     path.removeLast()
   }
 
