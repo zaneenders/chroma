@@ -19,6 +19,8 @@ struct MoveOutWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
+  mutating func beforeGroup(_ group: [any Block]) {}
+  mutating func afterGroup(_ group: [any Block]) {}
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
     appendPath(siblings: 0)
     // No updates to be made here best case found selected.
@@ -34,7 +36,12 @@ struct MoveOutWalker: L2ElementWalker {
     beforeGroup(group)
     for (index, element) in group.enumerated() {
       currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
-      walk(element)
+      switch element {
+      case .group(let innerGroup):
+        walkGroup(innerGroup)
+      case let .text(txt, binding):
+        walkText(txt, binding)
+      }
     }
     switch mode {
     case .findingSelected:

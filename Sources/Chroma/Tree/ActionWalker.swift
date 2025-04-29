@@ -1,4 +1,4 @@
-struct ActionWalker: L2HashWalker {
+struct ActionWalker: L2ElementWalker {
 
   private(set) var state: BlockState
   private var input: AsciiKeyCode
@@ -9,9 +9,8 @@ struct ActionWalker: L2HashWalker {
     self.input = input
   }
 
-  mutating func beforeGroup(_ group: [L2Element]) {}
-
-  mutating func afterGroup(_ group: [L2Element]) {}
+  mutating func beforeGroup(_ group: [any Block]) {}
+  mutating func afterGroup(_ group: [any Block]) {}
 
   mutating func walkText(_ text: String, _ handler: InputHandler?) {
     Log.debug("\(#function): \(currentHash), \(state.selected)")

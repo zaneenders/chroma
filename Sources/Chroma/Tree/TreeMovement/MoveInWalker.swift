@@ -19,6 +19,8 @@ struct MoveInWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
+  mutating func beforeGroup(_ group: [any Block]) {}
+  mutating func afterGroup(_ group: [any Block]) {}
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
     appendPath(siblings: 0)
     if atSelected {
@@ -62,7 +64,12 @@ struct MoveInWalker: L2ElementWalker {
     }
     child_loop: for (index, element) in group.enumerated() {
       currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
-      walk(element)
+      switch element {
+      case .group(let innerGroup):
+        walkGroup(innerGroup)
+      case let .text(txt, binding):
+        walkText(txt, binding)
+      }
       switch mode {
       case .findingSelected:
         ()

@@ -24,27 +24,35 @@ extension Block {
   into one function to handle nested state correctly.
   */
   func parseTree(action: Bool, _ walker: inout some L2ElementWalker) {
-    let text: L2Element
     if let str = self as? String {
-      text = .text(str, nil)
+      walker.walkText(str, nil)
     } else if let textBlock = self as? Text {
-      text = .text(textBlock.text, nil)
+      walker.walkText(textBlock.text, nil)
     } else if let inputBlock = self as? any InputBlock {
       // TODO: if selected && action, call handler.
-      text = .text(inputBlock.wrapped, inputBlock.handler)
+      walker.walkText(inputBlock.wrapped, inputBlock.handler)
     } else if let group = self as? any BlockGroup {
-      for child in group.children {
+      let ourHash = walker.currentHash
+      walker.beforeGroup(group.children)
+      for (index, child) in group.children.enumerated() {
+        walker.currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
         child.parseTree(action: action, &walker)
       }
+      walker.afterGroup(group.children)
+      walker.currentHash = ourHash
       return
     } else {
       self.restoreState(nodeKey: "\(self)")
+      let ourHash = walker.currentHash
+      walker.currentHash = hash(contents: "\(ourHash)\(#function)\(0)")
+      walker.beforeGroup([self.layer])
       self.layer.parseTree(action: action, &walker)
+      walker.afterGroup([self.layer])
+      walker.currentHash = ourHash
       if action {
         self.saveState(nodeKey: "\(self)")
       }
       return
     }
-    text._walk(&walker)
   }
 }

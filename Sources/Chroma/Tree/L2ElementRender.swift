@@ -1,4 +1,4 @@
-struct L2ElementRender: L2SelectionWalker {
+struct L2ElementRender: L2ElementWalker {
 
   internal var isSelected: Bool = false
   var currentHash: Hash
@@ -47,6 +47,12 @@ struct L2ElementRender: L2SelectionWalker {
     }
     out.removeLast()  // remove last newline.
     return out
+  }
+
+  mutating func beforeGroup(_ group: [any Block]) {}
+  mutating func afterGroup(_ group: [any Block]) {}
+  mutating func walkText(_ text: String, _ binding: InputHandler?) {
+    leafNode(text)
   }
 
   mutating func leafNode(_ text: String) {

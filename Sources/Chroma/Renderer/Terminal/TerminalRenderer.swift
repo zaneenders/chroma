@@ -7,7 +7,7 @@ extension TerminalRenderer: Renderer {
     let before = clock.now
     let size = Self.size
     var walker = L2ElementRender(state: state, width: size.x, height: size.y)
-    let tree = block.parseTree(action: false, &walker)
+    block.parseTree(action: false, &walker)
     Self.write(frame: walker.ascii)
     let after = clock.now
     Log.trace("\(before.duration(to: after))")

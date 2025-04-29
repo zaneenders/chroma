@@ -1,4 +1,4 @@
-struct InitialWalk: L2HashWalker {
+struct InitialWalk: L2ElementWalker {
 
   private var first: Bool = true
   private(set) var state: BlockState
@@ -9,13 +9,11 @@ struct InitialWalk: L2HashWalker {
     self.currentHash = hash(contents: "0")
   }
 
-  mutating func beforeGroup(_ group: [L2Element]) {
+  mutating func beforeGroup(_ group: [any Block]) {
     setFirstSelection()
   }
 
-  mutating func afterGroup(_ group: [L2Element]) {
-    // ignored
-  }
+  mutating func afterGroup(_ group: [any Block]) {}
 
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
     setFirstSelection()

@@ -26,13 +26,15 @@ struct MoveDownWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
+  mutating func beforeGroup(_ group: [any Block]) {}
+  mutating func afterGroup(_ group: [any Block]) {}
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
     appendPath(siblings: 0)
     path.removeLast()
   }
 
   mutating func beforeGroup(_ group: [L2Element]) {
-    appendPath(siblings: group.count - 1)
+
   }
 
   mutating func walkGroup(_ group: [L2Element]) {
@@ -48,7 +50,12 @@ struct MoveDownWalker: L2ElementWalker {
         break child_loop
       }
       currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
-      walk(element)
+      switch element {
+      case .group(let innerGroup):
+        walkGroup(innerGroup)
+      case let .text(txt, binding):
+        walkText(txt, binding)
+      }
       switch mode {
       case .foundSelected:
         guard path.count < selectedDepth else {

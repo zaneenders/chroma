@@ -13,7 +13,7 @@ struct TestRenderer: Renderer {
   }
 }
 
-struct TestWalker: L2SelectionWalker {
+struct TestWalker: L2ElementWalker {
 
   // Set by the visitor
   var currentHash: Hash
@@ -21,15 +21,22 @@ struct TestWalker: L2SelectionWalker {
   var blockObjects: [Hash: String]
 
   var textObjects: [Hash: String] = [:]
-  var isSelected: Bool = false
   init(state: BlockState) {
     self.state = state
     self.currentHash = hash(contents: "\(0)")
     self.blockObjects = [:]
   }
 
+  mutating func beforeGroup(_ group: [any Block]) {}
+
+  mutating func afterGroup(_ group: [any Block]) {}
+
+  mutating func walkText(_ text: String, _ binding: InputHandler?) {
+    leafNode(text)
+  }
+
   mutating func leafNode(_ text: String) {
-    if isSelected {
+    if currentHash == self.state.selected {
       textObjects[currentHash] = "[\(text)]"
     } else {
       textObjects[currentHash] = text
