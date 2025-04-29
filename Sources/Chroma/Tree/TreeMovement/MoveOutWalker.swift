@@ -19,14 +19,14 @@ struct MoveOutWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
-  mutating func beforeGroup(_ group: [any Block]) {
-    appendPath(siblings: group.count - 1)
+  mutating func beforeGroup(childrenCount: Int) {
+    appendPath(siblings: childrenCount - 1)
   }
   mutating func beforeChild() -> Bool { false }
   mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     false
   }
-  mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {
+  mutating func afterGroup(ourHash: Hash) {
     switch mode {
     case .findingSelected:
       ()

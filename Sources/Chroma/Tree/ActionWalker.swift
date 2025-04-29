@@ -9,8 +9,8 @@ struct ActionWalker: L2ElementWalker {
     self.input = input
   }
 
-  mutating func beforeGroup(_ group: [any Block]) {}
-  mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {}
+  mutating func beforeGroup(childrenCount: Int) {}
+  mutating func afterGroup(ourHash: Hash) {}
   mutating func beforeChild() -> Bool { false }
   mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     false

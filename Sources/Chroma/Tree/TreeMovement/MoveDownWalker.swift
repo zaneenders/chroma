@@ -25,8 +25,8 @@ struct MoveDownWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
-  mutating func beforeGroup(_ group: [any Block]) {
-    appendPath(siblings: group.count - 1)
+  mutating func beforeGroup(childrenCount: Int) {
+    appendPath(siblings: childrenCount - 1)
   }
   mutating func beforeChild() -> Bool {
     switch mode {
@@ -68,7 +68,7 @@ struct MoveDownWalker: L2ElementWalker {
     return false
   }
 
-  mutating func afterGroup(ourHash: Hash, _ group: [any Block]) {
+  mutating func afterGroup(ourHash: Hash) {
     path.removeLast()
   }
 

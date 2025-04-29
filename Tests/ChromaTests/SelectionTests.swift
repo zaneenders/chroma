@@ -259,12 +259,12 @@ struct SelectionTests {
     var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     // Move Down
     container.moveDown()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
   }
 
   @Test func selectSelectionBlock() async throws {
@@ -272,7 +272,7 @@ struct SelectionTests {
     var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     container.moveIn()
     container.expectState(&renderer, expected: ["0", "1", "2", "Zane", "[Hello]", "here", "was"])
@@ -318,15 +318,15 @@ struct SelectionTests {
 
     container.moveOut()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     container.moveOut()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     container.moveOut()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
   }
 
   @Test func selectAsyncUpdateStateUpdate() async throws {

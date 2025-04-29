@@ -22,10 +22,10 @@ struct MoveUpWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
-  mutating func beforeGroup(_ group: [any Block]) {
-    appendPath(siblings: group.count - 1)
+  mutating func beforeGroup(childrenCount: Int) {
+    appendPath(siblings: childrenCount - 1)
   }
-  mutating func afterGroup(_ group: [any Block]) {}
+  mutating func afterGroup(ourHash: Hash) {}
   mutating func beforeChild() -> Bool {
     switch mode {
     case .foundSelected:
