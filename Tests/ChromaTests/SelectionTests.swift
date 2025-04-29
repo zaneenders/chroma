@@ -353,6 +353,30 @@ struct SelectionTests {
     try await Task.sleep(for: .milliseconds(secondPause))
     container.expectState(&renderer, expected: ["[ready]"])
   }
+
+  @Test func selectAsyncUpdateHeapUpdate() async throws {
+    let firstPause = AsyncUpdateHeapUpdate.delay / 2
+    let secondPause = AsyncUpdateHeapUpdate.delay
+
+    let block = AsyncUpdateHeapUpdate()
+    var container = ChromaController(block)
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.]"])
+
+    // Move in
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.]"])
+
+    // Action
+    container.action(.lowercaseI)
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#]"])
+
+    try await Task.sleep(for: .milliseconds(firstPause))
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#]"])
+
+    try await Task.sleep(for: .milliseconds(secondPause))
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#!]"])
+  }
 }
 
 // Helper functions to make creating test easier.

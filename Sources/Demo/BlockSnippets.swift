@@ -111,6 +111,27 @@ struct AsyncUpdateStateUpdate: Block {
   }
 }
 
+struct AsyncUpdateHeapUpdate: Block {
+  static let delay = 100
+  let storage = HeapObject()
+  var layer: some Block {
+    "\(storage.message)".bind { selected, key in
+      if selected && key == .lowercaseI {
+        update()
+      }
+    }
+  }
+
+  func update() {
+    self.storage.message += "#"
+    Task {
+      _ = await Worker.shared.performWork(
+        with: .milliseconds(AsyncUpdateStateUpdate.delay))
+      self.storage.message += "!"
+    }
+  }
+}
+
 @globalActor
 // Making this a `@globalActor`` forces the work to be done off the main thread
 // to help make sure that this API works for larger task.
