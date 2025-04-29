@@ -1,6 +1,4 @@
 struct L2ElementRender: L2ElementWalker {
-
-  internal var isSelected: Bool = false
   var currentHash: Hash
   var width: Int
   var height: Int
@@ -51,6 +49,10 @@ struct L2ElementRender: L2ElementWalker {
 
   mutating func beforeGroup(_ group: [any Block]) {}
   mutating func afterGroup(_ group: [any Block]) {}
+  mutating func beforeChild() {}
+  mutating func afterChild() -> Bool {
+    false
+  }
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
     leafNode(text)
   }
@@ -71,6 +73,7 @@ struct L2ElementRender: L2ElementWalker {
         return
       }
     }
+    let isSelected = self.state.selected == currentHash
     place(text, count, selected: isSelected)
     count += 1
   }

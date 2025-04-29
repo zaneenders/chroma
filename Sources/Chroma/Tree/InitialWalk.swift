@@ -14,7 +14,10 @@ struct InitialWalk: L2ElementWalker {
   }
 
   mutating func afterGroup(_ group: [any Block]) {}
-
+  mutating func beforeChild() {}
+  mutating func afterChild() -> Bool {
+    false
+  }
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
     setFirstSelection()
   }

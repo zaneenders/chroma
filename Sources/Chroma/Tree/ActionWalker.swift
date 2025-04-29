@@ -11,7 +11,10 @@ struct ActionWalker: L2ElementWalker {
 
   mutating func beforeGroup(_ group: [any Block]) {}
   mutating func afterGroup(_ group: [any Block]) {}
-
+  mutating func beforeChild() {}
+  mutating func afterChild() -> Bool {
+    false
+  }
   mutating func walkText(_ text: String, _ handler: InputHandler?) {
     Log.debug("\(#function): \(currentHash), \(state.selected)")
     runBinding(handler)

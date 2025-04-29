@@ -34,9 +34,13 @@ extension Block {
     } else if let group = self as? any BlockGroup {
       let ourHash = walker.currentHash
       walker.beforeGroup(group.children)
-      for (index, child) in group.children.enumerated() {
+      child_loop: for (index, child) in group.children.enumerated() {
+        walker.beforeChild()
         walker.currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
         child.parseTree(action: action, &walker)
+        if walker.afterChild() {
+          break child_loop
+        }
       }
       walker.afterGroup(group.children)
       walker.currentHash = ourHash
@@ -46,7 +50,9 @@ extension Block {
       let ourHash = walker.currentHash
       walker.currentHash = hash(contents: "\(ourHash)\(#function)\(0)")
       walker.beforeGroup([self.layer])
+      walker.beforeChild()
       self.layer.parseTree(action: action, &walker)
+      _ = walker.afterChild()
       walker.afterGroup([self.layer])
       walker.currentHash = ourHash
       if action {

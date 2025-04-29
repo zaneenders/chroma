@@ -15,27 +15,29 @@ struct SelectionTests {
     }.environment(Mode())
     var container = ChromaController(window.entry)
     var renderer = TestRenderer()
-    container.printState(&renderer)
     container.expectState(
       &renderer,
       expected: [
         "0"
       ])
-    container.printState(&renderer)
     container.action(.lowercaseI)
-    container.printState(&renderer)
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "[0]"
-    //   ])
-    // container.moveIn()
-    // container.action(.lowercaseI)
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "[1]"
-    //   ])
+    container.expectState(
+      &renderer,
+      expected: [
+        "0"
+      ])
+    container.moveIn()
+    container.expectState(
+      &renderer,
+      expected: [
+        "[0]"
+      ])
+    container.action(.lowercaseI)
+    container.expectState(
+      &renderer,
+      expected: [
+        "[1]"
+      ])
   }
 
   @Test func selectEntry() async throws {
