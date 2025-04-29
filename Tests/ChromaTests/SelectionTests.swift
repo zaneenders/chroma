@@ -215,7 +215,7 @@ struct SelectionTests {
     let block = All()
     var container = ChromaController(block)
     var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[A]", "[Button]", "[Here]", "[Was]", "[Zane]"])
+    container.expectState(&renderer, expected: ["A", "Button", "Here", "Was", "Zane"])
     // Move in
     container.moveIn()
 
@@ -230,7 +230,7 @@ struct SelectionTests {
     var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
-      &renderer, expected: ["[Hello]", "[OptionalBlock(idk: Optional(\"Hello\"))]"])
+      &renderer, expected: ["Hello", "OptionalBlock(idk: Optional(\"Hello\"))"])
   }
 
   // Test up and down logic.
@@ -238,7 +238,7 @@ struct SelectionTests {
     let block = BasicTupleBindedText()
     var container = ChromaController(block)
     var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]", "[Enders]"])
+    container.expectState(&renderer, expected: ["Hello", "Zane", "Enders"])
     container.moveIn()
     container.moveIn()
     container.moveDown()
