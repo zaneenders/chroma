@@ -13,7 +13,7 @@ struct TestRenderer: Renderer {
   }
 }
 
-struct TestWalker: L2ElementWalker {
+struct TestWalker: ElementWalker {
 
   // Set by the visitor
   var currentHash: Hash

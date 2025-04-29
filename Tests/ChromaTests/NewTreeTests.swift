@@ -10,7 +10,7 @@ struct NewTreeTests {
 
   @Test func treeEntry() async throws {
     let block = Entry()
-    var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
+    var parser = ElementRender(state: BlockState(), width: 80, height: 24)
     block.parseTree(action: false, &parser)
     let expectedText = #"""
       Hello, I am Chroma.
@@ -24,7 +24,7 @@ struct NewTreeTests {
 
   @Test func treeAll() async throws {
     let block = All()
-    var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
+    var parser = ElementRender(state: BlockState(), width: 80, height: 24)
     block.parseTree(action: false, &parser)
     let expectedText = #"""
       Button
@@ -39,7 +39,7 @@ struct NewTreeTests {
 
   @Test func treeOptionalBlock() async throws {
     let block = OptionalBlock()
-    var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
+    var parser = ElementRender(state: BlockState(), width: 80, height: 24)
     block.parseTree(action: false, &parser)
     let expectedText = #"""
       OptionalBlock(idk: Optional("Hello"))
@@ -51,7 +51,7 @@ struct NewTreeTests {
 
   @Test func treeBasicTupleText() async throws {
     let block = BasicTupleText()
-    var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
+    var parser = ElementRender(state: BlockState(), width: 80, height: 24)
     block.parseTree(action: false, &parser)
     let expectedText = #"""
       Hello
@@ -63,7 +63,7 @@ struct NewTreeTests {
 
   @Test func treeSelectionBlock() async throws {
     let block = SelectionBlock()
-    var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
+    var parser = ElementRender(state: BlockState(), width: 80, height: 24)
     block.parseTree(action: false, &parser)
     let expectedText = #"""
       Hello
@@ -80,7 +80,7 @@ struct NewTreeTests {
 
   @Test func treeAsyncUpdateStateUpdate() async throws {
     let block = AsyncUpdateStateUpdate()
-    var parser = L2ElementRender(state: BlockState(), width: 80, height: 24)
+    var parser = ElementRender(state: BlockState(), width: 80, height: 24)
     block.parseTree(action: false, &parser)
     let expectedText = #"""
       ready

@@ -15,7 +15,7 @@ struct Demo: Chroma {
   // Entry point of your AST
   var window: some Window {
     TerminalWindow {
-      SelectionBlock()
+      AsyncUpdateStateUpdate()
     }
     // Adds Mode to @Environment to be accessed through out the Block layers.
     .environment(Mode())

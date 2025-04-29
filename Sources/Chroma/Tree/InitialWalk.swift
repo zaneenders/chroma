@@ -1,4 +1,4 @@
-struct InitialWalk: L2ElementWalker {
+struct InitialWalk: ElementWalker {
 
   private var first: Bool = true
   private(set) var state: BlockState

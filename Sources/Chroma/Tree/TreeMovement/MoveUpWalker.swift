@@ -1,4 +1,4 @@
-struct MoveUpWalker: L2ElementWalker {
+struct MoveUpWalker: ElementWalker {
 
   private let startingSelection: Hash
   private(set) var state: BlockState

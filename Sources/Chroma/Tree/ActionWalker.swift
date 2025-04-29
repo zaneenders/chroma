@@ -1,4 +1,4 @@
-struct ActionWalker: L2ElementWalker {
+struct ActionWalker: ElementWalker {
 
   private(set) var state: BlockState
   private var input: AsciiKeyCode

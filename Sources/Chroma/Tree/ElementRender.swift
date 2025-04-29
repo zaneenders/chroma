@@ -1,4 +1,4 @@
-struct L2ElementRender: L2ElementWalker {
+struct ElementRender: ElementWalker {
   var currentHash: Hash
   var width: Int
   var height: Int

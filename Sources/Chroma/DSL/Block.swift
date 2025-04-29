@@ -44,7 +44,7 @@ extension Block {
   This function is a more flattened out version of optimizeTree as we need to flatten out those calls
   into one function to handle nested state correctly.
   */
-  func parseTree(action: Bool, _ walker: inout some L2ElementWalker) {
+  func parseTree(action: Bool, _ walker: inout some ElementWalker) {
     if let str = self as? String {
       walker.walkText(str, nil)
     } else if let textBlock = self as? Text {

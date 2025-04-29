@@ -1,4 +1,4 @@
-struct MoveInWalker: L2ElementWalker {
+struct MoveInWalker: ElementWalker {
 
   enum State {
     case findingSelected

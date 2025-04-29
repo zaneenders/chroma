@@ -1,5 +1,5 @@
 @MainActor
-protocol L2ElementWalker {
+protocol ElementWalker {
   var currentHash: Hash { get set }
   mutating func walkText(_ text: String, _ binding: InputHandler?)
   mutating func beforeGroup(childrenCount: Int)

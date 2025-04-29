@@ -3,7 +3,7 @@ enum SelectedPathNode {
   case layer(siblings: Int)
 }
 
-struct MoveDownWalker: L2ElementWalker {
+struct MoveDownWalker: ElementWalker {
   private let startingSelection: Hash
   private(set) var state: BlockState
   var currentHash: Hash = hash(contents: "0")
