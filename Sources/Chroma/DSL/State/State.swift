@@ -11,11 +11,16 @@ protocol StorageProtocol<Value> {
 }
 
 @propertyWrapper
+@available(*, deprecated, message: "Seeing what I can build without @State")
+/*
+Ok so doing async updates to this is more complicated than it's worth right now.
+Instead of letting the project get stuck because of this I am going for a not as pretty DSL in favor of building something.
+*/
 @MainActor
-public struct State<Value: Sendable>: StateProtocol {
+internal struct State<Value: Sendable>: StateProtocol {
   private let _storage: Storage
 
-  public init(wrappedValue: Value) {
+  internal init(wrappedValue: Value) {
     self._storage = Storage(wrappedValue)
   }
 
@@ -23,7 +28,7 @@ public struct State<Value: Sendable>: StateProtocol {
     _storage
   }
 
-  public var wrappedValue: Value {
+  internal var wrappedValue: Value {
     get {
       _storage.value
     }
@@ -32,7 +37,7 @@ public struct State<Value: Sendable>: StateProtocol {
     }
   }
 
-  public var projectedValue: Binding<Value> {
+  internal var projectedValue: Binding<Value> {
     Binding(
       get: {
         self.wrappedValue

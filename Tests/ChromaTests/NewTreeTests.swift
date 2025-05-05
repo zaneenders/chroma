@@ -77,17 +77,6 @@ struct NewTreeTests {
     let window = Window(expectedText, width: 80, height: 24)
     #expect(window.tiles == parser.tiles)
   }
-
-  @Test func treeAsyncUpdateStateUpdate() async throws {
-    let block = AsyncUpdateStateUpdate()
-    var parser = ElementRender(state: BlockState(), width: 80, height: 24)
-    block.parseTree(action: false, &parser)
-    let expectedText = #"""
-      ready
-      """#
-    let window = Window(expectedText, width: 80, height: 24)
-    #expect(window.tiles == parser.tiles)
-  }
 }
 
 struct Window {

@@ -15,7 +15,7 @@ struct Demo: Chroma {
   // Entry point of your AST
   var window: some Window {
     TerminalWindow {
-      AsyncUpdateStateUpdate()
+      Entry()
     }
     // Adds Mode to @Environment to be accessed through out the Block layers.
     .environment(Mode())
@@ -53,11 +53,6 @@ struct Demo: Chroma {
 struct Entry: Block {
   @Environment(Mode.self) var inputMode
   let storage = HeapObject()
-  // ``@State`` is used for simple variables that can be modified at run time
-  // by user interaction from the `.bind` function or async task.
-  @State var running: RunningState = .ready
-  @State var count = 0
-  @State var message: String = "Hello"
   var layer: some Block {
     storage.message.bind { selected, key in
       if selected && key == .lowercaseI {
@@ -68,33 +63,32 @@ struct Entry: Block {
         case .movement:
           inputMode.mode = .input
         }
-        storage.message += "!"
-        message += "#"
+        storage.message = "\(inputMode.mode)"
       }
     }
-    "Zane was here :\(count)".bind { selected, key in
+    "Zane was here :\(storage.count)".bind { selected, key in
       if selected && key == .lowercaseE {
         // Basic counter
-        count += 1
+        storage.count += 1
       }
     }
-    "Job running: \(running)".bind { selected, key in
+    "Job running: \(storage.running)".bind { selected, key in
       if selected && key == .lowercaseI {
         self.longRunningTask()
       }
     }
-    Nested(text: $message, count: $count)
+    Nested(text: storage.message, count: storage.count)
   }
 
   // This is an example of a basic async task and update to the UI to display
   // if the task is still running. More complex states could be displayed by
   // extending ``RunningState``.
   func longRunningTask() {
-    self.running = .running
-    message = "\(running)"
+    storage.running = .running
+    storage.message = "\(storage.running)"
     Task {
-      self.running = await Worker.shared.performWork(with: .seconds(1))
-      message = "\(running)"
+      storage.running = await Worker.shared.performWork(with: .seconds(1))
+      storage.message = "\(storage.running)"
     }
   }
 }
@@ -103,8 +97,8 @@ struct Entry: Block {
 /// parent. This is useful if you only want the composed ``Block`` to display
 /// or update based on another value.
 struct Nested: Block {
-  @Binding var text: String
-  @Binding var count: Int
+  let text: String
+  let count: Int
   var layer: some Block {
     "Nested[text: \(text)]"
     for i in 0..<count {
@@ -118,6 +112,8 @@ struct Nested: Block {
 /// located on the heap.
 final class HeapObject {
   var message = "Hello, I am Chroma."
+  var running: RunningState = .ready
+  var count = 0
 }
 
 enum RunningState {
