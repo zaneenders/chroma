@@ -1,4 +1,4 @@
-struct ActionWalker: L2HashWalker {
+struct ActionWalker: ElementWalker {
 
   private(set) var state: BlockState
   private var input: AsciiKeyCode
@@ -9,10 +9,12 @@ struct ActionWalker: L2HashWalker {
     self.input = input
   }
 
-  mutating func beforeGroup(_ group: [L2Element]) {}
-
-  mutating func afterGroup(_ group: [L2Element]) {}
-
+  mutating func beforeGroup(childrenCount: Int) {}
+  mutating func afterGroup(ourHash: Hash) {}
+  mutating func beforeChild() -> Bool { false }
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
+    false
+  }
   mutating func walkText(_ text: String, _ handler: InputHandler?) {
     Log.debug("\(#function): \(currentHash), \(state.selected)")
     runBinding(handler)

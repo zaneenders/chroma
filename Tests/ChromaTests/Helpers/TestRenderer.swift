@@ -8,33 +8,39 @@ struct TestRenderer: Renderer {
     selected = state.selected ?? ""
     var walker = TestWalker(state: state)
     walker.textObjects = [:]
-    walker.walk(block.optimizeTree())
+    block.parseTree(action: false, &walker)
     previousWalker = walker
   }
 }
 
-extension TestRenderer {
-  struct TestWalker: L2SelectionWalker {
+struct TestWalker: ElementWalker {
 
-    // Set by the visitor
-    var currentHash: Hash
-    let state: BlockState
-    var blockObjects: [Hash: String]
+  // Set by the visitor
+  var currentHash: Hash
+  let state: BlockState
+  var blockObjects: [Hash: String]
 
-    var textObjects: [Hash: String] = [:]
-    var isSelected: Bool = false
-    init(state: BlockState) {
-      self.state = state
-      self.currentHash = hash(contents: "\(0)")
-      self.blockObjects = [:]
-    }
+  var textObjects: [Hash: String] = [:]
+  init(state: BlockState) {
+    self.state = state
+    self.currentHash = hash(contents: "\(0)")
+    self.blockObjects = [:]
+  }
 
-    mutating func leafNode(_ text: String) {
-      if isSelected {
-        textObjects[currentHash] = "[\(text)]"
-      } else {
-        textObjects[currentHash] = text
-      }
+  mutating func beforeGroup(childrenCount: Int) {}
+  mutating func beforeChild() -> Bool { false }
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool { false }
+  mutating func afterGroup(ourHash: Hash) {}
+
+  mutating func walkText(_ text: String, _ binding: InputHandler?) {
+    leafNode(text)
+  }
+
+  mutating func leafNode(_ text: String) {
+    if currentHash == self.state.selected {
+      textObjects[currentHash] = "[\(text)]"
+    } else {
+      textObjects[currentHash] = text
     }
   }
 }

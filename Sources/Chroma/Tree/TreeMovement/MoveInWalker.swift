@@ -1,4 +1,4 @@
-struct MoveInWalker: L2ElementWalker {
+struct MoveInWalker: ElementWalker {
 
   enum State {
     case findingSelected
@@ -19,6 +19,36 @@ struct MoveInWalker: L2ElementWalker {
     Log.debug("\(self.startingSelection)")
   }
 
+  mutating func beforeGroup(childrenCount: Int) {
+    appendPath(siblings: childrenCount - 1)
+    switch mode {
+    case .findingSelected:
+      ()
+    case .foundSelected:
+      if path.count > selectedDepth {
+        // we are below the layer we were
+        state.selected = currentHash
+        self.mode = .selectionUpdated
+      }
+    case .selectionUpdated:
+      ()
+    }
+  }
+  mutating func beforeChild() -> Bool { false }
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
+    switch mode {
+    case .findingSelected:
+      ()
+    case .foundSelected:
+      ()
+    case .selectionUpdated:
+      return true
+    }
+    return false
+  }
+  mutating func afterGroup(ourHash: Hash) {
+    path.removeLast()
+  }
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
     appendPath(siblings: 0)
     if atSelected {
@@ -38,45 +68,6 @@ struct MoveInWalker: L2ElementWalker {
         }
       }
     }
-    path.removeLast()
-  }
-
-  mutating func beforeGroup(_ group: [L2Element]) {
-    appendPath(siblings: group.count - 1)
-  }
-
-  mutating func walkGroup(_ group: [L2Element]) {
-    let ourHash = currentHash
-    beforeGroup(group)
-    switch mode {
-    case .findingSelected:
-      ()
-    case .foundSelected:
-      if path.count > selectedDepth {
-        // we are below the layer we were
-        state.selected = ourHash
-        self.mode = .selectionUpdated
-      }
-    case .selectionUpdated:
-      ()
-    }
-    child_loop: for (index, element) in group.enumerated() {
-      currentHash = hash(contents: "\(ourHash)\(#function)\(index)")
-      walk(element)
-      switch mode {
-      case .findingSelected:
-        ()
-      case .foundSelected:
-        ()
-      case .selectionUpdated:
-        break child_loop
-      }
-    }
-    currentHash = ourHash
-    afterGroup(group)
-  }
-
-  mutating func afterGroup(_ group: [L2Element]) {
     path.removeLast()
   }
 
