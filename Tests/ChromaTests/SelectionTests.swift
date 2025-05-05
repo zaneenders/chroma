@@ -107,86 +107,6 @@ struct SelectionTests {
     container.expectState(&renderer, expected: ["Hello", "Zane"])
   }
 
-  @Test func selectEntry() async throws {
-    let window = TerminalWindow {
-      Entry()
-    }.environment(Mode())
-    var container = ChromaController(window.entry)
-    var renderer = TestRenderer()
-    container.printState(&renderer)
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "[Hello, I am Chroma.]", "[Job running: ready]", "[Nested[text: Hello]]",
-    //     "[Zane was here :0]",
-    //   ])
-
-    // container.moveIn()
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "[Hello, I am Chroma.]", "Job running: ready", "Nested[text: Hello]", "Zane was here :0",
-    //   ])
-
-    // container.action(.lowercaseI)
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "Zane was here :0", "Nested[text: Hello#]", "[Hello, I am Chroma.!]", "Job running: ready",
-    //   ])
-
-    // container.moveDown()
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "[Zane was here :0]", "Nested[text: Hello#]", "Hello, I am Chroma.!", "Job running: ready",
-    //   ])
-
-    // container.action(.lowercaseE)
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "Job running: ready", "[Zane was here :1]", "Nested[text: Hello#]", "Hello, I am Chroma.!",
-    //     "0",
-    //   ])
-    // container.moveDown()
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "Zane was here :1", "[Job running: ready]", "Nested[text: Hello#]", "Hello, I am Chroma.!",
-    //     "0",
-    //   ])
-    // container.action(.lowercaseI)
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-    //     "Hello, I am Chroma.!", "0",
-    //   ])
-    // try await Task.sleep(for: .seconds(0.5))
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-    //     "Hello, I am Chroma.!", "0",
-    //   ])
-    // try await Task.sleep(for: .seconds(1))
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "Zane was here :1", "[Job running: ready]", "Nested[text: ready]", "Hello, I am Chroma.!",
-    //     "0",
-    //   ])
-    // container.moveUp()
-    // container.expectState(
-    //   &renderer,
-    //   expected: [
-    //     "[Zane was here :1]", "Job running: ready", "Nested[text: ready]", "Hello, I am Chroma.!",
-    //     "0",
-    //   ])
-
-  }
-
   @Test func selectEntryMoveToNested() async throws {
     let window = TerminalWindow {
       Entry()
@@ -201,13 +121,13 @@ struct SelectionTests {
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :0", "Job running: ready", "[Nested[text: Hello]]", "Hello, I am Chroma.",
+        "Zane was here :0", "Job running: ready", "[Nested[text: Hello, I am Chroma.]]", "Hello, I am Chroma.",
       ])
     container.moveUp()
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :0", "[Job running: ready]", "Nested[text: Hello]", "Hello, I am Chroma.",
+        "Zane was here :0", "[Job running: ready]", "Nested[text: Hello, I am Chroma.]", "Hello, I am Chroma.",
       ])
   }
 
@@ -327,31 +247,6 @@ struct SelectionTests {
     container.moveOut()
     container.expectState(
       &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
-  }
-
-  @Test func selectAsyncUpdateStateUpdate() async throws {
-
-    let firstPause = AsyncUpdateStateUpdate.delay / 2
-    let secondPause = AsyncUpdateStateUpdate.delay
-
-    let block = AsyncUpdateStateUpdate()
-    var container = ChromaController(block)
-    var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[ready]"])
-
-    // Move in
-    container.moveIn()
-    container.expectState(&renderer, expected: ["[ready]"])
-
-    // Action
-    container.action(.lowercaseI)
-    container.expectState(&renderer, expected: ["[running]"])
-
-    try await Task.sleep(for: .milliseconds(firstPause))
-    container.expectState(&renderer, expected: ["[running]"])
-
-    try await Task.sleep(for: .milliseconds(secondPause))
-    container.expectState(&renderer, expected: ["[ready]"])
   }
 
   @Test func selectAsyncUpdateHeapUpdate() async throws {
