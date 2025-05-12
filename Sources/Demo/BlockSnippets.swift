@@ -97,6 +97,12 @@ struct NestedState: Block {
   }
 }
 
+struct NestedAsyncUpdateHeapUpdate: Block {
+  var layer: some Block {
+    AsyncUpdateHeapUpdate()
+  }
+}
+
 struct AsyncUpdateHeapUpdate: Block {
   static let delay = 100
   let storage = HeapObject()
