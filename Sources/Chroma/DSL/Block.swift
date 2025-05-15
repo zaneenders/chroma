@@ -49,6 +49,13 @@ extension Block {
       walker.walkText(str, nil)
     } else if let textBlock = self as? Text {
       walker.walkText(textBlock.text, nil)
+    } else if let nav = self as? Navigation {
+      let ourHash = walker.currentHash
+      for (i, item) in nav.items.enumerated() {
+        walker.currentHash = hash(contents: "\(ourHash)\(#function)\(i)")
+        item.b.parseTree(action: action, &walker)
+      }
+      walker.currentHash = ourHash
     } else if let inputBlock = self as? any InputBlock {
       // TODO: if selected && action, call handler.
       walker.walkText(inputBlock.wrapped, inputBlock.handler)
