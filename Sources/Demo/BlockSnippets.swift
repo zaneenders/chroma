@@ -30,6 +30,19 @@ struct All: Block {
   }
 }
 
+struct TestNav: Block {
+  var layer: some Block {
+    Navigation {
+      Item {
+        "Top"
+      }
+      Item {
+        "Bottom"
+      }
+    }
+  }
+}
+
 struct OptionalBlock: Block {
   var idk: String? = "Hello"
   var layer: some Block {
