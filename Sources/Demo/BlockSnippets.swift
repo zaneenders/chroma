@@ -9,14 +9,17 @@ starting point for building more complex interfaces.
 // right now.
 struct All: Block {
   let items = ["Zane", "Was", "Here"]
-  @State var condition = true
+  final class Storage {
+    var condition = true
+  }
+  let store = Storage()
   var layer: some Block {
     "Button".bind { selected, key in
       if selected && key == .lowercaseI {
-        condition.toggle()
+        store.condition.toggle()
       }
     }
-    if condition {
+    if store.condition {
       "A"
     } else {
       "B"
@@ -71,12 +74,40 @@ struct SelectionBlock: Block {
   }
 }
 
-// Simple example of asynchronously updating the state from a
-struct AsyncUpdateStateUpdate: Block {
-  static let delay = 100
-  @State var state: RunningState = .ready
+// Test nested state
+struct NestedState: Block {
+  final class Storage {
+    var count: Int = 0
+  }
+  let store = Storage()
   var layer: some Block {
-    "\(state)".bind { selected, key in
+    Nested(store: store)
+  }
+
+  struct Nested: Block {
+    let store: Storage
+    var layer: some Block {
+      "\(store.count)".bind { selected, code in
+        if selected && code == .lowercaseI {
+          Log.warning("Clicked")
+          store.count += 1
+        }
+      }
+    }
+  }
+}
+
+struct NestedAsyncUpdateHeapUpdate: Block {
+  var layer: some Block {
+    AsyncUpdateHeapUpdate()
+  }
+}
+
+struct AsyncUpdateHeapUpdate: Block {
+  static let delay = 100
+  let storage = HeapObject()
+  var layer: some Block {
+    "\(storage.message)".bind { selected, key in
       if selected && key == .lowercaseI {
         update()
       }
@@ -84,10 +115,11 @@ struct AsyncUpdateStateUpdate: Block {
   }
 
   func update() {
-    self.state = .running
+    self.storage.message += "#"
     Task {
-      self.state = await Worker.shared.performWork(
-        with: .milliseconds(AsyncUpdateStateUpdate.delay))
+      _ = await Worker.shared.performWork(
+        with: .milliseconds(AsyncUpdateHeapUpdate.delay))
+      self.storage.message += "!"
     }
   }
 }

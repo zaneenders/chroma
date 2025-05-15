@@ -12,12 +12,11 @@ extension String {
 @MainActor
 protocol InputBlock: Block {
   var handler: InputHandler { get }
-  associatedtype Wrapped: Block
-  var layer: Wrapped { get }
+  var wrapped: String { get }
 }
 
-struct Input<W: Block>: InputBlock {
-  let wrapped: W
+struct Input: InputBlock {
+  let wrapped: String
   let handler: InputHandler
   var layer: some Block {
     wrapped.layer

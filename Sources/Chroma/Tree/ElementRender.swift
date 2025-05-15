@@ -1,6 +1,4 @@
-struct L2ElementRender: L2SelectionWalker {
-
-  internal var isSelected: Bool = false
+struct ElementRender: ElementWalker {
   var currentHash: Hash
   var width: Int
   var height: Int
@@ -49,6 +47,16 @@ struct L2ElementRender: L2SelectionWalker {
     return out
   }
 
+  mutating func beforeGroup(childrenCount: Int) {}
+  mutating func afterGroup(ourHash: Hash) {}
+  mutating func beforeChild() -> Bool { false }
+  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
+    false
+  }
+  mutating func walkText(_ text: String, _ binding: InputHandler?) {
+    leafNode(text)
+  }
+
   mutating func leafNode(_ text: String) {
     // This "rendering" logic is dumb but lets get it working first.
     if count >= height {
@@ -65,6 +73,7 @@ struct L2ElementRender: L2SelectionWalker {
         return
       }
     }
+    let isSelected = self.state.selected == currentHash
     place(text, count, selected: isSelected)
     count += 1
   }

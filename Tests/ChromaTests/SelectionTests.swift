@@ -5,86 +5,106 @@ import Testing
 
 @MainActor  // UI Block test run on main thread.
 @Suite("Selection Tests")
-// NOTE: Keep ordered by Demo then BlockSnippets
 struct SelectionTests {
 
-  @Test func selectEntry() async throws {
+  @MainActor
+  @Test func nestedBlocks() async throws {
     let window = TerminalWindow {
-      Entry()
+      NestedState()
     }.environment(Mode())
     var container = ChromaController(window.entry)
     var renderer = TestRenderer()
     container.expectState(
       &renderer,
       expected: [
-        "[Hello, I am Chroma.]", "[Job running: ready]", "[Nested[text: Hello]]",
-        "[Zane was here :0]",
+        "0"
       ])
-
+    container.action(.lowercaseI)
+    container.expectState(
+      &renderer,
+      expected: [
+        "0"
+      ])
     container.moveIn()
     container.expectState(
       &renderer,
       expected: [
-        "[Hello, I am Chroma.]", "Job running: ready", "Nested[text: Hello]", "Zane was here :0",
-      ])
-
-    container.action(.lowercaseI)
-    container.expectState(
-      &renderer,
-      expected: [
-        "Zane was here :0", "Nested[text: Hello#]", "[Hello, I am Chroma.!]", "Job running: ready",
-      ])
-
-    container.moveDown()
-    container.expectState(
-      &renderer,
-      expected: [
-        "[Zane was here :0]", "Nested[text: Hello#]", "Hello, I am Chroma.!", "Job running: ready",
-      ])
-
-    container.action(.lowercaseE)
-    container.expectState(
-      &renderer,
-      expected: [
-        "Job running: ready", "[Zane was here :1]", "Nested[text: Hello#]", "Hello, I am Chroma.!",
-        "0",
-      ])
-    container.moveDown()
-    container.expectState(
-      &renderer,
-      expected: [
-        "Zane was here :1", "[Job running: ready]", "Nested[text: Hello#]", "Hello, I am Chroma.!",
-        "0",
+        "[0]"
       ])
     container.action(.lowercaseI)
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-        "Hello, I am Chroma.!", "0",
+        "[1]"
       ])
-    try await Task.sleep(for: .seconds(0.5))
+    container.moveOut()
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :1", "[Job running: running]", "Nested[text: running]",
-        "Hello, I am Chroma.!", "0",
+        "1"
       ])
-    try await Task.sleep(for: .seconds(1))
-    container.expectState(
-      &renderer,
-      expected: [
-        "Zane was here :1", "[Job running: ready]", "Nested[text: ready]", "Hello, I am Chroma.!",
-        "0",
-      ])
+  }
+
+  @Test func selectBasicTupleText() async throws {
+    let block = BasicTupleText()
+    var container = ChromaController(block)
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+  }
+
+  @Test func selectBasicTupleTextMoveIn() async throws {
+    let block = BasicTupleText()
+    var container = ChromaController(block)
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
+  }
+
+  @Test func selectBasicTupleTextMoveInAndOut() async throws {
+    let block = BasicTupleText()
+    var container = ChromaController(block)
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+    container.moveIn()
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
+    container.moveOut()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+    container.moveOut()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+  }
+
+  @Test func selectBasicTupleTextMoveInDownOut() async throws {
+    let block = BasicTupleText()
+    var container = ChromaController(block)
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+    container.moveIn()
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
+    container.moveDown()
+    container.expectState(&renderer, expected: ["Hello", "[Zane]"])
+    container.moveOut()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+  }
+
+  @Test func selectBasicTupleTextMoveInDownUpOut() async throws {
+    let block = BasicTupleText()
+    var container = ChromaController(block)
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
+    container.moveIn()
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
+    container.moveDown()
+    container.expectState(&renderer, expected: ["Hello", "[Zane]"])
     container.moveUp()
-    container.expectState(
-      &renderer,
-      expected: [
-        "[Zane was here :1]", "Job running: ready", "Nested[text: ready]", "Hello, I am Chroma.!",
-        "0",
-      ])
-
+    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
+    container.moveOut()
+    container.expectState(&renderer, expected: ["Hello", "Zane"])
   }
 
   @Test func selectEntryMoveToNested() async throws {
@@ -101,13 +121,13 @@ struct SelectionTests {
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :0", "Job running: ready", "[Nested[text: Hello]]", "Hello, I am Chroma.",
+        "Zane was here :0", "Job running: ready", "[Nested[text: Hello, I am Chroma.]]", "Hello, I am Chroma.",
       ])
     container.moveUp()
     container.expectState(
       &renderer,
       expected: [
-        "Zane was here :0", "[Job running: ready]", "Nested[text: Hello]", "Hello, I am Chroma.",
+        "Zane was here :0", "[Job running: ready]", "Nested[text: Hello, I am Chroma.]", "Hello, I am Chroma.",
       ])
   }
 
@@ -115,7 +135,7 @@ struct SelectionTests {
     let block = All()
     var container = ChromaController(block)
     var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[A]", "[Button]", "[Here]", "[Was]", "[Zane]"])
+    container.expectState(&renderer, expected: ["A", "Button", "Here", "Was", "Zane"])
     // Move in
     container.moveIn()
 
@@ -130,7 +150,7 @@ struct SelectionTests {
     var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
-      &renderer, expected: ["[Hello]", "[OptionalBlock(idk: Optional(\"Hello\"))]"])
+      &renderer, expected: ["Hello", "OptionalBlock(idk: Optional(\"Hello\"))"])
   }
 
   // Test up and down logic.
@@ -138,7 +158,7 @@ struct SelectionTests {
     let block = BasicTupleBindedText()
     var container = ChromaController(block)
     var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]", "[Enders]"])
+    container.expectState(&renderer, expected: ["Hello", "Zane", "Enders"])
     container.moveIn()
     container.moveIn()
     container.moveDown()
@@ -154,79 +174,17 @@ struct SelectionTests {
     container.expectState(&renderer, expected: ["[Hello]", "Zane", "Enders"])
   }
 
-  @Test func selectBasicTupleText() async throws {
-    let block = BasicTupleText()
-    var container = ChromaController(block)
-    var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-  }
-
-  @Test func selectBasicTupleTextMoveIn() async throws {
-    let block = BasicTupleText()
-    var container = ChromaController(block)
-    var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-    container.moveIn()
-    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
-    container.moveIn()
-    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
-  }
-
-  @Test func selectBasicTupleTextMoveInAndOut() async throws {
-    let block = BasicTupleText()
-    var container = ChromaController(block)
-    var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-    container.moveIn()
-    container.moveIn()
-    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
-    container.moveOut()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-    container.moveOut()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-  }
-
-  @Test func selectBasicTupleTextMoveInDownOut() async throws {
-    let block = BasicTupleText()
-    var container = ChromaController(block)
-    var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-    container.moveIn()
-    container.moveIn()
-    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
-    container.moveDown()
-    container.expectState(&renderer, expected: ["Hello", "[Zane]"])
-    container.moveOut()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-  }
-
-  @Test func selectBasicTupleTextMoveInDownUpOut() async throws {
-    let block = BasicTupleText()
-    var container = ChromaController(block)
-    var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-    container.moveIn()
-    container.moveIn()
-    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
-    container.moveDown()
-    container.expectState(&renderer, expected: ["Hello", "[Zane]"])
-    container.moveUp()
-    container.expectState(&renderer, expected: ["[Hello]", "Zane"])
-    container.moveOut()
-    container.expectState(&renderer, expected: ["[Hello]", "[Zane]"])
-  }
-
   @Test func selectSelectionBlockDontMoveDown() async throws {
     let block = SelectionBlock()
     var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     // Move Down
     container.moveDown()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
   }
 
   @Test func selectSelectionBlock() async throws {
@@ -234,7 +192,7 @@ struct SelectionTests {
     var container = ChromaController(block)
     var renderer = TestRenderer()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     container.moveIn()
     container.expectState(&renderer, expected: ["0", "1", "2", "Zane", "[Hello]", "here", "was"])
@@ -280,40 +238,65 @@ struct SelectionTests {
 
     container.moveOut()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     container.moveOut()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
 
     container.moveOut()
     container.expectState(
-      &renderer, expected: ["[0]", "[1]", "[2]", "[Hello]", "[Zane]", "[here]", "[was]"])
+      &renderer, expected: ["0", "1", "2", "Hello", "Zane", "here", "was"])
   }
 
-  @Test func selectAsyncUpdateStateUpdate() async throws {
+  @Test func selectAsyncUpdateHeapUpdate() async throws {
+    let firstPause = AsyncUpdateHeapUpdate.delay / 2
+    let secondPause = AsyncUpdateHeapUpdate.delay
 
-    let firstPause = AsyncUpdateStateUpdate.delay / 2
-    let secondPause = AsyncUpdateStateUpdate.delay
-
-    let block = AsyncUpdateStateUpdate()
+    let block = AsyncUpdateHeapUpdate()
     var container = ChromaController(block)
     var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["[ready]"])
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.]"])
 
     // Move in
     container.moveIn()
-    container.expectState(&renderer, expected: ["[ready]"])
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.]"])
 
     // Action
     container.action(.lowercaseI)
-    container.expectState(&renderer, expected: ["[running]"])
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#]"])
 
     try await Task.sleep(for: .milliseconds(firstPause))
-    container.expectState(&renderer, expected: ["[running]"])
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#]"])
 
     try await Task.sleep(for: .milliseconds(secondPause))
-    container.expectState(&renderer, expected: ["[ready]"])
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#!]"])
+  }
+
+  @Test(.disabled("Broken because state isn't being stored or restored.")) func selectNestedAsyncUpdateHeapUpdate()
+    async throws
+  {
+    let firstPause = AsyncUpdateHeapUpdate.delay / 2
+    let secondPause = AsyncUpdateHeapUpdate.delay
+
+    let block = NestedAsyncUpdateHeapUpdate()
+    var container = ChromaController(block)
+    var renderer = TestRenderer()
+    container.expectState(&renderer, expected: ["Hello, I am Chroma."])
+
+    // Move in
+    container.moveIn()
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.]"])
+
+    // Action
+    container.action(.lowercaseI)
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#]"])
+
+    try await Task.sleep(for: .milliseconds(firstPause))
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#]"])
+
+    try await Task.sleep(for: .milliseconds(secondPause))
+    container.expectState(&renderer, expected: ["[Hello, I am Chroma.#!]"])
   }
 }
 

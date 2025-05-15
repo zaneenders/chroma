@@ -1,11 +1,11 @@
 /// Wraps a Value so that it can be viewed and mutated in other ``Block``s.
 @propertyWrapper
-public struct Binding<Value> {
+internal struct Binding<Value> {
 
   var get: () -> Value
   var set: (Value) -> Void
 
-  public var wrappedValue: Value {
+  internal var wrappedValue: Value {
     get {
       get()
     }
@@ -14,7 +14,7 @@ public struct Binding<Value> {
     }
   }
 
-  public var projectedValue: Binding<Value> {
+  internal var projectedValue: Binding<Value> {
     Binding(get: get, set: set)
   }
 }
