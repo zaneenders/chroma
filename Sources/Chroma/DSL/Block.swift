@@ -55,12 +55,12 @@ extension Block {
       let ourHash = walker.currentHash
       self.restoreState(nodeKey: ourHash)
       for (i, item) in nav.items.enumerated() {
-        // if i == 0 {
-        let h = hash(contents: "\(ourHash)\(#function)label\(i)")
-        walker.currentHash = h
-        nav.selected = h
+        let labelHash = hash(contents: "\(ourHash)\(#function)label\(i)")
+        walker.currentHash = labelHash
+        if walker is InitialWalk && i == 0 {
+          nav.selected = labelHash
+        }
         item.label.parseTree(action: action, &walker)
-        // }
       }
       for (i, item) in nav.items.enumerated() {
         let labelHash = hash(contents: "\(ourHash)\(#function)label\(i)")
@@ -69,6 +69,10 @@ extension Block {
           item.content.parseTree(action: action, &walker)
           walker.currentHash = labelHash
         }
+      }
+      if walker is InitialWalk {
+        // setup state
+        self.saveState(nodeKey: ourHash)
       }
       if action {
         self.saveState(nodeKey: ourHash)
