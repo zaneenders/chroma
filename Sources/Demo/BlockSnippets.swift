@@ -34,10 +34,10 @@ struct TestNav: Block {
   var layer: some Block {
     Navigation {
       Item(label: "Top") {
-        BasicTupleBindedText()
+        "Top Content"
       }
       Item(label: "Bottom") {
-        "Bottom Content"
+        BasicTupleBindedText()
       }
     }
   }

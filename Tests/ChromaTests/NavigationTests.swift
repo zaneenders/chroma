@@ -12,6 +12,6 @@ struct name {
     var renderer = TestRenderer()
     container.expectState(
       &renderer,
-      expected: ["Top", "Bottom", "Bottom Content"])
+      expected: ["Top", "Bottom", "Top Content"])
   }
 }
