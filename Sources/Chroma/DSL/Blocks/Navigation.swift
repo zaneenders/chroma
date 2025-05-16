@@ -12,14 +12,14 @@ public struct Navigation: Block {
 
 public struct Item: NavigationItem {
 
-  let label: any Block
+  let label: String
   let content: any Block
 
   public init(
-    @BlockParser label: () -> some Block,
+    label: String,
     @BlockParser content: () -> some Block
   ) {
-    self.label = label()
+    self.label = label
     self.content = content()
   }
 }
