@@ -1,3 +1,5 @@
+import Testing
+
 @testable import Chroma
 
 func enableTestLogging(write_to_file: Bool = true) {
@@ -51,5 +53,40 @@ struct Window {
       placed += 1
     }
     x += placed
+  }
+}
+
+// Helper functions to make creating test easier.
+extension ChromaController {
+  mutating func moveRight() {
+    right()
+  }
+  mutating func moveLeft() {
+    left()
+  }
+  mutating func moveUp() {
+    up()
+  }
+  mutating func moveDown() {
+    down()
+  }
+  mutating func moveOut() {
+    out()
+  }
+  mutating func moveIn() {
+    `in`()
+  }
+
+  mutating func expectState(_ renderer: inout TestRenderer, expected: [String]) {
+    self.observe(with: &renderer)
+    let output = renderer.previousWalker.textObjects.map { $0.value }
+    #expect(output.sorted() == expected.sorted())
+  }
+
+  // Helper for creating expected arrays
+  mutating func printState(_ renderer: inout TestRenderer) {
+    self.observe(with: &renderer)
+    let output = renderer.previousWalker.textObjects.map { $0.value }
+    print(output)
   }
 }
