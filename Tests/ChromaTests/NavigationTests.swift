@@ -10,6 +10,8 @@ struct name {
     let block = TestNav()
     var container = ChromaController(block)
     var renderer = TestRenderer()
-    container.expectState(&renderer, expected: ["Top", "Bottom"])
+    container.expectState(
+      &renderer,
+      expected: ["Top", "Bottom", "Bottom Content"])
   }
 }

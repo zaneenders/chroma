@@ -1,5 +1,6 @@
 public struct Navigation: Block {
   let items: [Item]
+  @State var selected = ""  // store hash
   public init(@NavigationBuilder navigationBuilder: () -> Navigation) {
     self = navigationBuilder()
   }
@@ -10,15 +11,22 @@ public struct Navigation: Block {
 }
 
 public struct Item: NavigationItem {
-  let b: any Block
-  public init(@BlockParser elements: () -> some Block) {
-    self.b = elements()
+
+  let label: any Block
+  let content: any Block
+
+  public init(
+    @BlockParser label: () -> some Block,
+    @BlockParser content: () -> some Block
+  ) {
+    self.label = label()
+    self.content = content()
   }
 }
 
 extension Item {
   public var block: some Block {
-    fatalError()
+    fatalError("Item has no block see Item.label and Item.content.")
   }
 }
 
