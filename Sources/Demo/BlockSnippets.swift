@@ -35,9 +35,13 @@ struct TestNav: Block {
     Navigation {
       Item {
         "Top"
+      } content: {
+        BasicTupleBindedText()
       }
       Item {
         "Bottom"
+      } content: {
+        "Bottom Content"
       }
     }
   }

@@ -53,9 +53,25 @@ extension Block {
       walker.walkText(textBlock.text, nil)
     } else if let nav = self as? Navigation {
       let ourHash = walker.currentHash
+      self.restoreState(nodeKey: ourHash)
       for (i, item) in nav.items.enumerated() {
-        walker.currentHash = hash(contents: "\(ourHash)\(#function)\(i)")
-        item.b.parseTree(action: action, &walker)
+        // if i == 0 {
+        let h = hash(contents: "\(ourHash)\(#function)label\(i)")
+        walker.currentHash = h
+        nav.selected = h
+        item.label.parseTree(action: action, &walker)
+        // }
+      }
+      for (i, item) in nav.items.enumerated() {
+        let labelHash = hash(contents: "\(ourHash)\(#function)label\(i)")
+        if labelHash == nav.selected {
+          walker.currentHash = hash(contents: "\(ourHash)\(#function)content\(i)")
+          item.content.parseTree(action: action, &walker)
+          walker.currentHash = labelHash
+        }
+      }
+      if action {
+        self.saveState(nodeKey: ourHash)
       }
       walker.currentHash = ourHash
     } else if let inputBlock = self as? any InputBlock {
