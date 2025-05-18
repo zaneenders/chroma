@@ -10,6 +10,7 @@ struct MoveOutWalker: ElementWalker {
   private(set) var state: BlockState
   var currentHash: Hash = hash(contents: "0")
   var mode: State = .findingSelected
+  var orientation: Orientation
   private var path: [SelectedPathNode] = []
   private var selectedDepth = 0
 
@@ -17,6 +18,7 @@ struct MoveOutWalker: ElementWalker {
     self.state = state
     self.startingSelection = state.selected!
     Log.debug("\(self.startingSelection)")
+    self.orientation = .vertical
   }
 
   mutating func beforeGroup(childrenCount: Int) {

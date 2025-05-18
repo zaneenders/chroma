@@ -6,6 +6,7 @@ struct ElementRender: ElementWalker {
   var count = 0
   let state: BlockState
   private var seenSelected: Bool = false
+  var orientation: Orientation
 
   init(state: BlockState, width: Int, height: Int) {
     self.state = state
@@ -15,6 +16,7 @@ struct ElementRender: ElementWalker {
       repeating: Array(repeating: Tile(), count: width),
       count: height)
     currentHash = hash(contents: "\(0)")
+    self.orientation = .vertical
   }
 
   var ascii: String {

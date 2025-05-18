@@ -2,6 +2,7 @@ struct MoveUpWalker: ElementWalker {
 
   private let startingSelection: Hash
   private(set) var state: BlockState
+  var orientation: Orientation
   var currentHash: Hash = hash(contents: "0")
   // Protect against moving into layers below selected.
   // That is left to the move in and out commands
@@ -20,6 +21,7 @@ struct MoveUpWalker: ElementWalker {
     self.state = state
     self.startingSelection = state.selected!
     Log.debug("\(self.startingSelection)")
+    self.orientation = .vertical
   }
 
   mutating func beforeGroup(childrenCount: Int) {

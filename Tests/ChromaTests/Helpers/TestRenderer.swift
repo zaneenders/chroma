@@ -14,6 +14,7 @@ struct TestRenderer: Renderer {
 }
 
 struct TestWalker: ElementWalker {
+  var orientation: Orientation
 
   // Set by the visitor
   var currentHash: Hash
@@ -21,10 +22,12 @@ struct TestWalker: ElementWalker {
   var blockObjects: [Hash: String]
 
   var textObjects: [Hash: String] = [:]
+  var objectOrientation: [Hash: Orientation] = [:]
   init(state: BlockState) {
     self.state = state
     self.currentHash = hash(contents: "\(0)")
     self.blockObjects = [:]
+    self.orientation = .vertical
   }
 
   mutating func beforeGroup(childrenCount: Int) {}
@@ -37,6 +40,7 @@ struct TestWalker: ElementWalker {
   }
 
   mutating func leafNode(_ text: String) {
+    objectOrientation[currentHash] = orientation
     if currentHash == self.state.selected {
       textObjects[currentHash] = "[\(text)]"
     } else {

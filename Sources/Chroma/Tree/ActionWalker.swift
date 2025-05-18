@@ -3,10 +3,12 @@ struct ActionWalker: ElementWalker {
   private(set) var state: BlockState
   private var input: AsciiKeyCode
   var currentHash: Hash = hash(contents: "0")
+  var orientation: Orientation
 
   init(state: BlockState, input: AsciiKeyCode) {
     self.state = state
     self.input = input
+    self.orientation = .vertical
   }
 
   mutating func beforeGroup(childrenCount: Int) {}

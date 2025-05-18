@@ -1,6 +1,7 @@
 @MainActor
 protocol ElementWalker {
   var currentHash: Hash { get set }
+  var orientation: Orientation { get set }
   mutating func walkText(_ text: String, _ binding: InputHandler?)
   mutating func beforeGroup(childrenCount: Int)
   mutating func afterGroup(ourHash: Hash)

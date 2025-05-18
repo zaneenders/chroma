@@ -19,6 +19,11 @@ struct SelectionTests {
       expected: [
         "Hello", "Zane",
       ])
+    for (hash, ori) in renderer.previousWalker.objectOrientation {
+      if let str = renderer.previousWalker.textObjects[hash] {
+        #expect(ori == .horizontal)
+      }
+    }
   }
 
   @MainActor

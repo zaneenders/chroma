@@ -50,10 +50,12 @@ extension Block {
     } else if let textBlock = self as? Text {
       walker.walkText(textBlock.text, nil)
     } else if let inputBlock = self as? any InputBlock {
-      // TODO: if selected && action, call handler.
       walker.walkText(inputBlock.wrapped, inputBlock.handler)
-    } else if let orientation = self as? any OrientationBlock {
+    } else if let group = self as? any OrientationBlock {
+      let current = walker.orientation
+      walker.orientation = group.orientation
       self.layer.parseTree(action: action, &walker)
+      walker.orientation = current
     } else if let group = self as? any BlockGroup {
       let ourHash = walker.currentHash
       let children = group.children.flatMap { $0.collectChildren() }

@@ -12,6 +12,7 @@ struct MoveDownWalker: ElementWalker {
   // Protect against moving into layers below selected.
   // That is left to the move in and out commands
   private var selectedDepth = 0
+  var orientation: Orientation
 
   enum Mode {
     case lookingForSelected
@@ -23,6 +24,7 @@ struct MoveDownWalker: ElementWalker {
     self.state = state
     self.startingSelection = state.selected!
     Log.debug("\(self.startingSelection)")
+    self.orientation = .vertical
   }
 
   mutating func beforeGroup(childrenCount: Int) {
