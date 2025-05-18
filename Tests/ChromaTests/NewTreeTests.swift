@@ -5,7 +5,7 @@ import Testing
 
 // Note none of these test selection.
 @MainActor  // UI Block test run on main thread.
-@Suite("New Tree Tests", .disabled())
+@Suite("New Tree Tests")
 struct NewTreeTests {
 
   @Test func treeEntry() async throws {
@@ -16,7 +16,7 @@ struct NewTreeTests {
       Hello, I am Chroma.
       Zane was here :0
       Job running: ready
-      Nested[text: Hello]
+      Nested[text: Hello, I am Chroma.]
       """#
     let window = Window(expectedText, width: 80, height: 24)
     #expect(window.tiles == parser.tiles)
