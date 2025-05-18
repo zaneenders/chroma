@@ -8,6 +8,20 @@ import Testing
 struct SelectionTests {
 
   @MainActor
+  @Test func groupTest() async throws {
+    let window = TerminalWindow {
+      HTest()
+    }.environment(Mode())
+    var container = ChromaController(window.entry)
+    var renderer = TestRenderer()
+    container.expectState(
+      &renderer,
+      expected: [
+        "Hello", "Zane",
+      ])
+  }
+
+  @MainActor
   @Test func nestedBlocks() async throws {
     let window = TerminalWindow {
       NestedState()
