@@ -13,5 +13,13 @@ struct name {
     container.expectState(
       &renderer,
       expected: ["Top", "Bottom", "Top Content"])
+    container.moveIn()
+    container.expectState(
+      &renderer,
+      expected: ["[Top]", "Bottom", "Top Content"])
+    container.moveIn()
+    container.expectState(
+      &renderer,
+      expected: ["Top", "Bottom", "[Top Content]"])
   }
 }
