@@ -1,4 +1,4 @@
-struct NewRenderer: ElementWalker {
+struct ElementRender: ElementWalker {
   let state: BlockState
   var currentHash: Hash
   var orientation: Orientation

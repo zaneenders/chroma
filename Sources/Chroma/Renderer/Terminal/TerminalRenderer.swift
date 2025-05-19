@@ -6,7 +6,7 @@ extension TerminalRenderer: Renderer {
   func view(_ block: borrowing some Block, with state: BlockState) {
     let before = clock.now
     let size = Self.size
-    var walker = NewRenderer(state: state, width: size.x, height: size.y)
+    var walker = ElementRender(state: state, width: size.x, height: size.y)
     block.parseTree(action: false, &walker)
     Self.write(frame: walker.ascii)
     let after = clock.now
