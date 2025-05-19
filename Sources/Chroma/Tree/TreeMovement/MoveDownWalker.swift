@@ -44,6 +44,9 @@ struct MoveDownWalker: ElementWalker {
   mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     switch mode {
     case .foundSelected:
+      guard orientation == .vertical else {
+        return true  // Should this be true or false?
+      }
       guard path.count < selectedDepth else {
         return true
       }
