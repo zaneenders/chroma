@@ -34,14 +34,28 @@ extension ChromaController {
 
   public mutating func up() {
     Log.debug("MoveUp")
-    var move = MoveUpWalker(state: state)
+    var move = MoveUpLeftWalker(state: state, move: .vertical)
+    block.parseTree(action: false, &move)
+    self.state = move.state
+  }
+
+  public mutating func left() {
+    Log.debug("MoveLeft")
+    var move = MoveUpLeftWalker(state: state, move: .horizontal)
     block.parseTree(action: false, &move)
     self.state = move.state
   }
 
   public mutating func down() {
     Log.debug("MoveDown")
-    var move = MoveDownWalker(state: state)
+    var move = MoveDownRightWalker(state: state, move: .vertical)
+    block.parseTree(action: false, &move)
+    self.state = move.state
+  }
+
+  public mutating func right() {
+    Log.debug("MoveRight")
+    var move = MoveDownRightWalker(state: state, move: .horizontal)
     block.parseTree(action: false, &move)
     self.state = move.state
   }

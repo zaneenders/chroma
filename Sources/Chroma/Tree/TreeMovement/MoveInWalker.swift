@@ -12,11 +12,13 @@ struct MoveInWalker: ElementWalker {
   var mode: State = .findingSelected
   private var path: [SelectedPathNode] = []
   private var selectedDepth = 0
+  var orientation: Orientation
 
   init(state: BlockState) {
     self.state = state
     self.startingSelection = state.selected!
     Log.debug("\(self.startingSelection)")
+    self.orientation = .vertical
   }
 
   mutating func beforeGroup(childrenCount: Int) {

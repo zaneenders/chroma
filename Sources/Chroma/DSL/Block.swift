@@ -27,6 +27,8 @@ extension Block {
       return [self]
     } else if self is any InputBlock {
       return [self]
+    } else if self is any OrientationBlock {
+      return [self]  // TODO flatten if Orientation is same as parent.
     } else if let group = self as? any BlockGroup {
       return group.children.flatMap { $0.collectChildren() }
       // NOTE: not sure if I need this second collection if this is called as a flatMap, see notes for original.
@@ -50,8 +52,14 @@ extension Block {
     } else if let textBlock = self as? Text {
       walker.walkText(textBlock.text, nil)
     } else if let inputBlock = self as? any InputBlock {
-      // TODO: if selected && action, call handler.
       walker.walkText(inputBlock.wrapped, inputBlock.handler)
+    } else if let group = self as? any OrientationBlock {
+      let current = walker.orientation
+      walker.orientation = group.orientation
+      walker.pushNewGroup()
+      self.layer.parseTree(action: action, &walker)
+      walker.popGroup()
+      walker.orientation = current
     } else if let group = self as? any BlockGroup {
       let ourHash = walker.currentHash
       let children = group.children.flatMap { $0.collectChildren() }

@@ -31,6 +31,10 @@ struct Demo: Chroma {
         container.down()
       case .lowercaseF:
         container.up()
+      case .lowercaseK:
+        container.right()
+      case .lowercaseD:
+        container.left()
       default:
         return input
       }

@@ -1,21 +1,47 @@
 struct ElementRender: ElementWalker {
-  var currentHash: Hash
-  var width: Int
-  var height: Int
-  var tiles: [[Tile]]
-  var count = 0
   let state: BlockState
+  var currentHash: Hash
+  var orientation: Orientation
+  private var groupHeight = 0
+  private var groupWidth = 0
+  private var currentWidth = 0
+  private var currentHeight = 0
+  /*
+  Well this is where our nested groups push and pop things off the stack.
+  
+  Well better we know how much space is available and consumed at this point.
+  */
+  mutating func pushNewGroup() {
+    groupHeight = currentHeight
+    groupWidth = 0
+  }
+  mutating func popGroup() {
+    switch orientation {
+    case .horizontal:
+      currentWidth = max(groupWidth, currentWidth)
+      currentHeight = max(groupHeight + 1, currentHeight)
+    case .vertical:
+      currentWidth = max(groupWidth, currentWidth)
+      currentHeight = max(groupHeight, currentHeight)
+    }
+  }
+  private let fg: Shell.Color = .blue
+  private let bg: Shell.Color = .green
   private var seenSelected: Bool = false
+  private let width: Int
+  private let height: Int
 
   init(state: BlockState, width: Int, height: Int) {
-    self.state = state
     self.height = height
     self.width = width
+    self.state = state
     self.tiles = Array(
       repeating: Array(repeating: Tile(), count: width),
       count: height)
-    currentHash = hash(contents: "\(0)")
+    self.orientation = .vertical
+    self.currentHash = hash(contents: "\(0)")
   }
+  var tiles: [[Tile]]
 
   var ascii: String {
     var out = ""
@@ -31,8 +57,6 @@ struct ElementRender: ElementWalker {
     return out
   }
 
-  // Used for helping create test.
-  // Doesn't use .ascii
   var _raw: String {
     var out = ""
     for row in tiles {
@@ -47,41 +71,31 @@ struct ElementRender: ElementWalker {
     return out
   }
 
-  mutating func beforeGroup(childrenCount: Int) {}
-  mutating func afterGroup(ourHash: Hash) {}
-  mutating func beforeChild() -> Bool { false }
-  mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
-    false
-  }
   mutating func walkText(_ text: String, _ binding: InputHandler?) {
-    leafNode(text)
-  }
-
-  mutating func leafNode(_ text: String) {
-    // This "rendering" logic is dumb but lets get it working first.
-    if count >= height {
-      if !seenSelected {
-        count -= 1  // Override the last row.
-        for (i, _) in tiles.enumerated() {
-          if i < tiles.count - 1 {
-            tiles[i] = tiles[i + 1]
+    // This HACK needs to come before we update seenSelected for now.
+    switch orientation {
+    case .horizontal:
+      ()
+    case .vertical:
+      // HACK for vertical scrolling.
+      if groupHeight >= height {
+        if !seenSelected {
+          groupHeight -= 1  // Override the last row.
+          for (i, _) in tiles.enumerated() {
+            if i < tiles.count - 1 {
+              tiles[i] = tiles[i + 1]
+            }
           }
+          tiles[tiles.count - 1] = Array(repeating: Tile(), count: width)
+        } else {
+          Log.error("Too many rows \(text)")
+          return
         }
-        tiles[tiles.count - 1] = Array(repeating: Tile(), count: width)
-      } else {
-        Log.error("Too many rows \(text)")
-        return
       }
     }
-    let isSelected = self.state.selected == currentHash
-    place(text, count, selected: isSelected)
-    count += 1
-  }
-
-  private mutating func place(_ text: String, _ index: Int, selected: Bool) {
     let fg: Shell.Color
     let bg: Shell.Color
-    if selected {
+    if self.state.selected == currentHash {
       seenSelected = true
       fg = .yellow
       bg = .purple
@@ -89,20 +103,21 @@ struct ElementRender: ElementWalker {
       fg = .blue
       bg = .green
     }
-    var placed = 0
-    var x = 0
-    place_loop: for (i, char) in text.enumerated() {
-      guard x + i < width else {
-        Log.error("Frame width exceeded with \(text)")
-        break place_loop
+    switch self.orientation {
+    case .horizontal:
+      guard tiles[0].count >= groupWidth + text.count else {
+        print("Will not fit")
+        return
       }
-      guard char != "\n" else {
-        Log.error("Found newline in word \(text)")
-        break place_loop
+      for (i, char) in text.enumerated() {
+        tiles[groupHeight][groupWidth + i] = Tile(symbol: char, fg: fg, bg: bg)
       }
-      tiles[index][x + i] = Tile(symbol: char, fg: fg, bg: bg)
-      placed += 1
+      groupWidth += text.count
+    case .vertical:
+      for (i, char) in text.enumerated() {
+        tiles[groupHeight][groupWidth + i] = Tile(symbol: char, fg: fg, bg: bg)
+      }
+      groupHeight += 1
     }
-    x += placed
   }
 }

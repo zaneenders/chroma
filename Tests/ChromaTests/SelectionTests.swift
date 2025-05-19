@@ -8,6 +8,45 @@ import Testing
 struct SelectionTests {
 
   @MainActor
+  @Test func groupTest() async throws {
+    let window = TerminalWindow {
+      HTest()
+    }.environment(Mode())
+    var container = ChromaController(window.entry)
+    var renderer = TestRenderer()
+    container.expectState(
+      &renderer,
+      expected: [
+        "Hello", "Zane",
+      ])
+    container.moveIn()
+    container.expectState(
+      &renderer,
+      expected: [
+        "[Hello]", "Zane",
+      ])
+    container.moveDown()
+    container.moveUp()
+    container.expectState(
+      &renderer,
+      expected: [
+        "[Hello]", "Zane",
+      ])
+    container.moveRight()
+    container.expectState(
+      &renderer,
+      expected: [
+        "Hello", "[Zane]",
+      ])
+    container.moveLeft()
+    container.expectState(
+      &renderer,
+      expected: [
+        "[Hello]", "Zane",
+      ])
+  }
+
+  @MainActor
   @Test func nestedBlocks() async throws {
     let window = TerminalWindow {
       NestedState()
@@ -302,6 +341,12 @@ struct SelectionTests {
 
 // Helper functions to make creating test easier.
 extension ChromaController {
+  mutating func moveRight() {
+    right()
+  }
+  mutating func moveLeft() {
+    left()
+  }
   mutating func moveUp() {
     up()
   }
