@@ -15,7 +15,7 @@ struct Demo: Chroma {
   // Entry point of your AST
   var window: some Window {
     TerminalWindow {
-      HTest()
+      Entry()
     }
     // Adds Mode to @Environment to be accessed through out the Block layers.
     .environment(Mode())
@@ -31,6 +31,10 @@ struct Demo: Chroma {
         container.down()
       case .lowercaseF:
         container.up()
+      case .lowercaseK:
+        container.right()
+      case .lowercaseD:
+        container.left()
       default:
         return input
       }

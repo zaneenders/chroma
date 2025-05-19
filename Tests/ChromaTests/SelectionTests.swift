@@ -32,11 +32,18 @@ struct SelectionTests {
       expected: [
         "[Hello]", "Zane",
       ])
-    for (hash, ori) in renderer.previousWalker.objectOrientation {
-      if let str = renderer.previousWalker.textObjects[hash] {
-        #expect(ori == .horizontal)
-      }
-    }
+    container.moveRight()
+    container.expectState(
+      &renderer,
+      expected: [
+        "Hello", "[Zane]",
+      ])
+    container.moveLeft()
+    container.expectState(
+      &renderer,
+      expected: [
+        "[Hello]", "Zane",
+      ])
   }
 
   @MainActor
@@ -334,6 +341,12 @@ struct SelectionTests {
 
 // Helper functions to make creating test easier.
 extension ChromaController {
+  mutating func moveRight() {
+    right()
+  }
+  mutating func moveLeft() {
+    left()
+  }
   mutating func moveUp() {
     up()
   }
