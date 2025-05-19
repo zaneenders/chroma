@@ -70,6 +70,19 @@ struct HTest: Block {
   }
 }
 
+struct HTest2: Block {
+  var layer: some Block {
+    Group(.horizontal) {
+      "Hello"
+      "Zane"
+    }
+    Group(.horizontal) {
+      "Was"
+      "Here"
+    }
+  }
+}
+
 // Used for testing selection and also to test merging two lists composed from arrays and tuple blocks.
 struct SelectionBlock: Block {
   var layer: some Block {
