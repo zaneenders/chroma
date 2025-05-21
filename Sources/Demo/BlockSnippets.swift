@@ -32,7 +32,7 @@ struct All: Block {
 
 struct TestNav: Block {
   var layer: some Block {
-    Navigation {
+    Navigation(at: .left) {
       Item(label: "Top") {
         "Top Content"
       }

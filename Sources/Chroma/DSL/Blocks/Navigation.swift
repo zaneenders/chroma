@@ -1,7 +1,23 @@
+public enum Location {
+  case left
+  case right
+  case top
+  case bottom
+}
+
 public struct Navigation: Block {
   let items: [Item]
   @State var selected = ""  // store hash
-  public init(@NavigationBuilder navigationBuilder: () -> Navigation) {
+
+  // Navigation displays the content at the Location given. So if left is
+  // passed in the navigation block is displayed on the left and the content is
+  // displayed to the right in a horizontal layout.
+  // if bottom is passed in the navigation is displayed at the bottom with the
+  // content displayed above the navigation bar in a vertical fashion.
+  public init(
+    at location: Location,
+    @NavigationBuilder navigationBuilder: () -> Navigation
+  ) {
     self = navigationBuilder()
   }
 
