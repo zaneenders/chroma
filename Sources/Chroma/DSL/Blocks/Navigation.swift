@@ -8,6 +8,7 @@ public enum Location {
 public struct Navigation: Block {
   let items: [Item]
   @State var selected = ""  // store hash
+  let layout: Location
 
   // Navigation displays the content at the Location given. So if left is
   // passed in the navigation block is displayed on the left and the content is
@@ -16,13 +17,21 @@ public struct Navigation: Block {
   // content displayed above the navigation bar in a vertical fashion.
   public init(
     at location: Location,
-    @NavigationBuilder navigationBuilder: () -> Navigation
+    @NavigationBuilder navigationBuilder: () -> [Item]
   ) {
-    self = navigationBuilder()
+    self.items = navigationBuilder()
+    self.layout = location
   }
+}
 
-  fileprivate init(_ items: [Item]) {
-    self.items = items
+extension Navigation {
+  var orientation: Orientation {
+    switch self.layout {
+    case .bottom, .top:
+      return .vertical
+    case .left, .right:
+      return .horizontal
+    }
   }
 }
 
@@ -58,13 +67,13 @@ public enum NavigationBuilder {
   public static func buildBlock<each Element: NavigationItem>(
     _ items: repeat each Element
   )
-    -> Navigation
+    -> [Item]
   {
     var _items: [Item] = []
     for item in repeat (each items) {
       let _item = item as! Item
       _items.append(_item)
     }
-    return Navigation(_items)
+    return _items
   }
 }
