@@ -1,7 +1,7 @@
 typealias ANSIString = String
 
-extension Shell.Color {
-  static func random() -> Shell.Color {
+extension ChromaShell.Color {
+  public static func random() -> ChromaShell.Color {
     let colors = Self.allCases
     let r = Int.random(in: 0..<colors.count)
     for (i, color) in colors.enumerated() {
@@ -14,15 +14,15 @@ extension Shell.Color {
 }
 
 /// A wrapper to help make printing color to the terminal easier.
-enum Shell {
+public enum ChromaShell {
 
-  enum TerminalColor {
+  public enum TerminalColor {
     case reset
     case basic(Basic)
     case bright(Basic)
     case int(Int)
 
-    enum Basic {
+    public enum Basic {
       case black
       case red
       case green
@@ -34,7 +34,7 @@ enum Shell {
     }
   }
 
-  enum Color: CaseIterable {
+  public enum Color: CaseIterable {
     case yellow
     case blue
     case pink
@@ -49,7 +49,7 @@ enum Shell {
   }
 
   // BUG background color doesn't seem to work
-  static func wrap(
+  public static func wrap(
     _ out: String,
     _ foreground: Color = .default,
     _ background: Color = .default
@@ -110,7 +110,7 @@ enum Shell {
     return bg
   }
 
-  enum Position {
+  public enum Position {
     case foreground
     case background
   }

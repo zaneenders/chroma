@@ -1,6 +1,6 @@
 /// Ansi Codes
 /// This is only used as a output translation.
-enum AnsiEscapeCode: String {
+public enum AnsiEscapeCode: String {
 
   case esc = "\u{001b}["
   case reset = "\u{001b}[0m"
@@ -21,7 +21,7 @@ enum AnsiEscapeCode: String {
   //    ESC[1K    erase start of line to the cursor
   //    ESC[2K    erase the entire line
 
-  enum Border: String {
+  public enum Border: String {
     case topLeft = "\u{250F}"
     case topRight = "\u{2513}"
     case bottomLeft = "\u{2517}"
@@ -30,11 +30,11 @@ enum AnsiEscapeCode: String {
     case vertical = "\u{2503}"
   }
 
-  enum Cursor: String {
+  public enum Cursor: String {
     case hide = "\u{001b}[?25l"
     case show = "\u{001b}[?25h"
 
-    enum Move: String {
+    public enum Move: String {
       case up = "\u{001b}[A"
       case down = "\u{001b}[B"
       case right = "\u{001b}[C"
@@ -49,33 +49,33 @@ enum AnsiEscapeCode: String {
     /// 5  blinking bar, xterm.
     /// 6  steady bar, xterm.
 
-    enum Style {
-      enum Block: String {
+    public enum Style {
+      public enum Block: String {
         case blinking = "\u{001b}[1 q"
         case steady = "\u{001b}[2 q"
       }
-      enum Underline: String {
+      public enum Underline: String {
         case blinking = "\u{001b}[3 q"
         case steady = "\u{001b}[4 q"
       }
-      enum Bar: String {
+      public enum Bar: String {
         case blinking = "\u{001b}[5 q"
         case steady = "\u{001b}[6 q"
       }
     }
   }
 
-  enum Style: String {
+  public enum Style: String {
     case bold = "\u{001b}[1m"
     case underline = "\u{001b}[4m"
     case reversed = "\u{001b}[7m"
   }
 
-  enum Charter: String {
+  public enum Charter: String {
     case arrowRight = "\u{2192}"
   }
 
-  static func goTo(_ x: Int = 1, _ y: Int = 1) -> String {
+  public static func goTo(_ x: Int = 1, _ y: Int = 1) -> String {
     // I don't understand why this off by one
     // top left seems to be off by one vertically
     "\u{001b}[\(y);\(x)H"

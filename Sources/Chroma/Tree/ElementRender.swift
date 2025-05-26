@@ -1,3 +1,5 @@
+import ChromaShell
+
 struct ElementRender: ElementWalker {
   let state: BlockState
   var currentHash: Hash
@@ -25,8 +27,8 @@ struct ElementRender: ElementWalker {
       currentHeight = max(groupHeight, currentHeight)
     }
   }
-  private let fg: Shell.Color = .blue
-  private let bg: Shell.Color = .green
+  private let fg: ChromaShell.Color = .blue
+  private let bg: ChromaShell.Color = .green
   private var seenSelected: Bool = false
   private let width: Int
   private let height: Int
@@ -93,8 +95,8 @@ struct ElementRender: ElementWalker {
         }
       }
     }
-    let fg: Shell.Color
-    let bg: Shell.Color
+    let fg: ChromaShell.Color
+    let bg: ChromaShell.Color
     if self.state.selected == currentHash {
       seenSelected = true
       fg = .yellow
