@@ -18,7 +18,7 @@ struct ActionWalker: ElementWalker {
     false
   }
   mutating func walkText(_ text: String, _ handler: InputHandler?) {
-    Log.debug("\(#function): \(currentHash), \(state.selected)")
+    _ChromaLog.debug("\(#function): \(currentHash), \(state.selected)")
     runBinding(handler)
   }
 

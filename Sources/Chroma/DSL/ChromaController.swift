@@ -33,42 +33,42 @@ public struct ChromaController: ~Copyable {
 extension ChromaController {
 
   public mutating func up() {
-    Log.debug("MoveUp")
+    _ChromaLog.debug("MoveUp")
     var move = MoveUpLeftWalker(state: state, move: .vertical)
     block.parseTree(action: false, &move)
     self.state = move.state
   }
 
   public mutating func left() {
-    Log.debug("MoveLeft")
+    _ChromaLog.debug("MoveLeft")
     var move = MoveUpLeftWalker(state: state, move: .horizontal)
     block.parseTree(action: false, &move)
     self.state = move.state
   }
 
   public mutating func down() {
-    Log.debug("MoveDown")
+    _ChromaLog.debug("MoveDown")
     var move = MoveDownRightWalker(state: state, move: .vertical)
     block.parseTree(action: false, &move)
     self.state = move.state
   }
 
   public mutating func right() {
-    Log.debug("MoveRight")
+    _ChromaLog.debug("MoveRight")
     var move = MoveDownRightWalker(state: state, move: .horizontal)
     block.parseTree(action: false, &move)
     self.state = move.state
   }
 
   public mutating func `in`() {
-    Log.debug("MoveIn")
+    _ChromaLog.debug("MoveIn")
     var move = MoveInWalker(state: state)
     block.parseTree(action: false, &move)
     self.state = move.state
   }
 
   public mutating func out() {
-    Log.debug("MoveOut")
+    _ChromaLog.debug("MoveOut")
     var move = MoveOutWalker(state: state)
     block.parseTree(action: false, &move)
     self.state = move.state
