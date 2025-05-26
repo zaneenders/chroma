@@ -9,6 +9,7 @@ let package = Package(
   ],
   products: [
     .executable(name: "chroma", targets: ["Demo"]),
+    .library(name: "ChromaShell", targets: ["ChromaShell"]),
     .library(
       name: "Chroma",
       targets: ["Chroma"]),
@@ -41,9 +42,11 @@ let package = Package(
       ],
       swiftSettings: swiftSettings),
     // MARK: Targets
+    .target(name: "ChromaShell"),
     .target(
       name: "Chroma",
       dependencies: [
+        "ChromaShell",
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "SystemPackage", package: "swift-system"),
         .product(name: "Logging", package: "swift-log"),

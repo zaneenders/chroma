@@ -1,3 +1,4 @@
+import ChromaShell
 import Foundation
 import Logging
 import SystemPackage
@@ -90,7 +91,7 @@ struct ChromaLogging: LogHandler {
   }
 
   private func terminal(_ level: Logger.Level, _ message: Logger.Message) {
-    let color: Shell.Color
+    let color: ChromaShell.Color
     switch level {
     case .trace:
       color = .default
@@ -107,7 +108,7 @@ struct ChromaLogging: LogHandler {
     case .critical:
       color = .red
     }
-    print(Shell.wrap("\(message)", color, .default))
+    print(ChromaShell.wrap("\(message)", color, .default))
   }
 
   private func tracing(_ level: Logger.Level, _ message: Logger.Message) {

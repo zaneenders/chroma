@@ -1,8 +1,10 @@
+import ChromaShell
+
 /// Represents one monospaced unit of the screen.
 struct Tile: Equatable {
   let symbol: Character
-  let fg: Shell.Color
-  let bg: Shell.Color
+  let fg: ChromaShell.Color
+  let bg: ChromaShell.Color
 
   init(_ symbol: Character = " ") {
     self.symbol = symbol
@@ -10,13 +12,13 @@ struct Tile: Equatable {
     self.bg = .default
   }
 
-  init(symbol: Character, fg: Shell.Color, bg: Shell.Color) {
+  init(symbol: Character, fg: ChromaShell.Color, bg: ChromaShell.Color) {
     self.symbol = symbol
     self.fg = fg
     self.bg = bg
   }
 
   var ascii: String {
-    Shell.wrap("\(symbol)", fg, bg)
+    ChromaShell.wrap("\(symbol)", fg, bg)
   }
 }

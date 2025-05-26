@@ -1,3 +1,5 @@
+import ChromaShell
+
 @testable import Chroma
 
 func enableTestLogging(write_to_file: Bool = true) {
@@ -23,8 +25,8 @@ struct Window {
   }
 
   private mutating func place(_ text: String, _ index: Int, selected: Bool) {
-    let fg: Shell.Color
-    let bg: Shell.Color
+    let fg: ChromaShell.Color
+    let bg: ChromaShell.Color
     if selected {
       fg = .yellow
       bg = .purple
