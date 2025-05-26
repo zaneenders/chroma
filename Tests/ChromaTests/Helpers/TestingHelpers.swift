@@ -38,15 +38,15 @@ struct Window {
     var x = 0
     place_loop: for (i, char) in text.enumerated() {
       guard x + i < width else {
-        Log.error("Frame width exceeded with \(text)")
+        _ChromaLog.error("Frame width exceeded with \(text)")
         break place_loop
       }
       guard char != "\n" else {
-        Log.error("Found newline in word \(text)")
+        _ChromaLog.error("Found newline in word \(text)")
         break place_loop
       }
       guard index < height else {
-        Log.error("Too many rows \(text)")
+        _ChromaLog.error("Too many rows \(text)")
         break place_loop
       }
       tiles[index][x + i] = Tile(symbol: char, fg: fg, bg: bg)

@@ -21,7 +21,7 @@ struct MoveUpLeftWalker: ElementWalker {
   init(state: BlockState, move: Orientation) {
     self.state = state
     self.startingSelection = state.selected!
-    Log.debug("\(self.startingSelection)")
+    _ChromaLog.debug("\(self.startingSelection)")
     self.orientation = .vertical
     self.move = move
   }

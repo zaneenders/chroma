@@ -8,7 +8,7 @@ public enum BlockParser {
   )
     -> Component
   {
-    Log.trace("\(block)")
+    _ChromaLog.trace("\(block)")
     return block
   }
 
@@ -17,7 +17,7 @@ public enum BlockParser {
   )
     -> Component
   {
-    Log.trace("\(block)")
+    _ChromaLog.trace("\(block)")
     return block
   }
 
@@ -27,21 +27,21 @@ public enum BlockParser {
     -> _TupleBlock<repeat each Component>
   where repeat each Component: Block {
     let tuple = _TupleBlock(repeat each block)
-    Log.trace("\(tuple)")
+    _ChromaLog.trace("\(tuple)")
     return tuple
   }
 
   public static func buildEither<B: Block>(
     first block: B
   ) -> B {
-    Log.trace("\(block)")
+    _ChromaLog.trace("\(block)")
     return block
   }
 
   public static func buildEither<B: Block>(
     second block: B
   ) -> B {
-    Log.trace("\(block)")
+    _ChromaLog.trace("\(block)")
     return block
   }
 
@@ -56,7 +56,7 @@ public enum BlockParser {
     } else {
       array = _ArrayBlock<Component>([])
     }
-    Log.trace("\(array)")
+    _ChromaLog.trace("\(array)")
     return array
   }
 
@@ -66,7 +66,7 @@ public enum BlockParser {
     -> _ArrayBlock<Component>
   {
     let array = _ArrayBlock<Component>(components)
-    Log.trace("\(array)")
+    _ChromaLog.trace("\(array)")
     return array
   }
 }

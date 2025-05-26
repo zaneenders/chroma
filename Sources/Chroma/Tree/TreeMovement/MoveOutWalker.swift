@@ -17,7 +17,7 @@ struct MoveOutWalker: ElementWalker {
   init(state: BlockState) {
     self.state = state
     self.startingSelection = state.selected!
-    Log.debug("\(self.startingSelection)")
+    _ChromaLog.debug("\(self.startingSelection)")
     self.orientation = .vertical
   }
 

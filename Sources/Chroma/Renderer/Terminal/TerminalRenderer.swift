@@ -10,7 +10,7 @@ extension TerminalRenderer: Renderer {
     block.parseTree(action: false, &walker)
     Self.write(frame: walker.ascii)
     let after = clock.now
-    Log.trace("\(before.duration(to: after))")
+    _ChromaLog.trace("\(before.duration(to: after))")
   }
 }
 
@@ -52,7 +52,7 @@ struct TerminalRenderer: ~Copyable {
 
   init() {
     self.prev = Self.enableRawMode()
-    Log.trace("Raw Mode enabled.")
+    _ChromaLog.trace("Raw Mode enabled.")
     Self.setup()
   }
 
@@ -63,7 +63,7 @@ struct TerminalRenderer: ~Copyable {
   }
 
   func close() {
-    Log.trace("Terminal config restored.")
+    _ChromaLog.trace("Terminal config restored.")
     Self.restore(prev)
     Self.reset()
   }

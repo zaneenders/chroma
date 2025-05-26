@@ -30,7 +30,7 @@ extension Block {
 private func _saveState(_ key: String, _ state: inout some StateProtocol) {
   Cache.shared.storage.withLock { cache in
     let v = state.storage._stored
-    Log.warning("Saving: \(v)")
+    _ChromaLog.warning("Saving: \(v)")
     cache[key] = v
   }
 }
@@ -42,9 +42,9 @@ private func _restoreState(
   Cache.shared.storage.withLock { cache in
     if let v = cache[key] {
       state.storage._stored = v
-      Log.warning("Hit: \(v)")
+      _ChromaLog.warning("Hit: \(v)")
     } else {
-      Log.error("Key: \(key) missing from cache: \(cache).")
+      _ChromaLog.error("Key: \(key) missing from cache: \(cache).")
     }
   }
 }

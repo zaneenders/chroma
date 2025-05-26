@@ -56,7 +56,7 @@ extension TerminalWindow {
     // I don't love this but what ever it works for now.
     @Environment(type(of: v).self) var temp
     temp = v
-    Log.trace("\(v)")
+    _ChromaLog.trace("\(v)")
     return self
   }
 }

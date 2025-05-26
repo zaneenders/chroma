@@ -28,7 +28,7 @@ extension Chroma {
     do {
       input_loop: for try await byte in renderer.input {
         guard let code = AsciiKeyCode.decode(keyboard: byte) else {
-          Log.warning("Could not decode: \(byte)")
+          _ChromaLog.warning("Could not decode: \(byte)")
           continue
         }
         /*
@@ -46,7 +46,7 @@ extension Chroma {
         }
       }
     } catch {
-      Log.error("\(error.localizedDescription)")
+      _ChromaLog.error("\(error.localizedDescription)")
     }
 
     // Restore the terminal config.

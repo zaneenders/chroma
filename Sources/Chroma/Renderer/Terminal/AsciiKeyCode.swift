@@ -5,7 +5,7 @@ public enum AsciiKeyCode: UInt8, Sendable {
     guard let unwrappedCode = code else {
       return nil
     }
-    Log.trace("\(unwrappedCode)")
+    _ChromaLog.trace("\(unwrappedCode)")
     return AsciiKeyCode(rawValue: unwrappedCode)
   }
 
