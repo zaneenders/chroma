@@ -30,6 +30,19 @@ struct All: Block {
   }
 }
 
+struct TestNav: Block {
+  var layer: some Block {
+    Navigation(at: .left) {
+      Item(label: "Top") {
+        "Top Content"
+      }
+      Item(label: "Bottom") {
+        BasicTupleBindedText()
+      }
+    }
+  }
+}
+
 struct OptionalBlock: Block {
   var idk: String? = "Hello"
   var layer: some Block {

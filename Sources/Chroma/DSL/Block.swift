@@ -51,6 +51,33 @@ extension Block {
       walker.walkText(str, nil)
     } else if let textBlock = self as? Text {
       walker.walkText(textBlock.text, nil)
+    } else if let nav = self as? Navigation {
+      let ourHash = walker.currentHash
+      self.restoreState(nodeKey: ourHash)
+      for (i, item) in nav.items.enumerated() {
+        let labelHash = hash(contents: "\(ourHash)\(#function)label\(i)")
+        walker.currentHash = labelHash
+        if walker is InitialWalk && i == 0 {
+          nav.selected = labelHash
+        }
+        item.label.parseTree(action: action, &walker)
+      }
+      for (i, item) in nav.items.enumerated() {
+        let labelHash = hash(contents: "\(ourHash)\(#function)label\(i)")
+        if labelHash == nav.selected {
+          walker.currentHash = hash(contents: "\(ourHash)\(#function)content\(i)")
+          item.content.parseTree(action: action, &walker)
+          walker.currentHash = labelHash
+        }
+      }
+      if walker is InitialWalk {
+        // setup state
+        self.saveState(nodeKey: ourHash)
+      }
+      if action {
+        self.saveState(nodeKey: ourHash)
+      }
+      walker.currentHash = ourHash
     } else if let inputBlock = self as? any InputBlock {
       walker.walkText(inputBlock.wrapped, inputBlock.handler)
     } else if let group = self as? any OrientationBlock {
