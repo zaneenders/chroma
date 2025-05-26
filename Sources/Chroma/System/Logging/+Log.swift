@@ -17,7 +17,7 @@ system to get better visibility into what is going on to use along side
 debugging and testing tools.
 */
 @available(*, deprecated, message: "BETA")
-public enum Log {
+public enum _ChromaLog {
   @TaskLocal
   static var id: UInt128 = UInt128.random(in: UInt128.min..<UInt128.max)
 
@@ -114,6 +114,6 @@ func clearLog(_ file_path: FilePath) {
       file_path, .readWrite, options: [.truncate, .create], permissions: .ownerReadWrite)
     try fd.close()
   } catch {
-    Log.critical("Unable to create log file: \(file_path.string)")
+    _ChromaLog.critical("Unable to create log file: \(file_path.string)")
   }
 }

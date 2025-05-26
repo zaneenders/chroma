@@ -24,7 +24,7 @@ struct MoveDownRightWalker: ElementWalker {
   init(state: BlockState, move: Orientation) {
     self.state = state
     self.startingSelection = state.selected!
-    Log.debug("\(self.startingSelection)")
+    _ChromaLog.debug("\(self.startingSelection)")
     self.orientation = .vertical
     self.move = move
   }
@@ -32,6 +32,7 @@ struct MoveDownRightWalker: ElementWalker {
   mutating func beforeGroup(childrenCount: Int) {
     appendPath(siblings: childrenCount - 1)
   }
+
   mutating func beforeChild() -> Bool {
     switch mode {
     case .foundSelected:
@@ -43,6 +44,7 @@ struct MoveDownRightWalker: ElementWalker {
     }
     return false
   }
+
   mutating func afterChild(nextChildHash: Hash, prevChildHash: Hash, index: Int, childCount: Int) -> Bool {
     switch mode {
     case .foundSelected:

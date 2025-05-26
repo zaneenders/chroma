@@ -69,7 +69,7 @@ struct ChromaLogging: LogHandler {
     out += "[\(levelStr)]"
     switch tracing {
     case true:
-      out += " <trace:\(Log.id)>"
+      out += " <trace:\(_ChromaLog.id)>"
     case false:
       ()
     }
@@ -111,7 +111,7 @@ struct ChromaLogging: LogHandler {
   }
 
   private func tracing(_ level: Logger.Level, _ message: Logger.Message) {
-    print("\(Log.id):[\("\(level)".uppercased())]\(message)")
+    print("\(_ChromaLog.id):[\("\(level)".uppercased())]\(message)")
   }
 }
 

@@ -88,7 +88,7 @@ struct ElementRender: ElementWalker {
           }
           tiles[tiles.count - 1] = Array(repeating: Tile(), count: width)
         } else {
-          Log.error("Too many rows \(text)")
+          _ChromaLog.error("Too many rows \(text)")
           return
         }
       }

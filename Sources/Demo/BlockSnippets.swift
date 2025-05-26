@@ -111,7 +111,7 @@ struct NestedState: Block {
     var layer: some Block {
       "\(store.count)".bind { selected, code in
         if selected && code == .lowercaseI {
-          Log.warning("Clicked")
+          _ChromaLog.warning("Clicked")
           store.count += 1
         }
       }
