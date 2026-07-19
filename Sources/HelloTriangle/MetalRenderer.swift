@@ -1,15 +1,6 @@
 import AppKit
 import MetalKit
 
-/// One glyph quad in the text instance buffer.
-private struct TextInstance {
-  var dst_p0: SIMD2<Float>  // top-left in NDC
-  var dst_p1: SIMD2<Float>  // bottom-right in NDC
-  var tex_tl: SIMD2<Float>  // font atlas UV of the glyph's top-left
-  var tex_br: SIMD2<Float>  // font atlas UV of the glyph's bottom-right
-  var color: SIMD4<Float>
-}
-
 /// The Metal backend.
 ///
 /// Owns the view, all GPU state, and the conversion of backend-neutral draw
@@ -115,7 +106,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
     for command in drawList.commands {
       switch command {
-      case let .text(position, text, color, scale):
+      case .text(let position, let text, let color, let scale):
         let glyphSize = SIMD2<Float>(metrics.glyphWidth, metrics.glyphHeight) * scale
         let advance = metrics.cellAdvance * scale
         var pen = SIMD2<Float>(position.x, position.y)

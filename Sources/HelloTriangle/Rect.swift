@@ -1,19 +1,3 @@
-/// A point in pixel space with a top-left origin.
-struct Point: Equatable {
-  var x: Float
-  var y: Float
-
-  static let zero = Point(x: 0, y: 0)
-}
-
-/// A size in pixel space.
-struct Size: Equatable {
-  var width: Float
-  var height: Float
-
-  static let zero = Size(width: 0, height: 0)
-}
-
 /// An axis-aligned rectangle in pixel space with a top-left origin.
 struct Rect: Equatable {
   var origin: Point

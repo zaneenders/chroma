@@ -1,12 +1,5 @@
 import Metal
 
-struct Glyph {
-  var rows: [String]
-  init(rows: [String] = Array(repeating: "", count: 7)) {
-    self.rows = rows
-  }
-}
-
 struct FontAtlas {
   let texture: MTLTexture
   // FontMetrics is the single source of truth for glyph geometry.
