@@ -235,50 +235,73 @@ final class Renderer: NSObject, MTKViewDelegate {
     cmd.commit()
   }
 
+  /// Draws a specimen containing every printable ASCII glyph (U+0020...U+007E).
+  /// Keeping this in the demo makes malformed, missing, or inconsistently aligned glyphs obvious.
   private func drawText(enc: MTLRenderCommandEncoder, viewport: SIMD2<Float>) {
-    let text = "Hello World!"
-    let scale: Float = 2.0  // glyph pixel size multiplier
+    let printableRows: [[UInt8]] = stride(from: 0x20, through: 0x70, by: 0x10).map { first in
+      let last = min(first + 0x0f, 0x7e)
+      let label = Array(String(format: "%02X  ", first).utf8)
+      return label + (first...last).map(UInt8.init)
+    }
+    let lines = [Array("5x7 PRINTABLE ASCII 20-7E".utf8)] + printableRows
 
-    // Convert pixel coords to NDC: NDC goes -1..1, so multiply by 2/viewport
-    let pxToNDC = Float(2.0) / viewport
-    let glyphW = fontAtlas.glyphWidth * scale * pxToNDC.x
-    let glyphH = fontAtlas.glyphHeight * scale * pxToNDC.y
-    let spacing = fontAtlas.glyphSpacing * scale * pxToNDC.x
+    // Use an integer scale so each font pixel lands on an exact block of screen pixels.
+    let margin: Float = 20
+    let longestLine = Float(lines.map(\.count).max() ?? 1)
+    let widthScale = (viewport.x - margin * 2) / (longestLine * 6)
+    let heightScale = (viewport.y - margin * 2) / (Float(lines.count) * 9)
+    let scale = max(1, min(4, floor(min(widthScale, heightScale))))
 
-    // Position in pixels from top-left, converted to NDC
-    let margin: Float = 10.0  // pixels from edge
-    let startX: Float = -1.0 + margin * pxToNDC.x
-    let startY: Float = 1.0 - margin * pxToNDC.y - glyphH  // top of first glyph
-
-    let chars = Array(text.utf8)
+    let pxToNDC = Float(2) / viewport
+    let glyphSize = SIMD2<Float>(fontAtlas.glyphWidth, fontAtlas.glyphHeight) * scale
+    let advance = SIMD2<Float>(fontAtlas.glyphWidth + fontAtlas.glyphSpacing, 9) * scale
     var instances = [TextInstance]()
-    instances.reserveCapacity(chars.count)
+    instances.reserveCapacity(lines.reduce(0) { $0 + $1.count })
 
-    var penX = startX
-    for c in chars {
-      let (u0, v0, u1, v1) = fontAtlas.glyphUV(c)
-      instances.append(
-        TextInstance(
-          dst_p0: [penX, startY],
-          dst_p1: [penX + glyphW, startY + glyphH],
-          tex_tl: [u0, v0],
-          tex_br: [u1, v1],
-          color: [1, 1, 1, 1]
-        ))
-      penX += glyphW + spacing
+    for (row, chars) in lines.enumerated() {
+      let color: SIMD4<Float> = row == 0 ? [1, 0.78, 0.25, 1] : [1, 1, 1, 1]
+      let top = SIMD2<Float>(margin, margin + Float(row) * advance.y)
+
+      for (column, c) in chars.enumerated() {
+        let pixelTopLeft = top + SIMD2<Float>(Float(column) * advance.x, 0)
+        let pixelBottomRight = pixelTopLeft + glyphSize
+        let ndcTopLeft = SIMD2<Float>(
+          -1 + pixelTopLeft.x * pxToNDC.x,
+          1 - pixelTopLeft.y * pxToNDC.y
+        )
+        let ndcBottomRight = SIMD2<Float>(
+          -1 + pixelBottomRight.x * pxToNDC.x,
+          1 - pixelBottomRight.y * pxToNDC.y
+        )
+        let (u0, v0, u1, v1) = fontAtlas.glyphUV(c)
+        instances.append(
+          TextInstance(
+            dst_p0: ndcTopLeft,
+            dst_p1: ndcBottomRight,
+            tex_tl: [u0, v0],
+            tex_br: [u1, v1],
+            color: color
+          ))
+      }
     }
 
-    guard !instances.isEmpty,
+    guard
       let buf = device.makeBuffer(
         bytes: instances,
         length: MemoryLayout<TextInstance>.stride * instances.count,
-        options: .storageModeShared)
+        options: .storageModeShared
+      )
     else { return }
 
     enc.setRenderPipelineState(textPipeline)
     enc.setVertexBuffer(buf, offset: 0, index: 0)
     enc.setFragmentTexture(fontAtlas.texture, index: 0)
-    enc.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4, instanceCount: instances.count)
+    enc.drawPrimitives(
+      type: .triangleStrip,
+      vertexStart: 0,
+      vertexCount: 4,
+      instanceCount: instances.count
+    )
   }
 
   func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
