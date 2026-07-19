@@ -1,18 +1,23 @@
 /// An axis-aligned rectangle in pixel space with a top-left origin.
-struct Rect: Equatable {
-  var origin: Point
-  var size: Size
+public struct Rect: Equatable, Sendable {
+  public var origin: Point
+  public var size: Size
 
-  var minX: Float { origin.x }
-  var minY: Float { origin.y }
-  var maxX: Float { origin.x + size.width }
-  var maxY: Float { origin.y + size.height }
+  public init(origin: Point, size: Size) {
+    self.origin = origin
+    self.size = size
+  }
 
-  func contains(_ point: Point) -> Bool {
+  public var minX: Float { origin.x }
+  public var minY: Float { origin.y }
+  public var maxX: Float { origin.x + size.width }
+  public var maxY: Float { origin.y + size.height }
+
+  public func contains(_ point: Point) -> Bool {
     point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY
   }
 
-  func intersection(_ other: Rect) -> Rect? {
+  public func intersection(_ other: Rect) -> Rect? {
     let x0 = max(minX, other.minX)
     let y0 = max(minY, other.minY)
     let x1 = min(maxX, other.maxX)

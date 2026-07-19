@@ -7,7 +7,7 @@ import MetalKit
 /// lists into encoded Metal commands. Everything above this type works in
 /// pixel-space draw lists and never sees a Metal type.
 @MainActor
-final class MetalRenderer: NSObject, MTKViewDelegate {
+public final class MetalRenderer: NSObject, MTKViewDelegate {
   private let device: MTLDevice
   private let queue: MTLCommandQueue
   private let textPipeline: MTLRenderPipelineState
@@ -16,13 +16,13 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
   /// The view to install in a window, exposed opaquely so application code
   /// does not depend on MetalKit.
-  var contentView: NSView { view }
+  public var contentView: NSView { view }
 
   /// Produces the draw list for one frame. Called on every draw with the
   /// viewport size in pixels.
-  var buildFrame: (inout DrawList, Size) -> Void = { _, _ in }
+  public var buildFrame: (inout DrawList, Size) -> Void = { _, _ in }
 
-  init?(frame: CGRect) {
+  public init?(frame: CGRect) {
     guard let device = MTLCreateSystemDefaultDevice(),
       let queue = device.makeCommandQueue()
     else {
@@ -79,7 +79,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     view.delegate = self
   }
 
-  func draw(in view: MTKView) {
+  public func draw(in view: MTKView) {
     guard let drawable = view.currentDrawable,
       let rpd = view.currentRenderPassDescriptor,
       let cmd = queue.makeCommandBuffer(),
@@ -96,7 +96,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     cmd.commit()
   }
 
-  func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+  public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
   /// Expands each text command into glyph instances and encodes one instanced draw.
   private func render(_ drawList: DrawList, viewport: Size, into enc: MTLRenderCommandEncoder) {
