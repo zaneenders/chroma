@@ -1,5 +1,0 @@
-module CWaylandClient [system] {
-  header "/usr/include/wayland-client.h"
-  link "wayland-client"
-  export *
-}
