@@ -9,9 +9,10 @@ struct Glyph {
 
 struct FontAtlas {
   let texture: MTLTexture
-  let glyphWidth: Float = 5
-  let glyphHeight: Float = 7
-  let glyphSpacing: Float = 1
+  // FontMetrics is the single source of truth for glyph geometry.
+  let glyphWidth: Float = FontMetrics().glyphWidth
+  let glyphHeight: Float = FontMetrics().glyphHeight
+  let glyphSpacing: Float = FontMetrics().glyphSpacing
   let firstChar: UInt8 = 32
   let lastChar: UInt8 = 126
 

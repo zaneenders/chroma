@@ -27,6 +27,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
   /// does not depend on MetalKit.
   var contentView: NSView { view }
 
+  /// Produces the draw list for one frame. Called on every draw with the
+  /// viewport size in pixels.
+  var buildFrame: (inout DrawList, Size) -> Void = { _, _ in }
+
   init?(frame: CGRect) {
     guard let device = MTLCreateSystemDefaultDevice(),
       let queue = device.makeCommandQueue()
@@ -91,8 +95,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
       let enc = cmd.makeRenderCommandEncoder(descriptor: rpd)
     else { return }
 
-    let viewport = SIMD2<Float>(Float(drawable.texture.width), Float(drawable.texture.height))
-    drawText(enc: enc, viewport: viewport)
+    let viewport = Size(width: Float(drawable.texture.width), height: Float(drawable.texture.height))
+    var drawList = DrawList()
+    buildFrame(&drawList, viewport)
+    render(drawList, viewport: viewport, into: enc)
 
     enc.endEncoding()
     cmd.present(drawable)
@@ -101,57 +107,42 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
 
   func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
-  /// Draws a specimen containing every printable ASCII glyph (U+0020...U+007E).
-  /// Keeping this in the demo makes malformed, missing, or inconsistently aligned glyphs obvious.
-  private func drawText(enc: MTLRenderCommandEncoder, viewport: SIMD2<Float>) {
-    let printableRows: [[UInt8]] = stride(from: 0x20, through: 0x70, by: 0x10).map { first in
-      let last = min(first + 0x0f, 0x7e)
-      let label = Array(String(format: "%02X  ", first).utf8)
-      return label + (first...last).map(UInt8.init)
-    }
-    let lines = [Array("5x7 PRINTABLE ASCII 20-7E".utf8)] + printableRows
-
-    // Use an integer scale so each font pixel lands on an exact block of screen pixels.
-    let margin: Float = 20
-    let longestLine = Float(lines.map(\.count).max() ?? 1)
-    let widthScale = (viewport.x - margin * 2) / (longestLine * 6)
-    let heightScale = (viewport.y - margin * 2) / (Float(lines.count) * 9)
-    let scale = max(1, min(4, floor(min(widthScale, heightScale))))
-
-    let pxToNDC = Float(2) / viewport
-    let glyphSize = SIMD2<Float>(fontAtlas.glyphWidth, fontAtlas.glyphHeight) * scale
-    let advance = SIMD2<Float>(fontAtlas.glyphWidth + fontAtlas.glyphSpacing, 9) * scale
+  /// Expands each text command into glyph instances and encodes one instanced draw.
+  private func render(_ drawList: DrawList, viewport: Size, into enc: MTLRenderCommandEncoder) {
+    let metrics = FontMetrics()
+    let pxToNDC = SIMD2<Float>(2 / viewport.width, 2 / viewport.height)
     var instances = [TextInstance]()
-    instances.reserveCapacity(lines.reduce(0) { $0 + $1.count })
 
-    for (row, chars) in lines.enumerated() {
-      let color: SIMD4<Float> = row == 0 ? [1, 0.78, 0.25, 1] : [1, 1, 1, 1]
-      let top = SIMD2<Float>(margin, margin + Float(row) * advance.y)
-
-      for (column, c) in chars.enumerated() {
-        let pixelTopLeft = top + SIMD2<Float>(Float(column) * advance.x, 0)
-        let pixelBottomRight = pixelTopLeft + glyphSize
-        let ndcTopLeft = SIMD2<Float>(
-          -1 + pixelTopLeft.x * pxToNDC.x,
-          1 - pixelTopLeft.y * pxToNDC.y
-        )
-        let ndcBottomRight = SIMD2<Float>(
-          -1 + pixelBottomRight.x * pxToNDC.x,
-          1 - pixelBottomRight.y * pxToNDC.y
-        )
-        let (u0, v0, u1, v1) = fontAtlas.glyphUV(c)
-        instances.append(
-          TextInstance(
-            dst_p0: ndcTopLeft,
-            dst_p1: ndcBottomRight,
-            tex_tl: [u0, v0],
-            tex_br: [u1, v1],
-            color: color
-          ))
+    for command in drawList.commands {
+      switch command {
+      case let .text(position, text, color, scale):
+        let glyphSize = SIMD2<Float>(metrics.glyphWidth, metrics.glyphHeight) * scale
+        let advance = metrics.cellAdvance * scale
+        var pen = SIMD2<Float>(position.x, position.y)
+        for byte in text.utf8 {
+          let ndcTopLeft = SIMD2<Float>(
+            -1 + pen.x * pxToNDC.x,
+            1 - pen.y * pxToNDC.y
+          )
+          let ndcBottomRight = SIMD2<Float>(
+            -1 + (pen.x + glyphSize.x) * pxToNDC.x,
+            1 - (pen.y + glyphSize.y) * pxToNDC.y
+          )
+          let (u0, v0, u1, v1) = fontAtlas.glyphUV(byte)
+          instances.append(
+            TextInstance(
+              dst_p0: ndcTopLeft,
+              dst_p1: ndcBottomRight,
+              tex_tl: [u0, v0],
+              tex_br: [u1, v1],
+              color: [color.r, color.g, color.b, color.a]
+            ))
+          pen.x += advance
+        }
       }
     }
 
-    guard
+    guard !instances.isEmpty,
       let buf = device.makeBuffer(
         bytes: instances,
         length: MemoryLayout<TextInstance>.stride * instances.count,
