@@ -1,3 +1,6 @@
+#if METAL_BACKEND
+
+import ImmediateGUI
 import Metal
 
 struct FontAtlas {
@@ -176,3 +179,7 @@ struct FontAtlas {
     return font
   }
 }
+
+#elseif METAL_TRAIT
+  #error("The Metal backend requires macOS.")
+#endif

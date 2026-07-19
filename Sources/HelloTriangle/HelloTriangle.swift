@@ -1,5 +1,8 @@
+#if METAL_BACKEND
+
 import AppKit
 import ImmediateGUI
+import MetalBackend
 
 @main
 struct HelloTriangle {
@@ -56,3 +59,19 @@ private func buildSpecimen(_ drawList: inout DrawList, viewport: Size) {
     )
   }
 }
+
+#elseif WAYLAND_BACKEND
+
+import WaylandBackend
+
+@main
+struct HelloTriangle {
+  static func main() {
+    // The Wayland backend is a stub; constructing it calls fatalError.
+    _ = WaylandRenderer()
+  }
+}
+
+#else
+  #error("HelloTriangle requires a rendering backend: MetalBackend (enabled by default) or WaylandBackend.")
+#endif

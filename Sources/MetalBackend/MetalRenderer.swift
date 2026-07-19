@@ -1,4 +1,7 @@
+#if METAL_BACKEND
+
 import AppKit
+import ImmediateGUI
 import MetalKit
 
 /// The Metal backend.
@@ -152,3 +155,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
     )
   }
 }
+
+#elseif METAL_TRAIT
+  #error("The Metal backend requires macOS.")
+#endif
