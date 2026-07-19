@@ -1,4 +1,5 @@
 import AppKit
+import ImmediateGUI
 
 @main
 struct HelloTriangle {

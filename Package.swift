@@ -4,9 +4,12 @@ import PackageDescription
 let package = Package(
   name: "HelloTriangle",
   platforms: [.macOS(.v14)],
+  products: [
+    .library(name: "ImmediateGUI", targets: ["ImmediateGUI"]),
+  ],
   targets: [
-    .executableTarget(
-      name: "HelloTriangle",
+    .target(
+      name: "ImmediateGUI",
       exclude: ["Shaders"],
       linkerSettings: [
         .unsafeFlags([
@@ -17,6 +20,15 @@ let package = Package(
       ],
       plugins: [
         .plugin(name: "MetalSourcePlugin")
+      ]
+    ),
+    .executableTarget(
+      name: "HelloTriangle",
+      dependencies: ["ImmediateGUI"],
+      linkerSettings: [
+        .unsafeFlags([
+          "-framework", "AppKit",
+        ])
       ]
     ),
     .executableTarget(name: "MetalSourceGenerator"),
