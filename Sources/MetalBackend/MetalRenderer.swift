@@ -13,6 +13,7 @@ import MetalKit
 public final class MetalRenderer: NSObject, MTKViewDelegate {
   private let device: MTLDevice
   private let queue: MTLCommandQueue
+  private let solidPipeline: MTLRenderPipelineState
   private let textPipeline: MTLRenderPipelineState
   private let fontAtlas: FontAtlas
   private let view: MTKView
@@ -48,20 +49,51 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
       return nil
     }
 
-    guard let textVert = library.makeFunction(name: "text_vertex"),
-      let textFrag = library.makeFunction(name: "text_fragment")
+    guard
+      let solidPipeline = Self.makePipeline(
+        device: device,
+        pixelFormat: view.colorPixelFormat,
+        library: library,
+        vertex: "solid_vertex",
+        fragment: "solid_fragment"
+      ),
+      let textPipeline = Self.makePipeline(
+        device: device,
+        pixelFormat: view.colorPixelFormat,
+        library: library,
+        vertex: "text_vertex",
+        fragment: "text_fragment"
+      )
     else {
-      print("Text functions not found in library")
+      return nil
+    }
+    self.solidPipeline = solidPipeline
+    self.textPipeline = textPipeline
+
+    super.init()
+    view.delegate = self
+  }
+
+  /// Creates an alpha-blended pipeline for the given shader functions.
+  private static func makePipeline(
+    device: MTLDevice,
+    pixelFormat: MTLPixelFormat,
+    library: MTLLibrary,
+    vertex: String,
+    fragment: String
+  ) -> MTLRenderPipelineState? {
+    guard let vertexFunction = library.makeFunction(name: vertex),
+      let fragmentFunction = library.makeFunction(name: fragment)
+    else {
+      print("Shader functions \(vertex)/\(fragment) not found in library")
       return nil
     }
 
-    let textDesc = MTLRenderPipelineDescriptor()
-    textDesc.vertexFunction = textVert
-    textDesc.fragmentFunction = textFrag
-    textDesc.colorAttachments[0].pixelFormat = view.colorPixelFormat
-
-    // Enable alpha blending for text
-    if let ca = textDesc.colorAttachments[0] {
+    let desc = MTLRenderPipelineDescriptor()
+    desc.vertexFunction = vertexFunction
+    desc.fragmentFunction = fragmentFunction
+    desc.colorAttachments[0].pixelFormat = pixelFormat
+    if let ca = desc.colorAttachments[0] {
       ca.isBlendingEnabled = true
       ca.sourceRGBBlendFactor = .sourceAlpha
       ca.destinationRGBBlendFactor = .oneMinusSourceAlpha
@@ -72,14 +104,11 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
     }
 
     do {
-      self.textPipeline = try device.makeRenderPipelineState(descriptor: textDesc)
+      return try device.makeRenderPipelineState(descriptor: desc)
     } catch {
-      print("Text pipeline creation failed:\n\(error)")
+      print("Pipeline \(vertex)/\(fragment) creation failed:\n\(error)")
       return nil
     }
-
-    super.init()
-    view.delegate = self
   }
 
   public func draw(in view: MTKView) {
@@ -101,61 +130,234 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
 
   public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
-  /// Expands each text command into glyph instances and encodes one instanced draw.
+  /// A run of consecutive draw commands that share one render pipeline.
+  ///
+  /// Batches are encoded in draw-list order and commands are never reordered
+  /// across pipelines: translucent GUI output depends on submission order.
+  private enum Batch {
+    case solid(indexOffset: Int, indexCount: Int)
+    case text(instanceOffset: Int, instanceCount: Int)
+    case pushClip(Rect)
+    case popClip
+  }
+
+  /// Expands the draw list into shared geometry arrays, then encodes one draw
+  /// per batch in draw-list order.
   private func render(_ drawList: DrawList, viewport: Size, into enc: MTLRenderCommandEncoder) {
     let metrics = FontMetrics()
     let pxToNDC = SIMD2<Float>(2 / viewport.width, 2 / viewport.height)
+    func ndc(_ x: Float, _ y: Float) -> SIMD2<Float> {
+      SIMD2(-1 + x * pxToNDC.x, 1 - y * pxToNDC.y)
+    }
+
+    var vertices = [GUIVertex]()
+    var indices = [UInt32]()
     var instances = [TextInstance]()
+    var batches: [Batch] = []
+
+    // One open batch per pipeline; consecutive same-pipeline commands merge
+    // into the open batch, and a command for the other pipeline closes it.
+    var solidStart: Int?
+    var textStart: Int?
+
+    func closeSolid() {
+      guard let start = solidStart else { return }
+      if indices.count > start {
+        batches.append(.solid(indexOffset: start, indexCount: indices.count - start))
+      }
+      solidStart = nil
+    }
+
+    func closeText() {
+      guard let start = textStart else { return }
+      if instances.count > start {
+        batches.append(.text(instanceOffset: start, instanceCount: instances.count - start))
+      }
+      textStart = nil
+    }
+
+    func appendQuad(_ rect: Rect, color: Color) {
+      guard rect.size.width > 0, rect.size.height > 0 else { return }
+      let base = UInt32(vertices.count)
+      let c = SIMD4(color.r, color.g, color.b, color.a)
+      vertices.append(GUIVertex(position: ndc(rect.minX, rect.minY), uv: .zero, color: c))
+      vertices.append(GUIVertex(position: ndc(rect.maxX, rect.minY), uv: .zero, color: c))
+      vertices.append(GUIVertex(position: ndc(rect.minX, rect.maxY), uv: .zero, color: c))
+      vertices.append(GUIVertex(position: ndc(rect.maxX, rect.maxY), uv: .zero, color: c))
+      indices.append(contentsOf: [base, base + 1, base + 2, base + 2, base + 1, base + 3])
+    }
+
+    /// Expands a stroked rectangle into four solid edge quads.
+    func appendStroke(_ rect: Rect, width: Float, color: Color) {
+      let border = max(0, width)
+      guard border > 0, rect.size.width > 0, rect.size.height > 0 else { return }
+      guard rect.size.width > 2 * border, rect.size.height > 2 * border else {
+        // The border covers the whole rect; fill it instead of inverting edges.
+        appendQuad(rect, color: color)
+        return
+      }
+      let (x, y) = (rect.origin.x, rect.origin.y)
+      let (w, h) = (rect.size.width, rect.size.height)
+      appendQuad(Rect(origin: Point(x: x, y: y), size: Size(width: w, height: border)), color: color)
+      appendQuad(Rect(origin: Point(x: x, y: y + h - border), size: Size(width: w, height: border)), color: color)
+      appendQuad(
+        Rect(origin: Point(x: x, y: y + border), size: Size(width: border, height: h - 2 * border)),
+        color: color
+      )
+      appendQuad(
+        Rect(origin: Point(x: x + w - border, y: y + border), size: Size(width: border, height: h - 2 * border)),
+        color: color
+      )
+    }
+
+    /// Clip stack of pixel-space rects. The current clip is the top element
+    /// (or the full viewport when empty).
+    var clipStack: [Rect] = []
 
     for command in drawList.commands {
       switch command {
+      case .fillRect(let rect, let color):
+        closeText()
+        if solidStart == nil { solidStart = indices.count }
+        appendQuad(rect, color: color)
+      case .strokeRect(let rect, let width, let color):
+        closeText()
+        if solidStart == nil { solidStart = indices.count }
+        appendStroke(rect, width: width, color: color)
       case .text(let position, let text, let color, let scale):
+        closeSolid()
+        if textStart == nil { textStart = instances.count }
         let glyphSize = SIMD2<Float>(metrics.glyphWidth, metrics.glyphHeight) * scale
         let advance = metrics.cellAdvance * scale
         var pen = SIMD2<Float>(position.x, position.y)
         for byte in text.utf8 {
-          let ndcTopLeft = SIMD2<Float>(
-            -1 + pen.x * pxToNDC.x,
-            1 - pen.y * pxToNDC.y
-          )
-          let ndcBottomRight = SIMD2<Float>(
-            -1 + (pen.x + glyphSize.x) * pxToNDC.x,
-            1 - (pen.y + glyphSize.y) * pxToNDC.y
-          )
           let (u0, v0, u1, v1) = fontAtlas.glyphUV(byte)
           instances.append(
             TextInstance(
-              dst_p0: ndcTopLeft,
-              dst_p1: ndcBottomRight,
+              dst_p0: ndc(pen.x, pen.y),
+              dst_p1: ndc(pen.x + glyphSize.x, pen.y + glyphSize.y),
               tex_tl: [u0, v0],
               tex_br: [u1, v1],
               color: [color.r, color.g, color.b, color.a]
             ))
           pen.x += advance
         }
+      case .pushClip(let rect):
+        closeSolid()
+        closeText()
+        let clipped = clipStack.last.map { rect.intersection($0) ?? Rect.zero } ?? rect
+        clipStack.append(clipped)
+        batches.append(.pushClip(clipped))
+      case .popClip:
+        closeSolid()
+        closeText()
+        _ = clipStack.popLast()
+        batches.append(.popClip)
       }
     }
+    closeSolid()
+    closeText()
 
-    guard !instances.isEmpty,
-      let buf = device.makeBuffer(
+    guard !batches.isEmpty else { return }
+
+    // Per-frame scratch buffers. Buffer reuse and growth are a separate step;
+    // the batch offsets below are structured so only this allocation changes.
+    let vertexBuffer: MTLBuffer?
+    let indexBuffer: MTLBuffer?
+    if vertices.isEmpty {
+      vertexBuffer = nil
+      indexBuffer = nil
+    } else {
+      vertexBuffer = device.makeBuffer(
+        bytes: vertices,
+        length: MemoryLayout<GUIVertex>.stride * vertices.count,
+        options: .storageModeShared
+      )
+      indexBuffer = device.makeBuffer(
+        bytes: indices,
+        length: MemoryLayout<UInt32>.stride * indices.count,
+        options: .storageModeShared
+      )
+    }
+    let textBuffer: MTLBuffer?
+    if instances.isEmpty {
+      textBuffer = nil
+    } else {
+      textBuffer = device.makeBuffer(
         bytes: instances,
         length: MemoryLayout<TextInstance>.stride * instances.count,
         options: .storageModeShared
       )
-    else { return }
+    }
 
-    enc.setRenderPipelineState(textPipeline)
-    enc.setVertexBuffer(buf, offset: 0, index: 0)
     enc.setFragmentTexture(fontAtlas.texture, index: 0)
-    enc.drawPrimitives(
-      type: .triangleStrip,
-      vertexStart: 0,
-      vertexCount: 4,
-      instanceCount: instances.count
-    )
+
+    /// Pixel-space scissor stack applied during encoding. Pop restores the
+    /// previous scissor; when the stack is empty the scissor is disabled.
+    var scissorStack: [Rect] = []
+    let viewportRect = Rect(origin: .zero, size: viewport)
+
+    for batch in batches {
+      switch batch {
+      case .solid(let indexOffset, let indexCount):
+        guard let vertexBuffer, let indexBuffer else { continue }
+        enc.setRenderPipelineState(solidPipeline)
+        enc.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
+        enc.drawIndexedPrimitives(
+          type: .triangle,
+          indexCount: indexCount,
+          indexType: .uint32,
+          indexBuffer: indexBuffer,
+          indexBufferOffset: indexOffset * MemoryLayout<UInt32>.stride
+        )
+      case .text(let instanceOffset, let instanceCount):
+        guard let textBuffer else { continue }
+        enc.setRenderPipelineState(textPipeline)
+        enc.setVertexBuffer(
+          textBuffer,
+          offset: instanceOffset * MemoryLayout<TextInstance>.stride,
+          index: 0
+        )
+        enc.drawPrimitives(
+          type: .triangleStrip,
+          vertexStart: 0,
+          vertexCount: 4,
+          instanceCount: instanceCount
+        )
+      case .pushClip(let rect):
+        let current = scissorStack.last ?? viewportRect
+        let clamped = current.intersection(rect) ?? Rect.zero
+        scissorStack.append(clamped)
+        enc.setScissorRect(clamped.asMtlScissor)
+      case .popClip:
+        _ = scissorStack.popLast()
+        if let prev = scissorStack.last {
+          enc.setScissorRect(prev.asMtlScissor)
+        } else {
+          enc.setScissorRect(viewportRect.asMtlScissor)
+        }
+      }
+    }
   }
 }
 
 #elseif METAL_TRAIT
   #error("The Metal backend requires macOS.")
+#endif
+
+#if METAL_BACKEND
+  import Metal
+
+  extension Rect {
+    /// Converts a pixel-space `Rect` into a `MTLScissorRect` for the
+    /// render-command encoder. Metal scissor uses the same top-left origin.
+    var asMtlScissor: MTLScissorRect {
+      MTLScissorRect(
+        x: Int(minX.rounded(.down)),
+        y: Int(minY.rounded(.down)),
+        width: Int(size.width.rounded(.up)),
+        height: Int(size.height.rounded(.up))
+      )
+    }
+  }
 #endif

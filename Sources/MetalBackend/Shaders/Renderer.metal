@@ -42,3 +42,26 @@ fragment float4 text_fragment(TextVertexOut in [[stage_in]],
     float a = fontTex.sample(s, in.texCoord).a;
     return float4(in.color.rgb, in.color.a * a);
 }
+
+struct GUIVertex {
+  float2 position;  // NDC
+  float2 uv;        // reserved for textured quads
+  float4 color;
+};
+
+struct SolidVertexOut {
+  float4 position [[position]];
+  float4 color;
+};
+
+vertex SolidVertexOut solid_vertex(uint vid [[vertex_id]],
+                                   constant GUIVertex* vertices [[buffer(0)]]) {
+    SolidVertexOut out;
+    out.position = float4(vertices[vid].position, 0.0, 1.0);
+    out.color = vertices[vid].color;
+    return out;
+}
+
+fragment float4 solid_fragment(SolidVertexOut in [[stage_in]]) {
+    return in.color;
+}

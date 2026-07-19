@@ -17,6 +17,8 @@ public struct Rect: Equatable, Sendable {
     point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY
   }
 
+  public static let zero = Rect(origin: .zero, size: .zero)
+
   public func intersection(_ other: Rect) -> Rect? {
     let x0 = max(minX, other.minX)
     let y0 = max(minY, other.minY)
