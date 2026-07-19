@@ -1,33 +1,6 @@
 #include <metal_stdlib>
 using namespace metal;
 
-struct Vertex {
-  float2 position;
-  float3 color;
-};
-
-struct VertexOut {
-  float4 position [[position]];
-  float3 color;
-};
-
-struct Uniforms {
-  float4x4 modelMatrix;
-};
-
-vertex VertexOut vertex_main(uint vid [[vertex_id]],
-                             constant Vertex* vertices [[buffer(0)]],
-                             constant Uniforms& uniforms [[buffer(1)]]) {
-    VertexOut out;
-    out.position = uniforms.modelMatrix * float4(vertices[vid].position, 0.0, 1.0);
-    out.color = vertices[vid].color;
-    return out;
-}
-
-fragment float4 fragment_main(VertexOut in [[stage_in]]) {
-    return float4(in.color, 1.0);
-}
-
 struct TextInstance {
   float2 dst_p0;   // top-left in NDC
   float2 dst_p1;   // bottom-right in NDC

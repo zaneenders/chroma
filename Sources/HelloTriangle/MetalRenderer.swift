@@ -1,71 +1,52 @@
+import AppKit
 import MetalKit
 
-struct Vertex {
-  var positions: SIMD2<Float>
-  var color: SIMD3<Float>
-}
-
-struct Uniforms {
-  var modelMatrix: simd_float4x4
-}
-
-struct TextInstance {
+/// One glyph quad in the text instance buffer.
+private struct TextInstance {
   var dst_p0: SIMD2<Float>  // top-left in NDC
   var dst_p1: SIMD2<Float>  // bottom-right in NDC
-  var tex_tl: SIMD2<Float>
-  var tex_br: SIMD2<Float>
+  var tex_tl: SIMD2<Float>  // font atlas UV of the glyph's top-left
+  var tex_br: SIMD2<Float>  // font atlas UV of the glyph's bottom-right
   var color: SIMD4<Float>
 }
 
+/// The Metal backend.
+///
+/// Owns the view, all GPU state, and the conversion of backend-neutral draw
+/// lists into encoded Metal commands. Everything above this type works in
+/// pixel-space draw lists and never sees a Metal type.
 @MainActor
-final class Renderer: NSObject, MTKViewDelegate {
+final class MetalRenderer: NSObject, MTKViewDelegate {
   private let device: MTLDevice
-  private let trianglePipeline: MTLRenderPipelineState
-  private let textPipeline: MTLRenderPipelineState
   private let queue: MTLCommandQueue
-  private let vertexBuffer: MTLBuffer
-  private let uniformBuffer: MTLBuffer
+  private let textPipeline: MTLRenderPipelineState
   private let fontAtlas: FontAtlas
+  private let view: MTKView
 
-  var rotation: Float = 0
-  var offsetX: Float = 0
-  var offsetY: Float = 0
+  /// The view to install in a window, exposed opaquely so application code
+  /// does not depend on MetalKit.
+  var contentView: NSView { view }
 
-  init?(view: MTKView) {
-    guard let device = view.device,
+  init?(frame: CGRect) {
+    guard let device = MTLCreateSystemDefaultDevice(),
       let queue = device.makeCommandQueue()
     else {
-      print("Unable to make command queue.")
+      print("Metal requires Apple Silicon or supported GPU.")
       return nil
     }
     self.device = device
     self.queue = queue
     self.fontAtlas = FontAtlas(device: device)
 
+    let view = MTKView(frame: frame, device: device)
+    view.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
+    self.view = view
+
     let library: MTLLibrary
     do {
       library = try device.makeLibrary(source: metalSource, options: nil)
     } catch {
       print("Shader compile failed:\n\(error)")
-      return nil
-    }
-
-    guard let triVert = library.makeFunction(name: "vertex_main"),
-      let triFrag = library.makeFunction(name: "fragment_main")
-    else {
-      print("Triangle functions not found in library")
-      return nil
-    }
-
-    let triDesc = MTLRenderPipelineDescriptor()
-    triDesc.vertexFunction = triVert
-    triDesc.fragmentFunction = triFrag
-    triDesc.colorAttachments[0].pixelFormat = view.colorPixelFormat
-
-    do {
-      self.trianglePipeline = try device.makeRenderPipelineState(descriptor: triDesc)
-    } catch {
-      print("Triangle pipeline creation failed:\n\(error)")
       return nil
     }
 
@@ -99,68 +80,26 @@ final class Renderer: NSObject, MTKViewDelegate {
       return nil
     }
 
-    let verties = [
-      Vertex(positions: [0.0, 0.8], color: [1, 0, 0]),
-      Vertex(positions: [-0.8, -0.8], color: [0, 1, 0]),
-      Vertex(positions: [0.8, -0.8], color: [0, 0, 1]),
-    ]
-    guard
-      let vertexBuffer = device.makeBuffer(
-        bytes: verties,
-        length: MemoryLayout<Vertex>.stride * verties.count,
-        options: .storageModeShared)
-    else {
-      return nil
-    }
-    self.vertexBuffer = vertexBuffer
-
-    guard
-      let uniformBuffer = device.makeBuffer(
-        length: MemoryLayout<Uniforms>.stride,
-        options: .storageModeShared)
-    else {
-      return nil
-    }
-    self.uniformBuffer = uniformBuffer
+    super.init()
+    view.delegate = self
   }
 
   func draw(in view: MTKView) {
     guard let drawable = view.currentDrawable,
       let rpd = view.currentRenderPassDescriptor,
-      let cmd = queue.makeCommandBuffer()
+      let cmd = queue.makeCommandBuffer(),
+      let enc = cmd.makeRenderCommandEncoder(descriptor: rpd)
     else { return }
 
-    guard let enc = cmd.makeRenderCommandEncoder(descriptor: rpd) else { return }
-
-    let cosA = cos(rotation)
-    let sinA = sin(rotation)
-    let rotate = simd_float4x4(rows: [
-      [cosA, -sinA, 0, 0],
-      [sinA, cosA, 0, 0],
-      [0, 0, 1, 0],
-      [0, 0, 0, 1],
-    ])
-    let translate = simd_float4x4(rows: [
-      [1, 0, 0, offsetX],
-      [0, 1, 0, offsetY],
-      [0, 0, 1, 0],
-      [0, 0, 0, 1],
-    ])
-    var uniforms = Uniforms(modelMatrix: translate * rotate)
-    uniformBuffer.contents().copyMemory(
-      from: &uniforms, byteCount: MemoryLayout<Uniforms>.stride)
-
-    enc.setRenderPipelineState(trianglePipeline)
-    enc.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
-    enc.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
-    enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-
-    drawText(enc: enc, viewport: SIMD2<Float>(Float(drawable.texture.width), Float(drawable.texture.height)))
+    let viewport = SIMD2<Float>(Float(drawable.texture.width), Float(drawable.texture.height))
+    drawText(enc: enc, viewport: viewport)
 
     enc.endEncoding()
     cmd.present(drawable)
     cmd.commit()
   }
+
+  func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
   /// Draws a specimen containing every printable ASCII glyph (U+0020...U+007E).
   /// Keeping this in the demo makes malformed, missing, or inconsistently aligned glyphs obvious.
@@ -230,6 +169,4 @@ final class Renderer: NSObject, MTKViewDelegate {
       instanceCount: instances.count
     )
   }
-
-  func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 }
