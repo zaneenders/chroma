@@ -8,6 +8,11 @@ public struct Rect: Equatable, Sendable {
     self.size = size
   }
 
+  /// Creates a rect from individual coordinates.
+  public init(x: Float, y: Float, width: Float, height: Float) {
+    self.init(origin: Point(x: x, y: y), size: Size(width: width, height: height))
+  }
+
   public var minX: Float { origin.x }
   public var minY: Float { origin.y }
   public var maxX: Float { origin.x + size.width }

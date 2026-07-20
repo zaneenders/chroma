@@ -2,11 +2,20 @@
 
 import ImmediateGUI
 
-public final class WaylandRenderer {
-  /// Produces the draw list for one frame. Same contract as the Metal backend.
-  public var buildFrame: (inout DrawList, Size) -> Void = { _, _ in }
+/// The Wayland backend (stub).
+///
+/// Conforms to ``Renderer`` so application code is already backend-neutral;
+/// the implementation lands with the Wayland event loop and surface setup.
+@MainActor
+public final class WaylandRenderer: Renderer {
+  public let name = "Wayland"
 
-  public init() {
+  /// The content rendered every frame. Same contract as the Metal backend.
+  public var content: (any Block)?
+
+  public init() {}
+
+  public func run(title: String = "Hello Triangle") {
     fatalError("WaylandBackend is not implemented yet.")
   }
 }

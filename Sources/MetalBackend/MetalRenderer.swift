@@ -6,25 +6,31 @@ import MetalKit
 
 /// The Metal backend.
 ///
-/// Owns the view, all GPU state, and the conversion of backend-neutral draw
-/// lists into encoded Metal commands. Everything above this type works in
-/// pixel-space draw lists and never sees a Metal type.
+/// Owns the rendering surface, all GPU state, and the conversion of
+/// backend-neutral draw lists into encoded Metal commands. Everything above
+/// this type works in pixel-space draw lists and never sees a Metal type.
+///
+/// Use ``run(title:)`` for a standalone window, or embed ``contentView`` in
+/// your own AppKit window to host the renderer inside an existing app.
 @MainActor
-public final class MetalRenderer: NSObject, MTKViewDelegate {
+public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
   private let device: MTLDevice
   private let queue: MTLCommandQueue
   private let solidPipeline: MTLRenderPipelineState
   private let textPipeline: MTLRenderPipelineState
   private let fontAtlas: FontAtlas
-  private let view: MTKView
+  private let mtkView: MTKView
 
-  /// The view to install in a window, exposed opaquely so application code
-  /// does not depend on MetalKit.
-  public var contentView: NSView { view }
+  public let name = "Metal"
 
-  /// Produces the draw list for one frame. Called on every draw with the
-  /// viewport size in pixels.
-  public var buildFrame: (inout DrawList, Size) -> Void = { _, _ in }
+  /// The content rendered every frame. Assign a new block at any time to swap
+  /// content without touching the backend.
+  public var content: (any Block)?
+
+  /// The rendering surface to install in a window, exposed opaquely so
+  /// application code does not depend on MetalKit. ``run(title:)`` installs
+  /// this for you; embed it yourself to host the renderer in an existing app.
+  public var contentView: NSView { mtkView }
 
   public init?(frame: CGRect) {
     guard let device = MTLCreateSystemDefaultDevice(),
@@ -37,9 +43,9 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
     self.queue = queue
     self.fontAtlas = FontAtlas(device: device)
 
-    let view = MTKView(frame: frame, device: device)
-    view.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
-    self.view = view
+    let mtkView = MTKView(frame: frame, device: device)
+    mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
+    self.mtkView = mtkView
 
     let library: MTLLibrary
     do {
@@ -52,14 +58,14 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
     guard
       let solidPipeline = Self.makePipeline(
         device: device,
-        pixelFormat: view.colorPixelFormat,
+        pixelFormat: mtkView.colorPixelFormat,
         library: library,
         vertex: "solid_vertex",
         fragment: "solid_fragment"
       ),
       let textPipeline = Self.makePipeline(
         device: device,
-        pixelFormat: view.colorPixelFormat,
+        pixelFormat: mtkView.colorPixelFormat,
         library: library,
         vertex: "text_vertex",
         fragment: "text_fragment"
@@ -71,7 +77,34 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
     self.textPipeline = textPipeline
 
     super.init()
-    view.delegate = self
+    mtkView.delegate = self
+  }
+
+  /// Creates a renderer whose surface is `size` points across.
+  public convenience init?(size: Size) {
+    self.init(frame: CGRect(x: 0, y: 0, width: CGFloat(size.width), height: CGFloat(size.height)))
+  }
+
+  /// Presents the renderer in its own window and runs the AppKit event loop.
+  ///
+  /// Owns all `NSApplication` setup and returns only when the app exits.
+  public func run(title: String = "Hello Triangle") {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.regular)
+
+    let window = NSWindow(
+      contentRect: mtkView.frame,
+      styleMask: [.titled, .closable, .resizable],
+      backing: .buffered,
+      defer: false
+    )
+    window.title = title
+    window.contentView = mtkView
+    window.center()
+    window.makeKeyAndOrderFront(nil)
+
+    app.activate(ignoringOtherApps: true)
+    app.run()
   }
 
   /// Creates an alpha-blended pipeline for the given shader functions.
@@ -111,16 +144,18 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
     }
   }
 
-  public func draw(in view: MTKView) {
-    guard let drawable = view.currentDrawable,
-      let rpd = view.currentRenderPassDescriptor,
+  public func draw(in mtkView: MTKView) {
+    guard let drawable = mtkView.currentDrawable,
+      let rpd = mtkView.currentRenderPassDescriptor,
       let cmd = queue.makeCommandBuffer(),
       let enc = cmd.makeRenderCommandEncoder(descriptor: rpd)
     else { return }
 
     let viewport = Size(width: Float(drawable.texture.width), height: Float(drawable.texture.height))
     var drawList = DrawList()
-    buildFrame(&drawList, viewport)
+    if let content {
+      BlockEngine.draw(content, into: &drawList, in: Rect(origin: .zero, size: viewport))
+    }
     render(drawList, viewport: viewport, into: enc)
 
     enc.endEncoding()
@@ -342,22 +377,22 @@ public final class MetalRenderer: NSObject, MTKViewDelegate {
 }
 
 #elseif METAL_TRAIT
-  #error("The Metal backend requires macOS.")
+#error("The Metal backend requires macOS.")
 #endif
 
 #if METAL_BACKEND
-  import Metal
+import Metal
 
-  extension Rect {
-    /// Converts a pixel-space `Rect` into a `MTLScissorRect` for the
-    /// render-command encoder. Metal scissor uses the same top-left origin.
-    var asMtlScissor: MTLScissorRect {
-      MTLScissorRect(
-        x: Int(minX.rounded(.down)),
-        y: Int(minY.rounded(.down)),
-        width: Int(size.width.rounded(.up)),
-        height: Int(size.height.rounded(.up))
-      )
-    }
+extension Rect {
+  /// Converts a pixel-space `Rect` into a `MTLScissorRect` for the
+  /// render-command encoder. Metal scissor uses the same top-left origin.
+  var asMtlScissor: MTLScissorRect {
+    MTLScissorRect(
+      x: Int(minX.rounded(.down)),
+      y: Int(minY.rounded(.down)),
+      width: Int(size.width.rounded(.up)),
+      height: Int(size.height.rounded(.up))
+    )
   }
+}
 #endif
