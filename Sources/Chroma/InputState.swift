@@ -9,10 +9,16 @@
 /// - `pointerDown`: held across frames
 /// - `pointerPressed`: false-to-true transition during this frame
 /// - `pointerReleased`: true-to-false transition during this frame
+/// - `pointerPressPosition`: the pointer location at the moment of the most
+///   recent press, used to establish capture on the correct widget even when
+///   the pointer moves before the next rendered frame.
 public struct InputState: Equatable, Sendable {
   /// Pointer position in pixel space (top-left origin), or a point outside
   /// the viewport when the pointer has left the window.
   public var pointerPosition: Point
+  /// The position at which the most recent press occurred (or a sentinel
+  /// outside the viewport when no press happened this frame).
+  public var pointerPressPosition: Point
   public var pointerDown: Bool
   public var pointerPressed: Bool
   public var pointerReleased: Bool
@@ -20,12 +26,14 @@ public struct InputState: Equatable, Sendable {
 
   public init(
     pointerPosition: Point = .zero,
+    pointerPressPosition: Point = Point(x: -1, y: -1),
     pointerDown: Bool = false,
     pointerPressed: Bool = false,
     pointerReleased: Bool = false,
     scrollDelta: Point = .zero
   ) {
     self.pointerPosition = pointerPosition
+    self.pointerPressPosition = pointerPressPosition
     self.pointerDown = pointerDown
     self.pointerPressed = pointerPressed
     self.pointerReleased = pointerReleased

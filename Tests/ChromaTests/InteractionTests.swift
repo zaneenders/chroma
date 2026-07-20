@@ -226,4 +226,25 @@ struct InteractionTests {
     ctx.endFrame()
     #expect(ctx.active == id, "active persists while button held")
   }
+
+  /// A press that starts outside the widget, drags inside, and releases
+  /// inside — all within a single frame — must NOT fire a click. The
+  /// capture decision uses the press position, not the final position.
+  @Test func pressOutsideDragInsideReleaseInsideSameFrameDoesNotClick() {
+    let ctx = Interaction()
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+
+    // Press outside (200, 200), drag to (50, 50), release — all in one frame.
+    ctx.beginFrame(input: InputState(
+      pointerPosition: Point(x: 50, y: 50),        // final position: inside
+      pointerPressPosition: Point(x: 200, y: 200),  // press position: outside
+      pointerDown: false,
+      pointerPressed: true,
+      pointerReleased: true
+    ))
+    let state = ctx.buttonBehavior(id: WidgetID("btn"), rect: rect)
+    #expect(!state.clicked, "press outside must not click even when released inside")
+    #expect(ctx.active == nil, "no capture because press was outside")
+    ctx.endFrame()
+  }
 }

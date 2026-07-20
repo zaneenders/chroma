@@ -13,6 +13,7 @@ import MetalKit
 /// frame therefore still produces exactly one click.
 final class ChromaInputView: MTKView {
   private var pointerPosition = Point(x: -1, y: -1)
+  private var pointerPressPosition = Point(x: -1, y: -1)
   private var pointerDown = false
   private var pressedEdge = false
   private var releasedEdge = false
@@ -23,6 +24,7 @@ final class ChromaInputView: MTKView {
   func frameInput() -> InputState {
     let input = InputState(
       pointerPosition: pointerPosition,
+      pointerPressPosition: pointerPressPosition,
       pointerDown: pointerDown,
       pointerPressed: pressedEdge,
       pointerReleased: releasedEdge,
@@ -30,6 +32,7 @@ final class ChromaInputView: MTKView {
     )
     pressedEdge = false
     releasedEdge = false
+    pointerPressPosition = Point(x: -1, y: -1)
     scroll = .zero
     return input
   }
@@ -57,6 +60,7 @@ final class ChromaInputView: MTKView {
 
   override func mouseDown(with event: NSEvent) {
     updatePointer(with: event)
+    pointerPressPosition = pointerPosition
     pointerDown = true
     pressedEdge = true
   }

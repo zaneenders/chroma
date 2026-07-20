@@ -55,7 +55,16 @@ public final class Interaction {
   public func buttonBehavior(id: WidgetID, rect: Rect) -> ButtonState {
     let hovered = rect.contains(input.pointerPosition) && (active == nil || active == id)
     if hovered { hot = id }
-    if hovered && input.pointerPressed && active == nil { active = id }
+
+    // Capture is established using the press position so that a press
+    // that starts outside the widget never captures it, even when the
+    // pointer is dragged inside before the next rendered frame.
+    let pressPos = input.pointerPressPosition
+    let pressedInside = input.pointerPressed
+      && rect.contains(pressPos.x >= 0 ? pressPos : input.pointerPosition)
+      && active == nil
+    if pressedInside { active = id }
+
     let clicked = active == id && hovered && input.pointerReleased
     if active == id && input.pointerReleased { active = nil }
     return ButtonState(
