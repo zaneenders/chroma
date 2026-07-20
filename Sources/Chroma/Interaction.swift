@@ -101,6 +101,19 @@ public final class Interaction {
   /// no hover macros.
   private var lastPointerPosition = Point(x: -1, y: -1)
 
+  /// Retained vertical scroll positions and prior limits, keyed by a stable
+  /// scroll-view ID.
+  private var scrollOffsets: [WidgetID: Float] = [:]
+  private var scrollLimits: [WidgetID: Float] = [:]
+  /// Viewports from the previous frame suppress the legacy wheel-to-focus
+  /// mapping when the wheel belongs to a scroll container.
+  private var scrollViewports: [Rect] = []
+  private var buildingScrollViewports: [Rect] = []
+
+  /// Clips inherited by blocks as they draw. The effective clip is stored on
+  /// focus-tree leaves so pointer hit testing agrees with rendered clipping.
+  private var clipStack: [Rect] = []
+
   /// The selected leaf's identity for this frame, resolved during
   /// ``beginFrame(input:)`` so leaves are matched by ``WidgetID`` across the
   /// frame boundary. Nil when the cursor is on a group.
@@ -135,6 +148,8 @@ public final class Interaction {
     builderRoot = root
     builderStack = [root]
     builderPath = []
+    clipStack = []
+    buildingScrollViewports = []
 
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
@@ -164,11 +179,15 @@ public final class Interaction {
       self.pressedLeaf = nil
     }
 
-    // Scroll wheels speak the language too: one step per frame.
-    if input.scrollDelta.y > 0 {
-      apply(.up)
-    } else if input.scrollDelta.y < 0 {
-      apply(.down)
+    // Outside a scroll viewport, wheels retain the original focus-navigation
+    // behavior. Inside one, the viewport consumes the raw delta during draw.
+    let wheelIsOverScrollView = scrollViewports.contains { $0.contains(input.pointerPosition) }
+    if !wheelIsOverScrollView {
+      if input.scrollDelta.y > 0 {
+        apply(.up)
+      } else if input.scrollDelta.y < 0 {
+        apply(.down)
+      }
     }
 
     // The keyboard speaks last.
@@ -199,8 +218,10 @@ public final class Interaction {
       self.editingLeaf = nil  // The field vanished from the UI mid-edit.
     }
     tree = newTree
+    scrollViewports = buildingScrollViewports
     builderRoot = nil
     builderStack = []
+    buildingScrollViewports = []
     activatePending = false
   }
 
@@ -240,6 +261,47 @@ public final class Interaction {
     return selection == builderPath
   }
 
+  // MARK: Clipping and retained scroll state
+
+  /// Narrows pointer hit testing to `rect` until the matching ``popClip()``.
+  /// Draw containers call this alongside `DrawList.pushClip`.
+  public func pushClip(_ rect: Rect) {
+    let clip = clipStack.last.flatMap { $0.intersection(rect) } ?? (clipStack.isEmpty ? rect : .zero)
+    clipStack.append(clip)
+  }
+
+  public func popClip() {
+    guard !clipStack.isEmpty else {
+      preconditionFailure("popClip without a matching pushClip")
+    }
+    clipStack.removeLast()
+  }
+
+  /// Registers a viewport for wheel routing on the next frame.
+  public func registerScrollViewport(_ rect: Rect) {
+    buildingScrollViewports.append(rect)
+  }
+
+  /// Returns the retained content offset for a scroll view.
+  public func scrollOffset(for id: WidgetID) -> Float {
+    scrollOffsets[id, default: 0]
+  }
+
+  /// Stores a clamped content offset for a scroll view.
+  public func setScrollOffset(_ offset: Float, for id: WidgetID) {
+    scrollOffsets[id] = max(0, offset)
+  }
+
+  /// The previous frame's maximum offset, used to preserve stick-to-bottom
+  /// while streaming content grows.
+  public func scrollLimit(for id: WidgetID) -> Float {
+    scrollLimits[id, default: 0]
+  }
+
+  public func setScrollLimit(_ limit: Float, for id: WidgetID) {
+    scrollLimits[id] = max(0, limit)
+  }
+
   /// Registers an interactive widget as a leaf of the enclosing group and
   /// reports its state for this frame: `hovered` means the cursor is on this
   /// widget, `held` means a pointer press is held on it, and `clicked` means
@@ -248,7 +310,7 @@ public final class Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: rect))
+    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
 
     let selected = selectedLeafID == id
     let held = pressedLeaf == id && input.pointerDown
@@ -282,7 +344,7 @@ public final class Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: rect))
+    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
 
     let selected = selectedLeafID == id
     let held = pressedLeaf == id && input.pointerDown
@@ -340,6 +402,11 @@ public final class Interaction {
       caretOffset: editing ? caretOffset : nil)
   }
 
+  private func clippedRect(_ rect: Rect) -> Rect {
+    guard let clip = clipStack.last else { return rect }
+    return rect.intersection(clip) ?? .zero
+  }
+
   // MARK: Display helpers
 
   /// A compact description of the cursor for status displays:
@@ -386,6 +453,8 @@ public final class Interaction {
       if !selection.isEmpty {
         self.selection = Array(selection.dropLast())
       }
+    case .pageUp, .pageDown, .home, .end:
+      return  // Viewport containers consume these during their draw.
     case .up, .down, .left, .right:
       guard !selection.isEmpty,
         let parent = tree.node(at: Array(selection.dropLast())),

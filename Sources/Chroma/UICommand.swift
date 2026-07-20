@@ -26,6 +26,14 @@ public enum UICommand: Equatable, Sendable {
   case out
   /// Activate the selected widget: click it, press it, fire its action.
   case activate
+  /// Scroll the active viewport upward by approximately one page.
+  case pageUp
+  /// Scroll the active viewport downward by approximately one page.
+  case pageDown
+  /// Scroll the active viewport to its beginning.
+  case home
+  /// Scroll the active viewport to its end.
+  case end
 
   /// A short lowercase name, joined into macro descriptions for display.
   public var label: String {
@@ -37,6 +45,10 @@ public enum UICommand: Equatable, Sendable {
     case .in: "in"
     case .out: "out"
     case .activate: "activate"
+    case .pageUp: "page-up"
+    case .pageDown: "page-down"
+    case .home: "home"
+    case .end: "end"
     }
   }
 }

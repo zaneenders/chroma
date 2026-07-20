@@ -122,6 +122,10 @@ final class ChromaInputView: MTKView {
     case 124: command = .right
     case 125: command = .down
     case 126: command = .up
+    case 116: command = .pageUp
+    case 121: command = .pageDown
+    case 115: command = .home
+    case 119: command = .end
     case 36, 76, 49: command = .activate  // return, keypad enter, space
     default:
       if event.modifierFlags.intersection([.command, .control, .option]).isEmpty {

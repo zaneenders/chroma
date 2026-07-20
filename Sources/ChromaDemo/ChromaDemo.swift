@@ -1,5 +1,5 @@
-import Foundation
 import Chroma
+import Foundation
 
 #if METAL_BACKEND
 import MetalBackend
@@ -26,7 +26,14 @@ struct ChromaDemo: PlatformApp {
 
 /// The demo's application state, shared by reference so value-type blocks can
 /// read it every frame and interaction closures can mutate it.
+private enum DemoTab {
+  case package
+  case ascii
+}
+
 private final class DemoState {
+  var selectedTab: DemoTab = .package
+  let packageSource = DemoState.loadPackageSource()
   var accent = Color(r: 0.3, g: 0.6, b: 1.0, a: 1)
   var accentName = "Blue"
   var wireframe = false
@@ -41,6 +48,16 @@ private final class DemoState {
     lastAction = action
     actionCount += 1
   }
+
+  private static func loadPackageSource() -> String {
+    let packageURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent("Package.swift")
+    return (try? String(contentsOf: packageURL, encoding: .utf8))
+      ?? "Could not load \(packageURL.path)"
+  }
 }
 
 private struct Entry: Block {
@@ -53,9 +70,7 @@ private struct Entry: Block {
       HStack(spacing: theme.margin) {
         Sidebar(theme: theme, state: state)
           .frame(width: 300)
-        AsciiPanel(theme: theme, state: state)
-          .background(theme.panelBackground)
-          .border(theme.border, width: 1)
+        MainPanel(theme: theme, state: state)
       }
       .padding(theme.margin)
       StatusBar(theme: theme, state: state)
@@ -75,10 +90,10 @@ private struct Header: Block {
           ? "Chroma  —  Immediate-Mode GUI Demo"
           : "Chroma  —  Hello, \(state.name)"
       )
-        .fontScale(theme.textScale)
-        .foregroundColor(state.accent)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding(EdgeInsets(leading: theme.margin))
+      .fontScale(theme.textScale)
+      .foregroundColor(state.accent)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+      .padding(EdgeInsets(leading: theme.margin))
       state.accent
         .frame(height: 1)
     }
@@ -177,6 +192,118 @@ private struct Sidebar: Block {
     .frame(maxHeight: .infinity, alignment: .top)
     .background(theme.panelBackground)
     .border(theme.border, width: 1)
+  }
+}
+
+private struct MainPanel: Block {
+  let theme: Theme
+  let state: DemoState
+
+  var body: some Block {
+    VStack(spacing: 0, alignment: .leading) {
+      HStack(spacing: 0) {
+        TabButton(
+          label: "Package.swift",
+          selected: state.selectedTab == .package,
+          theme: theme,
+          accent: state.accent
+        ) {
+          state.selectedTab = .package
+          state.record("Package.swift tab")
+        }
+        TabButton(
+          label: "ASCII Test",
+          selected: state.selectedTab == .ascii,
+          theme: theme,
+          accent: state.accent
+        ) {
+          state.selectedTab = .ascii
+          state.record("ASCII Test tab")
+        }
+        Spacer()
+      }
+      .frame(height: theme.itemHeight)
+      .background(theme.headerBackground)
+
+      if state.selectedTab == .package {
+        PackagePanel(theme: theme, source: state.packageSource)
+      } else {
+        AsciiPanel(theme: theme, state: state)
+      }
+    }
+    .background(theme.panelBackground)
+    .border(theme.border, width: 1)
+  }
+}
+
+private struct TabButton: Block {
+  let label: String
+  let selected: Bool
+  let theme: Theme
+  let accent: Color
+  let action: () -> Void
+
+  var body: some Block {
+    Interactive(id: "tab:\(label)", action: action) { phase in
+      Text(label)
+        .fontScale(theme.textScale)
+        .foregroundColor(selected ? .white : theme.textSecondary)
+        .padding(EdgeInsets(leading: 14, trailing: 14))
+        .frame(height: theme.itemHeight)
+        .background(selected ? accent : theme.buttonColor(for: phase, accent: accent))
+        .border(selected ? accent : theme.border, width: 1)
+    }
+  }
+}
+
+private struct PackagePanel: Block {
+  let theme: Theme
+  let source: String
+
+  var body: some Block {
+    ScrollView(id: WidgetID("demo:package-scroll"), showsIndicator: true) {
+      VStack(spacing: theme.spacing, alignment: .leading) {
+        Text("Package.swift  -  wheel / trackpad or PgUp / PgDn / Home / End")
+          .fontScale(theme.textScale)
+          .foregroundColor(theme.yellow)
+        PackageSourceListing(theme: theme, source: source)
+      }
+      .padding(theme.panelPadding)
+    }
+  }
+}
+
+/// Draws the source as one primitive instead of constructing a large nested
+/// stack. Its explicit height gives ScrollView a stable scrollable extent.
+private struct PackageSourceListing: PrimitiveBlock {
+  let theme: Theme
+  let lines: [Substring]
+
+  init(theme: Theme, source: String) {
+    self.theme = theme
+    self.lines = source.split(separator: "\n", omittingEmptySubsequences: false)
+  }
+
+  func sizeThatFits(_ proposal: Size) -> Size {
+    let metrics = FontMetrics()
+    let longestLine = lines.map(\.utf8.count).max() ?? 0
+    return Size(
+      width: Float(longestLine + 5) * metrics.cellAdvance * theme.textScale,
+      height: Float(lines.count) * metrics.lineAdvance * theme.textScale
+    )
+  }
+
+  func draw(into drawList: inout DrawList, in rect: Rect) {
+    let lineHeight = FontMetrics().lineAdvance * theme.textScale
+    for (index, line) in lines.enumerated() {
+      let isComment = line.trimmingCharacters(in: .whitespaces).hasPrefix("//")
+      drawList.text(
+        String(format: "%3d  %@", index + 1, String(line)),
+        at: Point(x: rect.minX, y: rect.minY + Float(index) * lineHeight),
+        color: isComment ? theme.textSecondary : .white,
+        scale: theme.textScale
+      )
+    }
   }
 }
 
@@ -358,12 +485,16 @@ private struct AsciiPanel: PrimitiveBlock {
 
     if state.grid {
       let gridColor = Color(r: 0.5, g: 0.6, b: 0.8, a: 0.06)
-      var x = rect.minX + (metrics.cellAdvance * scale - rect.minX.truncatingRemainder(dividingBy: metrics.cellAdvance * scale))
+      var x =
+        rect.minX
+        + (metrics.cellAdvance * scale - rect.minX.truncatingRemainder(dividingBy: metrics.cellAdvance * scale))
       while x < rect.maxX {
         drawList.fillRect(Rect(x: x.rounded(), y: rect.minY, width: 1, height: rect.size.height), color: gridColor)
         x += metrics.cellAdvance * scale
       }
-      var y = rect.minY + (metrics.lineAdvance * scale - rect.minY.truncatingRemainder(dividingBy: metrics.lineAdvance * scale))
+      var y =
+        rect.minY
+        + (metrics.lineAdvance * scale - rect.minY.truncatingRemainder(dividingBy: metrics.lineAdvance * scale))
       while y < rect.maxY {
         drawList.fillRect(Rect(x: rect.minX, y: y.rounded(), width: rect.size.width, height: 1), color: gridColor)
         y += metrics.lineAdvance * scale

@@ -43,6 +43,11 @@ extension Block {
   public func border(_ color: Color, width: Float = 1) -> BorderBlock {
     BorderBlock(content: self, color: color, width: width)
   }
+
+  /// Clips drawing and pointer hit testing to the block's assigned rectangle.
+  public func clipped() -> ClipBlock {
+    ClipBlock(content: self)
+  }
 }
 
 /// A frame around a block: fixed dimensions, greedy `.infinity` dimensions,
@@ -129,6 +134,26 @@ public struct BackgroundBlock: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     BlockEngine.draw(background, into: &drawList, in: rect)
     BlockEngine.draw(content, into: &drawList, in: rect)
+  }
+}
+
+/// A container that clips both rendering and interaction to its bounds.
+public struct ClipBlock: PrimitiveBlock {
+  public var content: any Block
+
+  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
+  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
+
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
+    BlockEngine.measure(content, proposal: proposal)
+  }
+
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
+    drawList.pushClip(rect)
+    Interaction.current.pushClip(rect)
+    BlockEngine.draw(content, into: &drawList, in: rect)
+    Interaction.current.popClip()
+    drawList.popClip()
   }
 }
 
