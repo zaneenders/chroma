@@ -14,7 +14,7 @@ public protocol App {
   associatedtype Body: Block
 
   /// The root block of the application.
-  @BlockBuilder var body: Body { get }
+  @MainActor @BlockBuilder var body: Body { get }
 
   init()
 

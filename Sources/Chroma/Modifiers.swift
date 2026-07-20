@@ -55,10 +55,10 @@ public struct FrameBlock: PrimitiveBlock {
   public var maxHeight: Float?
   public var alignment: Alignment
 
-  public var expandsHorizontally: Bool { maxWidth != nil }
-  public var expandsVertically: Bool { maxHeight != nil }
+  @MainActor public var expandsHorizontally: Bool { maxWidth != nil }
+  @MainActor public var expandsVertically: Bool { maxHeight != nil }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(width: width ?? proposal.width, height: height ?? proposal.height)
@@ -69,7 +69,7 @@ public struct FrameBlock: PrimitiveBlock {
     )
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(width: width ?? rect.size.width, height: height ?? rect.size.height)
@@ -83,10 +83,10 @@ public struct PaddingBlock: PrimitiveBlock {
   public var content: any Block
   public var insets: EdgeInsets
 
-  public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
+  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
+  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(
@@ -100,7 +100,7 @@ public struct PaddingBlock: PrimitiveBlock {
     )
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     BlockEngine.draw(
       content,
       into: &drawList,
@@ -119,14 +119,14 @@ public struct BackgroundBlock: PrimitiveBlock {
   public var content: any Block
   public var background: any Block
 
-  public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
+  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
+  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     BlockEngine.measure(content, proposal: proposal)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     BlockEngine.draw(background, into: &drawList, in: rect)
     BlockEngine.draw(content, into: &drawList, in: rect)
   }
@@ -138,14 +138,14 @@ public struct BorderBlock: PrimitiveBlock {
   public var color: Color
   public var width: Float
 
-  public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
+  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
+  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     BlockEngine.measure(content, proposal: proposal)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     BlockEngine.draw(content, into: &drawList, in: rect)
     drawList.strokeRect(rect, width: width, color: color)
   }

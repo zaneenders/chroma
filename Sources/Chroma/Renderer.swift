@@ -12,7 +12,8 @@
 ///
 /// To add a new backend, conform a type to this protocol: consume `DrawList`
 /// commands in your frame callback, create your platform window in
-/// ``run(title:)``, and expose ``content`` so blocks can be swapped at any
+/// ``run(title:)``, pump platform input into ``interaction`` once per frame
+/// before drawing, and expose ``content`` so blocks can be swapped at any
 /// time.
 @MainActor
 public protocol Renderer: AnyObject {
@@ -22,6 +23,11 @@ public protocol Renderer: AnyObject {
   /// The content rendered every frame. Assign a new block at any time to swap
   /// content without touching the backend.
   var content: (any Block)? { get set }
+
+  /// The interaction context this backend feeds with platform input. Install
+  /// it as ``Interaction/current`` so blocks can reach it, and call
+  /// ``Interaction/beginFrame(input:)`` at the start of every frame.
+  var interaction: Interaction { get }
 
   /// Creates the platform window, installs the rendering surface, and runs
   /// the platform event loop. Returns when the application exits.

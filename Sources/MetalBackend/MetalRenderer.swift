@@ -19,9 +19,13 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
   private let solidPipeline: MTLRenderPipelineState
   private let textPipeline: MTLRenderPipelineState
   private let fontAtlas: FontAtlas
-  private let mtkView: MTKView
+  private let mtkView: ChromaInputView
 
   public let name = "Metal"
+
+  /// The interaction context fed from AppKit input, installed as
+  /// ``Interaction/current`` at initialization.
+  public let interaction = Interaction()
 
   /// The content rendered every frame. Assign a new block at any time to swap
   /// content without touching the backend.
@@ -43,7 +47,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
     self.queue = queue
     self.fontAtlas = FontAtlas(device: device)
 
-    let mtkView = MTKView(frame: frame, device: device)
+    let mtkView = ChromaInputView(frame: frame, device: device)
     mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
     self.mtkView = mtkView
 
@@ -78,6 +82,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
 
     super.init()
     mtkView.delegate = self
+    Interaction.current = interaction
   }
 
   /// Creates a renderer whose surface is `size` points across.
@@ -144,12 +149,19 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
     }
   }
 
+  /// Frame timing for the smoothed ``Interaction/frameRate``.
+  private var lastFrameTime: Double = 0
+  private var smoothedFrameRate: Double = 0
+
   public func draw(in mtkView: MTKView) {
     guard let drawable = mtkView.currentDrawable,
       let rpd = mtkView.currentRenderPassDescriptor,
       let cmd = queue.makeCommandBuffer(),
       let enc = cmd.makeRenderCommandEncoder(descriptor: rpd)
     else { return }
+
+    updateFrameRate()
+    interaction.beginFrame(input: self.mtkView.frameInput())
 
     let viewport = Size(width: Float(drawable.texture.width), height: Float(drawable.texture.height))
     var drawList = DrawList()
@@ -164,6 +176,19 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
   }
 
   public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+
+  /// Maintains an exponentially smoothed frame rate on the interaction
+  /// context, for status displays.
+  private func updateFrameRate() {
+    let now = ProcessInfo.processInfo.systemUptime
+    defer { lastFrameTime = now }
+    guard lastFrameTime > 0 else { return }
+    let delta = now - lastFrameTime
+    guard delta > 0 else { return }
+    let instant = 1 / delta
+    smoothedFrameRate = smoothedFrameRate == 0 ? instant : smoothedFrameRate * 0.9 + instant * 0.1
+    interaction.frameRate = smoothedFrameRate
+  }
 
   /// A run of consecutive draw commands that share one render pipeline.
   ///

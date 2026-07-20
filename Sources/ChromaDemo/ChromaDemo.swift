@@ -17,26 +17,47 @@ typealias PlatformApp = WaylandApp
 struct ChromaDemo: PlatformApp {
   var title: String { "Chroma Demo" }
 
+  private let state = DemoState()
+
   var body: some Block {
-    Entry()
+    Entry(theme: Theme(), state: state)
+  }
+}
+
+/// The demo's application state, shared by reference so value-type blocks can
+/// read it every frame and interaction closures can mutate it.
+private final class DemoState {
+  var accent = Color(r: 0.3, g: 0.6, b: 1.0, a: 1)
+  var accentName = "Blue"
+  var wireframe = false
+  var grid = true
+  var axis = false
+  var stats = true
+  var lastAction = "None"
+  var actionCount = 0
+
+  func record(_ action: String) {
+    lastAction = action
+    actionCount += 1
   }
 }
 
 private struct Entry: Block {
-  let theme = Theme()
+  let theme: Theme
+  let state: DemoState
 
   var body: some Block {
     VStack(spacing: 0) {
-      Header(theme: theme)
+      Header(theme: theme, state: state)
       HStack(spacing: theme.margin) {
-        Sidebar(theme: theme)
+        Sidebar(theme: theme, state: state)
           .frame(width: 300)
-        AsciiPanel(theme: theme)
+        AsciiPanel(theme: theme, state: state)
           .background(theme.panelBackground)
           .border(theme.border, width: 1)
       }
       .padding(theme.margin)
-      StatusBar(theme: theme)
+      StatusBar(theme: theme, state: state)
     }
     .background(theme.background)
   }
@@ -44,15 +65,16 @@ private struct Entry: Block {
 
 private struct Header: Block {
   let theme: Theme
+  let state: DemoState
 
   var body: some Block {
     VStack(spacing: 0) {
       Text("Chroma  —  Immediate-Mode GUI Demo")
         .fontScale(theme.textScale)
-        .foregroundColor(theme.accent)
+        .foregroundColor(state.accent)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(EdgeInsets(leading: theme.margin))
-      theme.borderAccent
+      state.accent
         .frame(height: 1)
     }
     .frame(height: theme.headerHeight)
@@ -62,16 +84,29 @@ private struct Header: Block {
 
 private struct StatusBar: Block {
   let theme: Theme
+  let state: DemoState
 
-  var body: some Block {
-    VStack(spacing: 0) {
-      theme.borderAccent
+  @MainActor var body: some Block {
+    let input = Interaction.current.input
+    let fps = Int(Interaction.current.frameRate.rounded())
+    return VStack(spacing: 0) {
+      state.accent
         .frame(height: 1)
-      Text("FPS: --")
-        .fontScale(theme.textScale)
-        .foregroundColor(theme.green)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding(EdgeInsets(leading: theme.margin))
+      HStack(spacing: 0) {
+        if state.stats {
+          Text("FPS: \(fps)")
+            .fontScale(theme.textScale)
+            .foregroundColor(theme.green)
+          Text("  Pointer: (\(Int(input.pointerPosition.x)), \(Int(input.pointerPosition.y)))")
+            .fontScale(theme.textScale)
+            .foregroundColor(theme.textSecondary)
+        }
+        Spacer()
+        Text("Last action: \(state.lastAction) (\(state.actionCount))")
+          .fontScale(theme.textScale)
+          .foregroundColor(theme.textSecondary)
+      }
+      .padding(EdgeInsets(leading: theme.margin, trailing: theme.margin))
     }
     .frame(height: theme.statusHeight)
     .background(theme.statusBackground)
@@ -80,24 +115,39 @@ private struct StatusBar: Block {
 
 private struct Sidebar: Block {
   let theme: Theme
+  let state: DemoState
 
   var body: some Block {
     VStack(spacing: theme.spacing, alignment: .leading) {
       SectionTitle(title: "CONTROLS", theme: theme)
-      DemoButton(label: "New Project", theme: theme)
-      DemoButton(label: "Open...", theme: theme)
-      DemoButton(label: "Save", theme: theme)
+      DemoButton(label: "New Project", theme: theme, accent: state.accent) {
+        state.record("New Project")
+      }
+      DemoButton(label: "Open...", theme: theme, accent: state.accent) {
+        state.record("Open...")
+      }
+      DemoButton(label: "Save", theme: theme, accent: state.accent) {
+        state.record("Save")
+      }
 
       Spacer().frame(height: theme.spacing)
       SectionTitle(title: "OPTIONS", theme: theme)
-      CheckRow(label: "Wireframe", checked: true, theme: theme)
-      CheckRow(label: "Grid", checked: true, theme: theme)
-      CheckRow(label: "Axis", checked: false, theme: theme)
-      CheckRow(label: "Stats", checked: true, theme: theme)
+      CheckRow(label: "Wireframe", isOn: state.wireframe, theme: theme, accent: state.accent) {
+        state.wireframe.toggle()
+      }
+      CheckRow(label: "Grid", isOn: state.grid, theme: theme, accent: state.accent) {
+        state.grid.toggle()
+      }
+      CheckRow(label: "Axis", isOn: state.axis, theme: theme, accent: state.accent) {
+        state.axis.toggle()
+      }
+      CheckRow(label: "Stats", isOn: state.stats, theme: theme, accent: state.accent) {
+        state.stats.toggle()
+      }
 
       Spacer().frame(height: theme.spacing)
       SectionTitle(title: "COLORS", theme: theme)
-      SwatchGrid(theme: theme)
+      SwatchGrid(theme: theme, state: state)
     }
     .padding(theme.panelPadding)
     .frame(maxHeight: .infinity, alignment: .top)
@@ -122,60 +172,89 @@ private struct SectionTitle: Block {
 private struct DemoButton: Block {
   let label: String
   let theme: Theme
+  let accent: Color
+  let action: () -> Void
 
   var body: some Block {
-    Text(label)
-      .fontScale(theme.textScale)
-      .foregroundColor(.white)
-      .padding(EdgeInsets(leading: 12))
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .frame(height: theme.itemHeight, alignment: .leading)
-      .background(theme.buttonIdle)
-      .border(theme.border, width: 1)
+    Interactive(id: "button:\(label)", action: action) { phase in
+      Text(label)
+        .fontScale(theme.textScale)
+        .foregroundColor(.white)
+        .padding(EdgeInsets(leading: 12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: theme.itemHeight, alignment: .leading)
+        .background(theme.buttonColor(for: phase, accent: accent))
+        .border(phase == .idle ? theme.border : accent, width: 1)
+    }
   }
 }
 
 private struct CheckRow: Block {
   let label: String
-  let checked: Bool
+  let isOn: Bool
   let theme: Theme
+  let accent: Color
+  let action: () -> Void
 
   var body: some Block {
-    HStack(spacing: 10, alignment: .center) {
-      ZStack {
-        checked ? theme.accent : theme.buttonIdle
-        if checked {
-          Text("+")
-            .fontScale(theme.textScale)
-            .foregroundColor(.white)
+    Interactive(id: "check:\(label)", action: action) { phase in
+      HStack(spacing: 10, alignment: .center) {
+        ZStack {
+          isOn ? accent : theme.buttonIdle
+          if isOn {
+            Text("+")
+              .fontScale(theme.textScale)
+              .foregroundColor(.white)
+          }
         }
-      }
-      .frame(width: 24, height: 24)
-      .border(checked ? theme.accent : theme.border, width: 1)
+        .frame(width: 24, height: 24)
+        .border(isOn ? accent : theme.border, width: 1)
 
-      Text(label)
-        .fontScale(theme.textScale)
-        .foregroundColor(.white)
+        Text(label)
+          .fontScale(theme.textScale)
+          .foregroundColor(.white)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .frame(height: theme.itemHeight, alignment: .leading)
+      .padding(EdgeInsets(leading: 6))
+      .background(theme.highlightColor(for: phase))
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .frame(height: theme.itemHeight, alignment: .leading)
   }
 }
 
 private struct SwatchGrid: Block {
   let theme: Theme
+  let state: DemoState
 
   var body: some Block {
     VStack(spacing: 12, alignment: .leading) {
       HStack(spacing: 16) {
-        Swatch(label: "Blue", color: theme.accent, theme: theme)
-        Swatch(label: "Green", color: theme.green, theme: theme)
-        Swatch(label: "Red", color: theme.red, theme: theme)
+        Swatch(label: "Blue", color: theme.blue, theme: theme, selected: state.accentName == "Blue") {
+          state.accent = theme.blue
+          state.accentName = "Blue"
+        }
+        Swatch(label: "Green", color: theme.green, theme: theme, selected: state.accentName == "Green") {
+          state.accent = theme.green
+          state.accentName = "Green"
+        }
+        Swatch(label: "Red", color: theme.red, theme: theme, selected: state.accentName == "Red") {
+          state.accent = theme.red
+          state.accentName = "Red"
+        }
       }
       HStack(spacing: 16) {
-        Swatch(label: "Yellow", color: theme.yellow, theme: theme)
-        Swatch(label: "Orange", color: theme.orange, theme: theme)
-        Swatch(label: "Purple", color: theme.purple, theme: theme)
+        Swatch(label: "Yellow", color: theme.yellow, theme: theme, selected: state.accentName == "Yellow") {
+          state.accent = theme.yellow
+          state.accentName = "Yellow"
+        }
+        Swatch(label: "Orange", color: theme.orange, theme: theme, selected: state.accentName == "Orange") {
+          state.accent = theme.orange
+          state.accentName = "Orange"
+        }
+        Swatch(label: "Purple", color: theme.purple, theme: theme, selected: state.accentName == "Purple") {
+          state.accent = theme.purple
+          state.accentName = "Purple"
+        }
       }
     }
   }
@@ -185,21 +264,28 @@ private struct Swatch: Block {
   let label: String
   let color: Color
   let theme: Theme
+  let selected: Bool
+  let action: () -> Void
 
   var body: some Block {
-    VStack(spacing: 6, alignment: .leading) {
-      color
-        .frame(width: 30, height: 30)
-        .border(theme.border, width: 1)
-      Text(label)
-        .fontScale(theme.textScale)
-        .foregroundColor(theme.textSecondary)
+    Interactive(id: "swatch:\(label)", action: action) { phase in
+      VStack(spacing: 6, alignment: .leading) {
+        color
+          .frame(width: 30, height: 30)
+          .border(selected ? Color.white : theme.border, width: selected ? 2 : 1)
+        Text(label)
+          .fontScale(theme.textScale)
+          .foregroundColor(selected ? .white : theme.textSecondary)
+      }
+      .padding(4)
+      .background(theme.highlightColor(for: phase))
     }
   }
 }
 
 private struct AsciiPanel: PrimitiveBlock {
   let theme: Theme
+  let state: DemoState
 
   var expandsHorizontally: Bool { true }
   var expandsVertically: Bool { true }
@@ -221,17 +307,58 @@ private struct AsciiPanel: PrimitiveBlock {
     let widthScale = availableWidth / (longestLine * metrics.cellAdvance)
     let heightScale = availableHeight / (Float(lines.count) * metrics.lineAdvance)
     let scale = max(1, min(3, floor(min(widthScale, heightScale))))
+    let origin = Point(x: rect.minX + theme.panelPadding, y: rect.minY + theme.panelPadding)
+
+    if state.grid {
+      let gridColor = Color(r: 0.5, g: 0.6, b: 0.8, a: 0.06)
+      var x = rect.minX + (metrics.cellAdvance * scale - rect.minX.truncatingRemainder(dividingBy: metrics.cellAdvance * scale))
+      while x < rect.maxX {
+        drawList.fillRect(Rect(x: x.rounded(), y: rect.minY, width: 1, height: rect.size.height), color: gridColor)
+        x += metrics.cellAdvance * scale
+      }
+      var y = rect.minY + (metrics.lineAdvance * scale - rect.minY.truncatingRemainder(dividingBy: metrics.lineAdvance * scale))
+      while y < rect.maxY {
+        drawList.fillRect(Rect(x: rect.minX, y: y.rounded(), width: rect.size.width, height: 1), color: gridColor)
+        y += metrics.lineAdvance * scale
+      }
+    }
+
+    if state.axis {
+      let axisColor = Color(r: state.accent.r, g: state.accent.g, b: state.accent.b, a: 0.55)
+      let midX = (rect.minX + rect.size.width / 2).rounded()
+      let midY = (rect.minY + rect.size.height / 2).rounded()
+      drawList.fillRect(Rect(x: rect.minX, y: midY, width: rect.size.width, height: 1), color: axisColor)
+      drawList.fillRect(Rect(x: midX, y: rect.minY, width: 1, height: rect.size.height), color: axisColor)
+    }
 
     for (row, bytes) in lines.enumerated() {
       drawList.text(
         String(decoding: bytes, as: UTF8.self),
         at: Point(
-          x: rect.minX + theme.panelPadding,
-          y: rect.minY + theme.panelPadding + Float(row) * metrics.lineAdvance * scale
+          x: origin.x,
+          y: origin.y + Float(row) * metrics.lineAdvance * scale
         ),
         color: row == 0 ? theme.yellow : .white,
         scale: scale
       )
+    }
+
+    if state.wireframe {
+      let boxColor = Color(r: 1, g: 1, b: 1, a: 0.22)
+      for (row, bytes) in lines.enumerated() {
+        for column in 0..<bytes.count {
+          drawList.strokeRect(
+            Rect(
+              x: origin.x + Float(column) * metrics.cellAdvance * scale,
+              y: origin.y + Float(row) * metrics.lineAdvance * scale,
+              width: metrics.glyphWidth * scale,
+              height: metrics.glyphHeight * scale
+            ),
+            width: 1,
+            color: boxColor
+          )
+        }
+      }
     }
   }
 }
@@ -250,13 +377,33 @@ private struct Theme {
   var headerBackground = Color(r: 0.12, g: 0.14, b: 0.22, a: 1)
   var statusBackground = Color(r: 0.06, g: 0.20, b: 0.12, a: 1)
   var border = Color(r: 0.22, g: 0.22, b: 0.32, a: 1)
-  var borderAccent = Color(r: 0.28, g: 0.44, b: 0.72, a: 1)
   var buttonIdle = Color(r: 0.18, g: 0.20, b: 0.30, a: 1)
+  var buttonHover = Color(r: 0.24, g: 0.28, b: 0.42, a: 1)
+  var buttonPressed = Color(r: 0.30, g: 0.38, b: 0.55, a: 1)
   var textSecondary = Color(r: 0.5, g: 0.5, b: 0.6, a: 1)
-  var accent = Color(r: 0.3, g: 0.6, b: 1.0, a: 1)
+  var blue = Color(r: 0.3, g: 0.6, b: 1.0, a: 1)
   var green = Color(r: 0.3, g: 0.8, b: 0.4, a: 1)
   var red = Color(r: 0.9, g: 0.3, b: 0.3, a: 1)
   var yellow = Color(r: 1, g: 0.85, b: 0.25, a: 1)
   var orange = Color(r: 1, g: 0.55, b: 0.15, a: 1)
   var purple = Color(r: 0.7, g: 0.3, b: 0.9, a: 1)
+
+  /// Button background for the current interaction phase; a press flashes
+  /// the accent color.
+  func buttonColor(for phase: InteractionPhase, accent: Color) -> Color {
+    switch phase {
+    case .idle: buttonIdle
+    case .hovered: buttonHover
+    case .pressed: accent
+    }
+  }
+
+  /// Subtle row highlight behind hovered or pressed rows.
+  func highlightColor(for phase: InteractionPhase) -> Color {
+    switch phase {
+    case .idle: .clear
+    case .hovered: Color(r: 1, g: 1, b: 1, a: 0.06)
+    case .pressed: Color(r: 1, g: 1, b: 1, a: 0.12)
+    }
+  }
 }

@@ -21,7 +21,10 @@ public protocol Block {
   /// The content of the block. Composite blocks return a single expression —
   /// multi-statement composition happens inside stack and builder closures,
   /// which carry `@BlockBuilder`.
-  var body: Body { get }
+  ///
+  /// Bodies are evaluated on the main actor, so they may read the ambient
+  /// ``Interaction`` context.
+  @MainActor var body: Body { get }
 }
 
 extension Never: Block {
@@ -37,17 +40,18 @@ extension Never: Block {
 public protocol PrimitiveBlock: Block where Body == Never {
   /// The size the block wants given the parent's proposal. Greedy blocks
   /// return the proposal; content-hugging blocks (like `Text`) ignore it.
-  func sizeThatFits(_ proposal: Size) -> Size
+  @MainActor func sizeThatFits(_ proposal: Size) -> Size
 
   /// Draws the block inside `rect`, the exact region the parent assigned.
-  func draw(into drawList: inout DrawList, in rect: Rect)
+  /// Interactive primitives read the ambient ``Interaction`` context here.
+  @MainActor func draw(into drawList: inout DrawList, in rect: Rect)
 
   /// Whether the block grows to fill horizontally proposed space. Stacks
   /// distribute their leftover space among expanding children.
-  var expandsHorizontally: Bool { get }
+  @MainActor var expandsHorizontally: Bool { get }
 
   /// Whether the block grows to fill vertically proposed space.
-  var expandsVertically: Bool { get }
+  @MainActor var expandsVertically: Bool { get }
 }
 
 extension PrimitiveBlock {
@@ -67,15 +71,15 @@ public struct TupleBlock: PrimitiveBlock {
     self.children = children
   }
 
-  public var expandsHorizontally: Bool {
+  @MainActor public var expandsHorizontally: Bool {
     children.contains { BlockEngine.expandsHorizontally($0) }
   }
 
-  public var expandsVertically: Bool {
+  @MainActor public var expandsVertically: Bool {
     children.contains { BlockEngine.expandsVertically($0) }
   }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     var result = Size.zero
     for child in children {
       let size = BlockEngine.measure(child, proposal: proposal)
@@ -85,7 +89,7 @@ public struct TupleBlock: PrimitiveBlock {
     return result
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     for child in children {
       BlockEngine.draw(child, into: &drawList, in: rect)
     }

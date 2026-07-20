@@ -6,6 +6,7 @@
 /// through their ``Block/body`` until a ``PrimitiveBlock`` answers.
 ///
 /// Backends call ``draw(_:into:in:)`` once per frame with the viewport rect.
+@MainActor
 public enum BlockEngine {
   /// The size `block` wants given the parent's proposal.
   public static func measure(_ block: any Block, proposal: Size) -> Size {

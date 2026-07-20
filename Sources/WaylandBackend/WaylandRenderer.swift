@@ -13,6 +13,9 @@ public final class WaylandRenderer: Renderer {
   /// The content rendered every frame. Same contract as the Metal backend.
   public var content: (any Block)?
 
+  /// The interaction context. Input pumping lands with the event loop.
+  public let interaction = Interaction()
+
   public init() {}
 
   public func run(title: String = "Hello Triangle") {

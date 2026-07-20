@@ -77,17 +77,17 @@ public struct VStack: PrimitiveBlock {
     self.children = content().children
   }
 
-  public var expandsHorizontally: Bool {
+  @MainActor public var expandsHorizontally: Bool {
     children.contains { BlockEngine.expandsHorizontally($0) }
   }
 
-  public var expandsVertically: Bool {
+  @MainActor public var expandsVertically: Bool {
     children.contains { BlockEngine.expandsVertically($0) }
   }
 
   /// Child sizes against `proposal`: fixed children keep their measured
   /// height; expanding children split the leftover height equally.
-  private func layout(proposal: Size) -> [Size] {
+  @MainActor private func layout(proposal: Size) -> [Size] {
     var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
     var fixedTotal: Float = 0
     var expanderCount = 0
@@ -108,7 +108,7 @@ public struct VStack: PrimitiveBlock {
     return sizes
   }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     guard !children.isEmpty else { return .zero }
     let sizes = layout(proposal: proposal)
     let height = sizes.reduce(0) { $0 + $1.height } + spacing * Float(sizes.count - 1)
@@ -116,7 +116,7 @@ public struct VStack: PrimitiveBlock {
     return Size(width: width, height: height)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     let sizes = layout(proposal: rect.size)
     var y = rect.minY
     for (child, size) in zip(children, sizes) {
@@ -149,17 +149,17 @@ public struct HStack: PrimitiveBlock {
     self.children = content().children
   }
 
-  public var expandsHorizontally: Bool {
+  @MainActor public var expandsHorizontally: Bool {
     children.contains { BlockEngine.expandsHorizontally($0) }
   }
 
-  public var expandsVertically: Bool {
+  @MainActor public var expandsVertically: Bool {
     children.contains { BlockEngine.expandsVertically($0) }
   }
 
   /// Child sizes against `proposal`: fixed children keep their measured
   /// width; expanding children split the leftover width equally.
-  private func layout(proposal: Size) -> [Size] {
+  @MainActor private func layout(proposal: Size) -> [Size] {
     var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
     var fixedTotal: Float = 0
     var expanderCount = 0
@@ -180,7 +180,7 @@ public struct HStack: PrimitiveBlock {
     return sizes
   }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     guard !children.isEmpty else { return .zero }
     let sizes = layout(proposal: proposal)
     let width = sizes.reduce(0) { $0 + $1.width } + spacing * Float(sizes.count - 1)
@@ -188,7 +188,7 @@ public struct HStack: PrimitiveBlock {
     return Size(width: width, height: height)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     let sizes = layout(proposal: rect.size)
     var x = rect.minX
     for (child, size) in zip(children, sizes) {
@@ -215,15 +215,15 @@ public struct ZStack: PrimitiveBlock {
     self.children = content().children
   }
 
-  public var expandsHorizontally: Bool {
+  @MainActor public var expandsHorizontally: Bool {
     children.contains { BlockEngine.expandsHorizontally($0) }
   }
 
-  public var expandsVertically: Bool {
+  @MainActor public var expandsVertically: Bool {
     children.contains { BlockEngine.expandsVertically($0) }
   }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
     var result = Size.zero
     for child in children {
       let size = BlockEngine.measure(child, proposal: proposal)
@@ -233,7 +233,7 @@ public struct ZStack: PrimitiveBlock {
     return result
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     for child in children {
       let size = BlockEngine.measure(child, proposal: rect.size)
       BlockEngine.draw(child, into: &drawList, in: rect.placing(size, alignment: alignment))
