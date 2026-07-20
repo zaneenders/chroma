@@ -136,12 +136,6 @@ After the first prompt-and-transcript frontend works, Scribe will need:
 
 These are not all required for the first prototype, but copyable output and attachment support will become important quickly.
 
-## 8. Linux Backend
-
-`WaylandBackend` is currently a stub. Scribe supports macOS and Linux, while a Chroma frontend would initially be macOS-only.
-
-This is acceptable if the Chroma GUI is an optional macOS frontend and the terminal interface remains cross-platform. If Chroma is intended to replace the terminal frontend across platforms, a functional Wayland backend is a major requirement.
-
 ## Existing Chroma Foundation
 
 The existing foundation is useful and should support an initial Scribe frontend:
@@ -156,55 +150,3 @@ The existing foundation is useful and should support an initial Scribe frontend:
 - A backend abstraction that keeps Metal out of UI code
 
 The rendering and basic layout foundation does not need to be rewritten before attempting Scribe. Most missing work is concentrated around text, input, scrolling, identity, and application state.
-
-## Work Needed in Scribe Rather Than Chroma
-
-Scribe already exposes much of its agent machinery through `ScribeCore`, including `SessionHarness`, agent events, messages, queues, and tools. However, presentation and persistence functionality remains in `ScribeCLI`, with some of it coupled to Slate:
-
-- Transcript layout and rendering
-- Markdown rendering
-- Themes and palette
-- Configuration loading
-- Session loading and persistence
-- Profile and session pickers
-- Tool-invocation formatting
-
-A new UI-neutral target such as `ScribePresentation` should contain:
-
-- Transcript row and view models
-- Markdown-to-styled-runs conversion
-- Tool-call presentation
-- Configuration and profile loading
-- Session discovery and persistence
-- Usage and status formatting
-
-Both `ScribeCLI` and a future `ScribeGUI` target could consume this target. Importing `ScribeCLI` directly into the GUI would retain Slate dependencies and terminal-specific assumptions.
-
-## Recommended Vertical Slice
-
-Implement the first usable path in this order:
-
-1. Add keyboard and text events plus focused-widget state to Chroma.
-2. Implement a basic multiline `TextEditor`.
-3. Add a clipped vertical `ScrollView` with scroll-to-bottom behavior.
-4. Replace the ASCII atlas with Unicode-capable font rendering.
-5. Add multiline wrapped and styled text.
-6. Add a `ScribeGUI` executable depending on `ScribeCore`, Chroma, and `MetalBackend`.
-7. Render:
-   - A scrollable transcript
-   - Streaming assistant text
-   - Tool-invocation rows
-   - A prompt editor
-   - Send and Stop buttons
-8. Extract shared presentation and persistence code from `ScribeCLI`.
-9. Add selection and copying, Markdown styling, attachments, and session/profile navigation.
-
-## Summary
-
-Chroma can already draw the shell of a Scribe frontend. To make that frontend useful, it primarily needs:
-
-1. A real keyboard, focus, and text-input system
-2. Unicode-capable typography with wrapping and styled text
-3. Scrollable, clipped, and eventually virtualized content
-4. Stable widget identity and retained control state
-5. Explicit integration with asynchronous application state
