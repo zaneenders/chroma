@@ -21,6 +21,9 @@ final class ChromaInputView: MTKView {
   /// Keyboard input accumulated between frames, already translated into the
   /// framework's input language by ``keyDown(with:)``.
   private var pendingCommands: [UICommand] = []
+  /// Editing-mode input accumulated between frames, produced instead of
+  /// commands while a text field owns the keyboard.
+  private var pendingTextEvents: [TextEditEvent] = []
 
   /// Drains the accumulated events into a frame snapshot. Edge-triggered
   /// fields, scroll deltas, and queued commands reset for the next frame.
@@ -32,13 +35,15 @@ final class ChromaInputView: MTKView {
       pointerPressed: pressedEdge,
       pointerReleased: releasedEdge,
       scrollDelta: scroll,
-      commands: pendingCommands
+      commands: pendingCommands,
+      textEvents: pendingTextEvents
     )
     pressedEdge = false
     releasedEdge = false
     pointerPressPosition = Point(x: -1, y: -1)
     scroll = .zero
     pendingCommands = []
+    pendingTextEvents = []
     return input
   }
 
@@ -98,7 +103,19 @@ final class ChromaInputView: MTKView {
   /// to step in, `s` to step out, and return or space to activate. Arrow
   /// keys are aliases for the directions. Held keys repeat via AppKit's key
   /// repeat, which is exactly repeated movement.
+  ///
+  /// While a text field owns the cursor (insert mode), keys become
+  /// ``TextEditEvent``s instead — the same keymap swap vim makes between
+  /// normal and insert mode.
   override func keyDown(with event: NSEvent) {
+    if Interaction.current.isTextEditing {
+      if let edit = Self.textEditEvent(for: event) {
+        pendingTextEvents.append(edit)
+      } else {
+        super.keyDown(with: event)
+      }
+      return
+    }
     let command: UICommand?
     switch event.keyCode {
     case 123: command = .left
@@ -125,6 +142,30 @@ final class ChromaInputView: MTKView {
       pendingCommands.append(command)
     } else {
       super.keyDown(with: event)
+    }
+  }
+
+  /// The editing keymap, active only while a text field owns the cursor:
+  /// printable characters insert, arrows and home/end move the caret,
+  /// backspace and forward-delete edit, and escape or return end the
+  /// session (return commits this framework's single-line fields).
+  private static func textEditEvent(for event: NSEvent) -> TextEditEvent? {
+    switch event.keyCode {
+    case 53: return .endEditing  // escape
+    case 36, 76: return .endEditing  // return, keypad enter
+    case 51: return .backspace
+    case 117: return .deleteForward
+    case 123: return .moveCaretLeft
+    case 124: return .moveCaretRight
+    case 115: return .moveCaretToStart  // home
+    case 119: return .moveCaretToEnd  // end
+    default:
+      guard event.modifierFlags.intersection([.command, .control]).isEmpty,
+        let characters = event.characters,
+        !characters.isEmpty,
+        characters.utf8.allSatisfy({ $0 >= 0x20 && $0 != 0x7F })
+      else { return nil }
+      return .insert(characters)
     }
   }
 

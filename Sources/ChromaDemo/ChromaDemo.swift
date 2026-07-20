@@ -33,6 +33,7 @@ private final class DemoState {
   var grid = true
   var axis = false
   var stats = true
+  var name = ""
   var lastAction = "None"
   var actionCount = 0
 
@@ -69,7 +70,11 @@ private struct Header: Block {
 
   var body: some Block {
     VStack(spacing: 0) {
-      Text("Chroma  —  Immediate-Mode GUI Demo")
+      Text(
+        state.name.isEmpty
+          ? "Chroma  —  Immediate-Mode GUI Demo"
+          : "Chroma  —  Hello, \(state.name)"
+      )
         .fontScale(theme.textScale)
         .foregroundColor(state.accent)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -94,9 +99,12 @@ private struct StatusBar: Block {
         .frame(height: 1)
       HStack(spacing: 0) {
         if state.stats {
-          Text("FPS: \(fps)")
+          Text(interaction.isTextEditing ? "INSERT" : "NAV")
             .fontScale(theme.textScale)
-            .foregroundColor(theme.green)
+            .foregroundColor(interaction.isTextEditing ? theme.yellow : theme.green)
+          Text("  FPS: \(fps)")
+            .fontScale(theme.textScale)
+            .foregroundColor(theme.textSecondary)
           Text("  Cursor: \(interaction.selectionDescription)")
             .fontScale(theme.textScale)
             .foregroundColor(theme.textSecondary)
@@ -149,6 +157,15 @@ private struct Sidebar: Block {
       }
 
       Spacer().frame(height: theme.spacing)
+      SectionTitle(title: "PROFILE", theme: theme)
+      TextField(
+        "your name",
+        id: WidgetID("field:name"),
+        text: { state.name },
+        onChange: { state.name = $0 }
+      )
+
+      Spacer().frame(height: theme.spacing)
       SectionTitle(title: "COLORS", theme: theme)
       SwatchGrid(theme: theme, state: state)
 
@@ -187,6 +204,7 @@ private struct KeyLegend: Block {
       Text("k/d  right/left").legendStyle(theme)
       Text("l/s  in/out").legendStyle(theme)
       Text("enter  activate").legendStyle(theme)
+      Text("esc  end edit").legendStyle(theme)
       Text("mouse  = macro").legendStyle(theme)
     }
   }

@@ -25,6 +25,14 @@
 ///   parked pointer generates no macros, so keyboard movement is never
 ///   fought by the mouse.
 ///
+/// **Text fields are insert mode.** Activating a ``TextField`` (click or
+/// `activate` command) makes it the ``editingLeaf``: the backend stops
+/// translating keys into commands and sends ``TextEditEvent``s instead, and
+/// the field drains them during draw. The session ends on `.endEditing`
+/// (escape/return) or whenever the cursor leaves the field — by any device,
+/// since there is only one cursor. It is vim's normal/insert split, with
+/// tree movement as normal mode.
+///
 /// # Frame lifecycle
 ///
 /// Blocks are re-evaluated value types with no storage of their own, so
@@ -72,6 +80,19 @@ public final class Interaction {
   /// the same widget activates it; release anywhere else does not.
   private var pressedLeaf: WidgetID?
 
+  /// The text field holding the keyboard, while an editing session is
+  /// active. Set when a ``TextField`` is activated; cleared by an
+  /// `.endEditing` event or by the cursor leaving the field (any device —
+  /// there is only one cursor).
+  public private(set) var editingLeaf: WidgetID?
+
+  /// The caret's grapheme offset inside ``editingLeaf``'s text.
+  public private(set) var caretOffset: Int = 0
+
+  /// Whether a text field owns the keyboard. Backends check this to route
+  /// key events to ``TextEditEvent``s instead of ``UICommand``s.
+  public var isTextEditing: Bool { editingLeaf != nil }
+
   /// Set by an `activate` command and consumed by the selected leaf during
   /// this frame's draw.
   private var activatePending = false
@@ -117,6 +138,9 @@ public final class Interaction {
 
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
+      if let editingLeaf, editingLeaf != selectedLeafID {
+        self.editingLeaf = nil  // The cursor left the field: insert mode ends.
+      }
       lastPointerPosition = input.pointerPosition
     }
 
@@ -170,6 +194,9 @@ public final class Interaction {
     }
     if selection == nil {
       selection = newTree.firstLeafPath()
+    }
+    if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
+      self.editingLeaf = nil  // The field vanished from the UI mid-edit.
     }
     tree = newTree
     builderRoot = nil
@@ -231,6 +258,86 @@ public final class Interaction {
       activatePending = false
     }
     return ButtonState(hovered: selected, held: held, clicked: clicked)
+  }
+
+  /// Registers a text-input widget as a leaf of the enclosing group and runs
+  /// its editing session for this frame.
+  ///
+  /// Activation — a click, or an `activate` command while selected — enters
+  /// insert mode: the field becomes ``editingLeaf`` with the caret at the end
+  /// of its text, and the backend starts sending ``TextEditEvent``s instead
+  /// of navigation commands. While editing, this drains the frame's text
+  /// events in order, mutating the text through `onChange`; `.endEditing`
+  /// ends the session, as does the cursor leaving the field by any device.
+  ///
+  /// `text` is the widget's current value, re-read every frame; `onChange`
+  /// fires at most once per frame with the result of applying all of the
+  /// frame's edits.
+  public func textInputBehavior(
+    id: WidgetID,
+    rect: Rect,
+    text: String,
+    onChange: (String) -> Void
+  ) -> TextInputState {
+    guard let parent = builderStack.last else {
+      preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")
+    }
+    parent.children.append(FocusNode(kind: .leaf(id), rect: rect))
+
+    let selected = selectedLeafID == id
+    let held = pressedLeaf == id && input.pointerDown
+
+    // Activation (click or `activate` command) enters insert mode.
+    if selected && activatePending {
+      activatePending = false
+      editingLeaf = id
+      caretOffset = text.count
+    }
+
+    var editing = editingLeaf == id
+    if editing {
+      var characters = Array(text)
+      caretOffset = min(caretOffset, characters.count)
+      var changed = false
+      eventLoop: for event in input.textEvents {
+        switch event {
+        case .insert(let inserted):
+          let graft = Array(inserted)
+          characters.insert(contentsOf: graft, at: caretOffset)
+          caretOffset += graft.count
+          changed = true
+        case .backspace:
+          if caretOffset > 0 {
+            characters.remove(at: caretOffset - 1)
+            caretOffset -= 1
+            changed = true
+          }
+        case .deleteForward:
+          if caretOffset < characters.count {
+            characters.remove(at: caretOffset)
+            changed = true
+          }
+        case .moveCaretLeft:
+          caretOffset = max(0, caretOffset - 1)
+        case .moveCaretRight:
+          caretOffset = min(characters.count, caretOffset + 1)
+        case .moveCaretToStart:
+          caretOffset = 0
+        case .moveCaretToEnd:
+          caretOffset = characters.count
+        case .endEditing:
+          editingLeaf = nil
+          editing = false
+          break eventLoop  // The session is over; drop the rest of the frame.
+        }
+      }
+      if changed {
+        onChange(String(characters))
+      }
+    }
+    return TextInputState(
+      hovered: selected, held: held, editing: editing,
+      caretOffset: editing ? caretOffset : nil)
   }
 
   // MARK: Display helpers
@@ -323,6 +430,30 @@ public struct ButtonState: Equatable, Sendable {
     self.hovered = hovered
     self.held = held
     self.clicked = clicked
+  }
+
+  /// The phase used for styling this frame.
+  public var phase: InteractionPhase {
+    held ? .pressed : hovered ? .hovered : .idle
+  }
+}
+
+/// The result of evaluating a text-input widget for one frame.
+public struct TextInputState: Equatable, Sendable {
+  /// The cursor is on the field.
+  public var hovered: Bool
+  /// A pointer press captured the field and is still down.
+  public var held: Bool
+  /// The field owns the keyboard this frame (insert mode).
+  public var editing: Bool
+  /// The caret's grapheme offset, or nil when not editing.
+  public var caretOffset: Int?
+
+  public init(hovered: Bool, held: Bool, editing: Bool, caretOffset: Int?) {
+    self.hovered = hovered
+    self.held = held
+    self.editing = editing
+    self.caretOffset = caretOffset
   }
 
   /// The phase used for styling this frame.

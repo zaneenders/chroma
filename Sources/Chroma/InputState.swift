@@ -32,6 +32,11 @@ public struct InputState: Equatable, Sendable {
   /// the input language by the backend's keymap. Applied after any pointer
   /// macros, so the keyboard speaks last within a frame.
   public var commands: [UICommand]
+  /// Editing-mode input for this frame. While a text field owns the
+  /// keyboard (``Interaction/isTextEditing``), the backend translates keys
+  /// into these instead of ``commands``; the editing field drains them
+  /// during draw.
+  public var textEvents: [TextEditEvent]
 
   public init(
     pointerPosition: Point = .zero,
@@ -40,7 +45,8 @@ public struct InputState: Equatable, Sendable {
     pointerPressed: Bool = false,
     pointerReleased: Bool = false,
     scrollDelta: Point = .zero,
-    commands: [UICommand] = []
+    commands: [UICommand] = [],
+    textEvents: [TextEditEvent] = []
   ) {
     self.pointerPosition = pointerPosition
     self.pointerPressPosition = pointerPressPosition
@@ -49,5 +55,6 @@ public struct InputState: Equatable, Sendable {
     self.pointerReleased = pointerReleased
     self.scrollDelta = scrollDelta
     self.commands = commands
+    self.textEvents = textEvents
   }
 }
