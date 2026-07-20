@@ -4,11 +4,12 @@ public enum ScrollRequest: Equatable, Sendable {
   case top
   case bottom
   case offset(Float)
+  /// Reveal a rectangle expressed in the scroll view's current window coordinates.
+  case visible(Rect)
 }
 
 /// Reference-type scroll control that can be retained by application state.
 /// The view itself also retains its offset in ``Interaction`` by `WidgetID`.
-@MainActor
 public final class ScrollViewController {
   fileprivate var request: ScrollRequest?
 
@@ -16,6 +17,8 @@ public final class ScrollViewController {
   public func scrollToTop() { request = .top }
   public func scrollToBottom() { request = .bottom }
   public func scroll(to offset: Float) { request = .offset(offset) }
+  /// Scrolls only as far as needed to reveal `rect` in the viewport.
+  public func scrollToVisible(_ rect: Rect) { request = .visible(rect) }
 }
 
 /// A clipped vertical viewport with retained scroll position, wheel/trackpad
@@ -83,6 +86,12 @@ public struct ScrollView: PrimitiveBlock {
       case .top: offset = 0
       case .bottom: offset = maximumOffset
       case .offset(let requested): offset = requested
+      case .visible(let target):
+        if target.minY < rect.minY {
+          offset -= rect.minY - target.minY
+        } else if target.maxY > rect.maxY {
+          offset += target.maxY - rect.maxY
+        }
       }
       controller?.request = nil
     } else if sticksToBottom && wasAtBottom && maximumOffset > previousLimit {

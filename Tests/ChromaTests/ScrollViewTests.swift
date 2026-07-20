@@ -57,6 +57,25 @@ struct ScrollViewTests {
     #expect(interaction.scrollOffset(for: scrollID) == 80)
   }
 
+  @Test func controllerScrollsOnlyEnoughToRevealRect() {
+    let interaction = Interaction()
+    let controller = ScrollViewController()
+    _ = drawFrame(interaction, controller: controller)
+
+    controller.scrollToVisible(Rect(x: 0, y: 25, width: 100, height: 10))
+    _ = drawFrame(interaction, controller: controller)
+    #expect(interaction.scrollOffset(for: scrollID) == 15)
+
+    // This rectangle is already fully visible in current window coordinates.
+    controller.scrollToVisible(Rect(x: 0, y: 5, width: 100, height: 10))
+    _ = drawFrame(interaction, controller: controller)
+    #expect(interaction.scrollOffset(for: scrollID) == 15)
+
+    controller.scrollToVisible(Rect(x: 0, y: -5, width: 100, height: 10))
+    _ = drawFrame(interaction, controller: controller)
+    #expect(interaction.scrollOffset(for: scrollID) == 10)
+  }
+
   @Test func clippedLeafCannotBeHitOutsideViewport() {
     let interaction = Interaction()
 

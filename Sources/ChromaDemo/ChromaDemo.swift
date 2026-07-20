@@ -34,6 +34,7 @@ private enum DemoTab {
 private final class DemoState {
   var selectedTab: DemoTab = .package
   let packageSource = DemoState.loadPackageSource()
+  let packageScrollController = ScrollViewController()
   var accent = Color(r: 0.3, g: 0.6, b: 1.0, a: 1)
   var accentName = "Blue"
   var wireframe = false
@@ -226,7 +227,11 @@ private struct MainPanel: Block {
       .background(theme.headerBackground)
 
       if state.selectedTab == .package {
-        PackagePanel(theme: theme, source: state.packageSource)
+        PackagePanel(
+          theme: theme,
+          source: state.packageSource,
+          scrollController: state.packageScrollController
+        )
       } else {
         AsciiPanel(theme: theme, state: state)
       }
@@ -259,29 +264,40 @@ private struct TabButton: Block {
 private struct PackagePanel: Block {
   let theme: Theme
   let source: String
+  let scrollController: ScrollViewController
 
   var body: some Block {
-    ScrollView(id: WidgetID("demo:package-scroll"), showsIndicator: true) {
+    ScrollView(
+      id: WidgetID("demo:package-scroll"),
+      showsIndicator: true,
+      controller: scrollController
+    ) {
       VStack(spacing: theme.spacing, alignment: .leading) {
-        Text("Package.swift  -  wheel / trackpad or PgUp / PgDn / Home / End")
+        Text("Package.swift  -  Up / Down selects lines; wheel or PgUp / PgDn scrolls")
           .fontScale(theme.textScale)
           .foregroundColor(theme.yellow)
-        PackageSourceListing(theme: theme, source: source)
+        PackageSourceListing(
+          theme: theme,
+          source: source,
+          scrollController: scrollController
+        )
       }
       .padding(theme.panelPadding)
     }
   }
 }
 
-/// Draws the source as one primitive instead of constructing a large nested
-/// stack. Its explicit height gives ScrollView a stable scrollable extent.
+/// A vertically navigable source listing. Each line is a focus-tree leaf, so
+/// Up/Down and pointer hover share the normal one-cursor navigation path.
 private struct PackageSourceListing: PrimitiveBlock {
   let theme: Theme
   let lines: [Substring]
+  let scrollController: ScrollViewController
 
-  init(theme: Theme, source: String) {
+  init(theme: Theme, source: String, scrollController: ScrollViewController) {
     self.theme = theme
     self.lines = source.split(separator: "\n", omittingEmptySubsequences: false)
+    self.scrollController = scrollController
   }
 
   func sizeThatFits(_ proposal: Size) -> Size {
@@ -294,16 +310,33 @@ private struct PackageSourceListing: PrimitiveBlock {
   }
 
   func draw(into drawList: inout DrawList, in rect: Rect) {
+    let interaction = Interaction.current
     let lineHeight = FontMetrics().lineAdvance * theme.textScale
+    interaction.beginGroup(.vertical, rect: rect)
     for (index, line) in lines.enumerated() {
+      let lineRect = Rect(
+        x: rect.minX,
+        y: rect.minY + Float(index) * lineHeight,
+        width: rect.size.width,
+        height: lineHeight
+      )
+      let state = interaction.interactiveBehavior(
+        id: WidgetID("package-line:\(index)"),
+        rect: lineRect
+      )
+      if state.hovered {
+        drawList.fillRect(lineRect, color: theme.buttonHover)
+        scrollController.scrollToVisible(lineRect)
+      }
       let isComment = line.trimmingCharacters(in: .whitespaces).hasPrefix("//")
       drawList.text(
         String(format: "%3d  %@", index + 1, String(line)),
-        at: Point(x: rect.minX, y: rect.minY + Float(index) * lineHeight),
+        at: lineRect.origin,
         color: isComment ? theme.textSecondary : .white,
         scale: theme.textScale
       )
     }
+    interaction.endGroup()
   }
 }
 
