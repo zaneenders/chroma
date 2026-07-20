@@ -34,6 +34,16 @@ public final class Interaction {
     hot = nil
   }
 
+  /// Finalizes the interaction frame. Backends call this once per frame
+  /// after drawing; clears any active capture if the pointer was released
+  /// this frame but no widget claimed the release (e.g. the active widget
+  /// disappeared while held).
+  public func endFrame() {
+    if input.pointerReleased {
+      active = nil
+    }
+  }
+
   /// Shared press and capture semantics for button-like widgets, evaluated
   /// against the widget's assigned rect during its draw:
   ///

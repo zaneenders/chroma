@@ -39,6 +39,10 @@ let package = Package(
         .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"])),
       ]
     ),
+    .testTarget(
+      name: "ChromaTests",
+      dependencies: ["Chroma"]
+    ),
     .target(name: "Chroma"),
     .target(
       name: "MetalBackend",

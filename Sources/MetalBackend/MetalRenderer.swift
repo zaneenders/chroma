@@ -168,6 +168,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
     if let content {
       BlockEngine.draw(content, into: &drawList, in: Rect(origin: .zero, size: viewport))
     }
+    interaction.endFrame()
     render(drawList, viewport: viewport, into: enc)
 
     enc.endEncoding()
