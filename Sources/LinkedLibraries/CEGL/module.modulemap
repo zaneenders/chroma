@@ -1,0 +1,6 @@
+module CEGL [system] {
+  header "/usr/include/EGL/egl.h"
+  header "/usr/include/EGL/eglext.h"
+  link "EGL"
+  export *
+}

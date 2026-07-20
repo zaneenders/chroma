@@ -19,7 +19,7 @@ let package = Package(
     ),
     .trait(
       name: "WaylandBackend",
-      description: "Wayland rendering backend (stub, not yet implemented). Build with `--traits WaylandBackend`."
+      description: "Wayland/EGL/OpenGL ES rendering backend. Build with `--traits WaylandBackend`."
     ),
     .default(enabledTraits: ["MetalBackend"]),
   ],
@@ -66,10 +66,43 @@ let package = Package(
     ),
     .target(
       name: "WaylandBackend",
-      dependencies: ["Chroma", "ChromaFont"],
+      dependencies: [
+        "Chroma",
+        "ChromaFont",
+        "CWaylandClient",
+        "CWaylandEGL",
+        "CWaylandProtocols",
+        "CEGL",
+        "CGLES3",
+      ]
       swiftSettings: [
         .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
       ]
+    ),
+    .systemLibrary(
+      name: "CWaylandClient",
+      path: "Sources/LinkedLibraries/CWaylandClient",
+      pkgConfig: "wayland-client"
+    ),
+    .systemLibrary(
+      name: "CWaylandEGL",
+      path: "Sources/LinkedLibraries/CWaylandEGL",
+      pkgConfig: "wayland-egl"
+    ),
+    .systemLibrary(
+      name: "CEGL",
+      path: "Sources/LinkedLibraries/CEGL",
+      pkgConfig: "egl"
+    ),
+    .systemLibrary(
+      name: "CGLES3",
+      path: "Sources/LinkedLibraries/CGLES3",
+      pkgConfig: "glesv2"
+    ),
+    .target(
+      name: "CWaylandProtocols",
+      path: "Sources/LinkedLibraries/CWaylandProtocols",
+      publicHeadersPath: "include"
     ),
     .executableTarget(name: "MetalSourceGenerator"),
     .plugin(
