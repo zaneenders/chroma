@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-  name: "HelloTriangle",
+  name: "chroma",
   platforms: [.macOS(.v14)],
   products: [
-    .library(name: "ImmediateGUI", targets: ["ImmediateGUI"]),
+    .library(name: "Chroma", targets: ["Chroma"]),
     .library(name: "MetalBackend", targets: ["MetalBackend"]),
     .library(name: "WaylandBackend", targets: ["WaylandBackend"]),
   ],
@@ -22,9 +22,9 @@ let package = Package(
   ],
   targets: [
     .executableTarget(
-      name: "HelloTriangle",
+      name: "ChromaDemo",
       dependencies: [
-        "ImmediateGUI",
+        "Chroma",
         .target(
           name: "MetalBackend",
           condition: .when(platforms: [.macOS], traits: ["MetalBackend"])
@@ -39,10 +39,10 @@ let package = Package(
         .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"])),
       ]
     ),
-    .target(name: "ImmediateGUI"),
+    .target(name: "Chroma"),
     .target(
       name: "MetalBackend",
-      dependencies: ["ImmediateGUI"],
+      dependencies: ["Chroma"],
       exclude: ["Shaders"],
       swiftSettings: [
         .define("METAL_TRAIT", .when(traits: ["MetalBackend"])),
@@ -54,7 +54,7 @@ let package = Package(
     ),
     .target(
       name: "WaylandBackend",
-      dependencies: ["ImmediateGUI"],
+      dependencies: ["Chroma"],
       swiftSettings: [
         .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
       ]

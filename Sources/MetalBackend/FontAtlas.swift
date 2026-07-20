@@ -1,6 +1,6 @@
 #if METAL_BACKEND
 
-import ImmediateGUI
+import Chroma
 import Metal
 
 struct FontAtlas {

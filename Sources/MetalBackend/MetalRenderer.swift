@@ -1,7 +1,7 @@
 #if METAL_BACKEND
 
 import AppKit
-import ImmediateGUI
+import Chroma
 import MetalKit
 
 /// The Metal backend.

@@ -6,7 +6,7 @@
 ///
 /// ```swift
 /// @main
-/// struct HelloTriangle: MetalApp {
+/// struct ChromaDemo: MetalApp {
 ///   var body: some Block { Specimen() }
 /// }
 /// ```

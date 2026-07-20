@@ -1,5 +1,5 @@
 import Foundation
-import ImmediateGUI
+import Chroma
 
 #if METAL_BACKEND
 import MetalBackend
@@ -9,13 +9,13 @@ import WaylandBackend
 typealias PlatformApp = WaylandApp
 #else
 #error(
-  "HelloTriangle requires a rendering backend: MetalBackend (enabled by default) or WaylandBackend."
+  "ChromaDemo requires a rendering backend: MetalBackend (enabled by default) or WaylandBackend."
 )
 #endif
 
 @main
-struct HelloTriangle: PlatformApp {
-  var title: String { "Hello Triangle" }
+struct ChromaDemo: PlatformApp {
+  var title: String { "Chroma Demo" }
 
   var body: some Block {
     Entry()
@@ -47,7 +47,7 @@ private struct Header: Block {
 
   var body: some Block {
     VStack(spacing: 0) {
-      Text("swift-wayland  —  Immediate-Mode GUI Demo")
+      Text("Chroma  —  Immediate-Mode GUI Demo")
         .fontScale(theme.textScale)
         .foregroundColor(theme.accent)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

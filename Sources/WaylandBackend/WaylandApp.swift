@@ -1,6 +1,6 @@
 #if WAYLAND_BACKEND
 
-import ImmediateGUI
+import Chroma
 
 /// An ``App`` that runs on the Wayland backend.
 ///

@@ -1,6 +1,6 @@
 #if METAL_BACKEND
 
-import ImmediateGUI
+import Chroma
 
 /// An ``App`` that runs on the Metal backend.
 ///
@@ -8,7 +8,7 @@ import ImmediateGUI
 ///
 /// ```swift
 /// @main
-/// struct HelloTriangle: MetalApp {
+/// struct Chroma: MetalApp {
 ///   var body: some Block { Specimen() }
 /// }
 /// ```

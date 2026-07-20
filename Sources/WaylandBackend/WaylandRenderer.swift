@@ -1,6 +1,6 @@
 #if WAYLAND_BACKEND
 
-import ImmediateGUI
+import Chroma
 
 /// The Wayland backend (stub).
 ///
