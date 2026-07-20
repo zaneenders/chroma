@@ -247,4 +247,153 @@ struct InteractionTests {
     #expect(ctx.active == nil, "no capture because press was outside")
     ctx.endFrame()
   }
+
+  // MARK: - Overlapping widgets (ZStack hit-testing)
+
+  /// When two widgets overlap and neither is active, only the top-most
+  /// (last-drawn) widget should report `hovered == true` once the
+  /// resolved hot settles (second frame onward).
+  @Test func overlappingOnlyTopMostHovered() {
+    let ctx = Interaction()
+    let back = WidgetID("back")
+    let front = WidgetID("front")
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+
+    // Frame 1: pointer enters overlap — both may report hovered
+    // (resolvedHot is nil on the first frame).
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 50, y: 50)))
+    let b1 = ctx.buttonBehavior(id: back, rect: rect)
+    let f1 = ctx.buttonBehavior(id: front, rect: rect)
+    // First frame: both hit the resolvedHot==nil path.
+    #expect(b1.hovered)
+    #expect(f1.hovered)
+    ctx.endFrame()
+
+    // Frame 2: resolvedHot is now `front` (last writer wins).
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 50, y: 50)))
+    let b2 = ctx.buttonBehavior(id: back, rect: rect)
+    let f2 = ctx.buttonBehavior(id: front, rect: rect)
+    #expect(!b2.hovered, "back widget must not be hovered when front is on top")
+    #expect(f2.hovered, "front widget must be hovered")
+    ctx.endFrame()
+  }
+
+  /// When two overlapping widgets receive a press, the top-most widget
+  /// (identified by resolvedHot) must capture the press, not the
+  /// back-most widget that happens to be drawn first.
+  @Test func overlappingPressCapturesTopMost() {
+    let ctx = Interaction()
+    let back = WidgetID("back")
+    let front = WidgetID("front")
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+
+    // Settle hover so resolvedHot = front.
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 50, y: 50)))
+    _ = ctx.buttonBehavior(id: back, rect: rect)
+    _ = ctx.buttonBehavior(id: front, rect: rect)
+    ctx.endFrame()
+
+    // Press.
+    ctx.beginFrame(input: InputState(
+      pointerPosition: Point(x: 50, y: 50),
+      pointerDown: true,
+      pointerPressed: true
+    ))
+    let bState = ctx.buttonBehavior(id: back, rect: rect)
+    let fState = ctx.buttonBehavior(id: front, rect: rect)
+    #expect(!bState.held, "back widget must not capture press")
+    #expect(!bState.hovered, "back widget must not show hover during press")
+    #expect(fState.held, "front widget must capture press")
+    #expect(ctx.active == front, "active must be the front widget")
+    ctx.endFrame()
+  }
+
+  /// When the active (front) widget is released inside, it clicks.
+  /// The back widget must not click.
+  @Test func overlappingReleaseTopMostClicks() {
+    let ctx = Interaction()
+    let back = WidgetID("back")
+    let front = WidgetID("front")
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+
+    // Settle hover and press.
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 50, y: 50)))
+    _ = ctx.buttonBehavior(id: back, rect: rect)
+    _ = ctx.buttonBehavior(id: front, rect: rect)
+    ctx.endFrame()
+
+    ctx.beginFrame(input: InputState(
+      pointerPosition: Point(x: 50, y: 50),
+      pointerDown: true,
+      pointerPressed: true
+    ))
+    _ = ctx.buttonBehavior(id: back, rect: rect)
+    _ = ctx.buttonBehavior(id: front, rect: rect)
+    ctx.endFrame()
+
+    // Release.
+    ctx.beginFrame(input: InputState(
+      pointerPosition: Point(x: 50, y: 50),
+      pointerDown: false,
+      pointerReleased: true
+    ))
+    let bState = ctx.buttonBehavior(id: back, rect: rect)
+    let fState = ctx.buttonBehavior(id: front, rect: rect)
+    #expect(!bState.clicked, "back widget must not click")
+    #expect(fState.clicked, "front widget must click")
+    #expect(ctx.active == nil, "active must clear after click")
+    ctx.endFrame()
+  }
+
+  /// When the pointer moves to a non-overlapping area of the back widget,
+  /// the back widget becomes the top-most widget under the pointer and
+  /// should gain hover after one frame of settling.
+  @Test func overlappingPointerMovesToBackWidget() {
+    let ctx = Interaction()
+    let back = WidgetID("back")
+    let front = WidgetID("front")
+    let bigRect = Rect(x: 0, y: 0, width: 200, height: 100)
+    let smallRect = Rect(x: 0, y: 0, width: 100, height: 100)
+
+    // Settle with pointer in overlap area → front is hot.
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 50, y: 50)))
+    _ = ctx.buttonBehavior(id: back, rect: bigRect)
+    _ = ctx.buttonBehavior(id: front, rect: smallRect)
+    ctx.endFrame()
+
+    // Move pointer to back-only area (front doesn't contain this point).
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 150, y: 50)))
+    let b1 = ctx.buttonBehavior(id: back, rect: bigRect)
+    let f1 = ctx.buttonBehavior(id: front, rect: smallRect)
+    // First frame after move: front was hot but pointer is not in front,
+    // and back hasn't settled as hot yet.
+    #expect(!b1.hovered, "back not hovered until resolvedHot settles")
+    #expect(!f1.hovered)
+    ctx.endFrame()
+
+    // Next frame: back is now hot.
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 150, y: 50)))
+    let b2 = ctx.buttonBehavior(id: back, rect: bigRect)
+    let f2 = ctx.buttonBehavior(id: front, rect: smallRect)
+    #expect(b2.hovered, "back must be hovered after settling")
+    #expect(!f2.hovered)
+    ctx.endFrame()
+  }
+
+  /// `hot` still reflects the current frame's claim (last writer wins)
+  /// so callers can inspect which widget claimed hover during draw.
+  @Test func overlappingHotReflectsCurrentFrameClaim() {
+    let ctx = Interaction()
+    let back = WidgetID("back")
+    let front = WidgetID("front")
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+
+    // Frame 1: both claim, front overwrites.
+    ctx.beginFrame(input: InputState(pointerPosition: Point(x: 50, y: 50)))
+    _ = ctx.buttonBehavior(id: back, rect: rect)
+    #expect(ctx.hot == back, "hot is back (so far)")
+    _ = ctx.buttonBehavior(id: front, rect: rect)
+    #expect(ctx.hot == front, "hot is front (last writer)")
+    ctx.endFrame()
+  }
 }
