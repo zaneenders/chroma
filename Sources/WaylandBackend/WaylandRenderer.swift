@@ -6,6 +6,7 @@ import Chroma
 import CWaylandClient
 import CWaylandEGL
 import CWaylandProtocols
+import Foundation
 
 /// A Wayland window backed by EGL and OpenGL ES 3.
 ///
@@ -28,9 +29,17 @@ public final class WaylandRenderer: Renderer {
   private var registry: OpaquePointer?
   private var compositor: OpaquePointer?
   private var wmBase: OpaquePointer?
+  private var shm: OpaquePointer?
+  private var seat: OpaquePointer?
+  private var pointer: OpaquePointer?
   private var surface: OpaquePointer?
   private var xdgSurface: OpaquePointer?
   private var toplevel: OpaquePointer?
+
+  private let input = InputAccumulator()
+  private let cursor = WaylandCursor()
+  private var lastFrameTime: Double = 0
+  private var smoothedFrameRate: Double = 0
 
   private var eglDisplay: EGLDisplay?
   private var eglContext: EGLContext?
@@ -47,6 +56,8 @@ public final class WaylandRenderer: Renderer {
 
   private static var compositorInterface: wl_interface = unsafe wl_compositor_interface
   private static var wmBaseInterface: wl_interface = unsafe xdg_wm_base_interface
+  private static var seatInterface: wl_interface = unsafe wl_seat_interface
+  private static var shmInterface: wl_interface = unsafe wl_shm_interface
 
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
@@ -109,6 +120,7 @@ public final class WaylandRenderer: Renderer {
       case "wl_compositor":
         renderer.compositor = unsafe OpaquePointer(
           wl_registry_bind(registry, name, &compositorInterface, min(version, 4)))
+        renderer.setUpCursorIfReady()
       case "xdg_wm_base":
         renderer.wmBase = unsafe OpaquePointer(
           wl_registry_bind(registry, name, &wmBaseInterface, min(version, 2)))
@@ -116,6 +128,17 @@ public final class WaylandRenderer: Renderer {
           unsafe xdg_wm_base_add_listener(
             wmBase, &wmBaseListener, Unmanaged.passUnretained(renderer).toOpaque())
         }
+      case "wl_seat":
+        renderer.seat = unsafe OpaquePointer(
+          wl_registry_bind(registry, name, &seatInterface, min(version, 5)))
+        if let seat = renderer.seat {
+          unsafe wl_seat_add_listener(
+            seat, &seatListener, Unmanaged.passUnretained(renderer).toOpaque())
+        }
+      case "wl_shm":
+        renderer.shm = unsafe OpaquePointer(
+          wl_registry_bind(registry, name, &shmInterface, min(version, 1)))
+        renderer.setUpCursorIfReady()
       default: break
       }
     },
@@ -124,6 +147,98 @@ public final class WaylandRenderer: Renderer {
 
   private static var wmBaseListener = unsafe xdg_wm_base_listener(
     ping: { _, base, serial in unsafe xdg_wm_base_pong(base, serial) }
+  )
+
+  private static var seatListener = unsafe wl_seat_listener(
+    capabilities: { data, seat, capabilities in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      let hasPointer = (capabilities & WL_SEAT_CAPABILITY_POINTER.rawValue) != 0
+      if hasPointer {
+        guard renderer.pointer == nil, let seat else { return }
+        renderer.pointer = unsafe wl_seat_get_pointer(seat)
+        if let pointer = renderer.pointer {
+          unsafe wl_pointer_add_listener(
+            pointer, &pointerListener, Unmanaged.passUnretained(renderer).toOpaque())
+        }
+      } else if let pointer = renderer.pointer {
+        unsafe wl_pointer_destroy(pointer)
+        renderer.pointer = nil
+      }
+    },
+    name: { _, _, _ in }
+  )
+
+  private static let pointerEnter:
+    @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, OpaquePointer?, Int32, Int32) -> Void = {
+      data, pointer, serial, eventSurface, surfaceX, surfaceY in
+      guard let data, let eventSurface else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      guard eventSurface == renderer.surface else { return }
+      if let pointer { renderer.cursor.apply(pointer: pointer, serial: serial) }
+      renderer.input.pointerEntered(
+        x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+    }
+
+  private static let pointerLeave:
+    @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, OpaquePointer?) -> Void = {
+      data, _, _, eventSurface in
+      guard let data, let eventSurface else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      guard eventSurface == renderer.surface else { return }
+      renderer.input.pointerLeft()
+    }
+
+  private static let pointerMotion:
+    @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, Int32, Int32) -> Void = {
+      data, _, _, surfaceX, surfaceY in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.input.pointerMoved(
+        x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+    }
+
+  private static let pointerButton:
+    @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, UInt32, UInt32, UInt32) -> Void = {
+      data, _, _, _, button, state in
+      guard let data, button == btnLeft else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      switch state {
+      case WL_POINTER_BUTTON_STATE_PRESSED.rawValue:
+        renderer.input.pointerPressed()
+      case WL_POINTER_BUTTON_STATE_RELEASED.rawValue:
+        renderer.input.pointerReleased()
+      default: break
+      }
+    }
+
+  private static let pointerAxis:
+    @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, UInt32, Int32) -> Void = {
+      data, _, _, axis, value in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      let delta = fixedToFloat(value)
+      switch axis {
+      case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
+        renderer.input.scrollBy(x: delta, y: 0)
+      case WL_POINTER_AXIS_VERTICAL_SCROLL.rawValue:
+        renderer.input.scrollBy(x: 0, y: delta)
+      default: break
+      }
+    }
+
+  private static var pointerListener = unsafe wl_pointer_listener(
+    enter: pointerEnter,
+    leave: pointerLeave,
+    motion: pointerMotion,
+    button: pointerButton,
+    axis: pointerAxis,
+    frame: { _, _ in },
+    axis_source: { _, _, _ in },
+    axis_stop: { _, _, _, _ in },
+    axis_discrete: { _, _, _, _ in },
+    axis_value120: { _, _, _, _ in },
+    axis_relative_direction: { _, _, _, _ in }
   )
 
   private static var xdgSurfaceListener = unsafe xdg_surface_listener(
@@ -317,9 +432,10 @@ public final class WaylandRenderer: Renderer {
     glUniform2f(resolutionUniform, Float(width), Float(height))
     glBindVertexArray(vao)
 
-    // Pointer input lands with the Wayland seat listener; until then, still
-    // run begin/end so interactive blocks see a consistent empty snapshot.
-    interaction.beginFrame(input: InputState())
+    // Pointer input is accumulated from the wl_pointer listener and drained
+    // once per frame, matching the Metal backend's event coalescing.
+    updateFrameRate()
+    interaction.beginFrame(input: input.frameInput())
 
     let viewport = Size(width: Float(width), height: Float(height))
     var drawList = DrawList()
@@ -402,6 +518,22 @@ public final class WaylandRenderer: Renderer {
     glScissor(x, max(0, height - top - clipHeight), clipWidth, clipHeight)
   }
 
+  private func updateFrameRate() {
+    let now = ProcessInfo.processInfo.systemUptime
+    defer { lastFrameTime = now }
+    guard lastFrameTime > 0 else { return }
+    let delta = now - lastFrameTime
+    guard delta > 0 else { return }
+    let instant = 1 / delta
+    smoothedFrameRate = smoothedFrameRate == 0 ? instant : smoothedFrameRate * 0.9 + instant * 0.1
+    interaction.frameRate = smoothedFrameRate
+  }
+
+  private func setUpCursorIfReady() {
+    guard let compositor, let shm else { return }
+    cursor.setUp(compositor: compositor, shm: shm)
+  }
+
   private func cleanup() {
     if program != 0 { glDeleteProgram(program) }
     if let eglDisplay {
@@ -411,6 +543,10 @@ public final class WaylandRenderer: Renderer {
       _ = unsafe eglTerminate(eglDisplay)
     }
     if let eglWindow { unsafe wl_egl_window_destroy(eglWindow) }
+    cursor.cleanup()
+    if let pointer { unsafe wl_pointer_destroy(pointer) }
+    if let seat { unsafe wl_seat_destroy(seat) }
+    if let shm { unsafe wl_shm_destroy(shm) }
     if let toplevel { unsafe xdg_toplevel_destroy(toplevel) }
     if let xdgSurface { unsafe xdg_surface_destroy(xdgSurface) }
     if let surface { unsafe wl_surface_destroy(surface) }
@@ -426,5 +562,11 @@ private struct WaylandError: Error, CustomStringConvertible {
   let description: String
   init(_ description: String) { self.description = description }
 }
+
+private func fixedToFloat(_ value: Int32) -> Float {
+  Float(value) / 256
+}
+
+private let btnLeft: UInt32 = 0x110
 
 #endif

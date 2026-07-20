@@ -70,6 +70,7 @@ let package = Package(
         "Chroma",
         "ChromaFont",
         "CWaylandClient",
+        "CWaylandCursor",
         "CWaylandEGL",
         "CWaylandProtocols",
         "CEGL",
@@ -83,6 +84,11 @@ let package = Package(
       name: "CWaylandClient",
       path: "Sources/LinkedLibraries/CWaylandClient",
       pkgConfig: "wayland-client"
+    ),
+    .systemLibrary(
+      name: "CWaylandCursor",
+      path: "Sources/LinkedLibraries/CWaylandCursor",
+      pkgConfig: "wayland-cursor"
     ),
     .systemLibrary(
       name: "CWaylandEGL",
