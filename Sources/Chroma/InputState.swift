@@ -4,6 +4,11 @@
 /// result to ``Interaction/beginFrame(input:)`` at frame start, so a quick
 /// press and release within one frame is never lost.
 ///
+/// Keyboards don't deliver key codes here: the backend translates them into
+/// the framework's input language and enqueues ``commands`` — pointer motion
+/// is compiled into the same language by ``Interaction`` itself (see the
+/// `UICommand` docs for the model).
+///
 /// Held and edge-triggered state are distinct:
 ///
 /// - `pointerDown`: held across frames
@@ -23,6 +28,10 @@ public struct InputState: Equatable, Sendable {
   public var pointerPressed: Bool
   public var pointerReleased: Bool
   public var scrollDelta: Point
+  /// The keyboard's contribution for this frame, already translated into
+  /// the input language by the backend's keymap. Applied after any pointer
+  /// macros, so the keyboard speaks last within a frame.
+  public var commands: [UICommand]
 
   public init(
     pointerPosition: Point = .zero,
@@ -30,7 +39,8 @@ public struct InputState: Equatable, Sendable {
     pointerDown: Bool = false,
     pointerPressed: Bool = false,
     pointerReleased: Bool = false,
-    scrollDelta: Point = .zero
+    scrollDelta: Point = .zero,
+    commands: [UICommand] = []
   ) {
     self.pointerPosition = pointerPosition
     self.pointerPressPosition = pointerPressPosition
@@ -38,5 +48,6 @@ public struct InputState: Equatable, Sendable {
     self.pointerPressed = pointerPressed
     self.pointerReleased = pointerReleased
     self.scrollDelta = scrollDelta
+    self.commands = commands
   }
 }

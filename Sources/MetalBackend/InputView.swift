@@ -18,9 +18,12 @@ final class ChromaInputView: MTKView {
   private var pressedEdge = false
   private var releasedEdge = false
   private var scroll = Point.zero
+  /// Keyboard input accumulated between frames, already translated into the
+  /// framework's input language by ``keyDown(with:)``.
+  private var pendingCommands: [UICommand] = []
 
   /// Drains the accumulated events into a frame snapshot. Edge-triggered
-  /// fields and scroll deltas reset for the next frame.
+  /// fields, scroll deltas, and queued commands reset for the next frame.
   func frameInput() -> InputState {
     let input = InputState(
       pointerPosition: pointerPosition,
@@ -28,12 +31,14 @@ final class ChromaInputView: MTKView {
       pointerDown: pointerDown,
       pointerPressed: pressedEdge,
       pointerReleased: releasedEdge,
-      scrollDelta: scroll
+      scrollDelta: scroll,
+      commands: pendingCommands
     )
     pressedEdge = false
     releasedEdge = false
     pointerPressPosition = Point(x: -1, y: -1)
     scroll = .zero
+    pendingCommands = []
     return input
   }
 
@@ -59,6 +64,7 @@ final class ChromaInputView: MTKView {
   }
 
   override func mouseDown(with event: NSEvent) {
+    window?.makeFirstResponder(self)  // Clicks focus the view for keyboard.
     updatePointer(with: event)
     pointerPressPosition = pointerPosition
     pointerDown = true
@@ -80,6 +86,46 @@ final class ChromaInputView: MTKView {
   override func scrollWheel(with event: NSEvent) {
     scroll.x += Float(event.scrollingDeltaX)
     scroll.y += Float(event.scrollingDeltaY)
+  }
+
+  // MARK: Keyboard
+
+  override var acceptsFirstResponder: Bool { true }
+
+  /// The keymap: the only device-specific piece of input. Keys compile
+  /// directly into the framework's input language — mirrored home-row pairs
+  /// (`d`/`f` left hand, `j`/`k` right hand) for the four directions, `l`
+  /// to step in, `s` to step out, and return or space to activate. Arrow
+  /// keys are aliases for the directions. Held keys repeat via AppKit's key
+  /// repeat, which is exactly repeated movement.
+  override func keyDown(with event: NSEvent) {
+    let command: UICommand?
+    switch event.keyCode {
+    case 123: command = .left
+    case 124: command = .right
+    case 125: command = .down
+    case 126: command = .up
+    case 36, 76, 49: command = .activate  // return, keypad enter, space
+    default:
+      if event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
+        switch event.charactersIgnoringModifiers {
+        case "l": command = .in
+        case "s": command = .out
+        case "j": command = .down
+        case "f": command = .up
+        case "k": command = .right
+        case "d": command = .left
+        default: command = nil
+        }
+      } else {
+        command = nil  // Modified keys belong to the system, not navigation.
+      }
+    }
+    if let command {
+      pendingCommands.append(command)
+    } else {
+      super.keyDown(with: event)
+    }
   }
 
   /// Converts AppKit view points (bottom-left origin, in points) into Chroma

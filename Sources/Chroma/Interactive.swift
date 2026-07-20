@@ -1,10 +1,10 @@
-/// A region of UI with press interaction.
+/// A region of UI with press interaction: a leaf of the focus tree.
 ///
-/// Every frame the region hit-tests its assigned rect against the ambient
-/// ``Interaction`` context, styles its content for the resulting
-/// ``InteractionPhase``, and fires `action` when a press completes inside
-/// (press inside, drag outside, release does not click — see
-/// ``Interaction/buttonBehavior(id:rect:)``).
+/// Every frame the region registers itself with the ambient ``Interaction``
+/// context, styles its content for the resulting ``InteractionPhase``, and
+/// fires `action` when it is activated — by a click, or by an `activate`
+/// command while the navigation cursor is on it (press inside, drag outside,
+/// release does not click).
 ///
 /// This is the building block for buttons, checkboxes, and anything else
 /// clickable; the content closure is re-invoked each frame with the current
@@ -59,7 +59,7 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let state = Interaction.current.buttonBehavior(id: id, rect: rect)
+    let state = Interaction.current.interactiveBehavior(id: id, rect: rect)
     if state.clicked { action() }
     BlockEngine.draw(content(state.phase), into: &drawList, in: rect)
   }

@@ -107,6 +107,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
     window.contentView = mtkView
     window.center()
     window.makeKeyAndOrderFront(nil)
+    window.makeFirstResponder(mtkView)  // Key events route to the input view.
 
     app.activate(ignoringOtherApps: true)
     app.run()

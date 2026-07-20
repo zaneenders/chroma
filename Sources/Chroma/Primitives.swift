@@ -118,6 +118,9 @@ public struct VStack: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     let sizes = layout(proposal: rect.size)
+    let interaction = Interaction.current
+    interaction.beginGroup(.vertical, rect: rect)
+    let cursorOnGroup = interaction.isCurrentGroupSelected
     var y = rect.minY
     for (child, size) in zip(children, sizes) {
       let width = min(size.width, rect.size.width)
@@ -129,6 +132,10 @@ public struct VStack: PrimitiveBlock {
       }
       BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: width, height: size.height))
       y += size.height + spacing
+    }
+    interaction.endGroup()
+    if cursorOnGroup {
+      drawList.strokeRect(rect, width: 1, color: interaction.groupCursorColor)
     }
   }
 }
@@ -190,6 +197,9 @@ public struct HStack: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     let sizes = layout(proposal: rect.size)
+    let interaction = Interaction.current
+    interaction.beginGroup(.horizontal, rect: rect)
+    let cursorOnGroup = interaction.isCurrentGroupSelected
     var x = rect.minX
     for (child, size) in zip(children, sizes) {
       let height = min(size.height, rect.size.height)
@@ -201,6 +211,10 @@ public struct HStack: PrimitiveBlock {
       }
       BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: size.width, height: height))
       x += size.width + spacing
+    }
+    interaction.endGroup()
+    if cursorOnGroup {
+      drawList.strokeRect(rect, width: 1, color: interaction.groupCursorColor)
     }
   }
 }
@@ -234,9 +248,16 @@ public struct ZStack: PrimitiveBlock {
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
+    let interaction = Interaction.current
+    interaction.beginGroup(.none, rect: rect)
+    let cursorOnGroup = interaction.isCurrentGroupSelected
     for child in children {
       let size = BlockEngine.measure(child, proposal: rect.size)
       BlockEngine.draw(child, into: &drawList, in: rect.placing(size, alignment: alignment))
+    }
+    interaction.endGroup()
+    if cursorOnGroup {
+      drawList.strokeRect(rect, width: 1, color: interaction.groupCursorColor)
     }
   }
 }

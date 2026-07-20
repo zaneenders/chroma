@@ -87,8 +87,8 @@ private struct StatusBar: Block {
   let state: DemoState
 
   @MainActor var body: some Block {
-    let input = Interaction.current.input
-    let fps = Int(Interaction.current.frameRate.rounded())
+    let interaction = Interaction.current
+    let fps = Int(interaction.frameRate.rounded())
     return VStack(spacing: 0) {
       state.accent
         .frame(height: 1)
@@ -97,9 +97,12 @@ private struct StatusBar: Block {
           Text("FPS: \(fps)")
             .fontScale(theme.textScale)
             .foregroundColor(theme.green)
-          Text("  Pointer: (\(Int(input.pointerPosition.x)), \(Int(input.pointerPosition.y)))")
+          Text("  Cursor: \(interaction.selectionDescription)")
             .fontScale(theme.textScale)
             .foregroundColor(theme.textSecondary)
+          Text("  Mouse: \(interaction.lastMacroDescription)")
+            .fontScale(theme.textScale)
+            .foregroundColor(state.accent)
         }
         Spacer()
         Text("Last action: \(state.lastAction) (\(state.actionCount))")
@@ -148,6 +151,10 @@ private struct Sidebar: Block {
       Spacer().frame(height: theme.spacing)
       SectionTitle(title: "COLORS", theme: theme)
       SwatchGrid(theme: theme, state: state)
+
+      Spacer().frame(height: theme.spacing)
+      SectionTitle(title: "KEYS", theme: theme)
+      KeyLegend(theme: theme)
     }
     .padding(theme.panelPadding)
     .frame(maxHeight: .infinity, alignment: .top)
@@ -166,6 +173,28 @@ private struct SectionTitle: Block {
       .foregroundColor(theme.textSecondary)
       .frame(height: theme.itemHeight, alignment: .leading)
       .padding(EdgeInsets(bottom: theme.spacing))
+  }
+}
+
+/// The input-language cheat sheet. Every device compiles into these moves;
+/// the status bar shows the mouse doing it live.
+private struct KeyLegend: Block {
+  let theme: Theme
+
+  var body: some Block {
+    VStack(spacing: 4, alignment: .leading) {
+      Text("j/f  down/up").legendStyle(theme)
+      Text("k/d  right/left").legendStyle(theme)
+      Text("l/s  in/out").legendStyle(theme)
+      Text("enter  activate").legendStyle(theme)
+      Text("mouse  = macro").legendStyle(theme)
+    }
+  }
+}
+
+extension Text {
+  fileprivate func legendStyle(_ theme: Theme) -> Text {
+    fontScale(theme.textScale).foregroundColor(theme.textSecondary)
   }
 }
 
