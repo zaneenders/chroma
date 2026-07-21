@@ -24,6 +24,9 @@ public protocol Renderer: AnyObject {
   /// content without touching the backend.
   var content: (any Block)? { get set }
 
+  /// Called once when the standalone window or event loop closes.
+  var onClose: (() -> Void)? { get set }
+
   /// The interaction context this backend feeds with platform input. Install
   /// it as ``Interaction/current`` so blocks can reach it, and call
   /// ``Interaction/beginFrame(input:)`` at the start of every frame.

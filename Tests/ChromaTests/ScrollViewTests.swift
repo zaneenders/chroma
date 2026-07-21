@@ -9,6 +9,19 @@ private struct FixedContent: PrimitiveBlock {
   }
 }
 
+private struct RowContent: PrimitiveBlock {
+  let height: Float
+  let color: Color
+
+  func sizeThatFits(_ proposal: Size) -> Size {
+    Size(width: proposal.width, height: height)
+  }
+
+  func draw(into drawList: inout DrawList, in rect: Rect) {
+    drawList.fillRect(rect, color: color)
+  }
+}
+
 @Suite(.serialized)
 @MainActor
 struct ScrollViewTests {
@@ -74,6 +87,32 @@ struct ScrollViewTests {
     controller.scrollToVisible(Rect(x: 0, y: -5, width: 100, height: 10))
     _ = drawFrame(interaction, controller: controller)
     #expect(interaction.scrollOffset(for: scrollID) == 10)
+  }
+
+  @Test func loopRowsStackAndCreateScrollableContent() {
+    let interaction = Interaction()
+    Interaction.current = interaction
+    interaction.beginFrame(input: InputState())
+    var list = DrawList()
+    let colors = [
+      Color(r: 1, g: 0, b: 0, a: 1),
+      Color(r: 0, g: 1, b: 0, a: 1),
+      Color(r: 0, g: 0, b: 1, a: 1),
+    ]
+    let view = ScrollView(id: scrollID, showsIndicator: true) {
+      for color in colors {
+        RowContent(height: 10, color: color)
+      }
+    }
+    BlockEngine.draw(view, into: &list, in: viewport)
+    interaction.endFrame()
+
+    let rowRects = list.commands.compactMap { command -> Rect? in
+      guard case .fillRect(let rect, let color) = command, colors.contains(color) else { return nil }
+      return rect
+    }
+    #expect(rowRects.map(\.minY) == [0, 10, 20])
+    #expect(interaction.scrollLimit(for: scrollID) == 10)
   }
 
   @Test func clippedLeafCannotBeHitOutsideViewport() {

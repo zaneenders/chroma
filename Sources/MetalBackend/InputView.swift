@@ -182,16 +182,15 @@ final class ChromaInputView: MTKView {
     }
   }
 
-  /// Converts AppKit view points (bottom-left origin, in points) into Chroma
-  /// pixel space (top-left origin, drawable pixels).
+  /// Converts AppKit's bottom-left-origin point coordinates into Chroma's
+  /// top-left-origin point coordinates. Rendering and interaction deliberately
+  /// share this logical coordinate space; Metal handles Retina rasterization.
   private func updatePointer(with event: NSEvent) {
     let location = convert(event.locationInWindow, from: nil)
-    guard bounds.width > 0, bounds.height > 0, drawableSize.width > 0 else { return }
-    let scaleX = drawableSize.width / bounds.width
-    let scaleY = drawableSize.height / bounds.height
+    guard bounds.width > 0, bounds.height > 0 else { return }
     pointerPosition = Point(
-      x: Float(location.x * scaleX),
-      y: Float((bounds.height - location.y) * scaleY)
+      x: Float(location.x),
+      y: Float(bounds.height - location.y)
     )
   }
 }

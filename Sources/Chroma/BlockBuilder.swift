@@ -3,7 +3,16 @@
 @resultBuilder
 public enum BlockBuilder {
   public static func buildBlock(_ components: (any Block)...) -> TupleBlock {
-    TupleBlock(children: components)
+    // Control-flow builder methods (`if`, `switch`, and `for`) return a
+    // TupleBlock. Flatten those structural tuples here so a surrounding stack
+    // receives the branch/loop's actual children instead of one overlaying
+    // TupleBlock child.
+    TupleBlock(children: components.flatMap(flatten))
+  }
+
+  private static func flatten(_ component: any Block) -> [any Block] {
+    guard let tuple = component as? TupleBlock else { return [component] }
+    return tuple.children.flatMap(flatten)
   }
 
   public static func buildOptional(_ component: TupleBlock?) -> TupleBlock {

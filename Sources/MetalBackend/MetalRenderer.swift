@@ -13,7 +13,7 @@ import MetalKit
 /// Use ``run(title:)`` for a standalone window, or embed ``contentView`` in
 /// your own AppKit window to host the renderer inside an existing app.
 @MainActor
-public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
+public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, Renderer {
   private let device: MTLDevice
   private let queue: MTLCommandQueue
   private let solidPipeline: MTLRenderPipelineState
@@ -30,6 +30,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
   /// The content rendered every frame. Assign a new block at any time to swap
   /// content without touching the backend.
   public var content: (any Block)?
+  public var onClose: (() -> Void)?
 
   /// The rendering surface to install in a window, exposed opaquely so
   /// application code does not depend on MetalKit. ``run(title:)`` installs
@@ -105,12 +106,18 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
     )
     window.title = title
     window.contentView = mtkView
+    window.delegate = self
     window.center()
     window.makeKeyAndOrderFront(nil)
     window.makeFirstResponder(mtkView)  // Key events route to the input view.
 
     app.activate(ignoringOtherApps: true)
     app.run()
+  }
+
+  public func windowWillClose(_ notification: Notification) {
+    onClose?()
+    NSApplication.shared.terminate(nil)
   }
 
   /// Creates an alpha-blended pipeline for the given shader functions.
@@ -164,13 +171,22 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
     updateFrameRate()
     interaction.beginFrame(input: self.mtkView.frameInput())
 
-    let viewport = Size(width: Float(drawable.texture.width), height: Float(drawable.texture.height))
+    // Chroma lays out in AppKit points. The drawable may contain two pixels per
+    // point on Retina displays; using its pixel dimensions here made every UI
+    // metric appear half-sized and put pointer hit regions in a different space.
+    let viewport = Size(width: Float(mtkView.bounds.width), height: Float(mtkView.bounds.height))
     var drawList = DrawList()
     if let content {
       BlockEngine.draw(content, into: &drawList, in: Rect(origin: .zero, size: viewport))
     }
     interaction.endFrame()
-    render(drawList, viewport: viewport, into: enc)
+    render(
+      drawList,
+      viewport: viewport,
+      rasterScale: Point(
+        x: Float(drawable.texture.width) / max(1, viewport.width),
+        y: Float(drawable.texture.height) / max(1, viewport.height)),
+      into: enc)
 
     enc.endEncoding()
     cmd.present(drawable)
@@ -205,7 +221,12 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
 
   /// Expands the draw list into shared geometry arrays, then encodes one draw
   /// per batch in draw-list order.
-  private func render(_ drawList: DrawList, viewport: Size, into enc: MTLRenderCommandEncoder) {
+  private func render(
+    _ drawList: DrawList,
+    viewport: Size,
+    rasterScale: Point,
+    into enc: MTLRenderCommandEncoder
+  ) {
     let metrics = FontMetrics()
     let pxToNDC = SIMD2<Float>(2 / viewport.width, 2 / viewport.height)
     func ndc(_ x: Float, _ y: Float) -> SIMD2<Float> {
@@ -390,13 +411,13 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
         let current = scissorStack.last ?? viewportRect
         let clamped = current.intersection(rect) ?? Rect.zero
         scissorStack.append(clamped)
-        enc.setScissorRect(clamped.asMtlScissor)
+        enc.setScissorRect(clamped.asMtlScissor(scale: rasterScale))
       case .popClip:
         _ = scissorStack.popLast()
         if let prev = scissorStack.last {
-          enc.setScissorRect(prev.asMtlScissor)
+          enc.setScissorRect(prev.asMtlScissor(scale: rasterScale))
         } else {
-          enc.setScissorRect(viewportRect.asMtlScissor)
+          enc.setScissorRect(viewportRect.asMtlScissor(scale: rasterScale))
         }
       }
     }
@@ -411,14 +432,14 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, Renderer {
 import Metal
 
 extension Rect {
-  /// Converts a pixel-space `Rect` into a `MTLScissorRect` for the
-  /// render-command encoder. Metal scissor uses the same top-left origin.
-  var asMtlScissor: MTLScissorRect {
+  /// Converts a logical point-space rectangle into a drawable-pixel scissor.
+  /// Metal scissor coordinates use the same top-left origin.
+  func asMtlScissor(scale: Point) -> MTLScissorRect {
     MTLScissorRect(
-      x: Int(minX.rounded(.down)),
-      y: Int(minY.rounded(.down)),
-      width: Int(size.width.rounded(.up)),
-      height: Int(size.height.rounded(.up))
+      x: Int((minX * scale.x).rounded(.down)),
+      y: Int((minY * scale.y).rounded(.down)),
+      width: Int((size.width * scale.x).rounded(.up)),
+      height: Int((size.height * scale.y).rounded(.up))
     )
   }
 }
