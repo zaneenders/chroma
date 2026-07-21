@@ -440,6 +440,22 @@ public final class Interaction {
 
   // MARK: Command application
 
+  /// Moves the cursor to the leaf with `id`, if it exists in the most recent
+  /// tree, and optionally starts an editing session on it with the caret at
+  /// the end of its text (clamped on the field's next draw).
+  ///
+  /// Use sparingly — one cursor means programmatic focus steals from the
+  /// user. Intended for one-shot requests like focusing a chat composer
+  /// after launch or after a modal closes.
+  public func focus(_ id: WidgetID, editing: Bool = false) {
+    guard let tree, let path = tree.findLeaf(id) else { return }
+    moveCursor(to: path)
+    if editing {
+      editingLeaf = id
+      caretOffset = .max
+    }
+  }
+
   /// Walks the cursor to `path` by generating the macro between here and
   /// there and running it through the normal command path, recording it as
   /// the last pointer macro.
