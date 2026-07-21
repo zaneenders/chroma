@@ -25,6 +25,10 @@ public enum TextEditEvent: Equatable, Sendable {
   case moveCaretToStart
   /// Move the caret to the end of the text.
   case moveCaretToEnd
+  /// Commit the field's text (return). Fields with an `onSubmit` handler fire
+  /// it and keep editing; without one this ends the session like
+  /// ``endEditing``.
+  case submit
   /// Leave insert mode (escape, or return on a single-line field).
   case endEditing
 }

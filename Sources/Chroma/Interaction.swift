@@ -334,12 +334,15 @@ public final class Interaction {
   ///
   /// `text` is the widget's current value, re-read every frame; `onChange`
   /// fires at most once per frame with the result of applying all of the
-  /// frame's edits.
+  /// frame's edits. `onSubmit`, when provided, fires on ``TextEditEvent/submit``
+  /// (return) with the field's current text and the session stays in insert
+  /// mode; without it, submit ends the session like ``TextEditEvent/endEditing``.
   public func textInputBehavior(
     id: WidgetID,
     rect: Rect,
     text: String,
-    onChange: (String) -> Void
+    onChange: (String) -> Void,
+    onSubmit: ((String) -> Void)? = nil
   ) -> TextInputState {
     guard let parent = builderStack.last else {
       preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")
@@ -387,6 +390,18 @@ public final class Interaction {
           caretOffset = 0
         case .moveCaretToEnd:
           caretOffset = characters.count
+        case .submit:
+          if let onSubmit {
+            if changed {
+              onChange(String(characters))
+              changed = false
+            }
+            onSubmit(String(characters))
+          } else {
+            editingLeaf = nil
+            editing = false
+            break eventLoop
+          }
         case .endEditing:
           editingLeaf = nil
           editing = false

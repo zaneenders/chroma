@@ -26,6 +26,7 @@ public struct TextField: PrimitiveBlock {
   public var placeholder: String
   public var getText: () -> String
   public var onChange: (String) -> Void
+  public var onSubmit: ((String) -> Void)?
   public var fontScale: Float
   public var padding: Float
   public var textColor: Color
@@ -53,12 +54,14 @@ public struct TextField: PrimitiveBlock {
     borderColor: Color = Color(r: 0.22, g: 0.22, b: 0.32, a: 1),
     editingBorderColor: Color = Color(r: 0.3, g: 0.6, b: 1.0, a: 1),
     text getText: @escaping () -> String,
-    onChange: @escaping (String) -> Void
+    onChange: @escaping (String) -> Void,
+    onSubmit: ((String) -> Void)? = nil
   ) {
     self.id = id ?? WidgetID("field:\(placeholder)")
     self.placeholder = placeholder
     self.getText = getText
     self.onChange = onChange
+    self.onSubmit = onSubmit
     self.fontScale = fontScale
     self.padding = padding
     self.textColor = textColor
@@ -84,7 +87,7 @@ public struct TextField: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
     let metrics = FontMetrics()
     let state = Interaction.current.textInputBehavior(
-      id: id, rect: rect, text: getText(), onChange: onChange)
+      id: id, rect: rect, text: getText(), onChange: onChange, onSubmit: onSubmit)
 
     drawList.fillRect(
       rect,

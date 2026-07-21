@@ -109,6 +109,15 @@ final class ChromaInputView: MTKView {
   /// normal and insert mode.
   override func keyDown(with event: NSEvent) {
     if Interaction.current.isTextEditing {
+      // Paste: command-V inserts the clipboard's string as text.
+      if event.modifierFlags.contains(.command),
+        event.charactersIgnoringModifiers == "v",
+        let pasted = NSPasteboard.general.string(forType: .string),
+        !pasted.isEmpty
+      {
+        pendingTextEvents.append(.insert(pasted))
+        return
+      }
       if let edit = Self.textEditEvent(for: event) {
         pendingTextEvents.append(edit)
       } else {
@@ -156,7 +165,7 @@ final class ChromaInputView: MTKView {
   private static func textEditEvent(for event: NSEvent) -> TextEditEvent? {
     switch event.keyCode {
     case 53: return .endEditing  // escape
-    case 36, 76: return .endEditing  // return, keypad enter
+    case 36, 76: return .submit  // return, keypad enter
     case 51: return .backspace
     case 117: return .deleteForward
     case 123: return .moveCaretLeft
