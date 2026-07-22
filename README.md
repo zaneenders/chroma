@@ -2,5 +2,5 @@
 
 Immediate mode UI library
 
-⚠️ Not stable, Heavy AI usage, currently dog fooding the API.
+⚠️ Unstable: Heavy AI • Active API [dogfooding](https://github.com/zaneenders/scribe)
 
