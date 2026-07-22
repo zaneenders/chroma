@@ -128,11 +128,13 @@ public struct VStack: PrimitiveBlock {
   ) {
     self.spacing = spacing
     self.alignment = alignment
-    self.children = content().children
+    self.children = BlockBuilder.flattenedChildren(content().children)
   }
 
   @MainActor public var expandsHorizontally: Bool {
-    children.contains { BlockEngine.expandsHorizontally($0) }
+    children.contains { child in
+      !(child is Spacer) && BlockEngine.expandsHorizontally(child)
+    }
   }
 
   @MainActor public var expandsVertically: Bool {
@@ -143,6 +145,9 @@ public struct VStack: PrimitiveBlock {
   /// height; expanding children split the leftover height equally.
   @MainActor private func layout(proposal: Size) -> [Size] {
     var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
+    for index in sizes.indices where children[index] is Spacer {
+      sizes[index].width = 0
+    }
     var fixedTotal: Float = 0
     var expanderCount = 0
     for (child, size) in zip(children, sizes) {
@@ -207,7 +212,7 @@ public struct HStack: PrimitiveBlock {
   ) {
     self.spacing = spacing
     self.alignment = alignment
-    self.children = content().children
+    self.children = BlockBuilder.flattenedChildren(content().children)
   }
 
   @MainActor public var expandsHorizontally: Bool {
@@ -215,13 +220,18 @@ public struct HStack: PrimitiveBlock {
   }
 
   @MainActor public var expandsVertically: Bool {
-    children.contains { BlockEngine.expandsVertically($0) }
+    children.contains { child in
+      !(child is Spacer) && BlockEngine.expandsVertically(child)
+    }
   }
 
   /// Child sizes against `proposal`: fixed children keep their measured
   /// width; expanding children split the leftover width equally.
   @MainActor private func layout(proposal: Size) -> [Size] {
     var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
+    for index in sizes.indices where children[index] is Spacer {
+      sizes[index].height = 0
+    }
     var fixedTotal: Float = 0
     var expanderCount = 0
     for (child, size) in zip(children, sizes) {
@@ -280,7 +290,7 @@ public struct ZStack: PrimitiveBlock {
 
   public init(alignment: Alignment = .center, @BlockBuilder content: () -> TupleBlock) {
     self.alignment = alignment
-    self.children = content().children
+    self.children = BlockBuilder.flattenedChildren(content().children)
   }
 
   @MainActor public var expandsHorizontally: Bool {

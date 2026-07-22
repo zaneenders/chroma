@@ -7,7 +7,13 @@ public enum BlockBuilder {
     // TupleBlock. Flatten those structural tuples here so a surrounding stack
     // receives the branch/loop's actual children instead of one overlaying
     // TupleBlock child.
-    TupleBlock(children: components.flatMap(flatten))
+    TupleBlock(children: flattenedChildren(Array(components)))
+  }
+
+  /// Unwraps nested ``TupleBlock`` values so stacks lay out siblings instead
+  /// of overlaying them in one rect.
+  public static func flattenedChildren(_ components: [any Block]) -> [any Block] {
+    components.flatMap(flatten)
   }
 
   private static func flatten(_ component: any Block) -> [any Block] {
