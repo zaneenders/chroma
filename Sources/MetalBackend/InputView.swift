@@ -108,6 +108,19 @@ final class ChromaInputView: MTKView {
   /// ``TextEditEvent``s instead — the same keymap swap vim makes between
   /// normal and insert mode.
   override func keyDown(with event: NSEvent) {
+    // Give the app's visible selection first chance at Cmd+C even while a text
+    // field owns keyboard focus. TextField currently has a caret but no range
+    // selection, so routing copy exclusively through editing mode made
+    // transcript selections impossible to copy while the composer was focused.
+    if event.modifierFlags.contains(.command),
+      event.charactersIgnoringModifiers?.lowercased() == "c",
+      let text = Interaction.current.onCopy?(),
+      !text.isEmpty
+    {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(text, forType: .string)
+      return
+    }
     if Interaction.current.isTextEditing {
       // Paste: command-V inserts the clipboard's string as text.
       if event.modifierFlags.contains(.command),

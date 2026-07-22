@@ -101,6 +101,33 @@ public final class Interaction {
   /// no hover macros.
   private var lastPointerPosition = Point(x: -1, y: -1)
 
+  // MARK: Drag tracking (for text selection)
+
+  /// The position where the most recent pointer press occurred, while the
+  /// press is still held. Nil between drags.
+  public private(set) var dragOrigin: Point? = nil
+  /// The current pointer position during an active drag. Updated every frame.
+  public private(set) var dragCurrent: Point = Point(x: -1, y: -1)
+  /// `true` while a pointer drag is in progress (press held + moved).
+  public var isDragging: Bool { dragOrigin != nil && input.pointerDown }
+  /// The bounding rect of the active drag, from origin to current position.
+  /// Nil when no drag is in progress.
+  public var dragRect: Rect? {
+    guard let origin = dragOrigin, isDragging else { return nil }
+    return Rect(
+      x: min(origin.x, dragCurrent.x),
+      y: min(origin.y, dragCurrent.y),
+      width: abs(dragCurrent.x - origin.x),
+      height: abs(dragCurrent.y - origin.y))
+  }
+
+  // MARK: Clipboard
+
+  /// Called by the backend when the user presses Cmd+C (or equivalent) while
+  /// not in text-editing mode. Return the string to copy to the system
+  /// clipboard, or nil to ignore.
+  public var onCopy: (() -> String?)?
+
   /// Retained vertical scroll positions and prior limits, keyed by a stable
   /// scroll-view ID.
   private var scrollOffsets: [WidgetID: Float] = [:]
@@ -151,12 +178,30 @@ public final class Interaction {
     clipStack = []
     buildingScrollViewports = []
 
+    // Update text selection state from the previous frame's drag, then
+    // clear registries so this frame's draw can re-register layouts.
+    if input.pointerPressed {
+      TextSelectionManager.shared.clear()
+    }
+    TextSelectionManager.shared.updateFromDrag()
+    PlainTextLayoutRegistry.clear()
+
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
       if let editingLeaf, editingLeaf != selectedLeafID {
         self.editingLeaf = nil  // The cursor left the field: insert mode ends.
       }
       lastPointerPosition = input.pointerPosition
+      // Drag tracking
+      if input.pointerPressed {
+        dragOrigin = input.pointerPressPosition
+      }
+      if input.pointerReleased {
+        dragOrigin = nil
+      }
+      if isDragging {
+        dragCurrent = input.pointerPosition
+      }
     }
 
     guard let tree else { return }  // First frame: no tree to navigate yet.
