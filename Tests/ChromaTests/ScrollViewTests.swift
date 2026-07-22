@@ -9,6 +9,26 @@ private struct FixedContent: PrimitiveBlock {
   }
 }
 
+private final class DrawCounter {
+  var measured: [Int] = []
+  var drawn: [Int] = []
+}
+
+private struct CountedRow: PrimitiveBlock {
+  let index: Int
+  let height: Float
+  let counter: DrawCounter
+
+  func sizeThatFits(_ proposal: Size) -> Size {
+    counter.measured.append(index)
+    return Size(width: proposal.width, height: height)
+  }
+
+  func draw(into drawList: inout DrawList, in rect: Rect) {
+    counter.drawn.append(index)
+  }
+}
+
 private struct RowContent: PrimitiveBlock {
   let height: Float
   let color: Color
@@ -113,6 +133,38 @@ struct ScrollViewTests {
     }
     #expect(rowRects.map(\.minY) == [0, 10, 20])
     #expect(interaction.scrollLimit(for: scrollID) == 10)
+  }
+
+  @Test func lazyStackMeasuresRowsOnceAndOnlyDrawsVisibleRows() {
+    let interaction = Interaction()
+    let controller = ScrollViewController()
+    let counter = DrawCounter()
+    let rows = (0..<10).map { index in
+      LazyVStack.Row(
+        id: WidgetID("row-\(index)"),
+        content: CountedRow(index: index, height: 10, counter: counter))
+    }
+
+    func frame() {
+      Interaction.current = interaction
+      interaction.beginFrame(input: InputState())
+      var list = DrawList()
+      let view = LazyVStack(
+        id: scrollID, controller: controller, rows: rows)
+      BlockEngine.draw(view, into: &list, in: viewport)
+      interaction.endFrame()
+    }
+
+    frame()
+    #expect(counter.measured == Array(0..<10))
+    #expect(counter.drawn == [0, 1, 2])
+
+    counter.measured = []
+    counter.drawn = []
+    controller.scroll(to: 50)
+    frame()
+    #expect(counter.measured.isEmpty)
+    #expect(counter.drawn == [4, 5, 6, 7])
   }
 
   @Test func clippedLeafCannotBeHitOutsideViewport() {
