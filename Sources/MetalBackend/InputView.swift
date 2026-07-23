@@ -100,9 +100,10 @@ final class ChromaInputView: MTKView {
   /// The keymap: the only device-specific piece of input. Keys compile
   /// directly into the framework's input language — mirrored home-row pairs
   /// (`d`/`f` left hand, `j`/`k` right hand) for the four directions, `l`
-  /// to step in, `s` to step out, and return or space to activate. Arrow
-  /// keys are aliases for the directions. Held keys repeat via AppKit's key
-  /// repeat, which is exactly repeated movement.
+  /// to step in, `s` to step out, return or space to activate, and tab or
+  /// shift-tab to cycle the leaves in document order. Arrow keys are
+  /// aliases for the directions. Held keys repeat via AppKit's key repeat,
+  /// which is exactly repeated movement.
   ///
   /// While a text field owns the cursor (insert mode), keys become
   /// ``TextEditEvent``s instead — the same keymap swap vim makes between
@@ -140,6 +141,8 @@ final class ChromaInputView: MTKView {
     }
     let command: UICommand?
     switch event.keyCode {
+    case 48:  // tab: cycle the leaves, shift-tab backwards
+      command = event.modifierFlags.contains(.shift) ? .previousLeaf : .nextLeaf
     case 123: command = .left
     case 124: command = .right
     case 125: command = .down

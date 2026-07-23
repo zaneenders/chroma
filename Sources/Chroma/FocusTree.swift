@@ -85,6 +85,30 @@ extension FocusNode {
     return nil
   }
 
+  /// The path of the last leaf in depth-first order.
+  func lastLeafPath() -> [Int]? {
+    for (index, child) in children.enumerated().reversed() {
+      if child.isLeaf { return [index] }
+      if let sub = child.lastLeafPath() { return [index] + sub }
+    }
+    return nil
+  }
+
+  /// Every leaf path in depth-first order. This is the flattened navigation
+  /// order: because sibling indices increase along DFS, lexicographic
+  /// comparison of these paths is document order.
+  func leafPaths() -> [[Int]] {
+    var result: [[Int]] = []
+    for (index, child) in children.enumerated() {
+      if child.isLeaf {
+        result.append([index])
+      } else {
+        result.append(contentsOf: child.leafPaths().map { [index] + $0 })
+      }
+    }
+    return result
+  }
+
   /// The path of the leaf with `id`, depth-first. Used to re-attach the
   /// cursor to the same widget after the tree is rebuilt, wherever it moved.
   func findLeaf(_ id: WidgetID) -> [Int]? {

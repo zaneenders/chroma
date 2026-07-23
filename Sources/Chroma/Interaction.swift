@@ -4,12 +4,18 @@
 ///
 /// # UI is a tree, so input is tree movement
 ///
-/// The framework's whole input language is the seven ``UICommand``s —
-/// `up`, `down`, `left`, `right`, `in`, `out`, and `activate` — moving a
-/// single cursor over the focus tree. Stacks are groups (their orientation
+/// The framework's whole input language is the ``UICommand`` set — `up`,
+/// `down`, `left`, `right`, `in`, `out`, `activate`, and the flattened
+/// `nextLeaf` / `previousLeaf` leaf-cycling commands — moving a single
+/// cursor over the focus tree. Stacks are groups (their orientation
 /// decides which commands move between their children); ``Interactive``
 /// widgets are leaves. Groups containing no leaves are pruned, so the tree
 /// is exactly the navigable UI.
+///
+/// Directional movement is flattened: a keypress takes the strict sibling
+/// move when one applies, bubbles up to the nearest ancestor where it does
+/// otherwise, and wraps around the leaf order when nothing applies — no
+/// dead keys, no clamped ends.
 ///
 /// Every device compiles into the language:
 ///
@@ -512,10 +518,7 @@ public final class Interaction {
     if !commands.isEmpty { lastMacro = commands }
   }
 
-  /// Applies one command to the cursor against the current tree. Movement
-  /// is strict: sibling moves only apply when the parent group's axis
-  /// matches the command's direction, and clamp at both ends. (Skips that
-  /// bubble upward are a layer to build on top of this core.)
+  /// Applies one command to the cursor against the current tree.
   private func apply(_ command: UICommand) {
     guard let tree, let selection else { return }
     switch command {
@@ -531,23 +534,81 @@ public final class Interaction {
       }
     case .pageUp, .pageDown, .home, .end:
       return  // Viewport containers consume these during their draw.
+    case .nextLeaf, .previousLeaf:
+      cycleLeaf(forward: command == .nextLeaf)
     case .up, .down, .left, .right:
-      guard !selection.isEmpty,
-        let parent = tree.node(at: Array(selection.dropLast())),
-        let axis = parent.axis,
-        let index = selection.last
-      else { return }
-      let delta: Int
-      switch (axis, command) {
-      case (.vertical, .up), (.horizontal, .left), (.none, .up), (.none, .left):
-        delta = -1
-      case (.vertical, .down), (.horizontal, .right), (.none, .down), (.none, .right):
-        delta = 1
-      default:
-        return  // The command's direction doesn't apply to this group's axis.
+      flattenedMove(command)
+    }
+  }
+
+  /// The step a directional command takes inside a group of `axis`, or nil
+  /// when the direction doesn't apply to that axis. Axis-less (overlapping)
+  /// groups accept every direction.
+  private func directionDelta(_ command: UICommand, axis: FocusAxis) -> Int? {
+    switch (axis, command) {
+    case (.vertical, .up), (.horizontal, .left), (.none, .up), (.none, .left):
+      return -1
+    case (.vertical, .down), (.horizontal, .right), (.none, .down), (.none, .right):
+      return 1
+    default:
+      return nil
+    }
+  }
+
+  /// Flattened directional movement: a strict sibling move when one applies
+  /// at the cursor's own level; otherwise the command bubbles up to the
+  /// nearest ancestor where it applies, landing on the edge leaf of the
+  /// subtree entered; and when no ancestor allows the move, the cursor wraps
+  /// around the whole tree's leaf order. A directional keypress always moves
+  /// somewhere — there are no dead keys and no clamped ends.
+  private func flattenedMove(_ command: UICommand) {
+    guard let tree, let selection else { return }
+    let forward = command == .down || command == .right
+
+    // Walk from the cursor's own group upward looking for a level where the
+    // move applies. A move at the cursor's own level is the classic sibling
+    // move and lands on the node itself (group or leaf); a bubbled move
+    // enters a new subtree, so it lands on that subtree's edge leaf.
+    var level = selection.count - 1
+    while level >= 0 {
+      let parentPath = Array(selection.prefix(level))
+      guard let parent = tree.node(at: parentPath), let axis = parent.axis else { break }
+      if let delta = directionDelta(command, axis: axis) {
+        let next = selection[level] + delta
+        if next >= 0, next < parent.children.count {
+          var newPath = parentPath + [next]
+          if level < selection.count - 1 {
+            // Bubbled: descend to the edge leaf of the entered subtree.
+            while let node = tree.node(at: newPath), !node.isLeaf, !node.children.isEmpty {
+              newPath.append(forward ? 0 : node.children.count - 1)
+            }
+          }
+          self.selection = newPath
+          return
+        }
       }
-      let clamped = min(max(index + delta, 0), parent.children.count - 1)
-      self.selection = Array(selection.dropLast()) + [clamped]
+      level -= 1
+    }
+
+    // Nothing applied at any level: wrap around the flattened leaf order.
+    let wrapTarget = forward ? tree.firstLeafPath() : tree.lastLeafPath()
+    if let wrapTarget {
+      self.selection = wrapTarget
+    }
+  }
+
+  /// Moves the cursor through the leaves in depth-first (document) order,
+  /// wrapping at the ends. DFS paths compare lexicographically in document
+  /// order, so a cursor on a group resolves naturally: `nextLeaf` selects
+  /// the first leaf after it, `previousLeaf` the last leaf before it.
+  private func cycleLeaf(forward: Bool) {
+    guard let tree, let selection else { return }
+    let leaves = tree.leafPaths()
+    guard let first = leaves.first, let last = leaves.last else { return }
+    if forward {
+      self.selection = leaves.first(where: { selection.lexicographicallyPrecedes($0) }) ?? first
+    } else {
+      self.selection = leaves.last(where: { $0.lexicographicallyPrecedes(selection) }) ?? last
     }
   }
 }

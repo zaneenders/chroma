@@ -1,7 +1,7 @@
 import Testing
 @testable import Chroma
 
-/// Tests for tree navigation: the one-cursor model, the six movement
+/// Tests for tree navigation: the one-cursor model, flattened movement
 /// commands, pointer-to-macro compilation, and click/activate semantics.
 ///
 /// Tests drive `Interaction` the way the backend and blocks do:
@@ -75,16 +75,21 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 0])
   }
 
-  /// `down` walks siblings in a vertical group and clamps at the end;
-  /// `up` walks back.
-  @Test func verticalMovementWalksAndClamps() {
+  /// `down` walks siblings in a vertical group; past the last sibling the
+  /// cursor wraps around the flattened leaf order, and `up` wraps the same
+  /// way back.
+  @Test func verticalMovementWalksAndWraps() {
     let ctx = Interaction()
     select(ctx, [.down])
     #expect(ctx.selection == [0, 1])
     select(ctx, [.down])
     #expect(ctx.selection == [0, 2], "the horizontal row group is a sibling")
     select(ctx, [.down])
-    #expect(ctx.selection == [0, 2], "clamped at the last sibling")
+    #expect(ctx.selection == [0, 0], "past the last sibling the cursor wraps to the first leaf")
+    select(ctx, [.up])
+    #expect(ctx.selection == [0, 2, 1], "up from the first leaf wraps to the last leaf")
+    select(ctx, [.out])
+    #expect(ctx.selection == [0, 2])
     select(ctx, [.up, .up])
     #expect(ctx.selection == [0, 0])
   }
@@ -105,18 +110,104 @@ struct NavigationTests {
     #expect(ctx.selection == [], "out at the root stays put")
   }
 
-  /// `right`/`left` move inside a horizontal group and clamp; vertical
-  /// commands are strict no-ops there (skips are a layer on top).
-  @Test func horizontalMovementRespectsAxis() {
+  /// `right`/`left` move inside a horizontal group. When a direction
+  /// doesn't apply or runs out of siblings, the command bubbles up looking
+  /// for a level where it works and wraps around the leaf order when none
+  /// does — directional keys never dead-end.
+  @Test func horizontalMovementBubblesAndWraps() {
     let ctx = Interaction()
     select(ctx, [.down, .down, .in, .right])
     #expect(ctx.selection == [0, 2, 1])
-    select(ctx, [.right])
-    #expect(ctx.selection == [0, 2, 1], "clamped at the last sibling")
-    select(ctx, [.down])
-    #expect(ctx.selection == [0, 2, 1], "down does not apply in a horizontal group")
     select(ctx, [.left])
+    #expect(ctx.selection == [0, 2, 0], "a plain sibling move still applies within the row")
+    select(ctx, [.right, .right])
+    #expect(ctx.selection == [0, 0], "past the last sibling with no horizontal ancestor, right wraps to the first leaf")
+    select(ctx, [.down, .down, .in, .right])
+    #expect(ctx.selection == [0, 2, 1])
+    select(ctx, [.down])
+    #expect(
+      ctx.selection == [0, 0],
+      "down doesn't apply inside the row, so it bubbles to the root, finds no next sibling, and wraps")
+  }
+
+  /// A direction that doesn't apply inside a subgroup bubbles up to the
+  /// nearest ancestor where it does, landing on the edge leaf of the
+  /// subtree entered.
+  @Test func movementBubblesUpToTheNextSubtree() {
+    let ctx = Interaction()
+    // root (vertical)
+    // ├─ row1 (horizontal): a, b
+    // └─ row2 (horizontal): c, d
+    let drawTwoRows: @MainActor (Interaction, inout [WidgetID: ButtonState]) -> Void = { ctx, states in
+      ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+      ctx.beginGroup(.horizontal, rect: Rect(x: 0, y: 0, width: 100, height: 20))
+      states[WidgetID("a")] = ctx.interactiveBehavior(
+        id: WidgetID("a"), rect: Rect(x: 0, y: 0, width: 50, height: 20))
+      states[WidgetID("b")] = ctx.interactiveBehavior(
+        id: WidgetID("b"), rect: Rect(x: 50, y: 0, width: 50, height: 20))
+      ctx.endGroup()
+      ctx.beginGroup(.horizontal, rect: Rect(x: 0, y: 20, width: 100, height: 20))
+      states[WidgetID("c")] = ctx.interactiveBehavior(
+        id: WidgetID("c"), rect: Rect(x: 0, y: 20, width: 50, height: 20))
+      states[WidgetID("d")] = ctx.interactiveBehavior(
+        id: WidgetID("d"), rect: Rect(x: 50, y: 20, width: 50, height: 20))
+      ctx.endGroup()
+      ctx.endGroup()
+    }
+    frame(ctx, draw: drawTwoRows)
+    #expect(ctx.selection == [0, 0, 0], "cursor starts on a")
+    frame(ctx, input: InputState(commands: [.down]), draw: drawTwoRows)
+    #expect(ctx.selection == [0, 1, 0], "down bubbled out of row1 into row2's first leaf")
+    frame(ctx, input: InputState(commands: [.up]), draw: drawTwoRows)
+    #expect(ctx.selection == [0, 0, 1], "up bubbled back into row1's edge leaf in document order")
+    frame(ctx, input: InputState(commands: [.down]), draw: drawTwoRows)
+    #expect(ctx.selection == [0, 1, 0], "down from b also lands on row2's first leaf")
+  }
+
+  /// With the cursor parked on the root group, a direction heads to the
+  /// near edge leaf instead of doing nothing.
+  @Test func directionFromTheRootPicksAnEdgeLeaf() {
+    let ctx = Interaction()
+    frame(ctx)
+    select(ctx, [.out, .out])
+    #expect(ctx.selection == [])
+    select(ctx, [.down])
+    #expect(ctx.selection == [0, 0], "down wraps the root cursor to the first leaf")
+    select(ctx, [.out, .out])
+    #expect(ctx.selection == [])
+    select(ctx, [.up])
+    #expect(ctx.selection == [0, 2, 1], "up wraps the root cursor to the last leaf")
+  }
+
+  /// `nextLeaf` / `previousLeaf` cycle the flattened leaf order, wrapping
+  /// at the ends — the backend's tab and shift-tab.
+  @Test func leafCyclingWalksDocumentOrder() {
+    let ctx = Interaction()
+    frame(ctx)
+    #expect(ctx.selection == [0, 0])
+    select(ctx, [.nextLeaf])
+    #expect(ctx.selection == [0, 1])
+    select(ctx, [.nextLeaf])
+    #expect(ctx.selection == [0, 2, 0], "cycling descends into groups")
+    select(ctx, [.nextLeaf])
+    #expect(ctx.selection == [0, 2, 1])
+    select(ctx, [.nextLeaf])
+    #expect(ctx.selection == [0, 0], "wrapped past the last leaf")
+    select(ctx, [.previousLeaf])
+    #expect(ctx.selection == [0, 2, 1], "wrapped back to the last leaf")
+  }
+
+  /// Cycling from a group cursor resolves by document order: forward picks
+  /// the group's first descendant leaf, backward the leaf before the group.
+  @Test func leafCyclingFromAGroup() {
+    let ctx = Interaction()
+    select(ctx, [.down, .down])
+    #expect(ctx.selection == [0, 2], "cursor on the row group")
+    select(ctx, [.nextLeaf])
     #expect(ctx.selection == [0, 2, 0])
+    select(ctx, [.out])
+    select(ctx, [.previousLeaf])
+    #expect(ctx.selection == [0, 1])
   }
 
   // MARK: Activation
