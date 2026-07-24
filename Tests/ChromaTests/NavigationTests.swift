@@ -75,23 +75,20 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 0])
   }
 
-  /// `down` walks siblings in a vertical group; past the last sibling the
-  /// cursor wraps around the flattened leaf order, and `up` wraps the same
-  /// way back.
-  @Test func verticalMovementWalksAndWraps() {
+  /// `down` walks siblings in a vertical group and stops at the end;
+  /// `up` walks back and likewise stops at the start.
+  @Test func verticalMovementWalksAndStops() {
     let ctx = Interaction()
     select(ctx, [.down])
     #expect(ctx.selection == [0, 1])
     select(ctx, [.down])
     #expect(ctx.selection == [0, 2], "the horizontal row group is a sibling")
     select(ctx, [.down])
-    #expect(ctx.selection == [0, 0], "past the last sibling the cursor wraps to the first leaf")
-    select(ctx, [.up])
-    #expect(ctx.selection == [0, 2, 1], "up from the first leaf wraps to the last leaf")
-    select(ctx, [.out])
-    #expect(ctx.selection == [0, 2])
+    #expect(ctx.selection == [0, 2], "past the last sibling the cursor stays put")
     select(ctx, [.up, .up])
     #expect(ctx.selection == [0, 0])
+    select(ctx, [.up])
+    #expect(ctx.selection == [0, 0], "before the first sibling the cursor stays put")
   }
 
   /// `in` steps into a group onto its first child; `out` climbs back to the
@@ -112,22 +109,19 @@ struct NavigationTests {
 
   /// `right`/`left` move inside a horizontal group. When a direction
   /// doesn't apply or runs out of siblings, the command bubbles up looking
-  /// for a level where it works and wraps around the leaf order when none
-  /// does — directional keys never dead-end.
-  @Test func horizontalMovementBubblesAndWraps() {
+  /// for a level where it works and stops when none does.
+  @Test func horizontalMovementBubblesAndStops() {
     let ctx = Interaction()
     select(ctx, [.down, .down, .in, .right])
     #expect(ctx.selection == [0, 2, 1])
     select(ctx, [.left])
     #expect(ctx.selection == [0, 2, 0], "a plain sibling move still applies within the row")
     select(ctx, [.right, .right])
-    #expect(ctx.selection == [0, 0], "past the last sibling with no horizontal ancestor, right wraps to the first leaf")
-    select(ctx, [.down, .down, .in, .right])
-    #expect(ctx.selection == [0, 2, 1])
+    #expect(ctx.selection == [0, 2, 1], "past the last sibling the cursor stays put")
     select(ctx, [.down])
     #expect(
-      ctx.selection == [0, 0],
-      "down doesn't apply inside the row, so it bubbles to the root, finds no next sibling, and wraps")
+      ctx.selection == [0, 2, 1],
+      "down bubbles to the root, finds no next sibling, and stays put")
   }
 
   /// A direction that doesn't apply inside a subgroup bubbles up to the
@@ -164,19 +158,15 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 1, 0], "down from b also lands on row2's first leaf")
   }
 
-  /// With the cursor parked on the root group, a direction heads to the
-  /// near edge leaf instead of doing nothing.
-  @Test func directionFromTheRootPicksAnEdgeLeaf() {
+  /// With the cursor parked on the root group, directional movement has no
+  /// parent or sibling target and therefore stays put.
+  @Test func directionFromTheRootStops() {
     let ctx = Interaction()
     frame(ctx)
     select(ctx, [.out, .out])
     #expect(ctx.selection == [])
-    select(ctx, [.down])
-    #expect(ctx.selection == [0, 0], "down wraps the root cursor to the first leaf")
-    select(ctx, [.out, .out])
+    select(ctx, [.down, .up, .left, .right])
     #expect(ctx.selection == [])
-    select(ctx, [.up])
-    #expect(ctx.selection == [0, 2, 1], "up wraps the root cursor to the last leaf")
   }
 
   /// `nextLeaf` / `previousLeaf` cycle the flattened leaf order, wrapping

@@ -13,9 +13,8 @@
 /// is exactly the navigable UI.
 ///
 /// Directional movement is flattened: a keypress takes the strict sibling
-/// move when one applies, bubbles up to the nearest ancestor where it does
-/// otherwise, and wraps around the leaf order when nothing applies — no
-/// dead keys, no clamped ends.
+/// move when one applies and otherwise bubbles up to the nearest ancestor
+/// where it does. At the outer edge it stops, preserving the current cursor.
 ///
 /// Every device compiles into the language:
 ///
@@ -558,9 +557,7 @@ public final class Interaction {
   /// Flattened directional movement: a strict sibling move when one applies
   /// at the cursor's own level; otherwise the command bubbles up to the
   /// nearest ancestor where it applies, landing on the edge leaf of the
-  /// subtree entered; and when no ancestor allows the move, the cursor wraps
-  /// around the whole tree's leaf order. A directional keypress always moves
-  /// somewhere — there are no dead keys and no clamped ends.
+  /// subtree entered. When no ancestor allows the move, the cursor stays put.
   private func flattenedMove(_ command: UICommand) {
     guard let tree, let selection else { return }
     let forward = command == .down || command == .right
@@ -590,11 +587,7 @@ public final class Interaction {
       level -= 1
     }
 
-    // Nothing applied at any level: wrap around the flattened leaf order.
-    let wrapTarget = forward ? tree.firstLeafPath() : tree.lastLeafPath()
-    if let wrapTarget {
-      self.selection = wrapTarget
-    }
+    // Nothing applied at any level: this is the outer edge, so stay put.
   }
 
   /// Moves the cursor through the leaves in depth-first (document) order,

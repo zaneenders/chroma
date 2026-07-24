@@ -10,8 +10,7 @@
 ///
 /// Directional movement is flattened: a strict sibling move applies when it
 /// can, otherwise the command bubbles up to the nearest ancestor where it
-/// does apply, and if nothing applies the cursor wraps around the tree's
-/// leaf order — so a directional keypress always moves somewhere.
+/// does apply. At the outer edge the cursor stops instead of wrapping.
 /// ``nextLeaf`` / ``previousLeaf`` skip the tree structure entirely and
 /// cycle the leaves in depth-first (document) order, wrapping at the ends.
 ///
@@ -19,17 +18,17 @@
 /// language; shortcuts, skips, and chords are all expressible as sequences
 /// of these commands.
 public enum UICommand: Equatable, Sendable {
-  /// Move to the previous sibling in a vertical group, bubbling up and
-  /// wrapping when no such move applies.
+  /// Move to the previous sibling in a vertical group, bubbling up when
+  /// needed and stopping when no such move applies.
   case up
-  /// Move to the next sibling in a vertical group, bubbling up and
-  /// wrapping when no such move applies.
+  /// Move to the next sibling in a vertical group, bubbling up when needed
+  /// and stopping when no such move applies.
   case down
-  /// Move to the previous sibling in a horizontal group, bubbling up and
-  /// wrapping when no such move applies.
+  /// Move to the previous sibling in a horizontal group, bubbling up when
+  /// needed and stopping when no such move applies.
   case left
-  /// Move to the next sibling in a horizontal group, bubbling up and
-  /// wrapping when no such move applies.
+  /// Move to the next sibling in a horizontal group, bubbling up when needed
+  /// and stopping when no such move applies.
   case right
   /// Step into the selected group, selecting its first child.
   case `in`
