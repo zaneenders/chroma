@@ -1,6 +1,10 @@
 struct Glyph {
-  var rows: [String]
-  init(rows: [String] = Array(repeating: "", count: 7)) {
+  /// Twenty-bit scanlines, top to bottom. Bit 19 is the leftmost pixel.
+  var rows: [UInt32]
+
+  init(rows: [UInt32] = Array(repeating: 0, count: 28)) {
+    precondition(rows.count == 28, "A 20×28 glyph must contain exactly 28 rows")
+    precondition(rows.allSatisfy { $0 < (1 << 20) }, "Glyph rows may contain at most 20 bits")
     self.rows = rows
   }
 }

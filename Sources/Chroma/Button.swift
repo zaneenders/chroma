@@ -23,7 +23,7 @@ public struct Button: Block {
   public init(
     _ label: String,
     id: WidgetID? = nil,
-    fontScale: Float = 2,
+    fontScale: Float = 1,
     textColor: Color = .white,
     idleColor: Color = Color(r: 0.18, g: 0.20, b: 0.30, a: 1),
     hoveredColor: Color = Color(r: 0.24, g: 0.28, b: 0.42, a: 1),

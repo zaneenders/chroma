@@ -43,7 +43,7 @@ public struct TextField: PrimitiveBlock {
   public init(
     _ placeholder: String = "",
     id: WidgetID? = nil,
-    fontScale: Float = 2,
+    fontScale: Float = 1,
     padding: Float = 8,
     textColor: Color = .white,
     placeholderColor: Color = Color(r: 0.45, g: 0.45, b: 0.55, a: 1),

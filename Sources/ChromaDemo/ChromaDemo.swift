@@ -504,7 +504,7 @@ private struct AsciiPanel: PrimitiveBlock {
       let last = min(first + 0x0f, 0x7e)
       return Array(String(format: "%02X  ", first).utf8) + (first...last).map(UInt8.init)
     }
-    let lines = [Array("5x7  PRINTABLE  ASCII  20..7E".utf8)] + printableRows
+    let lines = [Array("20x28 PRINTABLE  ASCII  20..7E".utf8)] + printableRows
 
     // Fit the specimen to the assigned rect with an integer text scale.
     let metrics = FontMetrics()
@@ -581,7 +581,7 @@ private struct Theme {
   var headerHeight: Float = 48
   var statusHeight: Float = 32
   var itemHeight: Float = 36
-  var textScale: Float = 2
+  var textScale: Float = 1
 
   var background = Color(r: 0.08, g: 0.09, b: 0.13, a: 1)
   var panelBackground = Color(r: 0.10, g: 0.11, b: 0.16, a: 1)

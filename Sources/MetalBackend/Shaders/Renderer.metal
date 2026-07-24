@@ -39,7 +39,7 @@ vertex TextVertexOut text_vertex(uint vid [[vertex_id]],
 fragment float4 text_fragment(TextVertexOut in [[stage_in]],
                               texture2d<float> fontTex [[texture(0)]]) {
     constexpr sampler s(filter::nearest);
-    float a = fontTex.sample(s, in.texCoord).a;
+    float a = fontTex.sample(s, in.texCoord).r;
     return float4(in.color.rgb, in.color.a * a);
 }
 
