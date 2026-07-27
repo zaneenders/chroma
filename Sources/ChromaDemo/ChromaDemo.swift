@@ -15,7 +15,8 @@ typealias PlatformApp = WaylandApp
 
 @main
 struct ChromaDemo: PlatformApp {
-  var title: String { "Chroma Demo" }
+  var title: String { "Chroma" }
+  var windowSize: Size { Size(width: 1040, height: 720) }
 
   private let state = DemoState()
 
@@ -35,7 +36,7 @@ private final class DemoState {
   var selectedTab: DemoTab = .package
   let packageSource = DemoState.loadPackageSource()
   let packageScrollController = ScrollViewController()
-  var accent = Color(r: 0.3, g: 0.6, b: 1.0, a: 1)
+  var accent = Color(r: 0.20, g: 0.62, b: 0.98, a: 1)
   var accentName = "Blue"
   var wireframe = false
   var grid = true
@@ -70,7 +71,7 @@ private struct Entry: Block {
       Header(theme: theme, state: state)
       HStack(spacing: theme.margin) {
         Sidebar(theme: theme, state: state)
-          .frame(width: 300)
+          .frame(width: 248, alignment: .topLeading)
         MainPanel(theme: theme, state: state)
       }
       .padding(theme.margin)
@@ -88,8 +89,8 @@ private struct Header: Block {
     VStack(spacing: 0) {
       Text(
         state.name.isEmpty
-          ? "Chroma  —  Immediate-Mode GUI Demo"
-          : "Chroma  —  Hello, \(state.name)"
+          ? "CHROMA  /  WORKBENCH"
+          : "CHROMA  /  HELLO \(state.name.uppercased())"
       )
       .fontScale(theme.textScale)
       .foregroundColor(state.accent)
@@ -119,9 +120,6 @@ private struct StatusBar: Block {
             .fontScale(theme.textScale)
             .foregroundColor(interaction.isTextEditing ? theme.yellow : theme.green)
           Text("  FPS: \(fps)")
-            .fontScale(theme.textScale)
-            .foregroundColor(theme.textSecondary)
-          Text("  Cursor: \(interaction.selectionDescription)")
             .fontScale(theme.textScale)
             .foregroundColor(theme.textSecondary)
           Text("  Mouse: \(interaction.lastMacroDescription)")
@@ -177,6 +175,8 @@ private struct Sidebar: Block {
       TextField(
         "your name",
         id: WidgetID("field:name"),
+        fontScale: theme.textScale,
+        padding: 7,
         text: { state.name },
         onChange: { state.name = $0 }
       )
@@ -253,7 +253,7 @@ private struct TabButton: Block {
       Text(label)
         .fontScale(theme.textScale)
         .foregroundColor(selected ? .white : theme.textSecondary)
-        .padding(EdgeInsets(leading: 14, trailing: 14))
+        .padding(EdgeInsets(leading: 12, trailing: 12))
         .frame(height: theme.itemHeight)
         .background(selected ? accent : theme.buttonColor(for: phase, accent: accent))
         .border(selected ? accent : theme.border, width: 1)
@@ -273,7 +273,7 @@ private struct PackagePanel: Block {
       controller: scrollController
     ) {
       VStack(spacing: theme.spacing, alignment: .leading) {
-        Text("Package.swift  -  Up / Down selects lines; wheel or PgUp / PgDn scrolls")
+        Text("PACKAGE.SWIFT   /   UP-DOWN SELECT   /   WHEEL SCROLL")
           .fontScale(theme.textScale)
           .foregroundColor(theme.yellow)
         PackageSourceListing(
@@ -387,7 +387,7 @@ private struct DemoButton: Block {
       Text(label)
         .fontScale(theme.textScale)
         .foregroundColor(.white)
-        .padding(EdgeInsets(leading: 12))
+        .padding(EdgeInsets(leading: 10))
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: theme.itemHeight, alignment: .leading)
         .background(theme.buttonColor(for: phase, accent: accent))
@@ -414,7 +414,7 @@ private struct CheckRow: Block {
               .foregroundColor(.white)
           }
         }
-        .frame(width: 24, height: 24)
+        .frame(width: 20, height: 20)
         .border(isOn ? accent : theme.border, width: 1)
 
         Text(label)
@@ -434,8 +434,8 @@ private struct SwatchGrid: Block {
   let state: DemoState
 
   var body: some Block {
-    VStack(spacing: 12, alignment: .leading) {
-      HStack(spacing: 16) {
+    VStack(spacing: 8, alignment: .leading) {
+      HStack(spacing: 6) {
         Swatch(label: "Blue", color: theme.blue, theme: theme, selected: state.accentName == "Blue") {
           state.accent = theme.blue
           state.accentName = "Blue"
@@ -449,7 +449,7 @@ private struct SwatchGrid: Block {
           state.accentName = "Red"
         }
       }
-      HStack(spacing: 16) {
+      HStack(spacing: 6) {
         Swatch(label: "Yellow", color: theme.yellow, theme: theme, selected: state.accentName == "Yellow") {
           state.accent = theme.yellow
           state.accentName = "Yellow"
@@ -476,15 +476,15 @@ private struct Swatch: Block {
 
   var body: some Block {
     Interactive(id: "swatch:\(label)", action: action) { phase in
-      VStack(spacing: 6, alignment: .leading) {
+      VStack(spacing: 4, alignment: .leading) {
         color
-          .frame(width: 30, height: 30)
+          .frame(width: 26, height: 26)
           .border(selected ? Color.white : theme.border, width: selected ? 2 : 1)
         Text(label)
           .fontScale(theme.textScale)
           .foregroundColor(selected ? .white : theme.textSecondary)
       }
-      .padding(4)
+      .padding(2)
       .background(theme.highlightColor(for: phase))
     }
   }
@@ -575,24 +575,24 @@ private struct AsciiPanel: PrimitiveBlock {
 }
 
 private struct Theme {
-  var margin: Float = 16
-  var spacing: Float = 10
-  var panelPadding: Float = 16
-  var headerHeight: Float = 48
-  var statusHeight: Float = 32
-  var itemHeight: Float = 36
-  var textScale: Float = 1
+  var margin: Float = 12
+  var spacing: Float = 8
+  var panelPadding: Float = 12
+  var headerHeight: Float = 42
+  var statusHeight: Float = 26
+  var itemHeight: Float = 32
+  var textScale: Float = 0.5
 
-  var background = Color(r: 0.08, g: 0.09, b: 0.13, a: 1)
-  var panelBackground = Color(r: 0.10, g: 0.11, b: 0.16, a: 1)
-  var headerBackground = Color(r: 0.12, g: 0.14, b: 0.22, a: 1)
-  var statusBackground = Color(r: 0.06, g: 0.20, b: 0.12, a: 1)
-  var border = Color(r: 0.22, g: 0.22, b: 0.32, a: 1)
-  var buttonIdle = Color(r: 0.18, g: 0.20, b: 0.30, a: 1)
-  var buttonHover = Color(r: 0.24, g: 0.28, b: 0.42, a: 1)
-  var buttonPressed = Color(r: 0.30, g: 0.38, b: 0.55, a: 1)
-  var textSecondary = Color(r: 0.5, g: 0.5, b: 0.6, a: 1)
-  var blue = Color(r: 0.3, g: 0.6, b: 1.0, a: 1)
+  var background = Color(r: 0.045, g: 0.055, b: 0.075, a: 1)
+  var panelBackground = Color(r: 0.065, g: 0.075, b: 0.10, a: 1)
+  var headerBackground = Color(r: 0.075, g: 0.09, b: 0.13, a: 1)
+  var statusBackground = Color(r: 0.04, g: 0.11, b: 0.09, a: 1)
+  var border = Color(r: 0.16, g: 0.19, b: 0.25, a: 1)
+  var buttonIdle = Color(r: 0.09, g: 0.11, b: 0.15, a: 1)
+  var buttonHover = Color(r: 0.12, g: 0.16, b: 0.23, a: 1)
+  var buttonPressed = Color(r: 0.18, g: 0.28, b: 0.42, a: 1)
+  var textSecondary = Color(r: 0.52, g: 0.56, b: 0.66, a: 1)
+  var blue = Color(r: 0.20, g: 0.62, b: 0.98, a: 1)
   var green = Color(r: 0.3, g: 0.8, b: 0.4, a: 1)
   var red = Color(r: 0.9, g: 0.3, b: 0.3, a: 1)
   var yellow = Color(r: 1, g: 0.85, b: 0.25, a: 1)
