@@ -42,8 +42,9 @@ struct FontAtlas {
       let index = Int(byte - firstChar)
       let xOffset = (index % columns) * cellWidth
       let yOffset = (index / columns) * glyphHeight
+      let cleanedRows = Self.closingPinholes(in: glyph.rows, width: glyphWidth)
       for y in 0..<glyphHeight {
-        let bits = glyph.rows[y]
+        let bits = cleanedRows[y]
         for x in 0..<glyphWidth where bits & (UInt32(1) << UInt32(glyphWidth - x - 1)) != 0 {
           pixels[(yOffset + y) * width + xOffset + x] = 255
         }
@@ -68,6 +69,59 @@ struct FontAtlas {
       )
     }
     self.texture = texture
+  }
+
+  /// Removes the tiny enclosed voids in the hand-authored masks.
+  ///
+  /// Curved transitions in the original artwork contain enclosed six-pixel
+  /// checkerboard gaps. At half scale they look like conspicuous diamonds.
+  /// Actual counters are far larger, so filling enclosed components of at most
+  /// eight pixels removes the artifacts while preserving `0`, `A`, `B`, `O`,
+  /// and other intentionally hollow glyphs.
+  private static func closingPinholes(in rows: [UInt32], width: Int) -> [UInt32] {
+    guard !rows.isEmpty, width > 0 else { return rows }
+    let height = rows.count
+    var visited = [Bool](repeating: false, count: width * height)
+    var result = rows
+
+    func isFilled(_ x: Int, _ y: Int) -> Bool {
+      rows[y] & (UInt32(1) << UInt32(width - x - 1)) != 0
+    }
+
+    for startY in 0..<height {
+      for startX in 0..<width {
+        let start = startY * width + startX
+        guard !visited[start], !isFilled(startX, startY) else { continue }
+
+        var queue = [(startX, startY)]
+        var cursor = 0
+        var component: [(Int, Int)] = []
+        var touchesEdge = false
+        visited[start] = true
+
+        while cursor < queue.count {
+          let (x, y) = queue[cursor]
+          cursor += 1
+          component.append((x, y))
+          touchesEdge = touchesEdge || x == 0 || x == width - 1 || y == 0 || y == height - 1
+
+          for (nextX, nextY) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] {
+            guard nextX >= 0, nextX < width, nextY >= 0, nextY < height else { continue }
+            let next = nextY * width + nextX
+            guard !visited[next], !isFilled(nextX, nextY) else { continue }
+            visited[next] = true
+            queue.append((nextX, nextY))
+          }
+        }
+
+        if !touchesEdge, component.count <= 8 {
+          for (x, y) in component {
+            result[y] |= UInt32(1) << UInt32(width - x - 1)
+          }
+        }
+      }
+    }
+    return result
   }
 
   func glyphUV(_ byte: UInt8) -> (Float, Float, Float, Float) {
