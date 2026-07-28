@@ -133,10 +133,11 @@ public final class Interaction {
   /// clipboard, or nil to ignore.
   public var onCopy: (() -> String?)?
 
-  /// Retained vertical scroll positions and prior limits, keyed by a stable
-  /// scroll-view ID.
+  /// Retained scroll positions and prior limits, keyed by a stable scroll-view ID.
   private var scrollOffsets: [WidgetID: Float] = [:]
+  private var horizontalScrollOffsets: [WidgetID: Float] = [:]
   private var scrollLimits: [WidgetID: Float] = [:]
+  private var horizontalScrollLimits: [WidgetID: Float] = [:]
   /// Viewports from the previous frame suppress the legacy wheel-to-focus
   /// mapping when the wheel belongs to a scroll container.
   private var scrollViewports: [Rect] = []
@@ -342,14 +343,33 @@ public final class Interaction {
     scrollOffsets[id] = max(0, offset)
   }
 
-  /// The previous frame's maximum offset, used to preserve stick-to-bottom
-  /// while streaming content grows.
+  /// Returns the retained horizontal content offset for a scroll view.
+  public func horizontalScrollOffset(for id: WidgetID) -> Float {
+    horizontalScrollOffsets[id, default: 0]
+  }
+
+  /// Stores a clamped horizontal content offset for a scroll view.
+  public func setHorizontalScrollOffset(_ offset: Float, for id: WidgetID) {
+    horizontalScrollOffsets[id] = max(0, offset)
+  }
+
+  /// The previous frame's maximum vertical offset, used to preserve
+  /// stick-to-bottom while streaming content grows.
   public func scrollLimit(for id: WidgetID) -> Float {
     scrollLimits[id, default: 0]
   }
 
   public func setScrollLimit(_ limit: Float, for id: WidgetID) {
     scrollLimits[id] = max(0, limit)
+  }
+
+  /// Returns the maximum retained horizontal offset for a scroll view.
+  public func horizontalScrollLimit(for id: WidgetID) -> Float {
+    horizontalScrollLimits[id, default: 0]
+  }
+
+  public func setHorizontalScrollLimit(_ limit: Float, for id: WidgetID) {
+    horizontalScrollLimits[id] = max(0, limit)
   }
 
   /// Registers an interactive widget as a leaf of the enclosing group and

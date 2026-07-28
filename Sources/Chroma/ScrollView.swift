@@ -28,8 +28,10 @@ private struct LazyStackCache {
   var rowSizes: [Size] = []
 }
 
-/// A clipped vertical viewport with retained scroll position, wheel/trackpad
-/// input, keyboard paging, optional stick-to-bottom, and a position indicator.
+/// A clipped viewport with retained vertical and horizontal scroll positions,
+/// wheel/trackpad input, keyboard paging, optional stick-to-bottom, and position
+/// indicators. Content keeps its measured width instead of being squeezed into
+/// the viewport, so long lines can be panned sideways.
 ///
 /// Content is currently measured and drawn in full. This is the non-lazy
 /// foundation; collection virtualization should be a separate container so it
@@ -65,17 +67,27 @@ public struct ScrollView: PrimitiveBlock {
     interaction.registerScrollViewport(rect)
     let contentSize = BlockEngine.measure(
       content,
-      proposal: Size(width: rect.size.width, height: Float.greatestFiniteMagnitude)
+      proposal: Size(
+        width: rect.size.width,
+        height: Float.greatestFiniteMagnitude
+      )
     )
     let maximumOffset = max(0, contentSize.height - rect.size.height)
+    let maximumHorizontalOffset = max(0, contentSize.width - rect.size.width)
     let previousLimit = interaction.scrollLimit(for: id)
     var offset = min(interaction.scrollOffset(for: id), maximumOffset)
+    var horizontalOffset = min(
+      interaction.horizontalScrollOffset(for: id), maximumHorizontalOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
-    // AppKit's positive Y delta means fingers/wheel moved upward: reveal older
-    // content by reducing the top-origin content offset.
-    if rect.contains(interaction.input.pointerPosition) {
+    // AppKit's positive deltas mean fingers/wheel moved up or left: reveal
+    // earlier content by reducing the corresponding top/leading-origin offset.
+    let pointerIsInside = rect.contains(interaction.input.pointerPosition)
+    let isUserScrolling = pointerIsInside
+      && (interaction.input.scrollDelta.x != 0 || interaction.input.scrollDelta.y != 0)
+    if pointerIsInside {
       offset -= interaction.input.scrollDelta.y
+      horizontalOffset -= interaction.input.scrollDelta.x
     }
 
     for command in interaction.input.commands {
@@ -89,25 +101,47 @@ public struct ScrollView: PrimitiveBlock {
     }
 
     if let request = controller?.request {
-      switch request {
-      case .top: offset = 0
-      case .bottom: offset = maximumOffset
-      case .offset(let requested): offset = requested
-      case .visible(let target):
-        if target.minY < rect.minY {
-          offset -= rect.minY - target.minY
-        } else if target.maxY > rect.maxY {
-          offset += target.maxY - rect.maxY
+      // Direct wheel/trackpad input owns this frame. In particular, defer
+      // hover-driven `visible` requests until scrolling stops so a stationary
+      // pointer cannot pull the content back toward its selected row.
+      if isUserScrolling, case .visible = request {
+        // Drop the stale reveal request; content may enqueue a fresh one after
+        // drawing at its new position.
+        controller?.request = nil
+      } else {
+        switch request {
+        case .top: offset = 0
+        case .bottom: offset = maximumOffset
+        case .offset(let requested): offset = requested
+        case .visible(let target):
+          if target.minY < rect.minY {
+            offset -= rect.minY - target.minY
+          } else if target.maxY > rect.maxY {
+            offset += target.maxY - rect.maxY
+          }
+          // An oversized child can never be fully visible. Do not chase its two
+          // edges from frame to frame; that causes hover-driven reveal requests
+          // (such as a full-width source line) to fight horizontal trackpad input.
+          if target.size.width <= rect.size.width {
+            if target.minX < rect.minX {
+              horizontalOffset -= rect.minX - target.minX
+            } else if target.maxX > rect.maxX {
+              horizontalOffset += target.maxX - rect.maxX
+            }
+          }
         }
+        controller?.request = nil
       }
-      controller?.request = nil
     } else if sticksToBottom && wasAtBottom && maximumOffset > previousLimit {
       offset = maximumOffset
     }
 
     offset = min(max(0, offset), maximumOffset)
+    horizontalOffset = min(max(0, horizontalOffset), maximumHorizontalOffset)
     interaction.setScrollOffset(offset, for: id)
+    interaction.setHorizontalScrollOffset(horizontalOffset, for: id)
     interaction.setScrollLimit(maximumOffset, for: id)
+    interaction.setHorizontalScrollLimit(maximumHorizontalOffset, for: id)
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
@@ -115,8 +149,8 @@ public struct ScrollView: PrimitiveBlock {
       content,
       into: &drawList,
       in: Rect(
-        x: rect.minX, y: rect.minY - offset,
-        width: rect.size.width, height: contentSize.height)
+        x: rect.minX - horizontalOffset, y: rect.minY - offset,
+        width: contentSize.width, height: contentSize.height)
     )
     interaction.popClip()
 
@@ -127,6 +161,16 @@ public struct ScrollView: PrimitiveBlock {
       let thumbY = rect.minY + travel * (offset / maximumOffset)
       drawList.fillRect(
         Rect(x: rect.maxX - trackWidth, y: thumbY, width: trackWidth, height: thumbHeight),
+        color: Color(r: 1, g: 1, b: 1, a: 0.45)
+      )
+    }
+    if showsIndicator && maximumHorizontalOffset > 0 && rect.size.width > 0 {
+      let trackHeight: Float = 3
+      let thumbWidth = max(12, rect.size.width * rect.size.width / contentSize.width)
+      let travel = rect.size.width - thumbWidth
+      let thumbX = rect.minX + travel * (horizontalOffset / maximumHorizontalOffset)
+      drawList.fillRect(
+        Rect(x: thumbX, y: rect.maxY - trackHeight, width: thumbWidth, height: trackHeight),
         color: Color(r: 1, g: 1, b: 1, a: 0.45)
       )
     }

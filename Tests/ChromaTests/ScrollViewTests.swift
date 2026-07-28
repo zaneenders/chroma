@@ -81,6 +81,32 @@ struct ScrollViewTests {
     #expect(list.commands.last == .popClip)
   }
 
+  @Test func horizontalWheelRetainsOffsetAndMovesWideContent() {
+    let interaction = Interaction()
+
+    func frame(_ input: InputState = InputState()) -> DrawList {
+      Interaction.current = interaction
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      let view = ScrollView(id: scrollID, showsIndicator: true) {
+        FixedContent(size: Size(width: 200, height: 20))
+      }
+      BlockEngine.draw(view, into: &list, in: viewport)
+      interaction.endFrame()
+      return list
+    }
+
+    _ = frame()
+    let list = frame(InputState(
+      pointerPosition: Point(x: 10, y: 10),
+      scrollDelta: Point(x: -15, y: 0)))
+
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 15)
+    #expect(interaction.horizontalScrollLimit(for: scrollID) == 100)
+    #expect(list.commands.contains(.fillRect(
+      rect: Rect(x: -15, y: 0, width: 200, height: 20), color: .white)))
+  }
+
   @Test func controllerScrollsToBottom() {
     let interaction = Interaction()
     let controller = ScrollViewController()
@@ -88,6 +114,77 @@ struct ScrollViewTests {
     controller.scrollToBottom()
     _ = drawFrame(interaction, controller: controller)
     #expect(interaction.scrollOffset(for: scrollID) == 80)
+  }
+
+  @Test func controllerScrollsOnlyEnoughToRevealRectHorizontally() {
+    let interaction = Interaction()
+    let controller = ScrollViewController()
+
+    func frame() {
+      Interaction.current = interaction
+      interaction.beginFrame(input: InputState())
+      var list = DrawList()
+      let view = ScrollView(id: scrollID, controller: controller) {
+        FixedContent(size: Size(width: 200, height: 20))
+      }
+      BlockEngine.draw(view, into: &list, in: viewport)
+      interaction.endFrame()
+    }
+
+    frame()
+    controller.scrollToVisible(Rect(x: 125, y: 0, width: 10, height: 10))
+    frame()
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 35)
+  }
+
+  @Test func wheelInputWinsOverPendingRevealRequest() {
+    let interaction = Interaction()
+    let controller = ScrollViewController()
+
+    func frame(_ input: InputState = InputState()) {
+      Interaction.current = interaction
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      let view = ScrollView(id: scrollID, controller: controller) {
+        FixedContent(size: Size(width: 100, height: 100))
+      }
+      BlockEngine.draw(view, into: &list, in: viewport)
+      interaction.endFrame()
+    }
+
+    frame()
+    controller.scrollToVisible(Rect(x: 0, y: 25, width: 100, height: 10))
+    frame(InputState(
+      pointerPosition: Point(x: 10, y: 10),
+      scrollDelta: Point(x: 0, y: -12)))
+    #expect(interaction.scrollOffset(for: scrollID) == 12)
+  }
+
+  @Test func oversizedRevealTargetDoesNotFightHorizontalScrolling() {
+    let interaction = Interaction()
+    let controller = ScrollViewController()
+
+    func frame(_ input: InputState = InputState()) {
+      Interaction.current = interaction
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      let view = ScrollView(id: scrollID, controller: controller) {
+        FixedContent(size: Size(width: 200, height: 20))
+      }
+      BlockEngine.draw(view, into: &list, in: viewport)
+      interaction.endFrame()
+    }
+
+    frame(InputState(
+      pointerPosition: Point(x: 10, y: 10),
+      scrollDelta: Point(x: -40, y: 0)))
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 40)
+
+    // This mirrors PackageSourceListing, whose hovered line rect spans the
+    // entire content width and requests visibility every frame.
+    controller.scrollToVisible(Rect(x: -40, y: 0, width: 200, height: 10))
+    frame()
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 40)
   }
 
   @Test func controllerScrollsOnlyEnoughToRevealRect() {

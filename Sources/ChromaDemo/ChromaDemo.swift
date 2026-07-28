@@ -326,7 +326,12 @@ private struct PackageSourceListing: PrimitiveBlock {
       )
       if state.hovered {
         drawList.fillRect(lineRect, color: theme.buttonHover)
-        scrollController.scrollToVisible(lineRect)
+        // Reveal keyboard-driven selection changes, but do not enqueue a reveal
+        // every frame for a stationary pointer. Repeated hover requests fight
+        // wheel momentum and make vertical scrolling feel sticky.
+        if !interaction.input.commands.isEmpty {
+          scrollController.scrollToVisible(lineRect)
+        }
       }
       let isComment = line.trimmingCharacters(in: .whitespaces).hasPrefix("//")
       drawList.text(
