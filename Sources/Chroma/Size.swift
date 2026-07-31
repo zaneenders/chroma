@@ -1,4 +1,3 @@
-/// A size in pixel space.
 public struct Size: Equatable, Sendable {
   public var width: Float
   public var height: Float

@@ -25,8 +25,6 @@ struct ChromaDemo: PlatformApp {
   }
 }
 
-/// The demo's application state, shared by reference so value-type blocks can
-/// read it every frame and interaction closures can mutate it.
 private enum DemoTab {
   case package
   case ascii
@@ -287,8 +285,6 @@ private struct PackagePanel: Block {
   }
 }
 
-/// A vertically navigable source listing. Each line is a focus-tree leaf, so
-/// Up/Down and pointer hover share the normal one-cursor navigation path.
 private struct PackageSourceListing: PrimitiveBlock {
   let theme: Theme
   let lines: [Substring]
@@ -326,9 +322,6 @@ private struct PackageSourceListing: PrimitiveBlock {
       )
       if state.hovered {
         drawList.fillRect(lineRect, color: theme.buttonHover)
-        // Reveal keyboard-driven selection changes, but do not enqueue a reveal
-        // every frame for a stationary pointer. Repeated hover requests fight
-        // wheel momentum and make vertical scrolling feel sticky.
         if !interaction.input.commands.isEmpty {
           scrollController.scrollToVisible(lineRect)
         }
@@ -358,8 +351,6 @@ private struct SectionTitle: Block {
   }
 }
 
-/// The input-language cheat sheet. Every device compiles into these moves;
-/// the status bar shows the mouse doing it live.
 private struct KeyLegend: Block {
   let theme: Theme
 
@@ -511,7 +502,6 @@ private struct AsciiPanel: PrimitiveBlock {
     }
     let lines = [Array("20x28 PRINTABLE  ASCII  20..7E".utf8)] + printableRows
 
-    // Fit the specimen to the assigned rect with an integer text scale.
     let metrics = FontMetrics()
     let availableWidth = rect.size.width - 2 * theme.panelPadding
     let availableHeight = rect.size.height - 2 * theme.panelPadding
@@ -604,8 +594,6 @@ private struct Theme {
   var orange = Color(r: 1, g: 0.55, b: 0.15, a: 1)
   var purple = Color(r: 0.7, g: 0.3, b: 0.9, a: 1)
 
-  /// Button background for the current interaction phase; a press flashes
-  /// the accent color.
   func buttonColor(for phase: InteractionPhase, accent: Color) -> Color {
     switch phase {
     case .idle: buttonIdle
@@ -614,7 +602,6 @@ private struct Theme {
     }
   }
 
-  /// Subtle row highlight behind hovered or pressed rows.
   func highlightColor(for phase: InteractionPhase) -> Color {
     switch phase {
     case .idle: .clear

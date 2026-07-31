@@ -1,18 +1,15 @@
-/// Horizontal alignment of a block inside its parent.
 public enum HorizontalAlignment: Equatable, Sendable {
   case leading
   case center
   case trailing
 }
 
-/// Vertical alignment of a block inside its parent.
 public enum VerticalAlignment: Equatable, Sendable {
   case top
   case center
   case bottom
 }
 
-/// A two-axis alignment used for placing blocks inside assigned space.
 public struct Alignment: Equatable, Sendable {
   public var horizontal: HorizontalAlignment
   public var vertical: VerticalAlignment
@@ -31,7 +28,6 @@ public struct Alignment: Equatable, Sendable {
 }
 
 extension Rect {
-  /// Returns a rect of `size` placed inside this rect per `alignment`.
   func placing(_ size: Size, alignment: Alignment) -> Rect {
     let x: Float
     switch alignment.horizontal {
@@ -49,7 +45,6 @@ extension Rect {
   }
 }
 
-/// Insets applied by the `padding` modifier.
 public struct EdgeInsets: Equatable, Sendable {
   public var top: Float
   public var leading: Float
@@ -63,7 +58,6 @@ public struct EdgeInsets: Equatable, Sendable {
     self.trailing = trailing
   }
 
-  /// Equal insets on all edges.
   public init(_ amount: Float) {
     self.init(top: amount, leading: amount, bottom: amount, trailing: amount)
   }

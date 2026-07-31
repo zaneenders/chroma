@@ -4,14 +4,6 @@ import AppKit
 import Chroma
 import MetalKit
 
-/// The Metal backend.
-///
-/// Owns the rendering surface, all GPU state, and the conversion of
-/// backend-neutral draw lists into encoded Metal commands. Everything above
-/// this type works in pixel-space draw lists and never sees a Metal type.
-///
-/// Use ``run(title:)`` for a standalone window, or embed ``contentView`` in
-/// your own AppKit window to host the renderer inside an existing app.
 @MainActor
 public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, Renderer {
   private let device: MTLDevice
@@ -23,18 +15,11 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
   public let name = "Metal"
 
-  /// The interaction context fed from AppKit input, installed as
-  /// ``Interaction/current`` at initialization.
   public let interaction = Interaction()
 
-  /// The content rendered every frame. Assign a new block at any time to swap
-  /// content without touching the backend.
   public var content: (any Block)?
   public var onClose: (() -> Void)?
 
-  /// The rendering surface to install in a window, exposed opaquely so
-  /// application code does not depend on MetalKit. ``run(title:)`` installs
-  /// this for you; embed it yourself to host the renderer in an existing app.
   public var contentView: NSView { mtkView }
 
   public init?(frame: CGRect) {
@@ -86,14 +71,10 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     Interaction.current = interaction
   }
 
-  /// Creates a renderer whose surface is `size` points across.
   public convenience init?(size: Size) {
     self.init(frame: CGRect(x: 0, y: 0, width: CGFloat(size.width), height: CGFloat(size.height)))
   }
 
-  /// Presents the renderer in its own window and runs the AppKit event loop.
-  ///
-  /// Owns all `NSApplication` setup and returns only when the app exits.
   public func run(title: String = "Hello Triangle") {
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
@@ -109,7 +90,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     window.delegate = self
     window.center()
     window.makeKeyAndOrderFront(nil)
-    window.makeFirstResponder(mtkView)  // Key events route to the input view.
+    window.makeFirstResponder(mtkView)
 
     app.activate(ignoringOtherApps: true)
     app.run()
@@ -120,7 +101,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     NSApplication.shared.terminate(nil)
   }
 
-  /// Creates an alpha-blended pipeline for the given shader functions.
   private static func makePipeline(
     device: MTLDevice,
     pixelFormat: MTLPixelFormat,
@@ -157,7 +137,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     }
   }
 
-  /// Frame timing for the smoothed ``Interaction/frameRate``.
   private var lastFrameTime: Double = 0
   private var smoothedFrameRate: Double = 0
 
@@ -171,9 +150,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     updateFrameRate()
     interaction.beginFrame(input: self.mtkView.frameInput())
 
-    // Chroma lays out in AppKit points. The drawable may contain two pixels per
-    // point on Retina displays; using its pixel dimensions here made every UI
-    // metric appear half-sized and put pointer hit regions in a different space.
     let viewport = Size(width: Float(mtkView.bounds.width), height: Float(mtkView.bounds.height))
     var drawList = DrawList()
     if let content {
@@ -195,8 +171,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
   public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
-  /// Maintains an exponentially smoothed frame rate on the interaction
-  /// context, for status displays.
   private func updateFrameRate() {
     let now = ProcessInfo.processInfo.systemUptime
     defer { lastFrameTime = now }
@@ -208,10 +182,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     interaction.frameRate = smoothedFrameRate
   }
 
-  /// A run of consecutive draw commands that share one render pipeline.
-  ///
-  /// Batches are encoded in draw-list order and commands are never reordered
-  /// across pipelines: translucent GUI output depends on submission order.
   private enum Batch {
     case solid(indexOffset: Int, indexCount: Int)
     case text(instanceOffset: Int, instanceCount: Int)
@@ -219,8 +189,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     case popClip
   }
 
-  /// Expands the draw list into shared geometry arrays, then encodes one draw
-  /// per batch in draw-list order.
   private func render(
     _ drawList: DrawList,
     viewport: Size,
@@ -238,8 +206,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     var instances = [TextInstance]()
     var batches: [Batch] = []
 
-    // One open batch per pipeline; consecutive same-pipeline commands merge
-    // into the open batch, and a command for the other pipeline closes it.
     var solidStart: Int?
     var textStart: Int?
 
@@ -270,12 +236,10 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       indices.append(contentsOf: [base, base + 1, base + 2, base + 2, base + 1, base + 3])
     }
 
-    /// Expands a stroked rectangle into four solid edge quads.
     func appendStroke(_ rect: Rect, width: Float, color: Color) {
       let border = max(0, width)
       guard border > 0, rect.size.width > 0, rect.size.height > 0 else { return }
       guard rect.size.width > 2 * border, rect.size.height > 2 * border else {
-        // The border covers the whole rect; fill it instead of inverting edges.
         appendQuad(rect, color: color)
         return
       }
@@ -293,8 +257,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       )
     }
 
-    /// Clip stack of pixel-space rects. The current clip is the top element
-    /// (or the full viewport when empty).
     var clipStack: [Rect] = []
 
     for command in drawList.commands {
@@ -343,8 +305,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
     guard !batches.isEmpty else { return }
 
-    // Per-frame scratch buffers. Buffer reuse and growth are a separate step;
-    // the batch offsets below are structured so only this allocation changes.
     let vertexBuffer: MTLBuffer?
     let indexBuffer: MTLBuffer?
     if vertices.isEmpty {
@@ -375,8 +335,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
     enc.setFragmentTexture(fontAtlas.texture, index: 0)
 
-    /// Pixel-space scissor stack applied during encoding. Pop restores the
-    /// previous scissor; when the stack is empty the scissor is disabled.
     var scissorStack: [Rect] = []
     let viewportRect = Rect(origin: .zero, size: viewport)
 
@@ -432,8 +390,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 import Metal
 
 extension Rect {
-  /// Converts a logical point-space rectangle into a drawable-pixel scissor.
-  /// Metal scissor coordinates use the same top-left origin.
   func asMtlScissor(scale: Point) -> MTLScissorRect {
     MTLScissorRect(
       x: Int((minX * scale.x).rounded(.down)),

@@ -1,7 +1,3 @@
-/// The ordered drawing commands for one frame.
-///
-/// Application code appends commands; backends consume them without knowing
-/// what produced them.
 public struct DrawList: Sendable {
   public private(set) var commands: [DrawCommand] = []
 

@@ -11,7 +11,6 @@ struct MetalSourceGenerator {
     let outputURL = URL(fileURLWithPath: CommandLine.arguments[2])
     let source = try String(contentsOf: inputURL, encoding: .utf8)
 
-    // Pick a raw-string delimiter that cannot occur in the shader source.
     var hashes = "#"
     while source.contains("\"\"\"\(hashes)") || source.contains("\\\(hashes)(") {
       hashes += "#"

@@ -1,11 +1,8 @@
-/// A run of text in the built-in bitmap font.
 public struct Text: PrimitiveBlock {
   public var content: String
   public var color: Color
   public var scale: Float
-  /// When true, this text block participates in drag-to-select and Cmd+C.
   public var isSelectable: Bool = false
-  /// Stable identifier for selection tracking. Auto-generated when selectable.
   public var selectionID: WidgetID?
 
   public init(_ content: String) {
@@ -26,7 +23,6 @@ public struct Text: PrimitiveBlock {
     return copy
   }
 
-  /// Makes this text block selectable with a stable identifier.
   public func selectable(_ id: WidgetID? = nil) -> Text {
     var copy = self
     copy.isSelectable = true
@@ -35,34 +31,32 @@ public struct Text: PrimitiveBlock {
   }
 
   public func sizeThatFits(_ proposal: Size) -> Size {
-    FontMetrics().measure(content, scale: scale)
+    Interaction.current.fontMetrics.measure(content, scale: scale)
   }
 
   public func draw(into drawList: inout DrawList, in rect: Rect) {
     if isSelectable, let id = selectionID {
-      let metrics = FontMetrics()
+      let interaction = Interaction.current
+      let metrics = interaction.fontMetrics
       let cellWidth = metrics.cellAdvance * scale
       let lineHeight = metrics.lineAdvance * scale
       let layout = PlainTextLayout(
         text: content, rect: rect, cellWidth: cellWidth,
         lineHeight: lineHeight, scale: scale)
-      PlainTextLayoutRegistry.register(id, layout: layout)
+      interaction.textSelection.layoutRegistry.register(id, layout: layout)
 
-      if let sel = TextSelectionManager.shared.selection(for: layout) {
-        // Draw selection highlight
+      if let sel = interaction.textSelection.selection(for: layout) {
         let selX = rect.minX + Float(sel.from) * cellWidth
         let selW = Float(sel.to - sel.from) * cellWidth
         drawList.fillRect(
           Rect(x: selX, y: rect.minY, width: selW, height: lineHeight),
           color: Color(r: 0.3, g: 0.6, b: 1.0, a: 0.5))
 
-        // Prefix before selection
         let prefix = content.prefix(sel.from)
         if !prefix.isEmpty {
           drawList.text(
             String(prefix), at: rect.origin, color: color, scale: scale)
         }
-        // Selected text (inverted)
         let selected = content.dropFirst(sel.from).prefix(sel.to - sel.from)
         if !selected.isEmpty {
           let selOrigin = Point(x: rect.minX + Float(sel.from) * cellWidth, y: rect.minY)
@@ -71,7 +65,6 @@ public struct Text: PrimitiveBlock {
             color: Color(r: 1 - color.r, g: 1 - color.g, b: 1 - color.b, a: 1),
             scale: scale)
         }
-        // Suffix after selection
         let suffix = content.dropFirst(sel.to)
         if !suffix.isEmpty {
           let suffixOrigin = Point(x: rect.minX + Float(sel.to) * cellWidth, y: rect.minY)
@@ -96,15 +89,12 @@ extension Color: PrimitiveBlock {
   }
 }
 
-/// A block that draws nothing. Placeholder for optional content.
 public struct EmptyBlock: PrimitiveBlock {
   public init() {}
   public func sizeThatFits(_ proposal: Size) -> Size { .zero }
   public func draw(into drawList: inout DrawList, in rect: Rect) {}
 }
 
-/// Flexible space. Inside a stack it takes an equal share of the leftover
-/// space along the stack axis; elsewhere it fills its proposal.
 public struct Spacer: PrimitiveBlock {
   public init() {}
 
@@ -115,7 +105,6 @@ public struct Spacer: PrimitiveBlock {
   public func draw(into drawList: inout DrawList, in rect: Rect) {}
 }
 
-/// A vertical stack of blocks with spacing and horizontal alignment.
 public struct VStack: PrimitiveBlock {
   public var spacing: Float
   public var alignment: HorizontalAlignment
@@ -141,8 +130,6 @@ public struct VStack: PrimitiveBlock {
     children.contains { BlockEngine.expandsVertically($0) }
   }
 
-  /// Child sizes against `proposal`: fixed children keep their measured
-  /// height; expanding children split the leftover height equally.
   @MainActor private func layout(proposal: Size) -> [Size] {
     var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
     for index in sizes.indices where children[index] is Spacer {
@@ -199,7 +186,6 @@ public struct VStack: PrimitiveBlock {
   }
 }
 
-/// A horizontal stack of blocks with spacing and vertical alignment.
 public struct HStack: PrimitiveBlock {
   public var spacing: Float
   public var alignment: VerticalAlignment
@@ -225,8 +211,6 @@ public struct HStack: PrimitiveBlock {
     }
   }
 
-  /// Child sizes against `proposal`: fixed children keep their measured
-  /// width; expanding children split the leftover width equally.
   @MainActor private func layout(proposal: Size) -> [Size] {
     var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
     for index in sizes.indices where children[index] is Spacer {
@@ -283,7 +267,6 @@ public struct HStack: PrimitiveBlock {
   }
 }
 
-/// A stack that layers its children on top of each other, back to front.
 public struct ZStack: PrimitiveBlock {
   public var alignment: Alignment
   public var children: [any Block]

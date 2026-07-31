@@ -4,13 +4,6 @@ import AppKit
 import Chroma
 import MetalKit
 
-/// The Metal backend's rendering surface and input adapter.
-///
-/// AppKit delivers events more often than frames render, so events are
-/// accumulated: edge-triggered state (press, release) and scroll deltas pile
-/// up between frames, and ``frameInput()`` drains them into the frame's
-/// immutable ``InputState`` snapshot. A quick press and release within one
-/// frame therefore still produces exactly one click.
 final class ChromaInputView: MTKView {
   private var pointerPosition = Point(x: -1, y: -1)
   private var pointerPressPosition = Point(x: -1, y: -1)
@@ -18,15 +11,9 @@ final class ChromaInputView: MTKView {
   private var pressedEdge = false
   private var releasedEdge = false
   private var scroll = Point.zero
-  /// Keyboard input accumulated between frames, already translated into the
-  /// framework's input language by ``keyDown(with:)``.
   private var pendingCommands: [UICommand] = []
-  /// Editing-mode input accumulated between frames, produced instead of
-  /// commands while a text field owns the keyboard.
   private var pendingTextEvents: [TextEditEvent] = []
 
-  /// Drains the accumulated events into a frame snapshot. Edge-triggered
-  /// fields, scroll deltas, and queued commands reset for the next frame.
   func frameInput() -> InputState {
     let input = InputState(
       pointerPosition: pointerPosition,
@@ -69,7 +56,7 @@ final class ChromaInputView: MTKView {
   }
 
   override func mouseDown(with event: NSEvent) {
-    window?.makeFirstResponder(self)  // Clicks focus the view for keyboard.
+    window?.makeFirstResponder(self)
     updatePointer(with: event)
     pointerPressPosition = pointerPosition
     pointerDown = true
@@ -83,8 +70,6 @@ final class ChromaInputView: MTKView {
   }
 
   override func mouseExited(with event: NSEvent) {
-    // Outside the window nothing is hovered; hit-testing uses `<` on the
-    // max edges, so a negative position is never inside a rect.
     pointerPosition = Point(x: -1, y: -1)
   }
 
@@ -93,26 +78,10 @@ final class ChromaInputView: MTKView {
     scroll.y += Float(event.scrollingDeltaY)
   }
 
-  // MARK: Keyboard
 
   override var acceptsFirstResponder: Bool { true }
 
-  /// The keymap: the only device-specific piece of input. Keys compile
-  /// directly into the framework's input language — mirrored home-row pairs
-  /// (`d`/`f` left hand, `j`/`k` right hand) for the four directions, `l`
-  /// to step in, `s` to step out, return or space to activate, and tab or
-  /// shift-tab to cycle the leaves in document order. Arrow keys are
-  /// aliases for the directions. Held keys repeat via AppKit's key repeat,
-  /// which is exactly repeated movement.
-  ///
-  /// While a text field owns the cursor (insert mode), keys become
-  /// ``TextEditEvent``s instead — the same keymap swap vim makes between
-  /// normal and insert mode.
   override func keyDown(with event: NSEvent) {
-    // Give the app's visible selection first chance at Cmd+C even while a text
-    // field owns keyboard focus. TextField currently has a caret but no range
-    // selection, so routing copy exclusively through editing mode made
-    // transcript selections impossible to copy while the composer was focused.
     if event.modifierFlags.contains(.command),
       event.charactersIgnoringModifiers?.lowercased() == "c",
       let text = Interaction.current.onCopy?(),
@@ -123,7 +92,6 @@ final class ChromaInputView: MTKView {
       return
     }
     if Interaction.current.isTextEditing {
-      // Paste: command-V inserts the clipboard's string as text.
       if event.modifierFlags.contains(.command),
         event.charactersIgnoringModifiers == "v",
         let pasted = NSPasteboard.general.string(forType: .string),
@@ -141,7 +109,7 @@ final class ChromaInputView: MTKView {
     }
     let command: UICommand?
     switch event.keyCode {
-    case 48:  // tab: cycle the leaves, shift-tab backwards
+    case 48:
       command = event.modifierFlags.contains(.shift) ? .previousLeaf : .nextLeaf
     case 123: command = .left
     case 124: command = .right
@@ -151,7 +119,7 @@ final class ChromaInputView: MTKView {
     case 121: command = .pageDown
     case 115: command = .home
     case 119: command = .end
-    case 36, 76, 49: command = .activate  // return, keypad enter, space
+    case 36, 76, 49: command = .activate
     default:
       if event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
         switch event.charactersIgnoringModifiers {
@@ -164,7 +132,7 @@ final class ChromaInputView: MTKView {
         default: command = nil
         }
       } else {
-        command = nil  // Modified keys belong to the system, not navigation.
+        command = nil
       }
     }
     if let command {
@@ -174,20 +142,16 @@ final class ChromaInputView: MTKView {
     }
   }
 
-  /// The editing keymap, active only while a text field owns the cursor:
-  /// printable characters insert, arrows and home/end move the caret,
-  /// backspace and forward-delete edit, and escape or return end the
-  /// session (return commits this framework's single-line fields).
   private static func textEditEvent(for event: NSEvent) -> TextEditEvent? {
     switch event.keyCode {
-    case 53: return .endEditing  // escape
-    case 36, 76: return .submit  // return, keypad enter
+    case 53: return .endEditing
+    case 36, 76: return .submit
     case 51: return .backspace
     case 117: return .deleteForward
     case 123: return .moveCaretLeft
     case 124: return .moveCaretRight
-    case 115: return .moveCaretToStart  // home
-    case 119: return .moveCaretToEnd  // end
+    case 115: return .moveCaretToStart
+    case 119: return .moveCaretToEnd
     default:
       guard event.modifierFlags.intersection([.command, .control]).isEmpty,
         let characters = event.characters,
@@ -198,9 +162,6 @@ final class ChromaInputView: MTKView {
     }
   }
 
-  /// Converts AppKit's bottom-left-origin point coordinates into Chroma's
-  /// top-left-origin point coordinates. Rendering and interaction deliberately
-  /// share this logical coordinate space; Metal handles Retina rasterization.
   private func updatePointer(with event: NSEvent) {
     let location = convert(event.locationInWindow, from: nil)
     guard bounds.width > 0, bounds.height > 0 else { return }

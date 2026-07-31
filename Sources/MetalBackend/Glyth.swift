@@ -1,5 +1,4 @@
 struct Glyph {
-  /// Twenty-bit scanlines, top to bottom. Bit 19 is the leftmost pixel.
   var rows: [UInt32]
 
   init(rows: [UInt32] = Array(repeating: 0, count: 28)) {

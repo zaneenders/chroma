@@ -1,4 +1,3 @@
-/// An axis-aligned rectangle in pixel space with a top-left origin.
 public struct Rect: Equatable, Sendable {
   public var origin: Point
   public var size: Size
@@ -8,7 +7,6 @@ public struct Rect: Equatable, Sendable {
     self.size = size
   }
 
-  /// Creates a rect from individual coordinates.
   public init(x: Float, y: Float, width: Float, height: Float) {
     self.init(origin: Point(x: x, y: y), size: Size(width: width, height: height))
   }

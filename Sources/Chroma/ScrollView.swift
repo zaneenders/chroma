@@ -1,15 +1,10 @@
-/// Programmatic operations accepted by ``ScrollView``. Set a request on a
-/// stable controller and it is consumed during the next draw.
 public enum ScrollRequest: Equatable, Sendable {
   case top
   case bottom
   case offset(Float)
-  /// Reveal a rectangle expressed in the scroll view's current window coordinates.
   case visible(Rect)
 }
 
-/// Reference-type scroll control that can be retained by application state.
-/// The view itself also retains its offset in ``Interaction`` by `WidgetID`.
 public final class ScrollViewController {
   fileprivate var request: ScrollRequest?
   fileprivate var lazyStackCache = LazyStackCache()
@@ -18,7 +13,6 @@ public final class ScrollViewController {
   public func scrollToTop() { request = .top }
   public func scrollToBottom() { request = .bottom }
   public func scroll(to offset: Float) { request = .offset(offset) }
-  /// Scrolls only as far as needed to reveal `rect` in the viewport.
   public func scrollToVisible(_ rect: Rect) { request = .visible(rect) }
 }
 
@@ -28,14 +22,6 @@ private struct LazyStackCache {
   var rowSizes: [Size] = []
 }
 
-/// A clipped viewport with retained vertical and horizontal scroll positions,
-/// wheel/trackpad input, keyboard paging, optional stick-to-bottom, and position
-/// indicators. Content keeps its measured width instead of being squeezed into
-/// the viewport, so long lines can be panned sideways.
-///
-/// Content is currently measured and drawn in full. This is the non-lazy
-/// foundation; collection virtualization should be a separate container so it
-/// can construct only rows intersecting the exposed ``viewport``.
 public struct ScrollView: PrimitiveBlock {
   public var id: WidgetID
   public var showsIndicator: Bool
@@ -80,8 +66,6 @@ public struct ScrollView: PrimitiveBlock {
       interaction.horizontalScrollOffset(for: id), maximumHorizontalOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
-    // AppKit's positive deltas mean fingers/wheel moved up or left: reveal
-    // earlier content by reducing the corresponding top/leading-origin offset.
     let pointerIsInside = rect.contains(interaction.input.pointerPosition)
     let isUserScrolling = pointerIsInside
       && (interaction.input.scrollDelta.x != 0 || interaction.input.scrollDelta.y != 0)
@@ -101,12 +85,7 @@ public struct ScrollView: PrimitiveBlock {
     }
 
     if let request = controller?.request {
-      // Direct wheel/trackpad input owns this frame. In particular, defer
-      // hover-driven `visible` requests until scrolling stops so a stationary
-      // pointer cannot pull the content back toward its selected row.
       if isUserScrolling, case .visible = request {
-        // Drop the stale reveal request; content may enqueue a fresh one after
-        // drawing at its new position.
         controller?.request = nil
       } else {
         switch request {
@@ -119,9 +98,6 @@ public struct ScrollView: PrimitiveBlock {
           } else if target.maxY > rect.maxY {
             offset += target.maxY - rect.maxY
           }
-          // An oversized child can never be fully visible. Do not chase its two
-          // edges from frame to frame; that causes hover-driven reveal requests
-          // (such as a full-width source line) to fight horizontal trackpad input.
           if target.size.width <= rect.size.width {
             if target.minX < rect.minX {
               horizontalOffset -= rect.minX - target.minX
@@ -178,10 +154,6 @@ public struct ScrollView: PrimitiveBlock {
   }
 }
 
-/// A clipped vertical viewport that retains measured row heights and only
-/// draws rows intersecting the viewport. Row IDs must remain stable across
-/// insertions and removals so cached heights continue to describe the same
-/// content. Changed rows should receive a changed ID.
 public struct LazyVStack: PrimitiveBlock {
   public struct Row {
     public var id: WidgetID

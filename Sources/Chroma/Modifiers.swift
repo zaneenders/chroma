@@ -1,5 +1,4 @@
 extension Block {
-  /// A fixed-size frame. Omitted dimensions keep the content's size.
   public func frame(
     width: Float? = nil,
     height: Float? = nil,
@@ -11,8 +10,6 @@ extension Block {
     )
   }
 
-  /// A greedy frame: `.infinity` dimensions take all proposed space, making
-  /// the block expand in stacks. Finite values cap the proposal instead.
   public func frame(
     maxWidth: Float? = nil,
     maxHeight: Float? = nil,
@@ -24,34 +21,27 @@ extension Block {
     )
   }
 
-  /// Insets the content on all edges by the given amounts.
   public func padding(_ insets: EdgeInsets) -> PaddingBlock {
     PaddingBlock(content: self, insets: insets)
   }
 
-  /// Insets the content on all edges by `amount`.
   public func padding(_ amount: Float) -> PaddingBlock {
     padding(EdgeInsets(amount))
   }
 
-  /// Draws `background` behind the content, sized to the content.
   public func background(_ background: any Block) -> BackgroundBlock {
     BackgroundBlock(content: self, background: background)
   }
 
-  /// Strokes a border inside the content's rect.
   public func border(_ color: Color, width: Float = 1) -> BorderBlock {
     BorderBlock(content: self, color: color, width: width)
   }
 
-  /// Clips drawing and pointer hit testing to the block's assigned rectangle.
   public func clipped() -> ClipBlock {
     ClipBlock(content: self)
   }
 }
 
-/// A frame around a block: fixed dimensions, greedy `.infinity` dimensions,
-/// and alignment of the content within the frame.
 public struct FrameBlock: PrimitiveBlock {
   public var content: any Block
   public var width: Float?
@@ -83,7 +73,6 @@ public struct FrameBlock: PrimitiveBlock {
   }
 }
 
-/// Insets around a block.
 public struct PaddingBlock: PrimitiveBlock {
   public var content: any Block
   public var insets: EdgeInsets
@@ -119,7 +108,6 @@ public struct PaddingBlock: PrimitiveBlock {
   }
 }
 
-/// A block drawn on top of a background sized to it.
 public struct BackgroundBlock: PrimitiveBlock {
   public var content: any Block
   public var background: any Block
@@ -137,7 +125,6 @@ public struct BackgroundBlock: PrimitiveBlock {
   }
 }
 
-/// A container that clips both rendering and interaction to its bounds.
 public struct ClipBlock: PrimitiveBlock {
   public var content: any Block
 
@@ -157,7 +144,6 @@ public struct ClipBlock: PrimitiveBlock {
   }
 }
 
-/// A block with a border stroked inside its rect.
 public struct BorderBlock: PrimitiveBlock {
   public var content: any Block
   public var color: Color

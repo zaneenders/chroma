@@ -2,18 +2,18 @@
 using namespace metal;
 
 struct TextInstance {
-  float2 dst_p0;   // top-left in NDC
-  float2 dst_p1;   // bottom-right in NDC
-  float2 tex_tl;   // texture top-left UV
-  float2 tex_br;   // texture bottom-right UV
-  float4 color;    // rgba
+  float2 dst_p0;
+  float2 dst_p1;
+  float2 tex_tl;
+  float2 tex_br;
+  float4 color;
 };
 
 constant float2 quadPositions[4] = {
-  float2(0.0, 0.0),  // top-left
-  float2(1.0, 0.0),  // top-right
-  float2(0.0, 1.0),  // bottom-left
-  float2(1.0, 1.0),  // bottom-right
+  float2(0.0, 0.0),
+  float2(1.0, 0.0),
+  float2(0.0, 1.0),
+  float2(1.0, 1.0),
 };
 
 struct TextVertexOut {
@@ -44,8 +44,8 @@ fragment float4 text_fragment(TextVertexOut in [[stage_in]],
 }
 
 struct GUIVertex {
-  float2 position;  // NDC
-  float2 uv;        // reserved for textured quads
+  float2 position;
+  float2 uv;
   float4 color;
 };
 

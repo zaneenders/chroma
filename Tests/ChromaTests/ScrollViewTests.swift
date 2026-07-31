@@ -180,8 +180,6 @@ struct ScrollViewTests {
       scrollDelta: Point(x: -40, y: 0)))
     #expect(interaction.horizontalScrollOffset(for: scrollID) == 40)
 
-    // This mirrors PackageSourceListing, whose hovered line rect spans the
-    // entire content width and requests visibility every frame.
     controller.scrollToVisible(Rect(x: -40, y: 0, width: 200, height: 10))
     frame()
     #expect(interaction.horizontalScrollOffset(for: scrollID) == 40)
@@ -196,7 +194,6 @@ struct ScrollViewTests {
     _ = drawFrame(interaction, controller: controller)
     #expect(interaction.scrollOffset(for: scrollID) == 15)
 
-    // This rectangle is already fully visible in current window coordinates.
     controller.scrollToVisible(Rect(x: 0, y: 5, width: 100, height: 10))
     _ = drawFrame(interaction, controller: controller)
     #expect(interaction.scrollOffset(for: scrollID) == 15)

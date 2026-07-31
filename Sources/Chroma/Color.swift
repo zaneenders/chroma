@@ -1,4 +1,3 @@
-/// An RGBA color with float components in the range 0...1.
 public struct Color: Equatable, Sendable {
   public var r: Float
   public var g: Float

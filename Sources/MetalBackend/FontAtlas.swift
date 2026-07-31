@@ -6,7 +6,6 @@ import Metal
 struct FontAtlas {
   let texture: MTLTexture
 
-  // FontMetrics is the single source of truth for glyph geometry.
   let glyphWidth: Int = Int(FontMetrics().glyphWidth)
   let glyphHeight: Int = Int(FontMetrics().glyphHeight)
   let glyphSpacing: Int = Int(FontMetrics().glyphSpacing)
@@ -71,13 +70,6 @@ struct FontAtlas {
     self.texture = texture
   }
 
-  /// Removes the tiny enclosed voids in the hand-authored masks.
-  ///
-  /// Curved transitions in the original artwork contain enclosed six-pixel
-  /// checkerboard gaps. At half scale they look like conspicuous diamonds.
-  /// Actual counters are far larger, so filling enclosed components of at most
-  /// eight pixels removes the artifacts while preserving `0`, `A`, `B`, `O`,
-  /// and other intentionally hollow glyphs.
   private static func closingPinholes(in rows: [UInt32], width: Int) -> [UInt32] {
     guard !rows.isEmpty, width > 0 else { return rows }
     let height = rows.count

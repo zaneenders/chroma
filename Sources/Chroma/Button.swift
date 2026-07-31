@@ -1,11 +1,3 @@
-/// A text button with a simple built-in style: hover and press feedback, and
-/// an action fired on click.
-///
-/// For full control over appearance, build on ``Interactive`` directly.
-///
-/// ```swift
-/// Button("Increment") { state.count += 1 }
-/// ```
 public struct Button: Block {
   public var label: String
   public var id: WidgetID
@@ -18,8 +10,6 @@ public struct Button: Block {
   public var borderColor: Color
   public var padding: EdgeInsets
 
-  /// The button's ID defaults to its label; pass `id` to disambiguate two
-  /// buttons that share a visible label.
   public init(
     _ label: String,
     id: WidgetID? = nil,

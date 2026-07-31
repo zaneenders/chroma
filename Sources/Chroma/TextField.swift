@@ -1,26 +1,5 @@
 import Foundation
 
-/// A single-line text field: the framework's insert mode.
-///
-/// The field is a leaf of the focus tree like any interactive widget. When
-/// the cursor is on it, activation — a click, or `enter` — enters insert
-/// mode: the backend starts sending text instead of navigation commands, a
-/// blinking caret appears, and every keystroke edits the value through
-/// `onChange`. `esc` (or `return`) ends the session, as does anything that
-/// moves the cursor away — a hover macro, a scroll step, another click —
-/// because there is only one cursor.
-///
-/// The value lives in application state and is re-read every frame, like
-/// everything else in the tree:
-///
-/// ```swift
-/// TextField("your name", text: { state.name }, onChange: { state.name = $0 })
-/// ```
-///
-/// The field expands horizontally and hugs its content vertically (one line
-/// of the bitmap font plus padding). Long text scrolls horizontally to keep
-/// the caret visible. Caret geometry assumes one monospace cell per
-/// character, which is exact for the ASCII bitmap font.
 public struct TextField: PrimitiveBlock {
   public var id: WidgetID
   public var placeholder: String
@@ -38,8 +17,6 @@ public struct TextField: PrimitiveBlock {
   public var borderColor: Color
   public var editingBorderColor: Color
 
-  /// The field's ID defaults to its placeholder; pass `id` to disambiguate
-  /// fields that share a placeholder.
   public init(
     _ placeholder: String = "",
     id: WidgetID? = nil,
@@ -77,16 +54,17 @@ public struct TextField: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { true }
 
   @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
-    let metrics = FontMetrics()
+    let metrics = Interaction.current.fontMetrics
     return Size(
       width: proposal.width,
-      height: metrics.glyphHeight * fontScale + 2 * padding + 2  // border
+      height: metrics.glyphHeight * fontScale + 2 * padding + 2
     )
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let metrics = FontMetrics()
-    let state = Interaction.current.textInputBehavior(
+    let interaction = Interaction.current
+    let metrics = interaction.fontMetrics
+    let state = interaction.textInputBehavior(
       id: id, rect: rect, text: getText(), onChange: onChange, onSubmit: onSubmit)
 
     drawList.fillRect(
@@ -101,7 +79,6 @@ public struct TextField: PrimitiveBlock {
       height: metrics.glyphHeight * fontScale)
     let cellWidth = metrics.cellAdvance * fontScale
 
-    // Scroll long text horizontally so the caret stays inside the clip.
     var textOffset: Float = 0
     if let caret = state.caretOffset {
       let caretX = Float(caret) * cellWidth
@@ -137,7 +114,6 @@ public struct TextField: PrimitiveBlock {
     drawList.popClip()
   }
 
-  /// The caret's blink phase: a ~1.2s cycle, visible 60% of the time.
   private static var caretVisible: Bool {
     Date().timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) < 0.72
   }

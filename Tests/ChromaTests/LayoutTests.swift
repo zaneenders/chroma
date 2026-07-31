@@ -1,8 +1,6 @@
 import Testing
 @testable import Chroma
 
-/// Regression tests for stack layout. TupleBlock overlays its children in one
-/// rect; stacks must receive flattened children so bottom chrome stays pinned.
 @MainActor
 struct LayoutTests {
   private let viewport = Rect(x: 0, y: 0, width: 400, height: 300)
@@ -125,7 +123,6 @@ struct LayoutTests {
     #expect(queuedY! > headerY! + 40)
     #expect(composerY! > queuedY!)
     #expect(statusY! > composerY!)
-    // Bottom chrome should live in the lower third, not float in the middle.
     #expect(queuedY! > viewport.size.height * 0.65)
     #expect(statusY! < viewport.size.height)
   }
@@ -174,8 +171,6 @@ struct LayoutTests {
   }
 }
 
-/// Mirrors the pre-fix ScribeMac pattern: computed properties referenced from
-/// another computed property's stack builder.
 private struct LegacyHost: Block {
   var showQueue: Bool
 

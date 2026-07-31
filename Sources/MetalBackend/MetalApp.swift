@@ -2,16 +2,6 @@
 
 import Chroma
 
-/// An ``App`` that runs on the Metal backend.
-///
-/// Apply `@main` to a conforming type; `main()` comes from this extension:
-///
-/// ```swift
-/// @main
-/// struct Chroma: MetalApp {
-///   var body: some Block { Specimen() }
-/// }
-/// ```
 public protocol MetalApp: App {}
 
 extension MetalApp {
