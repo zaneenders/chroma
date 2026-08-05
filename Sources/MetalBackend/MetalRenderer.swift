@@ -15,7 +15,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
   public let name = "Metal"
 
-  public let interaction = Interaction()
+  package let interaction = Interaction()
 
   public var content: (any Block)?
   public var onClose: (() -> Void)?

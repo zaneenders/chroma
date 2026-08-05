@@ -47,23 +47,15 @@ struct StatusBar: Block {
   let theme: Theme
   let state: DemoState
 
-  @MainActor var body: some Block {
-    let interaction = Interaction.current
-    let fps = Int(interaction.frameRate.rounded())
-    return VStack(spacing: 0) {
+  var body: some Block {
+    VStack(spacing: 0) {
       state.accent
         .frame(height: 1)
       HStack(spacing: 0) {
         if state.stats {
-          Text(interaction.isTextEditing ? "INSERT" : "NAV")
+          Text("CHROMA")
             .fontScale(theme.textScale)
-            .foregroundColor(interaction.isTextEditing ? theme.yellow : theme.green)
-          Text("  FPS: \(fps)")
-            .fontScale(theme.textScale)
-            .foregroundColor(theme.textSecondary)
-          Text("  Mouse: \(interaction.lastMacroDescription)")
-            .fontScale(theme.textScale)
-            .foregroundColor(state.accent)
+            .foregroundColor(theme.green)
         }
         Spacer()
         Text("Last action: \(state.lastAction) (\(state.actionCount))")

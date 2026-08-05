@@ -1,4 +1,4 @@
-public enum ScrollRequest: Equatable, Sendable {
+enum ScrollRequest: Equatable, Sendable {
   case top
   case bottom
   case offset(Float)

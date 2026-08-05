@@ -137,9 +137,9 @@ public struct ClipBlock: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     drawList.pushClip(rect)
-    context.interaction.pushClip(rect)
-    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
-    context.interaction.popClip()
+    context.withInteractionClip(rect) {
+      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    }
     drawList.popClip()
   }
 }

@@ -9,7 +9,7 @@ public final class WaylandRenderer: Renderer {
   public var content: (any Block)?
   public var onClose: (() -> Void)?
 
-  public let interaction = Interaction()
+  package let interaction = Interaction()
 
   public init() {}
 

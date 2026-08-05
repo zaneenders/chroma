@@ -1,6 +1,6 @@
 @MainActor
 extension Interaction {
-  public func textInputBehavior(
+  func textInputBehavior(
     id: WidgetID,
     rect: Rect,
     text: String,

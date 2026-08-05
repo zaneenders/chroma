@@ -1,5 +1,5 @@
 @MainActor
-public protocol Renderer: AnyObject {
+package protocol Renderer: AnyObject {
   var name: String { get }
 
   var content: (any Block)? { get set }

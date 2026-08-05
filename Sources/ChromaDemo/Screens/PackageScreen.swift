@@ -48,34 +48,33 @@ struct PackageSourceListing: PrimitiveBlock {
   }
 
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
-    let interaction = context.interaction
-    let lineHeight = FontMetrics().lineAdvance * theme.textScale
-    interaction.beginGroup(.vertical, rect: rect)
-    for (index, line) in lines.enumerated() {
-      let lineRect = Rect(
-        x: rect.minX,
-        y: rect.minY + Float(index) * lineHeight,
-        width: rect.size.width,
-        height: lineHeight
-      )
-      let state = interaction.interactiveBehavior(
-        id: WidgetID("package-line:\(index)"),
-        rect: lineRect
-      )
-      if state.hovered {
-        drawList.fillRect(lineRect, color: theme.buttonHover)
-        if !interaction.input.commands.isEmpty {
-          scrollController.scrollToVisible(lineRect)
+    let lineHeight = context.fontMetrics.lineAdvance * theme.textScale
+    context.withFocusGroup(.vertical, in: rect) {
+      for (index, line) in lines.enumerated() {
+        let lineRect = Rect(
+          x: rect.minX,
+          y: rect.minY + Float(index) * lineHeight,
+          width: rect.size.width,
+          height: lineHeight
+        )
+        let state = context.buttonState(
+          id: WidgetID("package-line:\(index)"),
+          in: lineRect
+        )
+        if state.hovered {
+          drawList.fillRect(lineRect, color: theme.buttonHover)
+          if !context.input.commands.isEmpty {
+            scrollController.scrollToVisible(lineRect)
+          }
         }
+        let isComment = line.trimmingCharacters(in: .whitespaces).hasPrefix("//")
+        drawList.text(
+          String(format: "%3d  %@", index + 1, String(line)),
+          at: lineRect.origin,
+          color: isComment ? theme.textSecondary : .white,
+          scale: theme.textScale
+        )
       }
-      let isComment = line.trimmingCharacters(in: .whitespaces).hasPrefix("//")
-      drawList.text(
-        String(format: "%3d  %@", index + 1, String(line)),
-        at: lineRect.origin,
-        color: isComment ? theme.textSecondary : .white,
-        scale: theme.textScale
-      )
     }
-    interaction.endGroup()
   }
 }

@@ -1,6 +1,6 @@
 @MainActor
 extension Interaction {
-  public func beginGroup(_ axis: FocusAxis, rect: Rect) {
+  func beginGroup(_ axis: FocusAxis, rect: Rect) {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
@@ -10,7 +10,7 @@ extension Interaction {
     builderStack.append(node)
   }
 
-  public func endGroup() {
+  func endGroup() {
     guard builderStack.count > 1, let node = builderStack.popLast() else {
       preconditionFailure("endGroup without a matching beginGroup")
     }
@@ -20,12 +20,12 @@ extension Interaction {
     }
   }
 
-  public var isCurrentGroupSelected: Bool {
+  var isCurrentGroupSelected: Bool {
     guard let selection, selectedLeafID == nil else { return false }
     return selection == builderPath
   }
 
-  public func focus(_ id: WidgetID, editing: Bool = false) {
+  func focus(_ id: WidgetID, editing: Bool = false) {
     guard let tree, let path = tree.findLeaf(id) else { return }
     moveCursor(to: path)
     if editing {

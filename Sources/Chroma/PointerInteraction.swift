@@ -1,18 +1,18 @@
 @MainActor
 extension Interaction {
-  public func pushClip(_ rect: Rect) {
+  func pushClip(_ rect: Rect) {
     let clip = clipStack.last.flatMap { $0.intersection(rect) } ?? (clipStack.isEmpty ? rect : .zero)
     clipStack.append(clip)
   }
 
-  public func popClip() {
+  func popClip() {
     guard !clipStack.isEmpty else {
       preconditionFailure("popClip without a matching pushClip")
     }
     clipStack.removeLast()
   }
 
-  public func interactiveBehavior(id: WidgetID, rect: Rect) -> ButtonState {
+  func interactiveBehavior(id: WidgetID, rect: Rect) -> ButtonState {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
     }

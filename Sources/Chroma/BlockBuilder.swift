@@ -4,7 +4,7 @@ public enum BlockBuilder {
     TupleBlock(children: flattenedChildren(Array(components)))
   }
 
-  public static func flattenedChildren(_ components: [any Block]) -> [any Block] {
+  static func flattenedChildren(_ components: [any Block]) -> [any Block] {
     components.flatMap(flatten)
   }
 

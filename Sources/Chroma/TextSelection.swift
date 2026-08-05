@@ -53,7 +53,7 @@ public final class TextSelectionManager {
   private var originLayoutID: WidgetID? = nil
   private(set) var selectionStart: Int?
   private(set) var selectionEnd: Int?
-  public var isSelecting: Bool = false
+  public private(set) var isSelecting: Bool = false
 
   var layoutRegistry = PlainTextLayoutRegistry()
 

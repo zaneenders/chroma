@@ -1,39 +1,39 @@
 @MainActor
-public final class Interaction {
-  public static var current = Interaction()
+package final class Interaction {
+  package static var current = Interaction()
 
-  public let textSelection = TextSelectionManager()
+  package let textSelection = TextSelectionManager()
 
-  public var fontMetrics = FontMetrics()
+  package var fontMetrics = FontMetrics()
 
-  public private(set) var input = InputState()
+  package private(set) var input = InputState()
 
-  public var frameRate: Double = 0
+  package var frameRate: Double = 0
 
-  public internal(set) var selection: [Int]?
+  package internal(set) var selection: [Int]?
 
-  public internal(set) var lastMacro: [UICommand] = []
+  package internal(set) var lastMacro: [UICommand] = []
 
-  public var groupCursorColor = Color(r: 0.35, g: 0.6, b: 1, a: 0.4)
+  package var groupCursorColor = Color(r: 0.35, g: 0.6, b: 1, a: 0.4)
 
   var tree: FocusNode?
 
   var pressedLeaf: WidgetID?
 
-  public internal(set) var editingLeaf: WidgetID?
+  package internal(set) var editingLeaf: WidgetID?
 
-  public internal(set) var caretOffset: Int = 0
+  package internal(set) var caretOffset: Int = 0
 
-  public var isTextEditing: Bool { editingLeaf != nil }
+  package var isTextEditing: Bool { editingLeaf != nil }
 
   var activatePending = false
 
   var lastPointerPosition = Point(x: -1, y: -1)
 
-  public private(set) var dragOrigin: Point? = nil
-  public private(set) var dragCurrent: Point = Point(x: -1, y: -1)
-  public var isDragging: Bool { dragOrigin != nil && input.pointerDown }
-  public var dragRect: Rect? {
+  package private(set) var dragOrigin: Point? = nil
+  package private(set) var dragCurrent: Point = Point(x: -1, y: -1)
+  package var isDragging: Bool { dragOrigin != nil && input.pointerDown }
+  package var dragRect: Rect? {
     guard let origin = dragOrigin, isDragging else { return nil }
     return Rect(
       x: min(origin.x, dragCurrent.x),
@@ -42,7 +42,7 @@ public final class Interaction {
       height: abs(dragCurrent.y - origin.y))
   }
 
-  public var onCopy: (() -> String?)?
+  package var onCopy: (() -> String?)?
 
   var scrollOffsets: [WidgetID: Float] = [:]
   var horizontalScrollOffsets: [WidgetID: Float] = [:]
@@ -59,9 +59,9 @@ public final class Interaction {
   var builderStack: [FocusNode] = []
   var builderPath: [Int] = []
 
-  public init() {}
+  package init() {}
 
-  public func beginFrame(input: InputState) {
+  package func beginFrame(input: InputState) {
     self.input = input
     activatePending = false
 
@@ -125,7 +125,7 @@ public final class Interaction {
     for command in input.commands { apply(command) }
   }
 
-  public func endFrame() {
+  package func endFrame() {
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {
       if let id = oldTree.node(at: selection)?.leafID {
