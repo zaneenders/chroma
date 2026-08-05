@@ -10,25 +10,25 @@ public final class Interaction {
 
   public var frameRate: Double = 0
 
-  public private(set) var selection: [Int]?
+  public internal(set) var selection: [Int]?
 
-  public private(set) var lastMacro: [UICommand] = []
+  public internal(set) var lastMacro: [UICommand] = []
 
   public var groupCursorColor = Color(r: 0.35, g: 0.6, b: 1, a: 0.4)
 
-  private var tree: FocusNode?
+  var tree: FocusNode?
 
-  private var pressedLeaf: WidgetID?
+  var pressedLeaf: WidgetID?
 
-  public private(set) var editingLeaf: WidgetID?
+  public internal(set) var editingLeaf: WidgetID?
 
-  public private(set) var caretOffset: Int = 0
+  public internal(set) var caretOffset: Int = 0
 
   public var isTextEditing: Bool { editingLeaf != nil }
 
-  private var activatePending = false
+  var activatePending = false
 
-  private var lastPointerPosition = Point(x: -1, y: -1)
+  var lastPointerPosition = Point(x: -1, y: -1)
 
   public private(set) var dragOrigin: Point? = nil
   public private(set) var dragCurrent: Point = Point(x: -1, y: -1)
@@ -44,20 +44,20 @@ public final class Interaction {
 
   public var onCopy: (() -> String?)?
 
-  private var scrollOffsets: [WidgetID: Float] = [:]
-  private var horizontalScrollOffsets: [WidgetID: Float] = [:]
-  private var scrollLimits: [WidgetID: Float] = [:]
-  private var horizontalScrollLimits: [WidgetID: Float] = [:]
-  private var scrollViewports: [Rect] = []
-  private var buildingScrollViewports: [Rect] = []
+  var scrollOffsets: [WidgetID: Float] = [:]
+  var horizontalScrollOffsets: [WidgetID: Float] = [:]
+  var scrollLimits: [WidgetID: Float] = [:]
+  var horizontalScrollLimits: [WidgetID: Float] = [:]
+  var scrollViewports: [Rect] = []
+  var buildingScrollViewports: [Rect] = []
 
-  private var clipStack: [Rect] = []
+  var clipStack: [Rect] = []
 
-  private var selectedLeafID: WidgetID?
+  var selectedLeafID: WidgetID?
 
-  private var builderRoot: FocusNode?
-  private var builderStack: [FocusNode] = []
-  private var builderPath: [Int] = []
+  var builderRoot: FocusNode?
+  var builderStack: [FocusNode] = []
+  var builderPath: [Int] = []
 
   public init() {}
 
@@ -146,320 +146,5 @@ public final class Interaction {
     builderStack = []
     buildingScrollViewports = []
     activatePending = false
-  }
-
-
-  public func beginGroup(_ axis: FocusAxis, rect: Rect) {
-    guard let parent = builderStack.last else {
-      preconditionFailure("beginGroup outside of a frame; call beginFrame first")
-    }
-    let node = FocusNode(kind: .group(axis), rect: rect)
-    parent.children.append(node)
-    builderPath.append(parent.children.count - 1)
-    builderStack.append(node)
-  }
-
-  public func endGroup() {
-    guard builderStack.count > 1, let node = builderStack.popLast() else {
-      preconditionFailure("endGroup without a matching beginGroup")
-    }
-    builderPath.removeLast()
-    if node.children.isEmpty {
-      builderStack.last?.children.removeLast()
-    }
-  }
-
-  public var isCurrentGroupSelected: Bool {
-    guard let selection, selectedLeafID == nil else { return false }
-    return selection == builderPath
-  }
-
-
-  public func pushClip(_ rect: Rect) {
-    let clip = clipStack.last.flatMap { $0.intersection(rect) } ?? (clipStack.isEmpty ? rect : .zero)
-    clipStack.append(clip)
-  }
-
-  public func popClip() {
-    guard !clipStack.isEmpty else {
-      preconditionFailure("popClip without a matching pushClip")
-    }
-    clipStack.removeLast()
-  }
-
-  public func registerScrollViewport(_ rect: Rect) {
-    buildingScrollViewports.append(rect)
-  }
-
-  public func scrollOffset(for id: WidgetID) -> Float {
-    scrollOffsets[id, default: 0]
-  }
-
-  public func setScrollOffset(_ offset: Float, for id: WidgetID) {
-    scrollOffsets[id] = max(0, offset)
-  }
-
-  public func horizontalScrollOffset(for id: WidgetID) -> Float {
-    horizontalScrollOffsets[id, default: 0]
-  }
-
-  public func setHorizontalScrollOffset(_ offset: Float, for id: WidgetID) {
-    horizontalScrollOffsets[id] = max(0, offset)
-  }
-
-  public func scrollLimit(for id: WidgetID) -> Float {
-    scrollLimits[id, default: 0]
-  }
-
-  public func setScrollLimit(_ limit: Float, for id: WidgetID) {
-    scrollLimits[id] = max(0, limit)
-  }
-
-  public func horizontalScrollLimit(for id: WidgetID) -> Float {
-    horizontalScrollLimits[id, default: 0]
-  }
-
-  public func setHorizontalScrollLimit(_ limit: Float, for id: WidgetID) {
-    horizontalScrollLimits[id] = max(0, limit)
-  }
-
-  public func interactiveBehavior(id: WidgetID, rect: Rect) -> ButtonState {
-    guard let parent = builderStack.last else {
-      preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
-    }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
-
-    let selected = selectedLeafID == id
-    let held = pressedLeaf == id && input.pointerDown
-    var clicked = false
-    if selected && activatePending {
-      clicked = true
-      activatePending = false
-    }
-    return ButtonState(hovered: selected, held: held, clicked: clicked)
-  }
-
-  public func textInputBehavior(
-    id: WidgetID,
-    rect: Rect,
-    text: String,
-    onChange: (String) -> Void,
-    onSubmit: ((String) -> Void)? = nil
-  ) -> TextInputState {
-    guard let parent = builderStack.last else {
-      preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")
-    }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
-
-    let selected = selectedLeafID == id
-    let held = pressedLeaf == id && input.pointerDown
-
-    if selected && activatePending {
-      activatePending = false
-      editingLeaf = id
-      caretOffset = text.count
-    }
-
-    var editing = editingLeaf == id
-    if editing {
-      var characters = Array(text)
-      caretOffset = min(caretOffset, characters.count)
-      var changed = false
-      eventLoop: for event in input.textEvents {
-        switch event {
-        case .insert(let inserted):
-          let graft = Array(inserted)
-          characters.insert(contentsOf: graft, at: caretOffset)
-          caretOffset += graft.count
-          changed = true
-        case .backspace:
-          if caretOffset > 0 {
-            characters.remove(at: caretOffset - 1)
-            caretOffset -= 1
-            changed = true
-          }
-        case .deleteForward:
-          if caretOffset < characters.count {
-            characters.remove(at: caretOffset)
-            changed = true
-          }
-        case .moveCaretLeft:
-          caretOffset = max(0, caretOffset - 1)
-        case .moveCaretRight:
-          caretOffset = min(characters.count, caretOffset + 1)
-        case .moveCaretToStart:
-          caretOffset = 0
-        case .moveCaretToEnd:
-          caretOffset = characters.count
-        case .submit:
-          if let onSubmit {
-            if changed {
-              onChange(String(characters))
-              changed = false
-            }
-            onSubmit(String(characters))
-          } else {
-            editingLeaf = nil
-            editing = false
-            break eventLoop
-          }
-        case .endEditing:
-          editingLeaf = nil
-          editing = false
-          break eventLoop
-        }
-      }
-      if changed {
-        onChange(String(characters))
-      }
-    }
-    return TextInputState(
-      hovered: selected, held: held, editing: editing,
-      caretOffset: editing ? caretOffset : nil)
-  }
-
-  private func clippedRect(_ rect: Rect) -> Rect {
-    guard let clip = clipStack.last else { return rect }
-    return rect.intersection(clip) ?? .zero
-  }
-
-
-  public var selectionDescription: String {
-    guard let selection else { return "—" }
-    let path = selection.isEmpty ? "·" : selection.map(String.init).joined(separator: ".")
-    let kind = selectedLeafID != nil ? "leaf" : selection.isEmpty ? "root" : "group"
-    return "\(path) (\(kind))"
-  }
-
-  public var lastMacroDescription: String {
-    lastMacro.isEmpty ? "—" : lastMacro.map(\.label).joined(separator: " ")
-  }
-
-
-  public func focus(_ id: WidgetID, editing: Bool = false) {
-    guard let tree, let path = tree.findLeaf(id) else { return }
-    moveCursor(to: path)
-    if editing {
-      editingLeaf = id
-      caretOffset = .max
-    }
-  }
-
-  private func moveCursor(to path: [Int]) {
-    guard let tree else { return }
-    if selection == nil { selection = [] }
-    let commands = tree.macro(from: selection ?? [], to: path)
-    for command in commands { apply(command) }
-    if !commands.isEmpty { lastMacro = commands }
-  }
-
-  private func apply(_ command: UICommand) {
-    guard let tree, let selection else { return }
-    switch command {
-    case .activate:
-      activatePending = true
-    case .in:
-      if let node = tree.node(at: selection), !node.children.isEmpty {
-        self.selection = selection + [0]
-      }
-    case .out:
-      if !selection.isEmpty {
-        self.selection = Array(selection.dropLast())
-      }
-    case .pageUp, .pageDown, .home, .end:
-      return
-    case .nextLeaf, .previousLeaf:
-      cycleLeaf(forward: command == .nextLeaf)
-    case .up, .down, .left, .right:
-      flattenedMove(command)
-    }
-  }
-
-  private func directionDelta(_ command: UICommand, axis: FocusAxis) -> Int? {
-    switch (axis, command) {
-    case (.vertical, .up), (.horizontal, .left), (.none, .up), (.none, .left):
-      return -1
-    case (.vertical, .down), (.horizontal, .right), (.none, .down), (.none, .right):
-      return 1
-    default:
-      return nil
-    }
-  }
-
-  private func flattenedMove(_ command: UICommand) {
-    guard let tree, let selection else { return }
-    let forward = command == .down || command == .right
-
-    var level = selection.count - 1
-    while level >= 0 {
-      let parentPath = Array(selection.prefix(level))
-      guard let parent = tree.node(at: parentPath), let axis = parent.axis else { break }
-      if let delta = directionDelta(command, axis: axis) {
-        let next = selection[level] + delta
-        if next >= 0, next < parent.children.count {
-          var newPath = parentPath + [next]
-          if level < selection.count - 1 {
-            while let node = tree.node(at: newPath), !node.isLeaf, !node.children.isEmpty {
-              newPath.append(forward ? 0 : node.children.count - 1)
-            }
-          }
-          self.selection = newPath
-          return
-        }
-      }
-      level -= 1
-    }
-
-  }
-
-  private func cycleLeaf(forward: Bool) {
-    guard let tree, let selection else { return }
-    let leaves = tree.leafPaths()
-    guard let first = leaves.first, let last = leaves.last else { return }
-    if forward {
-      self.selection = leaves.first(where: { selection.lexicographicallyPrecedes($0) }) ?? first
-    } else {
-      self.selection = leaves.last(where: { $0.lexicographicallyPrecedes(selection) }) ?? last
-    }
-  }
-}
-
-public enum InteractionPhase: Equatable, Sendable {
-  case idle
-  case hovered
-  case pressed
-}
-
-public struct ButtonState: Equatable, Sendable {
-  public var hovered: Bool
-  public var held: Bool
-  public var clicked: Bool
-
-  public init(hovered: Bool, held: Bool, clicked: Bool) {
-    self.hovered = hovered
-    self.held = held
-    self.clicked = clicked
-  }
-
-  public var phase: InteractionPhase {
-    held ? .pressed : hovered ? .hovered : .idle
-  }
-}
-
-public struct TextInputState: Equatable, Sendable {
-  public var hovered: Bool
-  public var held: Bool
-  public var editing: Bool
-  public var caretOffset: Int?
-
-  public init(hovered: Bool, held: Bool, editing: Bool, caretOffset: Int?) {
-    self.hovered = hovered
-    self.held = held
-    self.editing = editing
-    self.caretOffset = caretOffset
-  }
-
-  public var phase: InteractionPhase {
-    held ? .pressed : hovered ? .hovered : .idle
   }
 }
