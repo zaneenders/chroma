@@ -2,26 +2,27 @@ import Chroma
 import Foundation
 
 struct Entry: Block {
-  let theme: Theme
   let state: DemoState
 
   var body: some Block {
-    VStack(spacing: 0) {
-      Header(theme: theme, state: state)
-      HStack(spacing: theme.margin) {
-        Sidebar(theme: theme, state: state)
-          .frame(width: 248, alignment: .topLeading)
-        MainPanel(theme: theme, state: state)
+    ThemeReader { theme in
+      VStack(spacing: 0) {
+        Header(theme: theme, state: state)
+        HStack(spacing: DemoMetrics.margin) {
+          Sidebar(theme: theme, state: state)
+            .frame(width: 248, alignment: .topLeading)
+          MainPanel(theme: theme, state: state)
+        }
+        .padding(DemoMetrics.margin)
+        StatusBar(theme: theme, state: state)
       }
-      .padding(theme.margin)
-      StatusBar(theme: theme, state: state)
+      .background(theme.background)
     }
-    .background(theme.background)
   }
 }
 
 struct Header: Block {
-  let theme: Theme
+  let theme: ChromaTheme
   let state: DemoState
 
   var body: some Block {
@@ -31,20 +32,20 @@ struct Header: Block {
           ? "CHROMA  /  WORKBENCH"
           : "CHROMA  /  HELLO \(state.name.uppercased())"
       )
-      .fontScale(theme.textScale)
+      .fontScale(DemoMetrics.textScale)
       .foregroundColor(state.accent)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-      .padding(EdgeInsets(leading: theme.margin))
+      .padding(EdgeInsets(leading: DemoMetrics.margin))
       state.accent
         .frame(height: 1)
     }
-    .frame(height: theme.headerHeight)
-    .background(theme.headerBackground)
+    .frame(height: DemoMetrics.headerHeight)
+    .background(theme.elevatedSurface)
   }
 }
 
 struct StatusBar: Block {
-  let theme: Theme
+  let theme: ChromaTheme
   let state: DemoState
 
   var body: some Block {
@@ -54,39 +55,39 @@ struct StatusBar: Block {
       HStack(spacing: 0) {
         if state.stats {
           Text("CHROMA")
-            .fontScale(theme.textScale)
-            .foregroundColor(theme.green)
+            .fontScale(DemoMetrics.textScale)
+            .foregroundColor(theme.positive)
         }
         Spacer()
         Text("Last action: \(state.lastAction) (\(state.actionCount))")
-          .fontScale(theme.textScale)
-          .foregroundColor(theme.textSecondary)
+          .fontScale(DemoMetrics.textScale)
+          .foregroundColor(theme.secondaryForeground)
       }
-      .padding(EdgeInsets(leading: theme.margin, trailing: theme.margin))
+      .padding(EdgeInsets(leading: DemoMetrics.margin, trailing: DemoMetrics.margin))
     }
-    .frame(height: theme.statusHeight)
-    .background(theme.statusBackground)
+    .frame(height: DemoMetrics.statusHeight)
+    .background(theme.surface)
   }
 }
 
 struct Sidebar: Block {
-  let theme: Theme
+  let theme: ChromaTheme
   let state: DemoState
 
   var body: some Block {
-    VStack(spacing: theme.spacing, alignment: .leading) {
+    VStack(spacing: DemoMetrics.spacing, alignment: .leading) {
       SectionTitle(title: "CONTROLS", theme: theme)
-      DemoButton(label: "New Project", theme: theme, accent: state.accent) {
+      DemoButton(label: "New Project") {
         state.record("New Project")
       }
-      DemoButton(label: "Open...", theme: theme, accent: state.accent) {
+      DemoButton(label: "Open...") {
         state.record("Open...")
       }
-      DemoButton(label: "Save", theme: theme, accent: state.accent) {
+      DemoButton(label: "Save") {
         state.record("Save")
       }
 
-      Spacer().frame(height: theme.spacing)
+      Spacer().frame(height: DemoMetrics.spacing)
       SectionTitle(title: "OPTIONS", theme: theme)
       CheckRow(label: "Wireframe", isOn: state.wireframe, theme: theme, accent: state.accent) {
         state.wireframe.toggle()
@@ -101,34 +102,35 @@ struct Sidebar: Block {
         state.stats.toggle()
       }
 
-      Spacer().frame(height: theme.spacing)
+      Spacer().frame(height: DemoMetrics.spacing)
       SectionTitle(title: "PROFILE", theme: theme)
       TextField(
         "your name",
         id: WidgetID("field:name"),
-        fontScale: theme.textScale,
+        fontScale: DemoMetrics.textScale,
         padding: 7,
+        style: theme.textField,
         text: { state.name },
         onChange: { state.name = $0 }
       )
 
-      Spacer().frame(height: theme.spacing)
+      Spacer().frame(height: DemoMetrics.spacing)
       SectionTitle(title: "COLORS", theme: theme)
       SwatchGrid(theme: theme, state: state)
 
-      Spacer().frame(height: theme.spacing)
+      Spacer().frame(height: DemoMetrics.spacing)
       SectionTitle(title: "KEYS", theme: theme)
       KeyLegend(theme: theme)
     }
-    .padding(theme.panelPadding)
+    .padding(DemoMetrics.panelPadding)
     .frame(maxHeight: .infinity, alignment: .top)
-    .background(theme.panelBackground)
+    .background(theme.surface)
     .border(theme.border, width: 1)
   }
 }
 
 struct MainPanel: Block {
-  let theme: Theme
+  let theme: ChromaTheme
   let state: DemoState
 
   var body: some Block {
@@ -154,8 +156,8 @@ struct MainPanel: Block {
         }
         Spacer()
       }
-      .frame(height: theme.itemHeight)
-      .background(theme.headerBackground)
+      .frame(height: DemoMetrics.itemHeight)
+      .background(theme.elevatedSurface)
 
       if state.selectedTab == .package {
         PackagePanel(
@@ -167,7 +169,7 @@ struct MainPanel: Block {
         AsciiPanel(theme: theme, state: state)
       }
     }
-    .background(theme.panelBackground)
+    .background(theme.surface)
     .border(theme.border, width: 1)
   }
 }

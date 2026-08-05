@@ -1,6 +1,7 @@
 @MainActor
 public struct RenderContext {
   package var interaction: Interaction
+  public var theme: ChromaTheme
 
   public var selection: TextSelectionManager { interaction.textSelection }
 
@@ -14,12 +15,20 @@ public struct RenderContext {
   /// Custom primitives should inspect this snapshot instead of mutating engine state.
   public var input: InputState { interaction.input }
 
-  public init() {
+  public init(theme: ChromaTheme = .dark) {
     self.interaction = Interaction()
+    self.theme = theme
   }
 
-  package init(interaction: Interaction) {
+  package init(interaction: Interaction, theme: ChromaTheme = .dark) {
     self.interaction = interaction
+    self.theme = theme
+  }
+
+  public func withTheme(_ theme: ChromaTheme) -> RenderContext {
+    var copy = self
+    copy.theme = theme
+    return copy
   }
 
   /// Registers an interactive leaf and returns its state for the current frame.

@@ -2,7 +2,7 @@ import Chroma
 import Foundation
 
 struct PackagePanel: Block {
-  let theme: Theme
+  let theme: ChromaTheme
   let source: String
   let scrollController: ScrollViewController
 
@@ -12,27 +12,27 @@ struct PackagePanel: Block {
       showsIndicator: true,
       controller: scrollController
     ) {
-      VStack(spacing: theme.spacing, alignment: .leading) {
+      VStack(spacing: DemoMetrics.spacing, alignment: .leading) {
         Text("PACKAGE.SWIFT   /   UP-DOWN SELECT   /   WHEEL SCROLL")
-          .fontScale(theme.textScale)
-          .foregroundColor(theme.yellow)
+          .fontScale(DemoMetrics.textScale)
+          .foregroundColor(theme.warning)
         PackageSourceListing(
           theme: theme,
           source: source,
           scrollController: scrollController
         )
       }
-      .padding(theme.panelPadding)
+      .padding(DemoMetrics.panelPadding)
     }
   }
 }
 
 struct PackageSourceListing: PrimitiveBlock {
-  let theme: Theme
+  let theme: ChromaTheme
   let lines: [Substring]
   let scrollController: ScrollViewController
 
-  init(theme: Theme, source: String, scrollController: ScrollViewController) {
+  init(theme: ChromaTheme, source: String, scrollController: ScrollViewController) {
     self.theme = theme
     self.lines = source.split(separator: "\n", omittingEmptySubsequences: false)
     self.scrollController = scrollController
@@ -42,13 +42,13 @@ struct PackageSourceListing: PrimitiveBlock {
     let metrics = FontMetrics()
     let longestLine = lines.map(\.utf8.count).max() ?? 0
     return Size(
-      width: Float(longestLine + 5) * metrics.cellAdvance * theme.textScale,
-      height: Float(lines.count) * metrics.lineAdvance * theme.textScale
+      width: Float(longestLine + 5) * metrics.cellAdvance * DemoMetrics.textScale,
+      height: Float(lines.count) * metrics.lineAdvance * DemoMetrics.textScale
     )
   }
 
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
-    let lineHeight = context.fontMetrics.lineAdvance * theme.textScale
+    let lineHeight = context.fontMetrics.lineAdvance * DemoMetrics.textScale
     context.withFocusGroup(.vertical, in: rect) {
       for (index, line) in lines.enumerated() {
         let lineRect = Rect(
@@ -62,7 +62,7 @@ struct PackageSourceListing: PrimitiveBlock {
           in: lineRect
         )
         if state.hovered {
-          drawList.fillRect(lineRect, color: theme.buttonHover)
+          drawList.fillRect(lineRect, color: theme.button.hoveredBackground)
           if !context.input.commands.isEmpty {
             scrollController.scrollToVisible(lineRect)
           }
@@ -71,8 +71,8 @@ struct PackageSourceListing: PrimitiveBlock {
         drawList.text(
           String(format: "%3d  %@", index + 1, String(line)),
           at: lineRect.origin,
-          color: isComment ? theme.textSecondary : .white,
-          scale: theme.textScale
+          color: isComment ? theme.secondaryForeground : .white,
+          scale: DemoMetrics.textScale
         )
       }
     }

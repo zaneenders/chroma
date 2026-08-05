@@ -3,19 +3,19 @@ import Foundation
 
 struct SectionTitle: Block {
   let title: String
-  let theme: Theme
+  let theme: ChromaTheme
 
   var body: some Block {
     Text(title)
-      .fontScale(theme.textScale)
-      .foregroundColor(theme.textSecondary)
-      .frame(height: theme.itemHeight, alignment: .leading)
-      .padding(EdgeInsets(bottom: theme.spacing))
+      .fontScale(DemoMetrics.textScale)
+      .foregroundColor(theme.secondaryForeground)
+      .frame(height: DemoMetrics.itemHeight, alignment: .leading)
+      .padding(EdgeInsets(bottom: DemoMetrics.spacing))
   }
 }
 
 struct KeyLegend: Block {
-  let theme: Theme
+  let theme: ChromaTheme
 
   var body: some Block {
     VStack(spacing: 4, alignment: .leading) {
@@ -30,7 +30,7 @@ struct KeyLegend: Block {
 }
 
 extension Text {
-  fileprivate func legendStyle(_ theme: Theme) -> Text {
-    fontScale(theme.textScale).foregroundColor(theme.textSecondary)
+  fileprivate func legendStyle(_ theme: ChromaTheme) -> Text {
+    fontScale(DemoMetrics.textScale).foregroundColor(theme.secondaryForeground)
   }
 }

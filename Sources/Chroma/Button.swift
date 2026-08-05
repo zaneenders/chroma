@@ -1,24 +1,16 @@
-public struct Button: Block {
+public struct Button: PrimitiveBlock {
   public var label: String
   public var id: WidgetID
   public var action: () -> Void
   public var fontScale: Float
-  public var textColor: Color
-  public var idleColor: Color
-  public var hoveredColor: Color
-  public var pressedColor: Color
-  public var borderColor: Color
+  public var style: ButtonStyle?
   public var padding: EdgeInsets
 
   public init(
     _ label: String,
     id: WidgetID? = nil,
     fontScale: Float = 1,
-    textColor: Color = .white,
-    idleColor: Color = Color(r: 0.18, g: 0.20, b: 0.30, a: 1),
-    hoveredColor: Color = Color(r: 0.24, g: 0.28, b: 0.42, a: 1),
-    pressedColor: Color = Color(r: 0.30, g: 0.60, b: 1.00, a: 1),
-    borderColor: Color = Color(r: 0.22, g: 0.22, b: 0.32, a: 1),
+    style: ButtonStyle? = nil,
     padding: EdgeInsets = EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16),
     action: @escaping () -> Void
   ) {
@@ -26,30 +18,34 @@ public struct Button: Block {
     self.id = id ?? WidgetID(label)
     self.action = action
     self.fontScale = fontScale
-    self.textColor = textColor
-    self.idleColor = idleColor
-    self.hoveredColor = hoveredColor
-    self.pressedColor = pressedColor
-    self.borderColor = borderColor
+    self.style = style
     self.padding = padding
   }
 
-  public var body: some Block {
-    Interactive(id: id, action: action) { phase in
-      Text(label)
-        .fontScale(fontScale)
-        .foregroundColor(textColor)
-        .padding(padding)
-        .background(color(for: phase))
-        .border(borderColor, width: 1)
-    }
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    let textSize = context.fontMetrics.measure(label, scale: fontScale)
+    return Size(
+      width: textSize.width + padding.leading + padding.trailing,
+      height: textSize.height + padding.top + padding.bottom)
   }
 
-  private func color(for phase: InteractionPhase) -> Color {
-    switch phase {
-    case .idle: idleColor
-    case .hovered: hoveredColor
-    case .pressed: pressedColor
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let style = style ?? context.theme.button
+    let state = context.buttonState(id: id, in: rect)
+    if state.clicked { action() }
+
+    let background: Color
+    switch state.phase {
+    case .idle: background = style.idleBackground
+    case .hovered: background = style.hoveredBackground
+    case .pressed: background = style.pressedBackground
     }
+    drawList.fillRect(rect, color: background)
+    drawList.strokeRect(rect, width: 1, color: style.border)
+    drawList.text(
+      label,
+      at: Point(x: rect.minX + padding.leading, y: rect.minY + padding.top),
+      color: style.foreground,
+      scale: fontScale)
   }
 }

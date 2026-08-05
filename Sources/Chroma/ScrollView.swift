@@ -56,8 +56,7 @@ public struct ScrollView: PrimitiveBlock {
       proposal: Size(
         width: rect.size.width,
         height: Float.greatestFiniteMagnitude
-      )
-    , context: context)
+      ), context: context)
     let maximumOffset = max(0, contentSize.height - rect.size.height)
     let maximumHorizontalOffset = max(0, contentSize.width - rect.size.width)
     let previousLimit = interaction.scrollLimit(for: id)
@@ -127,28 +126,28 @@ public struct ScrollView: PrimitiveBlock {
       into: &drawList,
       in: Rect(
         x: rect.minX - horizontalOffset, y: rect.minY - offset,
-        width: contentSize.width, height: contentSize.height)
-    , context: context)
+        width: contentSize.width, height: contentSize.height), context: context)
     interaction.popClip()
 
+    let style = context.theme.scrollView
     if showsIndicator && maximumOffset > 0 && rect.size.height > 0 {
-      let trackWidth: Float = 3
-      let thumbHeight = max(12, rect.size.height * rect.size.height / contentSize.height)
+      let trackWidth = style.indicatorThickness
+      let thumbHeight = max(style.minimumThumbLength, rect.size.height * rect.size.height / contentSize.height)
       let travel = rect.size.height - thumbHeight
       let thumbY = rect.minY + travel * (offset / maximumOffset)
       drawList.fillRect(
         Rect(x: rect.maxX - trackWidth, y: thumbY, width: trackWidth, height: thumbHeight),
-        color: Color(r: 1, g: 1, b: 1, a: 0.45)
+        color: style.indicator
       )
     }
     if showsIndicator && maximumHorizontalOffset > 0 && rect.size.width > 0 {
-      let trackHeight: Float = 3
-      let thumbWidth = max(12, rect.size.width * rect.size.width / contentSize.width)
+      let trackHeight = style.indicatorThickness
+      let thumbWidth = max(style.minimumThumbLength, rect.size.width * rect.size.width / contentSize.width)
       let travel = rect.size.width - thumbWidth
       let thumbX = rect.minX + travel * (horizontalOffset / maximumHorizontalOffset)
       drawList.fillRect(
         Rect(x: thumbX, y: rect.maxY - trackHeight, width: thumbWidth, height: trackHeight),
-        color: Color(r: 1, g: 1, b: 1, a: 0.45)
+        color: style.indicator
       )
     }
     drawList.popClip()

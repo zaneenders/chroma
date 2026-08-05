@@ -50,7 +50,7 @@ public struct Text: PrimitiveBlock {
         let selW = Float(sel.to - sel.from) * cellWidth
         drawList.fillRect(
           Rect(x: selX, y: rect.minY, width: selW, height: lineHeight),
-          color: Color(r: 0.3, g: 0.6, b: 1.0, a: 0.5))
+          color: context.theme.focus.selectionBackground)
 
         let prefix = content.prefix(sel.from)
         if !prefix.isEmpty {
@@ -62,7 +62,7 @@ public struct Text: PrimitiveBlock {
           let selOrigin = Point(x: rect.minX + Float(sel.from) * cellWidth, y: rect.minY)
           drawList.text(
             String(selected), at: selOrigin,
-            color: Color(r: 1 - color.r, g: 1 - color.g, b: 1 - color.b, a: 1),
+            color: context.theme.focus.selectionForeground,
             scale: scale)
         }
         let suffix = content.dropFirst(sel.to)

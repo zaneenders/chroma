@@ -8,28 +8,14 @@ public struct TextField: PrimitiveBlock {
   public var onSubmit: ((String) -> Void)?
   public var fontScale: Float
   public var padding: Float
-  public var textColor: Color
-  public var placeholderColor: Color
-  public var caretColor: Color
-  public var idleColor: Color
-  public var hoveredColor: Color
-  public var editingColor: Color
-  public var borderColor: Color
-  public var editingBorderColor: Color
+  public var style: TextFieldStyle?
 
   public init(
     _ placeholder: String = "",
     id: WidgetID? = nil,
     fontScale: Float = 1,
     padding: Float = 8,
-    textColor: Color = .white,
-    placeholderColor: Color = Color(r: 0.45, g: 0.45, b: 0.55, a: 1),
-    caretColor: Color = .white,
-    idleColor: Color = Color(r: 0.14, g: 0.15, b: 0.22, a: 1),
-    hoveredColor: Color = Color(r: 0.17, g: 0.19, b: 0.28, a: 1),
-    editingColor: Color = Color(r: 0.10, g: 0.12, b: 0.20, a: 1),
-    borderColor: Color = Color(r: 0.22, g: 0.22, b: 0.32, a: 1),
-    editingBorderColor: Color = Color(r: 0.3, g: 0.6, b: 1.0, a: 1),
+    style: TextFieldStyle? = nil,
     text getText: @escaping () -> String,
     onChange: @escaping (String) -> Void,
     onSubmit: ((String) -> Void)? = nil
@@ -41,14 +27,7 @@ public struct TextField: PrimitiveBlock {
     self.onSubmit = onSubmit
     self.fontScale = fontScale
     self.padding = padding
-    self.textColor = textColor
-    self.placeholderColor = placeholderColor
-    self.caretColor = caretColor
-    self.idleColor = idleColor
-    self.hoveredColor = hoveredColor
-    self.editingColor = editingColor
-    self.borderColor = borderColor
-    self.editingBorderColor = editingBorderColor
+    self.style = style
   }
 
   @MainActor public var expandsHorizontally: Bool { true }
@@ -63,13 +42,14 @@ public struct TextField: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let metrics = context.fontMetrics
+    let style = style ?? context.theme.textField
     let state = context.textInputState(
       id: id, in: rect, text: getText(), onChange: onChange, onSubmit: onSubmit)
 
     drawList.fillRect(
       rect,
-      color: state.editing ? editingColor : state.hovered ? hoveredColor : idleColor)
-    drawList.strokeRect(rect, width: 1, color: state.editing ? editingBorderColor : borderColor)
+      color: state.editing ? style.editingBackground : state.hovered ? style.hoveredBackground : style.idleBackground)
+    drawList.strokeRect(rect, width: 1, color: state.editing ? style.editingBorder : style.border)
 
     let inner = Rect(
       x: rect.minX + padding,
@@ -93,12 +73,12 @@ public struct TextField: PrimitiveBlock {
     drawList.pushClip(inner)
     let text = getText()
     if text.isEmpty && !state.editing {
-      drawList.text(placeholder, at: inner.origin, color: placeholderColor, scale: fontScale)
+      drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: fontScale)
     } else {
       drawList.text(
         text,
         at: Point(x: inner.minX + textOffset, y: inner.minY),
-        color: textColor,
+        color: style.foreground,
         scale: fontScale)
     }
     if let caret = state.caretOffset, Self.caretVisible {
@@ -108,7 +88,7 @@ public struct TextField: PrimitiveBlock {
           y: inner.minY - 1,
           width: max(1, fontScale),
           height: inner.size.height + 2),
-        color: caretColor)
+        color: style.caret)
     }
     drawList.popClip()
   }

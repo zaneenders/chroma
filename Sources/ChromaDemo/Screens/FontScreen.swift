@@ -2,7 +2,7 @@ import Chroma
 import Foundation
 
 struct AsciiPanel: PrimitiveBlock {
-  let theme: Theme
+  let theme: ChromaTheme
   let state: DemoState
 
   var expandsHorizontally: Bool { true }
@@ -18,13 +18,13 @@ struct AsciiPanel: PrimitiveBlock {
     let lines = [Array("20x28 PRINTABLE  ASCII  20..7E".utf8)] + printableRows
 
     let metrics = FontMetrics()
-    let availableWidth = rect.size.width - 2 * theme.panelPadding
-    let availableHeight = rect.size.height - 2 * theme.panelPadding
+    let availableWidth = rect.size.width - 2 * DemoMetrics.panelPadding
+    let availableHeight = rect.size.height - 2 * DemoMetrics.panelPadding
     let longestLine = Float(lines.map(\.count).max() ?? 1)
     let widthScale = availableWidth / (longestLine * metrics.cellAdvance)
     let heightScale = availableHeight / (Float(lines.count) * metrics.lineAdvance)
     let scale = max(1, min(3, floor(min(widthScale, heightScale))))
-    let origin = Point(x: rect.minX + theme.panelPadding, y: rect.minY + theme.panelPadding)
+    let origin = Point(x: rect.minX + DemoMetrics.panelPadding, y: rect.minY + DemoMetrics.panelPadding)
 
     if state.grid {
       let gridColor = Color(r: 0.5, g: 0.6, b: 0.8, a: 0.06)
@@ -59,7 +59,7 @@ struct AsciiPanel: PrimitiveBlock {
           x: origin.x,
           y: origin.y + Float(row) * metrics.lineAdvance * scale
         ),
-        color: row == 0 ? theme.yellow : .white,
+        color: row == 0 ? theme.warning : .white,
         scale: scale
       )
     }

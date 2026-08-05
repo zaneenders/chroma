@@ -4,7 +4,7 @@ import Foundation
 struct CheckRow: Block {
   let label: String
   let isOn: Bool
-  let theme: Theme
+  let theme: ChromaTheme
   let accent: Color
   let action: () -> Void
 
@@ -12,10 +12,10 @@ struct CheckRow: Block {
     Interactive(id: "check:\(label)", action: action) { phase in
       HStack(spacing: 10, alignment: .center) {
         ZStack {
-          isOn ? accent : theme.buttonIdle
+          isOn ? accent : theme.button.idleBackground
           if isOn {
             Text("+")
-              .fontScale(theme.textScale)
+              .fontScale(DemoMetrics.textScale)
               .foregroundColor(.white)
           }
         }
@@ -23,13 +23,13 @@ struct CheckRow: Block {
         .border(isOn ? accent : theme.border, width: 1)
 
         Text(label)
-          .fontScale(theme.textScale)
+          .fontScale(DemoMetrics.textScale)
           .foregroundColor(.white)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .frame(height: theme.itemHeight, alignment: .leading)
+      .frame(height: DemoMetrics.itemHeight, alignment: .leading)
       .padding(EdgeInsets(leading: 6))
-      .background(theme.highlightColor(for: phase))
+      .background((phase == .idle ? .clear : Color(r: 1, g: 1, b: 1, a: phase == .hovered ? 0.06 : 0.12)))
     }
   }
 }

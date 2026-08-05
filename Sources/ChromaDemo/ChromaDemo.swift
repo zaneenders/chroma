@@ -21,6 +21,7 @@ struct ChromaDemo: PlatformApp {
   private let state = DemoState()
 
   var body: some Block {
-    Entry(theme: Theme(), state: state)
+    Entry(state: state)
+      .chromaTheme(ChromaTheme.dark.accentColor(state.accent))
   }
 }
