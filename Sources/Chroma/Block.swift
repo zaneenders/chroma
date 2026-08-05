@@ -9,9 +9,9 @@ extension Never: Block {
 }
 
 public protocol PrimitiveBlock: Block where Body == Never {
-  @MainActor func sizeThatFits(_ proposal: Size) -> Size
+  @MainActor func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size
 
-  @MainActor func draw(into drawList: inout DrawList, in rect: Rect)
+  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext)
 
   @MainActor var expandsHorizontally: Bool { get }
 
@@ -39,19 +39,19 @@ public struct TupleBlock: PrimitiveBlock {
     children.contains { BlockEngine.expandsVertically($0) }
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     var result = Size.zero
     for child in children {
-      let size = BlockEngine.measure(child, proposal: proposal)
+      let size = BlockEngine.measure(child, proposal: proposal, context: context)
       result.width = max(result.width, size.width)
       result.height = max(result.height, size.height)
     }
     return result
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     for child in children {
-      BlockEngine.draw(child, into: &drawList, in: rect)
+      BlockEngine.draw(child, into: &drawList, in: rect, context: context)
     }
   }
 }

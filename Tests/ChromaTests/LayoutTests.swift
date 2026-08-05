@@ -104,10 +104,10 @@ struct LayoutTests {
 
   @Test func readyLayoutPinsBottomChromeBelowTranscript() {
     let interaction = Interaction()
-    Interaction.current = interaction
+    let context = RenderContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(Host(showQueue: true), into: &list, in: viewport)
+    BlockEngine.draw(Host(showQueue: true), into: &list, in: viewport, context: context)
     interaction.endFrame()
 
     let positions = textPositions(in: list)
@@ -129,10 +129,10 @@ struct LayoutTests {
 
   @Test func computedPropertyBottomChromeStillStacksChildren() {
     let interaction = Interaction()
-    Interaction.current = interaction
+    let context = RenderContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(LegacyHost(showQueue: true), into: &list, in: viewport)
+    BlockEngine.draw(LegacyHost(showQueue: true), into: &list, in: viewport, context: context)
     interaction.endFrame()
 
     let positions = textPositions(in: list)
@@ -160,14 +160,15 @@ struct LayoutTests {
       Text("bottom")
     }
     let proposal = Size(width: 400, height: 300)
+    let context = RenderContext()
 
     #expect(BlockEngine.expandsHorizontally(horizontal))
     #expect(!BlockEngine.expandsVertically(horizontal))
-    #expect(BlockEngine.measure(horizontal, proposal: proposal).height < proposal.height)
+    #expect(BlockEngine.measure(horizontal, proposal: proposal, context: context).height < proposal.height)
 
     #expect(!BlockEngine.expandsHorizontally(vertical))
     #expect(BlockEngine.expandsVertically(vertical))
-    #expect(BlockEngine.measure(vertical, proposal: proposal).width < proposal.width)
+    #expect(BlockEngine.measure(vertical, proposal: proposal, context: context).width < proposal.width)
   }
 }
 

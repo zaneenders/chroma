@@ -46,10 +46,10 @@ public struct ScrollView: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size { proposal }
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let interaction = Interaction.current
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let interaction = context.interaction
     interaction.registerScrollViewport(rect)
     let contentSize = BlockEngine.measure(
       content,
@@ -57,7 +57,7 @@ public struct ScrollView: PrimitiveBlock {
         width: rect.size.width,
         height: Float.greatestFiniteMagnitude
       )
-    )
+    , context: context)
     let maximumOffset = max(0, contentSize.height - rect.size.height)
     let maximumHorizontalOffset = max(0, contentSize.width - rect.size.width)
     let previousLimit = interaction.scrollLimit(for: id)
@@ -128,7 +128,7 @@ public struct ScrollView: PrimitiveBlock {
       in: Rect(
         x: rect.minX - horizontalOffset, y: rect.minY - offset,
         width: contentSize.width, height: contentSize.height)
-    )
+    , context: context)
     interaction.popClip()
 
     if showsIndicator && maximumOffset > 0 && rect.size.height > 0 {

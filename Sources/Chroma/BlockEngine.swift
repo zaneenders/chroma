@@ -1,21 +1,30 @@
 @MainActor
 public enum BlockEngine {
-  public static func measure(_ block: any Block, proposal: Size) -> Size {
+  public static func measure(
+    _ block: any Block,
+    proposal: Size,
+    context: RenderContext
+  ) -> Size {
     func open<B: Block>(_ block: B) -> Size {
       if let primitive = block as? any PrimitiveBlock {
-        return primitive.sizeThatFits(proposal)
+        return primitive.sizeThatFits(proposal, context: context)
       }
-      return measure(block.body, proposal: proposal)
+      return measure(block.body, proposal: proposal, context: context)
     }
     return open(block)
   }
 
-  public static func draw(_ block: any Block, into drawList: inout DrawList, in rect: Rect) {
+  public static func draw(
+    _ block: any Block,
+    into drawList: inout DrawList,
+    in rect: Rect,
+    context: RenderContext
+  ) {
     func open<B: Block>(_ block: B) {
       if let primitive = block as? any PrimitiveBlock {
-        primitive.draw(into: &drawList, in: rect)
+        primitive.draw(into: &drawList, in: rect, context: context)
       } else {
-        draw(block.body, into: &drawList, in: rect)
+        draw(block.body, into: &drawList, in: rect, context: context)
       }
     }
     open(block)

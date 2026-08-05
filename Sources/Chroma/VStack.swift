@@ -23,8 +23,8 @@ public struct VStack: PrimitiveBlock {
     children.contains { BlockEngine.expandsVertically($0) }
   }
 
-  @MainActor private func layout(proposal: Size) -> [Size] {
-    var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
+  @MainActor private func layout(proposal: Size, context: RenderContext) -> [Size] {
+    var sizes = children.map { BlockEngine.measure($0, proposal: proposal, context: context) }
     for index in sizes.indices where children[index] is Spacer {
       sizes[index].width = 0
     }
@@ -47,17 +47,17 @@ public struct VStack: PrimitiveBlock {
     return sizes
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     guard !children.isEmpty else { return .zero }
-    let sizes = layout(proposal: proposal)
+    let sizes = layout(proposal: proposal, context: context)
     let height = sizes.reduce(0) { $0 + $1.height } + spacing * Float(sizes.count - 1)
     let width = sizes.map(\.width).max() ?? 0
     return Size(width: width, height: height)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let sizes = layout(proposal: rect.size)
-    let interaction = Interaction.current
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let sizes = layout(proposal: rect.size, context: context)
+    let interaction = context.interaction
     interaction.beginGroup(.vertical, rect: rect)
     let cursorOnGroup = interaction.isCurrentGroupSelected
     var y = rect.minY
@@ -69,7 +69,7 @@ public struct VStack: PrimitiveBlock {
       case .center: x = rect.minX + (rect.size.width - width) / 2
       case .trailing: x = rect.maxX - width
       }
-      BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: width, height: size.height))
+      BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: width, height: size.height), context: context)
       y += size.height + spacing
     }
     interaction.endGroup()

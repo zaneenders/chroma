@@ -30,13 +30,13 @@ public struct Text: PrimitiveBlock {
     return copy
   }
 
-  public func sizeThatFits(_ proposal: Size) -> Size {
-    Interaction.current.fontMetrics.measure(content, scale: scale)
+  public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    context.interaction.fontMetrics.measure(content, scale: scale)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect) {
+  public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     if isSelectable, let id = selectionID {
-      let interaction = Interaction.current
+      let interaction = context.interaction
       let metrics = interaction.fontMetrics
       let cellWidth = metrics.cellAdvance * scale
       let lineHeight = metrics.lineAdvance * scale

@@ -23,8 +23,8 @@ public struct HStack: PrimitiveBlock {
     }
   }
 
-  @MainActor private func layout(proposal: Size) -> [Size] {
-    var sizes = children.map { BlockEngine.measure($0, proposal: proposal) }
+  @MainActor private func layout(proposal: Size, context: RenderContext) -> [Size] {
+    var sizes = children.map { BlockEngine.measure($0, proposal: proposal, context: context) }
     for index in sizes.indices where children[index] is Spacer {
       sizes[index].height = 0
     }
@@ -47,17 +47,17 @@ public struct HStack: PrimitiveBlock {
     return sizes
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     guard !children.isEmpty else { return .zero }
-    let sizes = layout(proposal: proposal)
+    let sizes = layout(proposal: proposal, context: context)
     let width = sizes.reduce(0) { $0 + $1.width } + spacing * Float(sizes.count - 1)
     let height = sizes.map(\.height).max() ?? 0
     return Size(width: width, height: height)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let sizes = layout(proposal: rect.size)
-    let interaction = Interaction.current
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let sizes = layout(proposal: rect.size, context: context)
+    let interaction = context.interaction
     interaction.beginGroup(.horizontal, rect: rect)
     let cursorOnGroup = interaction.isCurrentGroupSelected
     var x = rect.minX
@@ -69,7 +69,7 @@ public struct HStack: PrimitiveBlock {
       case .center: y = rect.minY + (rect.size.height - height) / 2
       case .bottom: y = rect.maxY - height
       }
-      BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: size.width, height: height))
+      BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: size.width, height: height), context: context)
       x += size.width + spacing
     }
     interaction.endGroup()

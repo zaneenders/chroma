@@ -34,12 +34,12 @@ public struct LazyVStack: PrimitiveBlock {
 
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size { proposal }
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let interaction = Interaction.current
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let interaction = context.interaction
     interaction.registerScrollViewport(rect)
-    updateCache(width: rect.size.width)
+    updateCache(width: rect.size.width, context: context)
 
     var contentHeight = controller.lazyStackCache.rowSizes.reduce(0) { $0 + $1.height }
     contentHeight += spacing * Float(max(0, rows.count - 1))
@@ -98,7 +98,7 @@ public struct LazyVStack: PrimitiveBlock {
           in: Rect(
             x: rect.minX, y: rect.minY + y - offset,
             width: rect.size.width, height: height)
-        )
+        , context: context)
       }
       y = bottom + spacing
     }
@@ -118,7 +118,7 @@ public struct LazyVStack: PrimitiveBlock {
     drawList.popClip()
   }
 
-  @MainActor private func updateCache(width: Float) {
+  @MainActor private func updateCache(width: Float, context: RenderContext) {
     let cache = controller.lazyStackCache
     var oldSizes: [WidgetID: Size] = [:]
     if cache.width == width {
@@ -137,7 +137,7 @@ public struct LazyVStack: PrimitiveBlock {
           BlockEngine.measure(
             row.content,
             proposal: Size(width: width, height: Float.greatestFiniteMagnitude)
-          ))
+          , context: context))
       }
     }
     controller.lazyStackCache = LazyStackCache(

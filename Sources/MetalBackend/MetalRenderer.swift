@@ -68,6 +68,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
     super.init()
     mtkView.delegate = self
+    mtkView.interaction = interaction
     Interaction.current = interaction
   }
 
@@ -153,7 +154,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     let viewport = Size(width: Float(mtkView.bounds.width), height: Float(mtkView.bounds.height))
     var drawList = DrawList()
     if let content {
-      BlockEngine.draw(content, into: &drawList, in: Rect(origin: .zero, size: viewport))
+      BlockEngine.draw(content, into: &drawList, in: Rect(origin: .zero, size: viewport), context: context)
     }
     interaction.endFrame()
     render(

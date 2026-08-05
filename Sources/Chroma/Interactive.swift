@@ -30,13 +30,13 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
     BlockEngine.expandsVertically(content(.idle))
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
-    BlockEngine.measure(content(.idle), proposal: proposal)
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    BlockEngine.measure(content(.idle), proposal: proposal, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let state = Interaction.current.interactiveBehavior(id: id, rect: rect)
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let state = context.interaction.interactiveBehavior(id: id, rect: rect)
     if state.clicked { action() }
-    BlockEngine.draw(content(state.phase), into: &drawList, in: rect)
+    BlockEngine.draw(content(state.phase), into: &drawList, in: rect, context: context)
   }
 }

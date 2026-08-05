@@ -53,23 +53,23 @@ public struct FrameBlock: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { maxWidth != nil }
   @MainActor public var expandsVertically: Bool { maxHeight != nil }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(width: width ?? proposal.width, height: height ?? proposal.height)
-    )
+    , context: context)
     return Size(
       width: width ?? maxWidth.map { min(proposal.width, $0) } ?? childSize.width,
       height: height ?? maxHeight.map { min(proposal.height, $0) } ?? childSize.height
     )
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(width: width ?? rect.size.width, height: height ?? rect.size.height)
-    )
-    BlockEngine.draw(content, into: &drawList, in: rect.placing(childSize, alignment: alignment))
+    , context: context)
+    BlockEngine.draw(content, into: &drawList, in: rect.placing(childSize, alignment: alignment), context: context)
   }
 }
 
@@ -80,21 +80,21 @@ public struct PaddingBlock: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(
         width: max(0, proposal.width - insets.leading - insets.trailing),
         height: max(0, proposal.height - insets.top - insets.bottom)
       )
-    )
+    , context: context)
     return Size(
       width: childSize.width + insets.leading + insets.trailing,
       height: childSize.height + insets.top + insets.bottom
     )
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     BlockEngine.draw(
       content,
       into: &drawList,
@@ -104,7 +104,7 @@ public struct PaddingBlock: PrimitiveBlock {
         width: rect.size.width - insets.leading - insets.trailing,
         height: rect.size.height - insets.top - insets.bottom
       )
-    )
+    , context: context)
   }
 }
 
@@ -115,13 +115,13 @@ public struct BackgroundBlock: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
-    BlockEngine.measure(content, proposal: proposal)
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    BlockEngine.measure(content, proposal: proposal, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    BlockEngine.draw(background, into: &drawList, in: rect)
-    BlockEngine.draw(content, into: &drawList, in: rect)
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    BlockEngine.draw(background, into: &drawList, in: rect, context: context)
+    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
   }
 }
 
@@ -131,15 +131,15 @@ public struct ClipBlock: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
-    BlockEngine.measure(content, proposal: proposal)
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    BlockEngine.measure(content, proposal: proposal, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     drawList.pushClip(rect)
-    Interaction.current.pushClip(rect)
-    BlockEngine.draw(content, into: &drawList, in: rect)
-    Interaction.current.popClip()
+    context.interaction.pushClip(rect)
+    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    context.interaction.popClip()
     drawList.popClip()
   }
 }
@@ -152,12 +152,12 @@ public struct BorderBlock: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
-    BlockEngine.measure(content, proposal: proposal)
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    BlockEngine.measure(content, proposal: proposal, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    BlockEngine.draw(content, into: &drawList, in: rect)
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
     drawList.strokeRect(rect, width: width, color: color)
   }
 }

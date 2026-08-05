@@ -41,10 +41,52 @@ struct RenderContextTests {
     Interaction.current = Interaction()
   }
 
+  @Test func blockEngineForwardsExplicitContext() {
+    let ambient = Interaction()
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+    let recorder = ContextRecorder()
+    let block = ContextRecordingBlock(recorder: recorder)
+    Interaction.current = ambient
+
+    _ = BlockEngine.measure(block, proposal: Size(width: 20, height: 10), context: context)
+    var drawList = DrawList()
+    BlockEngine.draw(
+      block,
+      into: &drawList,
+      in: Rect(x: 0, y: 0, width: 20, height: 10),
+      context: context)
+
+    #expect(recorder.measuredInteraction === interaction)
+    #expect(recorder.drawnInteraction === interaction)
+    #expect(recorder.measuredInteraction !== ambient)
+    #expect(recorder.drawnInteraction !== ambient)
+    Interaction.current = Interaction()
+  }
+
   @Test func rendererContextWrapsItsInteraction() {
     let renderer = FakeRenderer()
     #expect(renderer.context.interaction === renderer.interaction)
     #expect(renderer.context.selection === renderer.interaction.textSelection)
+  }
+}
+
+@MainActor
+private final class ContextRecorder {
+  var measuredInteraction: Interaction?
+  var drawnInteraction: Interaction?
+}
+
+private struct ContextRecordingBlock: PrimitiveBlock {
+  let recorder: ContextRecorder
+
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    recorder.measuredInteraction = context.interaction
+    return proposal
+  }
+
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    recorder.drawnInteraction = context.interaction
   }
 }
 

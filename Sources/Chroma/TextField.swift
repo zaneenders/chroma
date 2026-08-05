@@ -53,16 +53,16 @@ public struct TextField: PrimitiveBlock {
 
   @MainActor public var expandsHorizontally: Bool { true }
 
-  @MainActor public func sizeThatFits(_ proposal: Size) -> Size {
-    let metrics = Interaction.current.fontMetrics
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    let metrics = context.interaction.fontMetrics
     return Size(
       width: proposal.width,
       height: metrics.glyphHeight * fontScale + 2 * padding + 2
     )
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect) {
-    let interaction = Interaction.current
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let interaction = context.interaction
     let metrics = interaction.fontMetrics
     let state = interaction.textInputBehavior(
       id: id, rect: rect, text: getText(), onChange: onChange, onSubmit: onSubmit)

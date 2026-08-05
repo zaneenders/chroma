@@ -3,8 +3,8 @@ import Testing
 
 private struct FixedContent: PrimitiveBlock {
   var size: Size
-  func sizeThatFits(_ proposal: Size) -> Size { size }
-  func draw(into drawList: inout DrawList, in rect: Rect) {
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { size }
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     drawList.fillRect(rect, color: .white)
   }
 }
@@ -19,12 +19,12 @@ private struct CountedRow: PrimitiveBlock {
   let height: Float
   let counter: DrawCounter
 
-  func sizeThatFits(_ proposal: Size) -> Size {
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     counter.measured.append(index)
     return Size(width: proposal.width, height: height)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     counter.drawn.append(index)
   }
 }
@@ -33,11 +33,11 @@ private struct RowContent: PrimitiveBlock {
   let height: Float
   let color: Color
 
-  func sizeThatFits(_ proposal: Size) -> Size {
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: proposal.width, height: height)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     drawList.fillRect(rect, color: color)
   }
 }
@@ -54,7 +54,7 @@ struct ScrollViewTests {
     controller: ScrollViewController? = nil,
     sticksToBottom: Bool = false
   ) -> DrawList {
-    Interaction.current = interaction
+    let context = RenderContext(interaction: interaction)
     interaction.beginFrame(input: input)
     var list = DrawList()
     let view = ScrollView(
@@ -63,7 +63,7 @@ struct ScrollViewTests {
     ) {
       FixedContent(size: Size(width: 100, height: 100))
     }
-    BlockEngine.draw(view, into: &list, in: viewport)
+    BlockEngine.draw(view, into: &list, in: viewport, context: context)
     interaction.endFrame()
     return list
   }
@@ -85,13 +85,13 @@ struct ScrollViewTests {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) -> DrawList {
-      Interaction.current = interaction
+      let context = RenderContext(interaction: interaction)
       interaction.beginFrame(input: input)
       var list = DrawList()
       let view = ScrollView(id: scrollID, showsIndicator: true) {
         FixedContent(size: Size(width: 200, height: 20))
       }
-      BlockEngine.draw(view, into: &list, in: viewport)
+      BlockEngine.draw(view, into: &list, in: viewport, context: context)
       interaction.endFrame()
       return list
     }
@@ -121,13 +121,13 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame() {
-      Interaction.current = interaction
+      let context = RenderContext(interaction: interaction)
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       let view = ScrollView(id: scrollID, controller: controller) {
         FixedContent(size: Size(width: 200, height: 20))
       }
-      BlockEngine.draw(view, into: &list, in: viewport)
+      BlockEngine.draw(view, into: &list, in: viewport, context: context)
       interaction.endFrame()
     }
 
@@ -142,13 +142,13 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      Interaction.current = interaction
+      let context = RenderContext(interaction: interaction)
       interaction.beginFrame(input: input)
       var list = DrawList()
       let view = ScrollView(id: scrollID, controller: controller) {
         FixedContent(size: Size(width: 100, height: 100))
       }
-      BlockEngine.draw(view, into: &list, in: viewport)
+      BlockEngine.draw(view, into: &list, in: viewport, context: context)
       interaction.endFrame()
     }
 
@@ -165,13 +165,13 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      Interaction.current = interaction
+      let context = RenderContext(interaction: interaction)
       interaction.beginFrame(input: input)
       var list = DrawList()
       let view = ScrollView(id: scrollID, controller: controller) {
         FixedContent(size: Size(width: 200, height: 20))
       }
-      BlockEngine.draw(view, into: &list, in: viewport)
+      BlockEngine.draw(view, into: &list, in: viewport, context: context)
       interaction.endFrame()
     }
 
@@ -205,7 +205,7 @@ struct ScrollViewTests {
 
   @Test func loopRowsStackAndCreateScrollableContent() {
     let interaction = Interaction()
-    Interaction.current = interaction
+    let context = RenderContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     let colors = [
@@ -218,7 +218,7 @@ struct ScrollViewTests {
         RowContent(height: 10, color: color)
       }
     }
-    BlockEngine.draw(view, into: &list, in: viewport)
+    BlockEngine.draw(view, into: &list, in: viewport, context: context)
     interaction.endFrame()
 
     let rowRects = list.commands.compactMap { command -> Rect? in
@@ -240,12 +240,12 @@ struct ScrollViewTests {
     }
 
     func frame() {
-      Interaction.current = interaction
+      let context = RenderContext(interaction: interaction)
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       let view = LazyVStack(
         id: scrollID, controller: controller, rows: rows)
-      BlockEngine.draw(view, into: &list, in: viewport)
+      BlockEngine.draw(view, into: &list, in: viewport, context: context)
       interaction.endFrame()
     }
 

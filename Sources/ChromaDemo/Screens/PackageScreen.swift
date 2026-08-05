@@ -38,7 +38,7 @@ struct PackageSourceListing: PrimitiveBlock {
     self.scrollController = scrollController
   }
 
-  func sizeThatFits(_ proposal: Size) -> Size {
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let metrics = FontMetrics()
     let longestLine = lines.map(\.utf8.count).max() ?? 0
     return Size(
@@ -47,8 +47,8 @@ struct PackageSourceListing: PrimitiveBlock {
     )
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect) {
-    let interaction = Interaction.current
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let interaction = context.interaction
     let lineHeight = FontMetrics().lineAdvance * theme.textScale
     interaction.beginGroup(.vertical, rect: rect)
     for (index, line) in lines.enumerated() {

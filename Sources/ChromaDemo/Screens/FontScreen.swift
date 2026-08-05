@@ -8,9 +8,9 @@ struct AsciiPanel: PrimitiveBlock {
   var expandsHorizontally: Bool { true }
   var expandsVertically: Bool { true }
 
-  func sizeThatFits(_ proposal: Size) -> Size { proposal }
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
-  func draw(into drawList: inout DrawList, in rect: Rect) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let printableRows: [[UInt8]] = stride(from: 0x20, through: 0x70, by: 0x10).map { first in
       let last = min(first + 0x0f, 0x7e)
       return Array(String(format: "%02X  ", first).utf8) + (first...last).map(UInt8.init)

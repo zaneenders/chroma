@@ -5,6 +5,7 @@ import Chroma
 import MetalKit
 
 final class ChromaInputView: MTKView {
+  var interaction: Interaction!
   private var pointerPosition = Point(x: -1, y: -1)
   private var pointerPressPosition = Point(x: -1, y: -1)
   private var pointerDown = false
@@ -84,14 +85,14 @@ final class ChromaInputView: MTKView {
   override func keyDown(with event: NSEvent) {
     if event.modifierFlags.contains(.command),
       event.charactersIgnoringModifiers?.lowercased() == "c",
-      let text = Interaction.current.onCopy?(),
+      let text = interaction.onCopy?(),
       !text.isEmpty
     {
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(text, forType: .string)
       return
     }
-    if Interaction.current.isTextEditing {
+    if interaction.isTextEditing {
       if event.modifierFlags.contains(.command),
         event.charactersIgnoringModifiers == "v",
         let pasted = NSPasteboard.general.string(forType: .string),
