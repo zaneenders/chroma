@@ -36,6 +36,8 @@ private final class FileBrowserState {
   private(set) var directory: URL
   private(set) var entries: [Entry] = []
   private(set) var message = ""
+  let filesScrollController = ScrollViewController()
+  private var lastRevealedEntry: WidgetID?
 
   init() {
     directory =
@@ -63,7 +65,15 @@ private final class FileBrowserState {
     reload()
   }
 
+  func revealIfNeeded(id: WidgetID, rect: Rect, selected: Bool) {
+    guard selected, lastRevealedEntry != id else { return }
+    lastRevealedEntry = id
+    filesScrollController.scrollToVisible(rect)
+  }
+
   private func reload() {
+    lastRevealedEntry = nil
+    filesScrollController.scrollToTop()
     do {
       let urls = try FileManager.default.contentsOfDirectory(
         at: directory,
@@ -115,16 +125,10 @@ private struct FileBrowser: Block {
         .roundedBorder(theme.border, radius: 12)
         .padding(12)
 
-        ScrollView(id: WidgetID("files")) {
+        ScrollView(id: WidgetID("files"), controller: state.filesScrollController) {
           VStack(spacing: 4, alignment: .leading) {
             for entry in state.entries {
-              Button(
-                entry.isDirectory ? "[DIR]  \(entry.name)/" : "       \(entry.name)",
-                id: WidgetID(entry.url.path),
-                padding: EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12)
-              ) {
-                state.open(entry)
-              }
+              FileEntryButton(entry: entry, state: state)
             }
           }
           .padding(12)
@@ -139,6 +143,42 @@ private struct FileBrowser: Block {
       }
       .background(theme.background)
     }
+  }
+}
+
+private struct FileEntryButton: PrimitiveBlock {
+  let entry: FileBrowserState.Entry
+  let state: FileBrowserState
+
+  private var id: WidgetID { WidgetID(entry.url.path) }
+  private var label: String {
+    entry.isDirectory ? "[DIR]  \(entry.name)/" : "       \(entry.name)"
+  }
+  private let padding = EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12)
+
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    Button(label, id: id, padding: padding) {}.sizeThatFits(proposal, context: context)
+  }
+
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let style = context.theme.button
+    let buttonState = context.buttonState(id: id, in: rect)
+    state.revealIfNeeded(id: id, rect: rect, selected: buttonState.hovered)
+    if buttonState.clicked { state.open(entry) }
+
+    let background: Color
+    switch buttonState.phase {
+    case .idle: background = style.idleBackground
+    case .hovered: background = style.hoveredBackground
+    case .pressed: background = style.pressedBackground
+    }
+    drawList.fillRoundedRect(rect, radius: style.cornerRadius, color: background)
+    drawList.strokeRoundedRect(
+      rect, radius: style.cornerRadius, width: style.borderWidth, color: style.border)
+    drawList.text(
+      label,
+      at: Point(x: rect.minX + padding.leading, y: rect.minY + padding.top),
+      color: style.foreground)
   }
 }
 
