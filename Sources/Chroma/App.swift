@@ -15,9 +15,8 @@ extension App {
   public var windowSize: Size { Size(width: 800, height: 600) }
 
   @MainActor
-  package static func run(on renderer: any Renderer) {
-    let app = Self()
-    renderer.content = app.body
-    renderer.run(title: "\(app.title) — \(renderer.name)")
+  package func run(on renderer: any Renderer) {
+    renderer.content = body
+    renderer.run(title: "\(title) — \(renderer.name)")
   }
 }

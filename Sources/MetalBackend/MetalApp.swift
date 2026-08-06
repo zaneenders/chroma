@@ -11,7 +11,7 @@ extension MetalApp {
     guard let renderer = MetalRenderer(size: app.windowSize) else {
       fatalError("Metal requires Apple Silicon or supported GPU.")
     }
-    Self.run(on: renderer)
+    app.run(on: renderer)
   }
 }
 
