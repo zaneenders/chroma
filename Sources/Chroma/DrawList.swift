@@ -11,6 +11,24 @@ public struct DrawList: Sendable {
     commands.append(.strokeRect(rect: rect, width: width, color: color))
   }
 
+  public mutating func fillRoundedRect(_ rect: Rect, radius: Float, color: Color) {
+    fillRoundedRect(rect, radii: CornerRadii(radius), color: color)
+  }
+
+  public mutating func fillRoundedRect(_ rect: Rect, radii: CornerRadii, color: Color) {
+    commands.append(.fillRoundedRect(rect: rect, radii: radii, color: color))
+  }
+
+  public mutating func strokeRoundedRect(_ rect: Rect, radius: Float, width: Float, color: Color) {
+    strokeRoundedRect(rect, radii: CornerRadii(radius), width: width, color: color)
+  }
+
+  public mutating func strokeRoundedRect(
+    _ rect: Rect, radii: CornerRadii, width: Float, color: Color
+  ) {
+    commands.append(.strokeRoundedRect(rect: rect, radii: radii, width: width, color: color))
+  }
+
   public mutating func text(_ text: String, at position: Point, color: Color, scale: Float = 1) {
     commands.append(.text(position: position, text: text, color: color, scale: scale))
   }

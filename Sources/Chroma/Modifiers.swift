@@ -37,6 +37,26 @@ extension Block {
     BorderBlock(content: self, color: color, width: width)
   }
 
+  public func roundedBackground(_ color: Color, radius: Float) -> RoundedBackgroundBlock {
+    RoundedBackgroundBlock(content: self, color: color, radii: CornerRadii(radius))
+  }
+
+  public func roundedBackground(_ color: Color, radii: CornerRadii) -> RoundedBackgroundBlock {
+    RoundedBackgroundBlock(content: self, color: color, radii: radii)
+  }
+
+  public func roundedBorder(
+    _ color: Color, radius: Float, width: Float = 1
+  ) -> RoundedBorderBlock {
+    RoundedBorderBlock(content: self, color: color, radii: CornerRadii(radius), width: width)
+  }
+
+  public func roundedBorder(
+    _ color: Color, radii: CornerRadii, width: Float = 1
+  ) -> RoundedBorderBlock {
+    RoundedBorderBlock(content: self, color: color, radii: radii, width: width)
+  }
+
   public func clipped() -> ClipBlock {
     ClipBlock(content: self)
   }
@@ -137,6 +157,43 @@ public struct ClipBlock: PrimitiveBlock {
       BlockEngine.draw(content, into: &drawList, in: rect, context: context)
     }
     drawList.popClip()
+  }
+}
+
+public struct RoundedBackgroundBlock: PrimitiveBlock {
+  public var content: any Block
+  public var color: Color
+  public var radii: CornerRadii
+
+  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
+  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
+
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    BlockEngine.measure(content, proposal: proposal, context: context)
+  }
+
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    drawList.fillRoundedRect(rect, radii: radii, color: color)
+    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+  }
+}
+
+public struct RoundedBorderBlock: PrimitiveBlock {
+  public var content: any Block
+  public var color: Color
+  public var radii: CornerRadii
+  public var width: Float
+
+  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
+  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
+
+  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    BlockEngine.measure(content, proposal: proposal, context: context)
+  }
+
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    drawList.strokeRoundedRect(rect, radii: radii, width: width, color: color)
   }
 }
 

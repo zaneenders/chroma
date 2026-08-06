@@ -40,8 +40,9 @@ public struct Button: PrimitiveBlock {
     case .hovered: background = style.hoveredBackground
     case .pressed: background = style.pressedBackground
     }
-    drawList.fillRect(rect, color: background)
-    drawList.strokeRect(rect, width: 1, color: style.border)
+    drawList.fillRoundedRect(rect, radius: style.cornerRadius, color: background)
+    drawList.strokeRoundedRect(
+      rect, radius: style.cornerRadius, width: style.borderWidth, color: style.border)
     drawList.text(
       label,
       at: Point(x: rect.minX + padding.leading, y: rect.minY + padding.top),

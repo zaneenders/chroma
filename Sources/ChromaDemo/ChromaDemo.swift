@@ -111,7 +111,9 @@ private struct FileBrowser: Block {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.elevatedSurface)
+        .roundedBackground(theme.elevatedSurface, radius: 12)
+        .roundedBorder(theme.border, radius: 12)
+        .padding(12)
 
         ScrollView(id: WidgetID("files")) {
           VStack(spacing: 4, alignment: .leading) {

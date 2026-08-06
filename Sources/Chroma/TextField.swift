@@ -46,10 +46,15 @@ public struct TextField: PrimitiveBlock {
     let state = context.textInputState(
       id: id, in: rect, text: getText(), onChange: onChange, onSubmit: onSubmit)
 
-    drawList.fillRect(
+    drawList.fillRoundedRect(
       rect,
+      radius: style.cornerRadius,
       color: state.editing ? style.editingBackground : state.hovered ? style.hoveredBackground : style.idleBackground)
-    drawList.strokeRect(rect, width: 1, color: state.editing ? style.editingBorder : style.border)
+    drawList.strokeRoundedRect(
+      rect,
+      radius: style.cornerRadius,
+      width: style.borderWidth,
+      color: state.editing ? style.editingBorder : style.border)
 
     let inner = Rect(
       x: rect.minX + padding,

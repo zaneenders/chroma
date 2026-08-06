@@ -43,25 +43,69 @@ fragment float4 text_fragment(TextVertexOut in [[stage_in]],
     return float4(in.color.rgb, in.color.a * a);
 }
 
-struct GUIVertex {
-  float2 position;
-  float2 uv;
+struct ShapeInstance {
+  float2 dst_p0;
+  float2 dst_p1;
+  float2 size;
+  // top-left, top-right, bottom-right, bottom-left
+  float4 radii;
   float4 color;
+  float borderWidth;
+  float3 padding;
 };
 
-struct SolidVertexOut {
+struct ShapeVertexOut {
   float4 position [[position]];
+  float2 localPosition;
+  float2 size;
+  float4 radii;
   float4 color;
+  float borderWidth;
 };
 
-vertex SolidVertexOut solid_vertex(uint vid [[vertex_id]],
-                                   constant GUIVertex* vertices [[buffer(0)]]) {
-    SolidVertexOut out;
-    out.position = float4(vertices[vid].position, 0.0, 1.0);
-    out.color = vertices[vid].color;
+vertex ShapeVertexOut shape_vertex(uint vid [[vertex_id]],
+                                   uint iid [[instance_id]],
+                                   constant ShapeInstance* instances [[buffer(0)]]) {
+    ShapeInstance inst = instances[iid];
+    float2 q = quadPositions[vid];
+    ShapeVertexOut out;
+    out.position = float4(inst.dst_p0 + q * (inst.dst_p1 - inst.dst_p0), 0.0, 1.0);
+    out.localPosition = q * (inst.size + 2.0 * inst.padding.x) - inst.padding.x;
+    out.size = inst.size;
+    out.radii = inst.radii;
+    out.color = inst.color;
+    out.borderWidth = inst.borderWidth;
     return out;
 }
 
-fragment float4 solid_fragment(SolidVertexOut in [[stage_in]]) {
-    return in.color;
+float roundedRectDistance(float2 localPosition, float2 size, float4 radii) {
+    float2 centered = localPosition - size * 0.5;
+    bool left = centered.x < 0.0;
+    bool top = centered.y < 0.0;
+    float radius = top ? (left ? radii.x : radii.y)
+                       : (left ? radii.w : radii.z);
+    float2 q = abs(centered) - size * 0.5 + radius;
+    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - radius;
+}
+
+float shapeCoverage(float distance) {
+    float antialiasWidth = max(fwidth(distance), 0.001);
+    return 1.0 - smoothstep(-antialiasWidth, antialiasWidth, distance);
+}
+
+fragment float4 shape_fragment(ShapeVertexOut in [[stage_in]]) {
+    float outerDistance = roundedRectDistance(in.localPosition, in.size, in.radii);
+    float alpha = shapeCoverage(outerDistance);
+
+    if (in.borderWidth > 0.0) {
+        float2 innerSize = in.size - 2.0 * in.borderWidth;
+        if (innerSize.x > 0.0 && innerSize.y > 0.0) {
+            float2 innerPosition = in.localPosition - in.borderWidth;
+            float4 innerRadii = max(in.radii - in.borderWidth, 0.0);
+            float innerDistance = roundedRectDistance(innerPosition, innerSize, innerRadii);
+            alpha *= 1.0 - shapeCoverage(innerDistance);
+        }
+    }
+
+    return float4(in.color.rgb, in.color.a * alpha);
 }

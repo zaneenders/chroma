@@ -4,19 +4,25 @@ public struct ButtonStyle: Equatable, Sendable {
   public var pressedBackground: Color
   public var foreground: Color
   public var border: Color
+  public var cornerRadius: Float
+  public var borderWidth: Float
 
   public init(
     idleBackground: Color,
     hoveredBackground: Color,
     pressedBackground: Color,
     foreground: Color,
-    border: Color
+    border: Color,
+    cornerRadius: Float = 6,
+    borderWidth: Float = 1
   ) {
     self.idleBackground = idleBackground
     self.hoveredBackground = hoveredBackground
     self.pressedBackground = pressedBackground
     self.foreground = foreground
     self.border = border
+    self.cornerRadius = cornerRadius
+    self.borderWidth = borderWidth
   }
 }
 
@@ -29,6 +35,8 @@ public struct TextFieldStyle: Equatable, Sendable {
   public var caret: Color
   public var border: Color
   public var editingBorder: Color
+  public var cornerRadius: Float
+  public var borderWidth: Float
 
   public init(
     idleBackground: Color,
@@ -38,7 +46,9 @@ public struct TextFieldStyle: Equatable, Sendable {
     placeholder: Color,
     caret: Color,
     border: Color,
-    editingBorder: Color
+    editingBorder: Color,
+    cornerRadius: Float = 6,
+    borderWidth: Float = 1
   ) {
     self.idleBackground = idleBackground
     self.hoveredBackground = hoveredBackground
@@ -48,6 +58,8 @@ public struct TextFieldStyle: Equatable, Sendable {
     self.caret = caret
     self.border = border
     self.editingBorder = editingBorder
+    self.cornerRadius = cornerRadius
+    self.borderWidth = borderWidth
   }
 }
 

@@ -8,7 +8,7 @@ import MetalKit
 public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, Renderer {
   private let device: MTLDevice
   private let queue: MTLCommandQueue
-  private let solidPipeline: MTLRenderPipelineState
+  private let shapePipeline: MTLRenderPipelineState
   private let textPipeline: MTLRenderPipelineState
   private let fontAtlas: FontAtlas
   private let mtkView: ChromaInputView
@@ -46,12 +46,12 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     }
 
     guard
-      let solidPipeline = Self.makePipeline(
+      let shapePipeline = Self.makePipeline(
         device: device,
         pixelFormat: mtkView.colorPixelFormat,
         library: library,
-        vertex: "solid_vertex",
-        fragment: "solid_fragment"
+        vertex: "shape_vertex",
+        fragment: "shape_fragment"
       ),
       let textPipeline = Self.makePipeline(
         device: device,
@@ -63,7 +63,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     else {
       return nil
     }
-    self.solidPipeline = solidPipeline
+    self.shapePipeline = shapePipeline
     self.textPipeline = textPipeline
 
     super.init()
@@ -184,7 +184,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
   }
 
   private enum Batch {
-    case solid(indexOffset: Int, indexCount: Int)
+    case shape(instanceOffset: Int, instanceCount: Int)
     case text(instanceOffset: Int, instanceCount: Int)
     case pushClip(Rect)
     case popClip
@@ -202,171 +202,144 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       SIMD2(-1 + x * pxToNDC.x, 1 - y * pxToNDC.y)
     }
 
-    var vertices = [GUIVertex]()
-    var indices = [UInt32]()
-    var instances = [TextInstance]()
+    var shapes = [ShapeInstance]()
+    var textInstances = [TextInstance]()
     var batches: [Batch] = []
-
-    var solidStart: Int?
+    var shapeStart: Int?
     var textStart: Int?
 
-    func closeSolid() {
-      guard let start = solidStart else { return }
-      if indices.count > start {
-        batches.append(.solid(indexOffset: start, indexCount: indices.count - start))
+    func closeShapes() {
+      guard let start = shapeStart else { return }
+      if shapes.count > start {
+        batches.append(.shape(instanceOffset: start, instanceCount: shapes.count - start))
       }
-      solidStart = nil
+      shapeStart = nil
     }
 
     func closeText() {
       guard let start = textStart else { return }
-      if instances.count > start {
-        batches.append(.text(instanceOffset: start, instanceCount: instances.count - start))
+      if textInstances.count > start {
+        batches.append(.text(instanceOffset: start, instanceCount: textInstances.count - start))
       }
       textStart = nil
     }
 
-    func appendQuad(_ rect: Rect, color: Color) {
+    func appendShape(_ rect: Rect, radii requestedRadii: CornerRadii, borderWidth: Float, color: Color) {
       guard rect.size.width > 0, rect.size.height > 0 else { return }
-      let base = UInt32(vertices.count)
-      let c = SIMD4(color.r, color.g, color.b, color.a)
-      vertices.append(GUIVertex(position: ndc(rect.minX, rect.minY), uv: .zero, color: c))
-      vertices.append(GUIVertex(position: ndc(rect.maxX, rect.minY), uv: .zero, color: c))
-      vertices.append(GUIVertex(position: ndc(rect.minX, rect.maxY), uv: .zero, color: c))
-      vertices.append(GUIVertex(position: ndc(rect.maxX, rect.maxY), uv: .zero, color: c))
-      indices.append(contentsOf: [base, base + 1, base + 2, base + 2, base + 1, base + 3])
-    }
-
-    func appendStroke(_ rect: Rect, width: Float, color: Color) {
-      let border = max(0, width)
-      guard border > 0, rect.size.width > 0, rect.size.height > 0 else { return }
-      guard rect.size.width > 2 * border, rect.size.height > 2 * border else {
-        appendQuad(rect, color: color)
-        return
-      }
-      let (x, y) = (rect.origin.x, rect.origin.y)
-      let (w, h) = (rect.size.width, rect.size.height)
-      appendQuad(Rect(origin: Point(x: x, y: y), size: Size(width: w, height: border)), color: color)
-      appendQuad(Rect(origin: Point(x: x, y: y + h - border), size: Size(width: w, height: border)), color: color)
-      appendQuad(
-        Rect(origin: Point(x: x, y: y + border), size: Size(width: border, height: h - 2 * border)),
-        color: color
-      )
-      appendQuad(
-        Rect(origin: Point(x: x + w - border, y: y + border), size: Size(width: border, height: h - 2 * border)),
-        color: color
-      )
+      let radii = requestedRadii.normalized(for: rect.size)
+      // Give antialiasing room outside the logical bounds instead of clipping
+      // coverage at the quad's edge.
+      let edgePadding: Float = 1
+      shapes.append(
+        ShapeInstance(
+          dst_p0: ndc(rect.minX - edgePadding, rect.minY - edgePadding),
+          dst_p1: ndc(rect.maxX + edgePadding, rect.maxY + edgePadding),
+          size: [rect.size.width, rect.size.height],
+          radii: [radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft],
+          color: [color.r, color.g, color.b, color.a],
+          borderWidth: max(0, borderWidth),
+          padding: [edgePadding, 0, 0]))
     }
 
     var clipStack: [Rect] = []
-
     for command in drawList.commands {
       switch command {
       case .fillRect(let rect, let color):
         closeText()
-        if solidStart == nil { solidStart = indices.count }
-        appendQuad(rect, color: color)
+        if shapeStart == nil { shapeStart = shapes.count }
+        appendShape(rect, radii: .zero, borderWidth: 0, color: color)
       case .strokeRect(let rect, let width, let color):
         closeText()
-        if solidStart == nil { solidStart = indices.count }
-        appendStroke(rect, width: width, color: color)
+        if shapeStart == nil { shapeStart = shapes.count }
+        appendShape(rect, radii: .zero, borderWidth: width, color: color)
+      case .fillRoundedRect(let rect, let radii, let color):
+        closeText()
+        if shapeStart == nil { shapeStart = shapes.count }
+        appendShape(rect, radii: radii, borderWidth: 0, color: color)
+      case .strokeRoundedRect(let rect, let radii, let width, let color):
+        closeText()
+        if shapeStart == nil { shapeStart = shapes.count }
+        appendShape(rect, radii: radii, borderWidth: width, color: color)
       case .text(let position, let text, let color, let scale):
-        closeSolid()
-        if textStart == nil { textStart = instances.count }
+        closeShapes()
+        if textStart == nil { textStart = textInstances.count }
         let glyphSize = SIMD2<Float>(metrics.glyphWidth, metrics.glyphHeight) * scale
         let advance = metrics.cellAdvance * scale
         var pen = SIMD2<Float>(position.x, position.y)
         for character in text {
           let byte = character.asciiValue ?? 0x20
           let (u0, v0, u1, v1) = fontAtlas.glyphUV(byte)
-          instances.append(
+          textInstances.append(
             TextInstance(
               dst_p0: ndc(pen.x, pen.y),
               dst_p1: ndc(pen.x + glyphSize.x, pen.y + glyphSize.y),
               tex_tl: [u0, v0],
               tex_br: [u1, v1],
-              color: [color.r, color.g, color.b, color.a]
-            ))
+              color: [color.r, color.g, color.b, color.a]))
           pen.x += advance
         }
       case .pushClip(let rect):
-        closeSolid()
+        closeShapes()
         closeText()
         let clipped = clipStack.last.map { rect.intersection($0) ?? Rect.zero } ?? rect
         clipStack.append(clipped)
         batches.append(.pushClip(clipped))
       case .popClip:
-        closeSolid()
+        closeShapes()
         closeText()
         _ = clipStack.popLast()
         batches.append(.popClip)
       }
     }
-    closeSolid()
+    closeShapes()
     closeText()
 
     guard !batches.isEmpty else { return }
-
-    let vertexBuffer: MTLBuffer?
-    let indexBuffer: MTLBuffer?
-    if vertices.isEmpty {
-      vertexBuffer = nil
-      indexBuffer = nil
-    } else {
-      vertexBuffer = device.makeBuffer(
-        bytes: vertices,
-        length: MemoryLayout<GUIVertex>.stride * vertices.count,
-        options: .storageModeShared
-      )
-      indexBuffer = device.makeBuffer(
-        bytes: indices,
-        length: MemoryLayout<UInt32>.stride * indices.count,
-        options: .storageModeShared
-      )
-    }
-    let textBuffer: MTLBuffer?
-    if instances.isEmpty {
-      textBuffer = nil
-    } else {
-      textBuffer = device.makeBuffer(
-        bytes: instances,
-        length: MemoryLayout<TextInstance>.stride * instances.count,
-        options: .storageModeShared
-      )
-    }
+    let shapeBuffer =
+      shapes.isEmpty
+      ? nil
+      : device.makeBuffer(
+        bytes: shapes,
+        length: MemoryLayout<ShapeInstance>.stride * shapes.count,
+        options: .storageModeShared)
+    let textBuffer =
+      textInstances.isEmpty
+      ? nil
+      : device.makeBuffer(
+        bytes: textInstances,
+        length: MemoryLayout<TextInstance>.stride * textInstances.count,
+        options: .storageModeShared)
 
     enc.setFragmentTexture(fontAtlas.texture, index: 0)
-
     var scissorStack: [Rect] = []
     let viewportRect = Rect(origin: .zero, size: viewport)
 
     for batch in batches {
       switch batch {
-      case .solid(let indexOffset, let indexCount):
-        guard let vertexBuffer, let indexBuffer else { continue }
-        enc.setRenderPipelineState(solidPipeline)
-        enc.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
-        enc.drawIndexedPrimitives(
-          type: .triangle,
-          indexCount: indexCount,
-          indexType: .uint32,
-          indexBuffer: indexBuffer,
-          indexBufferOffset: indexOffset * MemoryLayout<UInt32>.stride
-        )
+      case .shape(let instanceOffset, let instanceCount):
+        guard let shapeBuffer else { continue }
+        enc.setRenderPipelineState(shapePipeline)
+        enc.setVertexBuffer(
+          shapeBuffer,
+          offset: instanceOffset * MemoryLayout<ShapeInstance>.stride,
+          index: 0)
+        enc.drawPrimitives(
+          type: .triangleStrip,
+          vertexStart: 0,
+          vertexCount: 4,
+          instanceCount: instanceCount)
       case .text(let instanceOffset, let instanceCount):
         guard let textBuffer else { continue }
         enc.setRenderPipelineState(textPipeline)
         enc.setVertexBuffer(
           textBuffer,
           offset: instanceOffset * MemoryLayout<TextInstance>.stride,
-          index: 0
-        )
+          index: 0)
         enc.drawPrimitives(
           type: .triangleStrip,
           vertexStart: 0,
           vertexCount: 4,
-          instanceCount: instanceCount
-        )
+          instanceCount: instanceCount)
       case .pushClip(let rect):
         let current = scissorStack.last ?? viewportRect
         let clamped = current.intersection(rect) ?? Rect.zero
@@ -374,14 +347,11 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
         enc.setScissorRect(clamped.asMtlScissor(scale: rasterScale))
       case .popClip:
         _ = scissorStack.popLast()
-        if let prev = scissorStack.last {
-          enc.setScissorRect(prev.asMtlScissor(scale: rasterScale))
-        } else {
-          enc.setScissorRect(viewportRect.asMtlScissor(scale: rasterScale))
-        }
+        enc.setScissorRect((scissorStack.last ?? viewportRect).asMtlScissor(scale: rasterScale))
       }
     }
   }
+
 }
 
 #elseif METAL_TRAIT

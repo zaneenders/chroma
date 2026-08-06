@@ -177,6 +177,36 @@ struct RenderingCommandTests {
       ])
   }
 
+  @Test func roundedModifiersPaintInPainterOrder() {
+    let rect = Rect(x: 2, y: 3, width: 40, height: 24)
+    let radii = CornerRadii(topLeft: 2, topRight: 4, bottomRight: 6, bottomLeft: 8)
+
+    let list = render(
+      CommandProbe(name: "rounded")
+        .roundedBackground(.black, radii: radii)
+        .roundedBorder(.yellow, radii: radii, width: 2),
+      in: rect,
+      context: RenderContext())
+
+    #expect(
+      list.commands == [
+        .fillRoundedRect(rect: rect, radii: radii, color: .black),
+        .text(position: rect.origin, text: "rounded", color: .white, scale: 1),
+        .strokeRoundedRect(rect: rect, radii: radii, width: 2, color: .yellow),
+      ])
+  }
+
+  @Test func cornerRadiiNormalizeWithoutOverlapping() {
+    let normalized = CornerRadii(
+      topLeft: 30, topRight: 30, bottomRight: -4, bottomLeft: 10
+    ).normalized(for: Size(width: 40, height: 20))
+
+    #expect(
+      normalized
+        == CornerRadii(
+          topLeft: 15, topRight: 15, bottomRight: 0, bottomLeft: 5))
+  }
+
   @Test func scopedThemePropagatesThroughCompositeWidgets() {
     let rect = Rect(x: 3, y: 4, width: 120, height: 28)
     var theme = ChromaTheme.light
@@ -191,8 +221,12 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(rect: rect, color: theme.button.idleBackground),
-        .strokeRect(rect: rect, width: 1, color: theme.button.border),
+        .fillRoundedRect(
+          rect: rect, radii: CornerRadii(theme.button.cornerRadius),
+          color: theme.button.idleBackground),
+        .strokeRoundedRect(
+          rect: rect, radii: CornerRadii(theme.button.cornerRadius),
+          width: theme.button.borderWidth, color: theme.button.border),
         .text(
           position: rect.origin, text: "Composite",
           color: theme.button.foreground, scale: 1),
