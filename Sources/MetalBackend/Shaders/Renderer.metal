@@ -80,12 +80,41 @@ vertex ShapeVertexOut shape_vertex(uint vid [[vertex_id]],
 
 float roundedRectDistance(float2 localPosition, float2 size, float4 radii) {
     float2 centered = localPosition - size * 0.5;
-    bool left = centered.x < 0.0;
-    bool top = centered.y < 0.0;
-    float radius = top ? (left ? radii.x : radii.y)
-                       : (left ? radii.w : radii.z);
-    float2 q = abs(centered) - size * 0.5 + radius;
-    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - radius;
+    float2 q = abs(centered) - size * 0.5;
+    float distance = min(max(q.x, q.y), 0.0) + length(max(q, 0.0));
+
+    // A corner can extend past the rectangle's midpoint when the neighboring
+    // corner is smaller. Test each corner's actual arc region instead of
+    // choosing a radius from the fragment's quadrant.
+    float radius = radii.x;
+    if (localPosition.x < radius && localPosition.y < radius) {
+        distance = max(
+            distance,
+            length(localPosition - float2(radius, radius)) - radius);
+    }
+
+    radius = radii.y;
+    if (localPosition.x > size.x - radius && localPosition.y < radius) {
+        distance = max(
+            distance,
+            length(localPosition - float2(size.x - radius, radius)) - radius);
+    }
+
+    radius = radii.z;
+    if (localPosition.x > size.x - radius && localPosition.y > size.y - radius) {
+        distance = max(
+            distance,
+            length(localPosition - float2(size.x - radius, size.y - radius)) - radius);
+    }
+
+    radius = radii.w;
+    if (localPosition.x < radius && localPosition.y > size.y - radius) {
+        distance = max(
+            distance,
+            length(localPosition - float2(radius, size.y - radius)) - radius);
+    }
+
+    return distance;
 }
 
 float shapeCoverage(float distance) {
