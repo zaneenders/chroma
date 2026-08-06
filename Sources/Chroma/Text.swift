@@ -23,10 +23,10 @@ public struct Text: PrimitiveBlock {
     return copy
   }
 
-  public func selectable(_ id: WidgetID? = nil) -> Text {
+  public func selectable(_ id: WidgetID) -> Text {
     var copy = self
     copy.isSelectable = true
-    copy.selectionID = id ?? WidgetID("text-select:\(content)")
+    copy.selectionID = id
     return copy
   }
 

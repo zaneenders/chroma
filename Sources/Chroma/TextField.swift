@@ -12,7 +12,7 @@ public struct TextField: PrimitiveBlock {
 
   public init(
     _ placeholder: String = "",
-    id: WidgetID? = nil,
+    id: WidgetID,
     fontScale: Float = 1,
     padding: Float = 8,
     style: TextFieldStyle? = nil,
@@ -20,7 +20,7 @@ public struct TextField: PrimitiveBlock {
     onChange: @escaping (String) -> Void,
     onSubmit: ((String) -> Void)? = nil
   ) {
-    self.id = id ?? WidgetID("field:\(placeholder)")
+    self.id = id
     self.placeholder = placeholder
     self.getText = getText
     self.onChange = onChange

@@ -8,14 +8,14 @@ public struct Button: PrimitiveBlock {
 
   public init(
     _ label: String,
-    id: WidgetID? = nil,
+    id: WidgetID,
     fontScale: Float = 1,
     style: ButtonStyle? = nil,
     padding: EdgeInsets = EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16),
     action: @escaping () -> Void
   ) {
     self.label = label
-    self.id = id ?? WidgetID(label)
+    self.id = id
     self.action = action
     self.fontScale = fontScale
     self.style = style
