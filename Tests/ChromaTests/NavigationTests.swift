@@ -162,6 +162,14 @@ struct NavigationTests {
     #expect(states[WidgetID("a")]?.hovered == false, "exactly one widget carries the cursor")
   }
 
+  @Test func inActivatesSelectedLeaf() {
+    let ctx = Interaction()
+    select(ctx, [.down])
+    let states = frame(ctx, input: InputState(commands: [.in]))
+    #expect(states[WidgetID("b")]?.clicked == true)
+    #expect(states[WidgetID("a")]?.clicked == false)
+  }
+
   @Test func activateOnAGroupDoesNotClick() {
     let ctx = Interaction()
     select(ctx, [.down, .down])

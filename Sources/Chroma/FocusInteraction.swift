@@ -50,6 +50,8 @@ extension Interaction {
     case .in:
       if let node = tree.node(at: selection), !node.children.isEmpty {
         self.selection = selection + [0]
+      } else {
+        activatePending = true
       }
     case .out:
       if !selection.isEmpty {
