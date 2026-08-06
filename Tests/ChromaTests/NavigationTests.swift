@@ -1,9 +1,9 @@
 import Testing
+
 @testable import Chroma
 
 @MainActor
 struct NavigationTests {
-
 
   private static func drawFixture(_ ctx: Interaction, states: inout [WidgetID: ButtonState]) {
     ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 60))
@@ -39,7 +39,6 @@ struct NavigationTests {
       frame(ctx, input: InputState(commands: [command]))
     }
   }
-
 
   @Test func firstFrameSelectsFirstLeaf() {
     let ctx = Interaction()
@@ -153,7 +152,6 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 1])
   }
 
-
   @Test func activateClicksSelectedLeaf() {
     let ctx = Interaction()
     select(ctx, [.down])
@@ -170,7 +168,6 @@ struct NavigationTests {
     let states = frame(ctx, input: InputState(commands: [.activate]))
     #expect(states.values.allSatisfy { !$0.clicked })
   }
-
 
   @Test func hoverMovesCursorViaMacro() {
     let ctx = Interaction()
@@ -236,7 +233,6 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 1], "front is the last-drawn child")
   }
 
-
   @Test func emptyGroupsArePruned() {
     let ctx = Interaction()
     frame(ctx) { ctx, states in
@@ -299,7 +295,6 @@ struct NavigationTests {
     }
     #expect(ctx.selection == [0, 1], "clamped to the last valid sibling")
   }
-
 
   @Test func scrollMovesTheCursor() {
     let ctx = Interaction()

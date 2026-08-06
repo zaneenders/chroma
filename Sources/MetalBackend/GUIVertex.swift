@@ -1,5 +1,5 @@
 #if METAL_BACKEND
-  import func Foundation.ceil
+import func Foundation.ceil
 #endif
 
 struct GUIVertex {

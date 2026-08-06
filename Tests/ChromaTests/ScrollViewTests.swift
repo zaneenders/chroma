@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Chroma
 
 private struct FixedContent: PrimitiveBlock {
@@ -97,14 +98,17 @@ struct ScrollViewTests {
     }
 
     _ = frame()
-    let list = frame(InputState(
-      pointerPosition: Point(x: 10, y: 10),
-      scrollDelta: Point(x: -15, y: 0)))
+    let list = frame(
+      InputState(
+        pointerPosition: Point(x: 10, y: 10),
+        scrollDelta: Point(x: -15, y: 0)))
 
     #expect(interaction.horizontalScrollOffset(for: scrollID) == 15)
     #expect(interaction.horizontalScrollLimit(for: scrollID) == 100)
-    #expect(list.commands.contains(.fillRect(
-      rect: Rect(x: -15, y: 0, width: 200, height: 20), color: .white)))
+    #expect(
+      list.commands.contains(
+        .fillRect(
+          rect: Rect(x: -15, y: 0, width: 200, height: 20), color: .white)))
   }
 
   @Test func simultaneousScrollViewsKeepIndependentOffsets() {
@@ -184,9 +188,10 @@ struct ScrollViewTests {
 
     frame()
     controller.scrollToVisible(Rect(x: 0, y: 25, width: 100, height: 10))
-    frame(InputState(
-      pointerPosition: Point(x: 10, y: 10),
-      scrollDelta: Point(x: 0, y: -12)))
+    frame(
+      InputState(
+        pointerPosition: Point(x: 10, y: 10),
+        scrollDelta: Point(x: 0, y: -12)))
     #expect(interaction.scrollOffset(for: scrollID) == 12)
   }
 
@@ -205,9 +210,10 @@ struct ScrollViewTests {
       interaction.endFrame()
     }
 
-    frame(InputState(
-      pointerPosition: Point(x: 10, y: 10),
-      scrollDelta: Point(x: -40, y: 0)))
+    frame(
+      InputState(
+        pointerPosition: Point(x: 10, y: 10),
+        scrollDelta: Point(x: -40, y: 0)))
     #expect(interaction.horizontalScrollOffset(for: scrollID) == 40)
 
     controller.scrollToVisible(Rect(x: -40, y: 0, width: 200, height: 10))

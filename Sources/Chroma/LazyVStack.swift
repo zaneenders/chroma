@@ -97,8 +97,7 @@ public struct LazyVStack: PrimitiveBlock {
           into: &drawList,
           in: Rect(
             x: rect.minX, y: rect.minY + y - offset,
-            width: rect.size.width, height: height)
-        , context: context)
+            width: rect.size.width, height: height), context: context)
       }
       y = bottom + spacing
     }
@@ -136,8 +135,7 @@ public struct LazyVStack: PrimitiveBlock {
         sizes.append(
           BlockEngine.measure(
             row.content,
-            proposal: Size(width: width, height: Float.greatestFiniteMagnitude)
-          , context: context))
+            proposal: Size(width: width, height: Float.greatestFiniteMagnitude), context: context))
       }
     }
     controller.lazyStackCache = LazyStackCache(

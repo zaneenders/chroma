@@ -21,7 +21,6 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
     self.init(id: WidgetID(id), action: action, content: content)
   }
 
-
   @MainActor public var expandsHorizontally: Bool {
     BlockEngine.expandsHorizontally(content(.idle))
   }

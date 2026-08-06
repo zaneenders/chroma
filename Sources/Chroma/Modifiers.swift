@@ -56,8 +56,7 @@ public struct FrameBlock: PrimitiveBlock {
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let childSize = BlockEngine.measure(
       content,
-      proposal: Size(width: width ?? proposal.width, height: height ?? proposal.height)
-    , context: context)
+      proposal: Size(width: width ?? proposal.width, height: height ?? proposal.height), context: context)
     return Size(
       width: width ?? maxWidth.map { min(proposal.width, $0) } ?? childSize.width,
       height: height ?? maxHeight.map { min(proposal.height, $0) } ?? childSize.height
@@ -67,8 +66,7 @@ public struct FrameBlock: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let childSize = BlockEngine.measure(
       content,
-      proposal: Size(width: width ?? rect.size.width, height: height ?? rect.size.height)
-    , context: context)
+      proposal: Size(width: width ?? rect.size.width, height: height ?? rect.size.height), context: context)
     BlockEngine.draw(content, into: &drawList, in: rect.placing(childSize, alignment: alignment), context: context)
   }
 }
@@ -86,8 +84,7 @@ public struct PaddingBlock: PrimitiveBlock {
       proposal: Size(
         width: max(0, proposal.width - insets.leading - insets.trailing),
         height: max(0, proposal.height - insets.top - insets.bottom)
-      )
-    , context: context)
+      ), context: context)
     return Size(
       width: childSize.width + insets.leading + insets.trailing,
       height: childSize.height + insets.top + insets.bottom
@@ -103,8 +100,7 @@ public struct PaddingBlock: PrimitiveBlock {
         y: rect.minY + insets.top,
         width: rect.size.width - insets.leading - insets.trailing,
         height: rect.size.height - insets.top - insets.bottom
-      )
-    , context: context)
+      ), context: context)
   }
 }
 

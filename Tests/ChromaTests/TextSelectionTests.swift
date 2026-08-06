@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Chroma
 
 @MainActor
@@ -22,7 +23,6 @@ struct TextSelectionTests {
     ctx.endFrame()
   }
 
-
   @Test func hitTestSnapsToNearestBoundary() {
     let l = layout
     #expect(l.hitTest(point: Point(x: l.rect.minX + 1, y: 21)) == 0)
@@ -32,7 +32,6 @@ struct TextSelectionTests {
     #expect(l.hitTest(point: Point(x: l.rect.maxX, y: 21)) == nil)
     #expect(l.hitTest(point: Point(x: l.rect.minX - 1, y: 21)) == nil)
   }
-
 
   @Test func dragIntoLastCellSelectsEntireText() {
     let ctx = Interaction()
@@ -113,7 +112,6 @@ struct TextSelectionTests {
 
     #expect(ctx.textSelection.selectedText() == "Ses")
   }
-
 
   @Test func unicodeLayoutUsesGraphemeBoundaries() {
     let unicode = "A👨‍👩‍👧‍👦e\u{301}🇺🇸"

@@ -79,7 +79,6 @@ final class ChromaInputView: MTKView {
     scroll.y += Float(event.scrollingDeltaY)
   }
 
-
   override var acceptsFirstResponder: Bool { true }
 
   override func keyDown(with event: NSEvent) {

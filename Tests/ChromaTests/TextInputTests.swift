@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Chroma
 
 @MainActor
@@ -31,7 +32,6 @@ struct TextInputTests {
     frame(ctx, input: InputState(commands: [.activate]), text: &text)
   }
 
-
   @Test func activateEntersInsertMode() {
     let ctx = Interaction()
     var text = "abc"
@@ -60,7 +60,6 @@ struct TextInputTests {
     #expect(state.caretOffset == 2)
     #expect(ctx.isTextEditing)
   }
-
 
   @Test func typingInsertsAtCaret() {
     let ctx = Interaction()
@@ -129,7 +128,6 @@ struct TextInputTests {
     #expect(text == "A🇺🇸")
     #expect(state.caretOffset == 2)
   }
-
 
   @Test func endEditingExitsInsertMode() {
     let ctx = Interaction()

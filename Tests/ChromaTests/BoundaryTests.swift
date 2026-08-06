@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Chroma
 
 private struct NamedBlock: PrimitiveBlock {
@@ -39,9 +40,10 @@ struct BoundaryTests {
       nested
     )
 
-    #expect(names(in: result) == [
-      "start", "optional", "second", "loop-0", "loop-1", "nested-0", "nested-1",
-    ])
+    #expect(
+      names(in: result) == [
+        "start", "optional", "second", "loop-0", "loop-1", "nested-0", "nested-1",
+      ])
     #expect(names(in: BlockBuilder.buildOptional(nil)).isEmpty)
     #expect(names(in: BlockBuilder.buildArray([])).isEmpty)
   }
@@ -56,19 +58,21 @@ struct BoundaryTests {
     BlockEngine.draw(
       NamedBlock(name: "content").padding(5).background(red),
       into: &outerBackground, in: viewport, context: context)
-    #expect(outerBackground.commands == [
-      .fillRect(rect: viewport, color: red),
-      .text(position: Point(x: 5, y: 5), text: "content", color: .white, scale: 1),
-    ])
+    #expect(
+      outerBackground.commands == [
+        .fillRect(rect: viewport, color: red),
+        .text(position: Point(x: 5, y: 5), text: "content", color: .white, scale: 1),
+      ])
 
     var innerBackground = DrawList()
     BlockEngine.draw(
       NamedBlock(name: "content").background(blue).padding(5),
       into: &innerBackground, in: viewport, context: context)
-    #expect(innerBackground.commands == [
-      .fillRect(rect: Rect(x: 5, y: 5, width: 30, height: 30), color: blue),
-      .text(position: Point(x: 5, y: 5), text: "content", color: .white, scale: 1),
-    ])
+    #expect(
+      innerBackground.commands == [
+        .fillRect(rect: Rect(x: 5, y: 5, width: 30, height: 30), color: blue),
+        .text(position: Point(x: 5, y: 5), text: "content", color: .white, scale: 1),
+      ])
   }
 
   @Test func nestedClipModifiersProduceBalancedProperlyNestedCommands() {
@@ -80,11 +84,12 @@ struct BoundaryTests {
     BlockEngine.draw(NamedBlock(name: "x").clipped().clipped(), into: &list, in: viewport, context: context)
     interaction.endFrame()
 
-    #expect(list.commands == [
-      .pushClip(viewport), .pushClip(viewport),
-      .text(position: .zero, text: "x", color: .white, scale: 1),
-      .popClip, .popClip,
-    ])
+    #expect(
+      list.commands == [
+        .pushClip(viewport), .pushClip(viewport),
+        .text(position: .zero, text: "x", color: .white, scale: 1),
+        .popClip, .popClip,
+      ])
     #expect(interaction.clipStack.isEmpty)
   }
 

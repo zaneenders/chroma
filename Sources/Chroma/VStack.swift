@@ -69,7 +69,8 @@ public struct VStack: PrimitiveBlock {
       case .center: x = rect.minX + (rect.size.width - width) / 2
       case .trailing: x = rect.maxX - width
       }
-      BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: width, height: size.height), context: context)
+      BlockEngine.draw(
+        child, into: &drawList, in: Rect(x: x, y: y, width: width, height: size.height), context: context)
       y += size.height + spacing
     }
     interaction.endGroup()

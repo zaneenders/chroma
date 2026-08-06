@@ -69,7 +69,8 @@ public struct HStack: PrimitiveBlock {
       case .center: y = rect.minY + (rect.size.height - height) / 2
       case .bottom: y = rect.maxY - height
       }
-      BlockEngine.draw(child, into: &drawList, in: Rect(x: x, y: y, width: size.width, height: height), context: context)
+      BlockEngine.draw(
+        child, into: &drawList, in: Rect(x: x, y: y, width: size.width, height: height), context: context)
       x += size.width + spacing
     }
     interaction.endGroup()
