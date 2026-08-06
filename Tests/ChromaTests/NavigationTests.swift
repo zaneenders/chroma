@@ -269,6 +269,22 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 2], "cursor stayed on b")
   }
 
+  @Test func focusFallsBackPredictablyAfterCompleteTreeReplacement() {
+    let ctx = Interaction()
+    select(ctx, [.down])
+    #expect(ctx.selection == [0, 1])
+
+    frame(ctx) { ctx, states in
+      ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+      states[WidgetID("new-a")] = ctx.interactiveBehavior(
+        id: WidgetID("new-a"), rect: Rect(x: 0, y: 0, width: 100, height: 20))
+      states[WidgetID("new-b")] = ctx.interactiveBehavior(
+        id: WidgetID("new-b"), rect: Rect(x: 0, y: 20, width: 100, height: 20))
+      ctx.endGroup()
+    }
+    #expect(ctx.selection == [0, 1], "without a matching ID, the prior structural path is retained")
+  }
+
   @Test func cursorClampsWhenLeafDisappears() {
     let ctx = Interaction()
     select(ctx, [.down, .down, .in, .right])

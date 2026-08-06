@@ -9,6 +9,6 @@ public struct FontMetrics: Equatable, Sendable {
   public var cellAdvance: Float { glyphWidth + glyphSpacing }
 
   public func measure(_ text: String, scale: Float = 1) -> Size {
-    Size(width: Float(text.utf8.count) * cellAdvance * scale, height: glyphHeight * scale)
+    Size(width: Float(text.count) * cellAdvance * scale, height: glyphHeight * scale)
   }
 }

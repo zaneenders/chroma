@@ -26,7 +26,7 @@ public struct Text: PrimitiveBlock {
   public func selectable(_ id: WidgetID? = nil) -> Text {
     var copy = self
     copy.isSelectable = true
-    copy.selectionID = id ?? WidgetID("text-select-\\(content.hashValue)")
+    copy.selectionID = id ?? WidgetID("text-select:\(content)")
     return copy
   }
 

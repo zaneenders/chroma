@@ -110,6 +110,26 @@ struct TextInputTests {
     #expect(!state.editing)
   }
 
+  @Test func unicodeEditingUsesGraphemeClusterOffsets() {
+    let ctx = Interaction()
+    var text = "A👨‍👩‍👧‍👦e\u{301}"
+    enterInsertMode(ctx, text: &text)
+
+    var state = frame(ctx, input: InputState(textEvents: [.moveCaretLeft]), text: &text)
+    #expect(state.caretOffset == 2)
+    state = frame(ctx, input: InputState(textEvents: [.backspace]), text: &text)
+    #expect(text == "Ae\u{301}", "backspace removes the whole emoji grapheme")
+    #expect(state.caretOffset == 1)
+
+    state = frame(ctx, input: InputState(textEvents: [.deleteForward]), text: &text)
+    #expect(text == "A", "forward delete removes the whole combining grapheme")
+    #expect(state.caretOffset == 1)
+
+    state = frame(ctx, input: InputState(textEvents: [.insert("🇺🇸")]), text: &text)
+    #expect(text == "A🇺🇸")
+    #expect(state.caretOffset == 2)
+  }
+
 
   @Test func endEditingExitsInsertMode() {
     let ctx = Interaction()

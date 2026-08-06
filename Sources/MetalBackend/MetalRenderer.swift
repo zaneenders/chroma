@@ -276,7 +276,8 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
         let glyphSize = SIMD2<Float>(metrics.glyphWidth, metrics.glyphHeight) * scale
         let advance = metrics.cellAdvance * scale
         var pen = SIMD2<Float>(position.x, position.y)
-        for byte in text.utf8 {
+        for character in text {
+          let byte = character.asciiValue ?? 0x20
           let (u0, v0, u1, v1) = fontAtlas.glyphUV(byte)
           instances.append(
             TextInstance(

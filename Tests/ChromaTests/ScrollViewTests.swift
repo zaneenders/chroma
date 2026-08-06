@@ -107,6 +107,36 @@ struct ScrollViewTests {
       rect: Rect(x: -15, y: 0, width: 200, height: 20), color: .white)))
   }
 
+  @Test func simultaneousScrollViewsKeepIndependentOffsets() {
+    let interaction = Interaction()
+    let firstID = WidgetID("first-scroll")
+    let secondID = WidgetID("second-scroll")
+    let firstViewport = Rect(x: 0, y: 0, width: 100, height: 20)
+    let secondViewport = Rect(x: 0, y: 30, width: 100, height: 20)
+
+    func frame(_ input: InputState = InputState()) {
+      let context = RenderContext(interaction: interaction)
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        ScrollView(id: firstID) { FixedContent(size: Size(width: 100, height: 100)) },
+        into: &list, in: firstViewport, context: context)
+      BlockEngine.draw(
+        ScrollView(id: secondID) { FixedContent(size: Size(width: 100, height: 100)) },
+        into: &list, in: secondViewport, context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -15)))
+    #expect(interaction.scrollOffset(for: firstID) == 15)
+    #expect(interaction.scrollOffset(for: secondID) == 0)
+
+    frame(InputState(pointerPosition: Point(x: 10, y: 40), scrollDelta: Point(x: 0, y: -25)))
+    #expect(interaction.scrollOffset(for: firstID) == 15)
+    #expect(interaction.scrollOffset(for: secondID) == 25)
+  }
+
   @Test func controllerScrollsToBottom() {
     let interaction = Interaction()
     let controller = ScrollViewController()

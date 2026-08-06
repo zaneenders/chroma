@@ -6,18 +6,18 @@ struct PlainTextLayout: Equatable {
   var scale: Float
 
   func hitTest(point: Point) -> Int? {
-    guard rect.contains(point) else { return nil }
+    guard rect.contains(point), cellWidth > 0, cellWidth.isFinite else { return nil }
     let xOffset = point.x - rect.minX
     let col = Int((xOffset / cellWidth).rounded(.toNearestOrAwayFromZero))
-    return max(0, min(col, text.utf8.count))
+    return max(0, min(col, text.count))
   }
 
   func textInRange(from: Int, to: Int) -> String {
-    let utf8 = Array(text.utf8)
-    let s = max(0, min(from, utf8.count))
-    let e = max(s, min(to, utf8.count))
+    let characters = Array(text)
+    let s = max(0, min(from, characters.count))
+    let e = max(s, min(to, characters.count))
     guard s < e else { return "" }
-    return String(decoding: utf8[s..<e], as: UTF8.self)
+    return String(characters[s..<e])
   }
 }
 
@@ -90,11 +90,11 @@ public final class TextSelectionManager {
     if let endHit = layout.hitTest(point: current) {
       selectionEnd = endHit
     } else if current.y > layout.rect.maxY {
-      selectionEnd = layout.text.utf8.count
+      selectionEnd = layout.text.count
     } else if current.y < layout.rect.minY {
       selectionEnd = 0
     } else if current.x >= layout.rect.maxX {
-      selectionEnd = layout.text.utf8.count
+      selectionEnd = layout.text.count
     } else if current.x < layout.rect.minX {
       selectionEnd = 0
     }
