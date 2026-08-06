@@ -73,8 +73,8 @@ public struct HStack: PrimitiveBlock {
         child, into: &drawList, in: Rect(x: x, y: y, width: size.width, height: height), context: context)
       x += size.width + spacing
     }
-    interaction.endGroup()
-    if cursorOnGroup {
+    let retainedFocusGroup = interaction.endGroup()
+    if cursorOnGroup && retainedFocusGroup {
       drawList.strokeRect(rect, width: 1, color: interaction.groupCursorColor)
     }
   }

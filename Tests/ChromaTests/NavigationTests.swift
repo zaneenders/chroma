@@ -243,16 +243,20 @@ struct NavigationTests {
 
   @Test func emptyGroupsArePruned() {
     let ctx = Interaction()
+    var innerRetained = true
+    var outerRetained = true
     frame(ctx) { ctx, states in
       ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 100))
       ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 50))
       ctx.beginGroup(.horizontal, rect: Rect(x: 0, y: 0, width: 50, height: 50))
-      ctx.endGroup()
-      ctx.endGroup()
+      innerRetained = ctx.endGroup()
+      outerRetained = ctx.endGroup()
       states[WidgetID("a")] = ctx.interactiveBehavior(
         id: WidgetID("a"), rect: Rect(x: 0, y: 50, width: 100, height: 50))
       ctx.endGroup()
     }
+    #expect(!innerRetained)
+    #expect(!outerRetained)
     #expect(ctx.selection == [0, 0], "the pruned groups occupy no path slots")
   }
 

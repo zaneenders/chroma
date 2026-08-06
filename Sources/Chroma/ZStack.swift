@@ -33,8 +33,8 @@ public struct ZStack: PrimitiveBlock {
       let size = BlockEngine.measure(child, proposal: rect.size, context: context)
       BlockEngine.draw(child, into: &drawList, in: rect.placing(size, alignment: alignment), context: context)
     }
-    interaction.endGroup()
-    if cursorOnGroup {
+    let retainedFocusGroup = interaction.endGroup()
+    if cursorOnGroup && retainedFocusGroup {
       drawList.strokeRect(rect, width: 1, color: interaction.groupCursorColor)
     }
   }

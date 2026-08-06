@@ -10,14 +10,20 @@ extension Interaction {
     builderStack.append(node)
   }
 
-  func endGroup() {
+  /// Finishes the current group and reports whether it was retained in the focus tree.
+  /// Empty groups are pruned, so callers must not render a focus cursor for them: a
+  /// later sibling can reuse the same path during this frame.
+  @discardableResult
+  func endGroup() -> Bool {
     guard builderStack.count > 1, let node = builderStack.popLast() else {
       preconditionFailure("endGroup without a matching beginGroup")
     }
     builderPath.removeLast()
     if node.children.isEmpty {
       builderStack.last?.children.removeLast()
+      return false
     }
+    return true
   }
 
   var isCurrentGroupSelected: Bool {
