@@ -91,12 +91,6 @@ public struct KeyBindings: Sendable {
   }
 
   public static let defaults = KeyBindings {
-    bind(.upArrow, to: .navigation(.up))
-    bind(.downArrow, to: .navigation(.down))
-    bind(.leftArrow, to: .navigation(.left))
-    bind(.rightArrow, to: .navigation(.right))
-    bind(.tab, to: .navigation(.next))
-    bind(.tab, modifiers: [.shift], to: .navigation(.previous))
     bind(.enter, to: .action(.activate))
     bind(.space, to: .action(.activate))
     bind(.escape, to: .action(.cancel))
