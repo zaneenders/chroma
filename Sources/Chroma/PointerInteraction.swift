@@ -12,11 +12,15 @@ extension Interaction {
     clipStack.removeLast()
   }
 
-  func interactiveBehavior(id: WidgetID, rect: Rect) -> ButtonState {
+  func interactiveBehavior(
+    id: WidgetID, rect: Rect, role: ActionRole = .normal,
+    action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
+    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect), role: role))
+    if role != .normal, let action { actionRoles[role] = action }
 
     let selected = selectedLeafID == id
     let held = pressedLeaf == id && input.pointerDown

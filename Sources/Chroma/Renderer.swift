@@ -8,5 +8,11 @@ package protocol Renderer: AnyObject {
 
   var interaction: Interaction { get }
 
+  func setKeyBindings(_ bindings: KeyBindings)
+
   func run(title: String)
+}
+
+extension Renderer {
+  package func setKeyBindings(_ bindings: KeyBindings) {}
 }

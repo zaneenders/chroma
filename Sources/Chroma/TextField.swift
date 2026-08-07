@@ -34,14 +34,16 @@ public struct TextField: PrimitiveBlock {
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let metrics = context.fontMetrics
+    let scale = fontScale * context.textScale
     return Size(
       width: proposal.width,
-      height: metrics.glyphHeight * fontScale + 2 * padding + 2
+      height: metrics.glyphHeight * scale + 2 * padding + 2
     )
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let metrics = context.fontMetrics
+    let scale = fontScale * context.textScale
     let style = style ?? context.theme.textField
     let state = context.textInputState(
       id: id, in: rect, text: getText(), onChange: onChange, onSubmit: onSubmit)
@@ -60,8 +62,8 @@ public struct TextField: PrimitiveBlock {
       x: rect.minX + padding,
       y: rect.minY + padding + 1,
       width: max(0, rect.size.width - 2 * padding),
-      height: metrics.glyphHeight * fontScale)
-    let cellWidth = metrics.cellAdvance * fontScale
+      height: metrics.glyphHeight * scale)
+    let cellWidth = metrics.cellAdvance * scale
 
     var textOffset: Float = 0
     if let caret = state.caretOffset {
@@ -78,20 +80,20 @@ public struct TextField: PrimitiveBlock {
     drawList.pushClip(inner)
     let text = getText()
     if text.isEmpty && !state.editing {
-      drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: fontScale)
+      drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: scale)
     } else {
       drawList.text(
         text,
         at: Point(x: inner.minX + textOffset, y: inner.minY),
         color: style.foreground,
-        scale: fontScale)
+        scale: scale)
     }
     if let caret = state.caretOffset, Self.caretVisible {
       drawList.fillRect(
         Rect(
           x: (inner.minX + textOffset + Float(caret) * cellWidth).rounded(),
           y: inner.minY - 1,
-          width: max(1, fontScale),
+          width: max(1, scale),
           height: inner.size.height + 2),
         color: style.caret)
     }

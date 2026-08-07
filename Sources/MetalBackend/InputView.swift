@@ -6,13 +6,14 @@ import MetalKit
 
 final class ChromaInputView: MTKView {
   var interaction: Interaction!
+  var keyBindings: KeyBindings = .defaults
   private var pointerPosition = Point(x: -1, y: -1)
   private var pointerPressPosition = Point(x: -1, y: -1)
   private var pointerDown = false
   private var pressedEdge = false
   private var releasedEdge = false
   private var scroll = Point.zero
-  private var pendingCommands: [UICommand] = []
+  private var pendingCommands: [Command] = []
   private var pendingTextEvents: [TextEditEvent] = []
 
   func frameInput() -> InputState {
@@ -23,7 +24,7 @@ final class ChromaInputView: MTKView {
       pointerPressed: pressedEdge,
       pointerReleased: releasedEdge,
       scrollDelta: scroll,
-      commands: pendingCommands,
+      semanticCommands: pendingCommands,
       textEvents: pendingTextEvents
     )
     pressedEdge = false
@@ -107,39 +108,47 @@ final class ChromaInputView: MTKView {
       }
       return
     }
-    let command: UICommand?
-    switch event.keyCode {
-    case 48:
-      command = event.modifierFlags.contains(.shift) ? .previousLeaf : .nextLeaf
-    case 123: command = .left
-    case 124: command = .right
-    case 125: command = .down
-    case 126: command = .up
-    case 116: command = .pageUp
-    case 121: command = .pageDown
-    case 115: command = .home
-    case 119: command = .end
-    case 36, 76, 49: command = .activate
-    default:
-      if event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
-        switch event.charactersIgnoringModifiers {
-        case "l": command = .in
-        case "s": command = .out
-        case "j": command = .down
-        case "f": command = .up
-        case "k": command = .right
-        case "d": command = .left
-        default: command = nil
-        }
-      } else {
-        command = nil
-      }
+    guard let chord = Self.keyChord(for: event) else {
+      super.keyDown(with: event)
+      return
     }
-    if let command {
-      pendingCommands.append(command)
+    // A disabled binding is still owned by the keymap and must not fall through.
+    if let resolution = keyBindings.command(for: chord) {
+      if let command = resolution { pendingCommands.append(command) }
     } else {
       super.keyDown(with: event)
     }
+  }
+
+  private static func keyChord(for event: NSEvent) -> KeyChord? {
+    let key: Key
+    switch event.keyCode {
+    case 48: key = .tab
+    case 123: key = .leftArrow
+    case 124: key = .rightArrow
+    case 125: key = .downArrow
+    case 126: key = .upArrow
+    case 116: key = .pageUp
+    case 121: key = .pageDown
+    case 115: key = .home
+    case 119: key = .end
+    case 36, 76: key = .enter
+    case 49: key = .space
+    case 53: key = .escape
+    case 51: key = .backspace
+    case 117: key = .delete
+    default:
+      guard let value = event.charactersIgnoringModifiers?.lowercased(), value.count == 1,
+        let character = value.first
+      else { return nil }
+      key = .character(character)
+    }
+    var modifiers: KeyModifiers = []
+    if event.modifierFlags.contains(.shift) { modifiers.insert(.shift) }
+    if event.modifierFlags.contains(.control) { modifiers.insert(.control) }
+    if event.modifierFlags.contains(.option) { modifiers.insert(.option) }
+    if event.modifierFlags.contains(.command) { modifiers.insert(.command) }
+    return KeyChord(key, modifiers: modifiers)
   }
 
   private static func textEditEvent(for event: NSEvent) -> TextEditEvent? {

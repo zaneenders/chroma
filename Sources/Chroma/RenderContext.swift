@@ -2,6 +2,7 @@
 public struct RenderContext {
   package var interaction: Interaction
   public var theme: ChromaTheme
+  public var textScale: Float
 
   public var selection: TextSelectionManager { interaction.textSelection }
 
@@ -15,14 +16,16 @@ public struct RenderContext {
   /// Custom primitives should inspect this snapshot instead of mutating engine state.
   public var input: InputState { interaction.input }
 
-  public init(theme: ChromaTheme = .dark) {
+  public init(theme: ChromaTheme = .dark, textScale: Float = 1) {
     self.interaction = Interaction()
     self.theme = theme
+    self.textScale = textScale
   }
 
-  package init(interaction: Interaction, theme: ChromaTheme = .dark) {
+  package init(interaction: Interaction, theme: ChromaTheme = .dark, textScale: Float = 1) {
     self.interaction = interaction
     self.theme = theme
+    self.textScale = textScale
   }
 
   public func withTheme(_ theme: ChromaTheme) -> RenderContext {
@@ -31,9 +34,18 @@ public struct RenderContext {
     return copy
   }
 
+  public func withTextScale(_ scale: Float) -> RenderContext {
+    var copy = self
+    copy.textScale = scale
+    return copy
+  }
+
   /// Registers an interactive leaf and returns its state for the current frame.
-  public func buttonState(id: WidgetID, in rect: Rect) -> ButtonState {
-    interaction.interactiveBehavior(id: id, rect: rect)
+  public func buttonState(
+    id: WidgetID, in rect: Rect, role: ActionRole = .normal,
+    action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
   }
 
   /// Registers an editable leaf and applies text input translated by the backend.

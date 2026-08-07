@@ -74,12 +74,12 @@ public struct ScrollView: PrimitiveBlock {
       horizontalOffset -= interaction.input.scrollDelta.x
     }
 
-    for command in interaction.input.commands {
+    for command in interaction.input.semanticCommands {
       switch command {
-      case .pageUp: offset -= rect.size.height
-      case .pageDown: offset += rect.size.height
-      case .home: offset = 0
-      case .end: offset = maximumOffset
+      case .navigation(.pageUp): offset -= rect.size.height
+      case .navigation(.pageDown): offset += rect.size.height
+      case .navigation(.home): offset = 0
+      case .navigation(.end): offset = maximumOffset
       default: break
       }
     }

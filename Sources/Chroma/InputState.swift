@@ -6,6 +6,7 @@ public struct InputState: Equatable, Sendable {
   public var pointerReleased: Bool
   public var scrollDelta: Point
   public var commands: [UICommand]
+  public var semanticCommands: [Command]
   public var textEvents: [TextEditEvent]
 
   public init(
@@ -16,6 +17,7 @@ public struct InputState: Equatable, Sendable {
     pointerReleased: Bool = false,
     scrollDelta: Point = .zero,
     commands: [UICommand] = [],
+    semanticCommands: [Command] = [],
     textEvents: [TextEditEvent] = []
   ) {
     self.pointerPosition = pointerPosition
@@ -25,6 +27,7 @@ public struct InputState: Equatable, Sendable {
     self.pointerReleased = pointerReleased
     self.scrollDelta = scrollDelta
     self.commands = commands
+    self.semanticCommands = semanticCommands + commands.map(\.command)
     self.textEvents = textEvents
   }
 }

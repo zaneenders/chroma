@@ -12,11 +12,14 @@ final class FocusNode {
 
   let kind: Kind
   let rect: Rect
+  var role: ActionRole = .normal
+  var commandHandlers: [Command: @MainActor () -> CommandResult] = [:]
   var children: [FocusNode] = []
 
-  init(kind: Kind, rect: Rect) {
+  init(kind: Kind, rect: Rect, role: ActionRole = .normal) {
     self.kind = kind
     self.rect = rect
+    self.role = role
   }
 
   var isLeaf: Bool {

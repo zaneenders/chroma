@@ -31,18 +31,19 @@ public struct Text: PrimitiveBlock {
   }
 
   public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
-    context.interaction.fontMetrics.measure(content, scale: scale)
+    context.interaction.fontMetrics.measure(content, scale: scale * context.textScale)
   }
 
   public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let effectiveScale = scale * context.textScale
     if isSelectable, let id = selectionID {
       let interaction = context.interaction
       let metrics = interaction.fontMetrics
-      let cellWidth = metrics.cellAdvance * scale
-      let lineHeight = metrics.lineAdvance * scale
+      let cellWidth = metrics.cellAdvance * effectiveScale
+      let lineHeight = metrics.lineAdvance * effectiveScale
       let layout = PlainTextLayout(
         text: content, rect: rect, cellWidth: cellWidth,
-        lineHeight: lineHeight, scale: scale)
+        lineHeight: lineHeight, scale: effectiveScale)
       interaction.textSelection.layoutRegistry.register(id, layout: layout)
 
       if let sel = interaction.textSelection.selection(for: layout) {
@@ -55,7 +56,7 @@ public struct Text: PrimitiveBlock {
         let prefix = content.prefix(sel.from)
         if !prefix.isEmpty {
           drawList.text(
-            String(prefix), at: rect.origin, color: color, scale: scale)
+            String(prefix), at: rect.origin, color: color, scale: effectiveScale)
         }
         let selected = content.dropFirst(sel.from).prefix(sel.to - sel.from)
         if !selected.isEmpty {
@@ -63,17 +64,17 @@ public struct Text: PrimitiveBlock {
           drawList.text(
             String(selected), at: selOrigin,
             color: context.theme.focus.selectionForeground,
-            scale: scale)
+            scale: effectiveScale)
         }
         let suffix = content.dropFirst(sel.to)
         if !suffix.isEmpty {
           let suffixOrigin = Point(x: rect.minX + Float(sel.to) * cellWidth, y: rect.minY)
           drawList.text(
-            String(suffix), at: suffixOrigin, color: color, scale: scale)
+            String(suffix), at: suffixOrigin, color: color, scale: effectiveScale)
         }
         return
       }
     }
-    drawList.text(content, at: rect.origin, color: color, scale: scale)
+    drawList.text(content, at: rect.origin, color: color, scale: effectiveScale)
   }
 }

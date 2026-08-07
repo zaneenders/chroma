@@ -27,6 +27,16 @@ package final class Interaction {
   package var isTextEditing: Bool { editingLeaf != nil }
 
   var activatePending = false
+  var pendingCommands: [Command] = []
+  var handledCommandIndices: Set<Int> = []
+  struct ScopedCommandHandler {
+    var path: [Int]
+    var command: Command
+    var action: @MainActor () -> CommandResult
+  }
+  var commandHandlers: [ScopedCommandHandler] = []
+  var buildingCommandHandlers: [ScopedCommandHandler] = []
+  var actionRoles: [ActionRole: @MainActor () -> Void] = [:]
 
   var lastPointerPosition = Point(x: -1, y: -1)
 
@@ -64,6 +74,12 @@ package final class Interaction {
   package func beginFrame(input: InputState) {
     self.input = input
     activatePending = false
+    pendingCommands = input.semanticCommands
+    handledCommandIndices = []
+    routePendingCommands()
+    pendingCommands = []
+    buildingCommandHandlers = []
+    actionRoles = [:]
 
     let root = FocusNode(kind: .group(.vertical), rect: .zero)
     builderRoot = root
@@ -122,10 +138,10 @@ package final class Interaction {
       }
     }
 
-    for command in input.commands { apply(command) }
   }
 
   package func endFrame() {
+    routePendingCommands()
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {
       if let id = oldTree.node(at: selection)?.leafID {
@@ -141,6 +157,7 @@ package final class Interaction {
       self.editingLeaf = nil
     }
     tree = newTree
+    commandHandlers = buildingCommandHandlers
     scrollViewports = buildingScrollViewports
     builderRoot = nil
     builderStack = []

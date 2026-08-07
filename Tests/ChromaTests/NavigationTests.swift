@@ -116,6 +116,33 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 1, 0], "down from b also lands on row2's first leaf")
   }
 
+  @Test func perpendicularDirectionCrossesSiblingPanes() {
+    let ctx = Interaction()
+    let panes: @MainActor (Interaction, inout [WidgetID: ButtonState]) -> Void = { ctx, states in
+      ctx.beginGroup(.horizontal, rect: Rect(x: 0, y: 0, width: 200, height: 100))
+      ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 100))
+      states[WidgetID("sidebar-a")] = ctx.interactiveBehavior(
+        id: WidgetID("sidebar-a"), rect: Rect(x: 0, y: 0, width: 100, height: 30))
+      states[WidgetID("sidebar-b")] = ctx.interactiveBehavior(
+        id: WidgetID("sidebar-b"), rect: Rect(x: 0, y: 30, width: 100, height: 30))
+      ctx.endGroup()
+      ctx.beginGroup(.vertical, rect: Rect(x: 100, y: 0, width: 100, height: 100))
+      states[WidgetID("content-a")] = ctx.interactiveBehavior(
+        id: WidgetID("content-a"), rect: Rect(x: 100, y: 0, width: 100, height: 30))
+      states[WidgetID("content-b")] = ctx.interactiveBehavior(
+        id: WidgetID("content-b"), rect: Rect(x: 100, y: 30, width: 100, height: 30))
+      ctx.endGroup()
+      ctx.endGroup()
+    }
+    frame(ctx, draw: panes)
+    frame(ctx, input: InputState(commands: [.down]), draw: panes)
+    #expect(ctx.selection == [0, 0, 1])
+    frame(ctx, input: InputState(commands: [.right]), draw: panes)
+    #expect(ctx.selection == [0, 1, 0], "right crosses from the sidebar to content")
+    frame(ctx, input: InputState(commands: [.left]), draw: panes)
+    #expect(ctx.selection == [0, 0, 1], "left returns to the sidebar edge")
+  }
+
   @Test func directionFromTheRootStops() {
     let ctx = Interaction()
     frame(ctx)
