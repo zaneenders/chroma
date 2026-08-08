@@ -1,9 +1,7 @@
 public struct ZStack: PrimitiveBlock {
-  public var alignment: Alignment
   public var children: [any Block]
 
-  public init(alignment: Alignment = .center, @BlockBuilder content: () -> TupleBlock) {
-    self.alignment = alignment
+  public init(@BlockBuilder content: () -> TupleBlock) {
     self.children = BlockBuilder.flattenedChildren(content().children)
   }
 
@@ -31,7 +29,11 @@ public struct ZStack: PrimitiveBlock {
     let cursorOnGroup = interaction.isCurrentGroupSelected
     for child in children {
       let size = BlockEngine.measure(child, proposal: rect.size, context: context)
-      BlockEngine.draw(child, into: &drawList, in: rect.placing(size, alignment: alignment), context: context)
+      BlockEngine.draw(
+        child,
+        into: &drawList,
+        in: Rect(x: rect.minX, y: rect.minY, width: size.width, height: size.height),
+        context: context)
     }
     let retainedFocusGroup = interaction.endGroup()
     if cursorOnGroup && retainedFocusGroup {

@@ -1,16 +1,13 @@
 public struct HStack: PrimitiveBlock {
   public var spacing: Float
-  public var alignment: VerticalAlignment
   public var children: [any Block]
   public var isLayoutReversed = false
 
   public init(
     spacing: Float = 0,
-    alignment: VerticalAlignment = .center,
     @BlockBuilder content: () -> TupleBlock
   ) {
     self.spacing = spacing
-    self.alignment = alignment
     self.children = BlockBuilder.flattenedChildren(content().children)
   }
 
@@ -71,12 +68,7 @@ public struct HStack: PrimitiveBlock {
     var x = isLayoutReversed ? rect.maxX : rect.minX
     for (child, size) in zip(children, sizes) {
       let height = size.height
-      let y: Float
-      switch alignment {
-      case .top: y = rect.minY
-      case .center: y = rect.minY + (rect.size.height - height) / 2
-      case .bottom: y = rect.maxY - height
-      }
+      let y = rect.minY
       if isLayoutReversed {
         x -= size.width
       }

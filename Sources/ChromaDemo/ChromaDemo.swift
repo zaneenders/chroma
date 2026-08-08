@@ -45,6 +45,7 @@ private final class DemoState {
   var page: Page = .navigation
   var name = ""
   var message = "Activate a control"
+  var isModalPresented = false
   let scrollController = ScrollViewController()
 }
 
@@ -56,18 +57,36 @@ private struct DemoView: Block {
 
   var body: some Block {
     ThemeReader { theme in
-      VStack(spacing: 0, alignment: .leading) {
+      VStack(spacing: 0) {
         DemoHeader()
-        HStack(spacing: 0, alignment: .top) {
-          DemoSidebar(state: state)
-            .sizing(x: .fixed(210))
-            .sizing(y: .grow)
-            .background(theme.surface)
-          DemoPage(state: state)
+        ZStack {
+          HStack(spacing: 0) {
+            DemoSidebar(state: state)
+              .sizing(x: .fixed(210))
+              .sizing(y: .grow)
+              .background(theme.surface)
+            DemoPage(state: state)
+              .sizing(x: .grow, y: .grow)
+              .clipped()
+              .background(theme.background)
+          }
+          .sizing(x: .grow, y: .grow)
+          if state.isModalPresented {
+            Color(r: 0, g: 0, b: 0, a: 0.65)
+            VStack {
+              Spacer()
+              HStack {
+                Spacer()
+                DemoModal(state: state)
+                  .sizing(x: .fixed(560))
+                Spacer()
+              }
+              Spacer()
+            }
             .sizing(x: .grow, y: .grow)
-            .clipped()
-            .background(theme.background)
+          }
         }
+        .sizing(x: .grow, y: .grow)
         DemoFooter(state: state)
       }
       .background(theme.background)
@@ -98,7 +117,7 @@ private struct DemoSidebar: Block {
 
   var body: some Block {
     ThemeReader { theme in
-      VStack(spacing: 8, alignment: .leading) {
+      VStack(spacing: 8) {
         Text("EXAMPLES")
           .fontScale(smallTextScale)
           .foregroundColor(theme.secondaryForeground)
@@ -147,7 +166,7 @@ private struct PageHeading: Block {
 
   var body: some Block {
     ThemeReader { theme in
-      VStack(spacing: 6, alignment: .leading) {
+      VStack(spacing: 6) {
         Text(title).fontScale(titleTextScale).foregroundColor(theme.accent)
         Text(detail).fontScale(smallTextScale).foregroundColor(theme.secondaryForeground)
       }
@@ -160,12 +179,12 @@ private struct NavigationExample: Block {
 
   var body: some Block {
     ThemeReader { theme in
-      VStack(spacing: 18, alignment: .leading) {
+      VStack(spacing: 18) {
         PageHeading(
           title: "Keyboard navigation",
           detail: "Move between the sidebar and this pane with d/k."
         )
-        VStack(spacing: 10, alignment: .leading) {
+        VStack(spacing: 10) {
           Button("First action", id: WidgetID("navigation.first"), fontScale: smallTextScale) {
             state.message = "First action"
           }
@@ -187,6 +206,9 @@ private struct NavigationExample: Block {
         .padding(16)
         .roundedBackground(theme.surface, radius: 8)
         .roundedBorder(theme.border, radius: 8)
+        Button("Show modal", id: WidgetID("navigation.modal"), fontScale: smallTextScale) {
+          state.isModalPresented = true
+        }
         Text("Last activation: \(state.message)")
           .fontScale(smallTextScale)
           .foregroundColor(theme.foreground)
@@ -201,7 +223,7 @@ private struct TextInputExample: Block {
 
   var body: some Block {
     ThemeReader { theme in
-      VStack(spacing: 18, alignment: .leading) {
+      VStack(spacing: 18) {
         PageHeading(
           title: "Text input",
           detail: "Activate the field, type normally, and press Escape to stop editing."
@@ -229,7 +251,7 @@ private struct ScrollingExample: Block {
 
   var body: some Block {
     ThemeReader { theme in
-      VStack(spacing: 14, alignment: .leading) {
+      VStack(spacing: 14) {
         PageHeading(
           title: "Scrolling",
           detail: "Use the wheel, Page Up/Down, Home/End, or the buttons below."
@@ -243,7 +265,7 @@ private struct ScrollingExample: Block {
           }
         }
         ScrollView(id: WidgetID("demo.scroll"), controller: state.scrollController) {
-          VStack(spacing: 5, alignment: .leading) {
+          VStack(spacing: 5) {
             for index in 1...50 {
               Text("Row \(index)")
                 .fontScale(smallTextScale)
@@ -259,6 +281,29 @@ private struct ScrollingExample: Block {
         .roundedBorder(theme.border, radius: 8)
       }
       .padding(24)
+    }
+  }
+}
+
+private struct DemoModal: Block {
+  let state: DemoState
+
+  var body: some Block {
+    ThemeReader { theme in
+      VStack(spacing: 14) {
+        Text("Modal overlay")
+          .fontScale(titleTextScale)
+          .foregroundColor(theme.accent)
+        Text("ZStack layers it over the page.")
+          .fontScale(smallTextScale)
+          .foregroundColor(theme.foreground)
+        Button("Dismiss", id: WidgetID("modal.dismiss"), fontScale: smallTextScale) {
+          state.isModalPresented = false
+        }
+      }
+      .padding(24)
+      .roundedBackground(theme.elevatedSurface, radius: 8)
+      .roundedBorder(theme.accent, radius: 8)
     }
   }
 }

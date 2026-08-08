@@ -181,6 +181,7 @@ window.makeKeyAndOrderFront(nil)
       BlockEngine.draw(content, into: &drawList, in: Rect(origin: .zero, size: viewport), context: context)
     }
     interaction.endFrame()
+    let redrawRequested = interaction.consumeRedrawRequest()
     render(
       drawList,
       viewport: viewport,
@@ -193,6 +194,9 @@ window.makeKeyAndOrderFront(nil)
     cmd.present(drawable)
     cmd.commit()
 
+    if redrawRequested {
+      mtkView.needsDisplay = true
+    }
     poolBufferIndex = (poolBufferIndex + 1) % poolBufferCount
   }
 

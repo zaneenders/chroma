@@ -40,7 +40,7 @@ public struct ScrollView: PrimitiveBlock {
     self.showsIndicator = showsIndicator
     self.sticksToBottom = sticksToBottom
     self.controller = controller
-    self.content = VStack(alignment: .leading, content: content)
+    self.content = VStack(content: content)
   }
 
   @MainActor public var expandsHorizontally: Bool { true }

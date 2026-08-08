@@ -27,6 +27,7 @@ package final class Interaction {
   package var isTextEditing: Bool { editingLeaf != nil }
 
   var activatePending = false
+  private var redrawRequested = false
   var pendingCommands: [Command] = []
   var handledCommandIndices: Set<Int> = []
   struct ScopedCommandHandler {
@@ -70,6 +71,15 @@ package final class Interaction {
   var builderPath: [Int] = []
 
   package init() {}
+
+  func requestRedraw() {
+    redrawRequested = true
+  }
+
+  package func consumeRedrawRequest() -> Bool {
+    defer { redrawRequested = false }
+    return redrawRequested
+  }
 
   package func beginFrame(input: InputState) {
     self.input = input

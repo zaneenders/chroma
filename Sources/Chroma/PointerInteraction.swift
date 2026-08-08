@@ -28,6 +28,7 @@ extension Interaction {
     if selected && activatePending {
       clicked = true
       activatePending = false
+      requestRedraw()
     }
     return ButtonState(hovered: selected, held: held, clicked: clicked)
   }

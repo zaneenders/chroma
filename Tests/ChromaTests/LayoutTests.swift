@@ -17,7 +17,7 @@ struct LayoutTests {
     var showQueue: Bool
 
     @MainActor var body: some Block {
-      VStack(spacing: 0, alignment: .leading) {
+      VStack(spacing: 0) {
         header
         switch showQueue {
         case true:
@@ -36,7 +36,7 @@ struct LayoutTests {
     }
 
     @MainActor private var readyWithQueue: some Block {
-      VStack(spacing: 0, alignment: .leading) {
+      VStack(spacing: 0) {
         transcript
         bottomChrome
       }
@@ -44,7 +44,7 @@ struct LayoutTests {
     }
 
     @MainActor private var readyWithoutQueue: some Block {
-      VStack(spacing: 0, alignment: .leading) {
+      VStack(spacing: 0) {
         transcript
         bottomChrome
       }
@@ -64,7 +64,7 @@ struct LayoutTests {
       var showQueue: Bool
 
       @MainActor var body: some Block {
-        VStack(spacing: 0, alignment: .leading) {
+        VStack(spacing: 0) {
           if showQueue {
             QueuedTrayHost()
           }
@@ -219,46 +219,6 @@ struct LayoutTests {
     #expect(verticalText[0].1.y > verticalText[1].1.y)
   }
 
-  @Test func stacksPreserveOversizedChildrenForTrailingAndCenterAlignment() {
-    let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
-    let rect = Rect(x: 10, y: 20, width: 100, height: 80)
-    interaction.beginFrame(input: InputState())
-
-    var horizontalList = DrawList()
-    BlockEngine.draw(
-      HStack(alignment: .bottom) {
-        Text("horizontal").sizing(x: .fixed(20), y: .fixed(120))
-      },
-      into: &horizontalList,
-      in: rect,
-      context: context
-    )
-
-    var verticalList = DrawList()
-    BlockEngine.draw(
-      VStack(alignment: .trailing) {
-        Text("vertical").sizing(x: .fixed(140), y: .fixed(20))
-      },
-      into: &verticalList,
-      in: rect,
-      context: context
-    )
-    interaction.endFrame()
-
-    let horizontalPosition = horizontalList.commands.compactMap { command -> Point? in
-      guard case .text(let position, "horizontal", _, _) = command else { return nil }
-      return position
-    }.first
-    let verticalPosition = verticalList.commands.compactMap { command -> Point? in
-      guard case .text(let position, "vertical", _, _) = command else { return nil }
-      return position
-    }.first
-
-    #expect(horizontalPosition == Point(x: rect.minX, y: rect.maxY - 120))
-    #expect(verticalPosition == Point(x: rect.maxX - 140, y: rect.minY))
-  }
-
   @Test func spacerOnlyExpandsAlongItsStackAxis() {
     let horizontal = HStack {
       Text("left")
@@ -287,7 +247,7 @@ private struct LegacyHost: Block {
   var showQueue: Bool
 
   @MainActor var body: some Block {
-    VStack(spacing: 0, alignment: .leading) {
+    VStack(spacing: 0) {
       transcript
       bottomChrome
     }
@@ -300,7 +260,7 @@ private struct LegacyHost: Block {
   }
 
   @MainActor private var bottomChrome: some Block {
-    VStack(spacing: 0, alignment: .leading) {
+    VStack(spacing: 0) {
       if showQueue {
         queuedTray
       }
