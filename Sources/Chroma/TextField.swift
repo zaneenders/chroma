@@ -81,6 +81,28 @@ public struct TextField: PrimitiveBlock {
     let text = getText()
     if text.isEmpty && !state.editing {
       drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: scale)
+    } else if state.editing, let selection = context.interaction.textSelectionRange {
+      let selectionRect = Rect(
+        x: inner.minX + textOffset + Float(selection.lowerBound) * cellWidth,
+        y: inner.minY,
+        width: Float(selection.count) * cellWidth,
+        height: inner.size.height)
+      drawList.fillRect(selectionRect, color: context.theme.focus.selectionBackground)
+      drawList.text(
+        text,
+        at: Point(x: inner.minX + textOffset, y: inner.minY),
+        color: style.foreground,
+        scale: scale)
+      let selected = String(Array(text)[selection])
+      drawList.pushClip(selectionRect)
+      drawList.text(
+        selected,
+        at: Point(
+          x: inner.minX + textOffset + Float(selection.lowerBound) * cellWidth,
+          y: inner.minY),
+        color: context.theme.focus.selectionForeground,
+        scale: scale)
+      drawList.popClip()
     } else {
       drawList.text(
         text,
@@ -88,7 +110,9 @@ public struct TextField: PrimitiveBlock {
         color: style.foreground,
         scale: scale)
     }
-    if let caret = state.caretOffset, Self.caretVisible {
+    if let caret = state.caretOffset, context.interaction.textSelectionRange == nil,
+      Self.caretVisible
+    {
       drawList.fillRect(
         Rect(
           x: (inner.minX + textOffset + Float(caret) * cellWidth).rounded(),

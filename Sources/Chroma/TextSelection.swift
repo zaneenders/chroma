@@ -107,6 +107,24 @@ public final class TextSelectionManager {
     return (end, start)
   }
 
+  public func selectAll() {
+    guard let layoutID = originLayoutID,
+      let layout = layoutRegistry.layout(for: layoutID)
+    else { return }
+    originLayoutRect = layout.rect
+    selectionStart = 0
+    selectionEnd = layout.text.count
+    isSelecting = false
+  }
+
+  package func selectAll(at point: Point) {
+    if originLayoutID == nil, let (id, layout) = layoutRegistry.entry(at: point) {
+      originLayoutID = id
+      originLayoutRect = layout.rect
+    }
+    selectAll()
+  }
+
   public func selectedText() -> String? {
     guard originLayoutRect != nil,
       let layoutID = originLayoutID,

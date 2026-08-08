@@ -19,7 +19,21 @@ struct ChromaDemo: PlatformApp {
   var windowSize: Size { Size(width: 960, height: 640) }
 
   var keyBindings: KeyBindings {
-    .defaults.overlay {
+    KeyBindings {
+      bind("c", modifiers: .command, to: .editing(.copy))
+      bind("v", modifiers: .command, to: .editing(.paste))
+      bind("a", modifiers: .command, to: .editing(.selectAll))
+      bind(.backspace, to: .editing(.backspace))
+      bind(.delete, to: .editing(.deleteForward))
+      bind(.leftArrow, to: .editing(.moveCaretLeft))
+      bind(.rightArrow, to: .editing(.moveCaretRight))
+      bind(.home, to: .editing(.moveCaretToStart))
+      bind(.end, to: .editing(.moveCaretToEnd))
+      bind(.enter, to: .editing(.submit))
+      bind(.escape, to: .editing(.endEditing))
+      bind(.space, to: .action(.activate))
+      bind(.pageUp, to: .navigation(.pageUp))
+      bind(.pageDown, to: .navigation(.pageDown))
       bind("j", to: .navigation(.down))
       bind("f", to: .navigation(.up))
       bind("d", to: .navigation(.left))
@@ -39,6 +53,7 @@ private final class DemoState {
   enum Page: String, CaseIterable {
     case navigation = "Navigation"
     case textInput = "Text input"
+    case textSelection = "Copy & paste"
     case scrolling = "Scrolling"
   }
 
@@ -130,6 +145,10 @@ private struct DemoSidebar: Block {
           state.page = .textInput
         }
         .sizing(x: .grow)
+        Button("Copy & paste", id: WidgetID("sidebar.copy"), fontScale: smallTextScale) {
+          state.page = .textSelection
+        }
+        .sizing(x: .grow)
         Button("Scrolling", id: WidgetID("sidebar.scroll"), fontScale: smallTextScale) {
           state.page = .scrolling
         }
@@ -148,6 +167,7 @@ private struct DemoPage: PrimitiveBlock {
     switch state.page {
     case .navigation: NavigationExample(state: state)
     case .textInput: TextInputExample(state: state)
+    case .textSelection: TextSelectionExample(state: state)
     case .scrolling: ScrollingExample(state: state)
     }
   }
@@ -246,6 +266,43 @@ private struct TextInputExample: Block {
   }
 }
 
+private struct TextSelectionExample: Block {
+  let state: DemoState
+
+  var body: some Block {
+    ThemeReader { theme in
+      VStack(spacing: 18) {
+        PageHeading(
+          title: "Copy & paste",
+          detail: "Drag to select, or press Command-A; use Command-C and Command-V to copy and paste."
+        )
+        VStack(spacing: 10) {
+          Text("Select and copy any part of this sentence.")
+            .selectable(WidgetID("copy.source"))
+            .fontScale(smallTextScale)
+            .foregroundColor(theme.foreground)
+          Text("Selections use the system clipboard.")
+            .selectable(WidgetID("copy.detail"))
+            .fontScale(smallTextScale)
+            .foregroundColor(theme.secondaryForeground)
+        }
+        .padding(16)
+        .roundedBackground(theme.surface, radius: 8)
+        .roundedBorder(theme.border, radius: 8)
+        TextField(
+          "Paste copied text here",
+          id: WidgetID("copy.destination"),
+          fontScale: smallTextScale,
+          text: { state.name },
+          onChange: { state.name = $0 }
+        )
+        .sizing(x: .fixed(520))
+      }
+      .padding(24)
+    }
+  }
+}
+
 private struct ScrollingExample: Block {
   let state: DemoState
 
@@ -314,7 +371,7 @@ private struct DemoFooter: Block {
   var body: some Block {
     ThemeReader { theme in
       HStack(spacing: 12) {
-        Text("j/f/d/k move  •  Enter activates  •  l enters  •  s exits")
+        Text("Movement: j/f/d/k  •  Enter edits  •  Editing: Escape returns to movement")
           .fontScale(smallTextScale)
           .foregroundColor(theme.secondaryForeground)
         Spacer()

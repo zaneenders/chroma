@@ -6,6 +6,10 @@ public struct RenderContext {
 
   public var selection: TextSelectionManager { interaction.textSelection }
 
+  /// The current input mode. Activating an editable control enters editing mode;
+  /// ending editing or moving focus returns to movement mode.
+  public var interactionMode: InteractionMode { interaction.mode }
+
   public var fontMetrics: FontMetrics {
     get { interaction.fontMetrics }
     nonmutating set { interaction.fontMetrics = newValue }

@@ -15,7 +15,6 @@ public protocol App {
 extension App {
   public var title: String { String(describing: Self.self) }
   public var windowSize: Size { Size(width: 800, height: 600) }
-  public var keyBindings: KeyBindings { .defaults }
 
   @MainActor
   package func run(on renderer: any Renderer) {

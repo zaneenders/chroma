@@ -143,6 +143,55 @@ struct TextSelectionTests {
     }
   }
 
+  @Test func copyTextFallsBackToTheActiveTextSelection() {
+    let ctx = Interaction()
+    let id = WidgetID("copy-source")
+    let l = layout
+    let origin = Point(x: l.rect.minX + 1, y: 21)
+
+    frame(
+      ctx, id: id,
+      input: InputState(
+        pointerPosition: origin, pointerPressPosition: origin,
+        pointerDown: true, pointerPressed: true))
+    let move = InputState(
+      pointerPosition: Point(x: l.rect.minX + 3 * cellWidth + 1, y: 21),
+      pointerDown: true)
+    frame(ctx, id: id, input: move)
+    frame(ctx, id: id, input: move)
+
+    #expect(ctx.copyText() == "Ses")
+  }
+
+  @Test func selectAllExpandsTheActiveSelection() {
+    let ctx = Interaction()
+    let id = WidgetID("copy-source")
+    let l = layout
+    let origin = Point(x: l.rect.minX + cellWidth, y: 21)
+
+    frame(
+      ctx, id: id,
+      input: InputState(
+        pointerPosition: origin, pointerPressPosition: origin,
+        pointerDown: true, pointerPressed: true))
+    let move = InputState(
+      pointerPosition: Point(x: l.rect.minX + 3 * cellWidth, y: 21),
+      pointerDown: true)
+    frame(ctx, id: id, input: move)
+    frame(ctx, id: id, input: move)
+
+    ctx.textSelection.selectAll()
+
+    #expect(ctx.copyText() == text)
+  }
+
+  @Test func customCopyProviderTakesPrecedenceOverTextSelection() {
+    let ctx = Interaction()
+    ctx.onCopy = { "custom copy" }
+
+    #expect(ctx.copyText() == "custom copy")
+  }
+
   @Test func contextsTrackSelectionsIndependently() {
     let a = Interaction()
     let b = Interaction()

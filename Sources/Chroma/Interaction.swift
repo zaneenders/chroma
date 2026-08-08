@@ -1,3 +1,8 @@
+public enum InteractionMode: Equatable, Sendable {
+  case movement
+  case editing
+}
+
 @MainActor
 package final class Interaction {
   package static var current = Interaction()
@@ -23,8 +28,11 @@ package final class Interaction {
   package internal(set) var editingLeaf: WidgetID?
 
   package internal(set) var caretOffset: Int = 0
+  package internal(set) var textSelectionRange: Range<Int>?
+  package internal(set) var editingText: String?
 
-  package var isTextEditing: Bool { editingLeaf != nil }
+  public package(set) var mode: InteractionMode = .movement
+  package var isTextEditing: Bool { mode == .editing }
 
   var activatePending = false
   private var redrawRequested = false
@@ -55,6 +63,16 @@ package final class Interaction {
 
   package var onCopy: (() -> String?)?
 
+  package func copyText() -> String? {
+    if let text = onCopy?(), !text.isEmpty { return text }
+    if isTextEditing, let range = textSelectionRange, let editingText {
+      let characters = Array(editingText)
+      guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
+      return String(characters[range])
+    }
+    return textSelection.selectedText()
+  }
+
   var scrollOffsets: [WidgetID: Float] = [:]
   var horizontalScrollOffsets: [WidgetID: Float] = [:]
   var scrollLimits: [WidgetID: Float] = [:]
@@ -71,6 +89,20 @@ package final class Interaction {
   var builderPath: [Int] = []
 
   package init() {}
+
+  func beginEditing(_ id: WidgetID, caretOffset: Int) {
+    editingLeaf = id
+    self.caretOffset = caretOffset
+    textSelectionRange = nil
+    mode = .editing
+  }
+
+  func endEditing() {
+    editingLeaf = nil
+    editingText = nil
+    textSelectionRange = nil
+    mode = .movement
+  }
 
   func requestRedraw() {
     redrawRequested = true
@@ -107,7 +139,7 @@ package final class Interaction {
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
       if let editingLeaf, editingLeaf != selectedLeafID {
-        self.editingLeaf = nil
+        endEditing()
       }
       lastPointerPosition = input.pointerPosition
       if input.pointerPressed {
@@ -164,7 +196,7 @@ package final class Interaction {
       selection = newTree.firstLeafPath()
     }
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
-      self.editingLeaf = nil
+      endEditing()
     }
     tree = newTree
     commandHandlers = buildingCommandHandlers

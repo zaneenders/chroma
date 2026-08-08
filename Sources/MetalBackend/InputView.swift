@@ -6,7 +6,7 @@ import MetalKit
 
 final class ChromaInputView: MTKView {
   var interaction: Interaction!
-  var keyBindings: KeyBindings = .defaults
+  var keyBindings = KeyBindings()
   private var pointerPosition = Point(x: -1, y: -1)
   private var pointerPressPosition = Point(x: -1, y: -1)
   private var pointerDown = false
@@ -94,41 +94,88 @@ final class ChromaInputView: MTKView {
 
   override func keyDown(with event: NSEvent) {
     scheduleRedraw()
-    if event.modifierFlags.contains(.command),
-      event.charactersIgnoringModifiers?.lowercased() == "c",
-      let text = interaction.onCopy?(),
-      !text.isEmpty
-    {
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.setString(text, forType: .string)
-      return
-    }
-    if interaction.isTextEditing {
-      if event.modifierFlags.contains(.command),
-        event.charactersIgnoringModifiers == "v",
-        let pasted = NSPasteboard.general.string(forType: .string),
-        !pasted.isEmpty
-      {
-        pendingTextEvents.append(.insert(pasted))
-        return
-      }
-      if let edit = Self.textEditEvent(for: event) {
+    guard let chord = Self.keyChord(for: event) else {
+      if interaction.mode == .editing, let edit = Self.textInsertionEvent(for: event) {
         pendingTextEvents.append(edit)
       } else {
         super.keyDown(with: event)
       }
       return
     }
-    guard let chord = Self.keyChord(for: event) else {
-      super.keyDown(with: event)
-      return
+    let resolution = keyBindings.command(for: chord)
+    if interaction.mode == .editing {
+      // Editing commands are explicit. Movement-mode commands on printable keys are ignored
+      // here so bindings such as Space-to-activate and j-to-move still insert text while editing.
+      if case .some(.some(let command)) = resolution,
+        case .editing = command,
+        handlePlatformCommand(command)
+      {
+        return
+      }
+      if case .some(.none) = resolution { return }
+      if let edit = Self.textInsertionEvent(for: event) {
+        pendingTextEvents.append(edit)
+        return
+      }
     }
     // A disabled binding is still owned by the keymap and must not fall through.
-    if let resolution = keyBindings.command(for: chord) {
-      if let command = resolution { pendingCommands.append(command) }
+    if let resolution {
+      guard let command = resolution else { return }
+      if handlePlatformCommand(command) { return }
+      pendingCommands.append(command)
     } else {
       super.keyDown(with: event)
     }
+  }
+
+  private func handlePlatformCommand(_ command: Command) -> Bool {
+    guard case .editing(let editing) = command else { return false }
+    switch editing {
+    case .copy:
+      guard let text = interaction.copyText(), !text.isEmpty else { return true }
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(text, forType: .string)
+    case .paste:
+      guard interaction.mode == .editing,
+        let pasted = NSPasteboard.general.string(forType: .string),
+        !pasted.isEmpty
+      else { return true }
+      pendingTextEvents.append(.insert(pasted))
+    case .selectAll:
+      if interaction.mode == .editing {
+        pendingTextEvents.append(.selectAll)
+      } else {
+        interaction.textSelection.selectAll(at: pointerPosition)
+      }
+    case .backspace:
+      guard interaction.mode == .editing else { return true }
+      pendingTextEvents.append(.backspace)
+    case .deleteForward:
+      guard interaction.mode == .editing else { return true }
+      pendingTextEvents.append(.deleteForward)
+    case .moveCaretLeft:
+      guard interaction.mode == .editing else { return false }
+      pendingTextEvents.append(.moveCaretLeft)
+    case .moveCaretRight:
+      guard interaction.mode == .editing else { return false }
+      pendingTextEvents.append(.moveCaretRight)
+    case .moveCaretToStart:
+      guard interaction.mode == .editing else { return false }
+      pendingTextEvents.append(.moveCaretToStart)
+    case .moveCaretToEnd:
+      guard interaction.mode == .editing else { return false }
+      pendingTextEvents.append(.moveCaretToEnd)
+    case .submit:
+      if interaction.mode == .editing {
+        pendingTextEvents.append(.submit)
+      } else {
+        pendingCommands.append(.action(.activate))
+      }
+    case .endEditing:
+      guard interaction.mode == .editing else { return true }
+      pendingTextEvents.append(.endEditing)
+    }
+    return true
   }
 
   private static func keyChord(for event: NSEvent) -> KeyChord? {
@@ -162,24 +209,13 @@ final class ChromaInputView: MTKView {
     return KeyChord(key, modifiers: modifiers)
   }
 
-  private static func textEditEvent(for event: NSEvent) -> TextEditEvent? {
-    switch event.keyCode {
-    case 53: return .endEditing
-    case 36, 76: return .submit
-    case 51: return .backspace
-    case 117: return .deleteForward
-    case 123: return .moveCaretLeft
-    case 124: return .moveCaretRight
-    case 115: return .moveCaretToStart
-    case 119: return .moveCaretToEnd
-    default:
-      guard event.modifierFlags.intersection([.command, .control]).isEmpty,
-        let characters = event.characters,
-        !characters.isEmpty,
-        characters.utf8.allSatisfy({ $0 >= 0x20 && $0 != 0x7F })
-      else { return nil }
-      return .insert(characters)
-    }
+  private static func textInsertionEvent(for event: NSEvent) -> TextEditEvent? {
+    guard event.modifierFlags.intersection([.command, .control]).isEmpty,
+      let characters = event.characters,
+      !characters.isEmpty,
+      characters.utf8.allSatisfy({ $0 >= 0x20 && $0 != 0x7F })
+    else { return nil }
+    return .insert(characters)
   }
 
   private func updatePointer(with event: NSEvent) {

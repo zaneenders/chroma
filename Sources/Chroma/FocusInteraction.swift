@@ -35,8 +35,7 @@ extension Interaction {
     guard let tree, let path = tree.findLeaf(id) else { return }
     moveCursor(to: path)
     if editing {
-      editingLeaf = id
-      caretOffset = .max
+      beginEditing(id, caretOffset: .max)
     }
   }
 
@@ -76,7 +75,7 @@ extension Interaction {
   func apply(_ command: Command) {
     guard let tree, let selection else { return }
     switch command {
-    case .application:
+    case .application, .editing:
       return
     case .action(.activate):
       activatePending = true

@@ -17,40 +17,62 @@ extension Interaction {
 
     if selected && activatePending {
       activatePending = false
-      editingLeaf = id
-      caretOffset = text.count
+      beginEditing(id, caretOffset: text.count)
     }
 
     var editing = editingLeaf == id
     if editing {
+      editingText = text
       var characters = Array(text)
       caretOffset = min(caretOffset, characters.count)
       var changed = false
       eventLoop: for event in input.textEvents {
         switch event {
         case .insert(let inserted):
+          if let range = textSelectionRange {
+            characters.removeSubrange(range)
+            caretOffset = range.lowerBound
+            textSelectionRange = nil
+          }
           let graft = Array(inserted)
           characters.insert(contentsOf: graft, at: caretOffset)
           caretOffset += graft.count
           changed = true
         case .backspace:
-          if caretOffset > 0 {
+          if let range = textSelectionRange {
+            characters.removeSubrange(range)
+            caretOffset = range.lowerBound
+            textSelectionRange = nil
+            changed = true
+          } else if caretOffset > 0 {
             characters.remove(at: caretOffset - 1)
             caretOffset -= 1
             changed = true
           }
         case .deleteForward:
-          if caretOffset < characters.count {
+          if let range = textSelectionRange {
+            characters.removeSubrange(range)
+            caretOffset = range.lowerBound
+            textSelectionRange = nil
+            changed = true
+          } else if caretOffset < characters.count {
             characters.remove(at: caretOffset)
             changed = true
           }
         case .moveCaretLeft:
-          caretOffset = max(0, caretOffset - 1)
+          caretOffset = textSelectionRange?.lowerBound ?? max(0, caretOffset - 1)
+          textSelectionRange = nil
         case .moveCaretRight:
-          caretOffset = min(characters.count, caretOffset + 1)
+          caretOffset = textSelectionRange?.upperBound ?? min(characters.count, caretOffset + 1)
+          textSelectionRange = nil
         case .moveCaretToStart:
           caretOffset = 0
+          textSelectionRange = nil
         case .moveCaretToEnd:
+          caretOffset = characters.count
+          textSelectionRange = nil
+        case .selectAll:
+          textSelectionRange = 0..<characters.count
           caretOffset = characters.count
         case .submit:
           if let onSubmit {
@@ -60,18 +82,20 @@ extension Interaction {
             }
             onSubmit(String(characters))
           } else {
-            editingLeaf = nil
+            endEditing()
             editing = false
             break eventLoop
           }
         case .endEditing:
-          editingLeaf = nil
+          endEditing()
           editing = false
           break eventLoop
         }
       }
       if changed {
-        onChange(String(characters))
+        let updated = String(characters)
+        editingText = updated
+        onChange(updated)
       }
     }
     return TextInputState(

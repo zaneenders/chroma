@@ -40,6 +40,7 @@ struct TextInputTests {
     #expect(state.editing)
     #expect(state.caretOffset == 3)
     #expect(ctx.isTextEditing)
+    #expect(ctx.mode == .editing)
   }
 
   @Test func clickEntersInsertMode() {
@@ -129,6 +130,45 @@ struct TextInputTests {
     #expect(state.caretOffset == 2)
   }
 
+  @Test func selectAllReplacesTheFieldContentsOnInsert() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    var state = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+    #expect(ctx.textSelectionRange == 0..<5)
+    #expect(ctx.copyText() == "hello")
+    #expect(state.caretOffset == 5)
+
+    state = frame(ctx, input: InputState(textEvents: [.insert("world")]), text: &text)
+    #expect(text == "world")
+    #expect(ctx.textSelectionRange == nil)
+    #expect(state.caretOffset == 5)
+  }
+
+  @Test func selectAllThenDeleteClearsTheField() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    let state = frame(
+      ctx, input: InputState(textEvents: [.selectAll, .deleteForward]), text: &text)
+    #expect(text.isEmpty)
+    #expect(ctx.textSelectionRange == nil)
+    #expect(state.caretOffset == 0)
+  }
+
+  @Test func selectAllThenBackspaceClearsTheField() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    let state = frame(ctx, input: InputState(textEvents: [.selectAll, .backspace]), text: &text)
+    #expect(text.isEmpty)
+    #expect(ctx.textSelectionRange == nil)
+    #expect(state.caretOffset == 0)
+  }
+
   @Test func endEditingExitsInsertMode() {
     let ctx = Interaction()
     var text = "abc"
@@ -137,6 +177,7 @@ struct TextInputTests {
     #expect(!state.editing)
     #expect(state.caretOffset == nil)
     #expect(!ctx.isTextEditing)
+    #expect(ctx.mode == .movement)
     #expect(text == "abc")
   }
 
@@ -148,6 +189,7 @@ struct TextInputTests {
     #expect(ctx.selection == [0, 1], "the cursor moved to the sibling leaf")
     #expect(!state.editing)
     #expect(!ctx.isTextEditing)
+    #expect(ctx.mode == .movement)
   }
 
   @Test func vanishingFieldEndsSession() {

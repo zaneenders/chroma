@@ -89,14 +89,4 @@ public struct KeyBindings: Sendable {
     for (chord, command) in other.entries { result.entries[chord] = .some(command) }
     return result
   }
-
-  public static let defaults = KeyBindings {
-    bind(.enter, to: .action(.activate))
-    bind(.space, to: .action(.activate))
-    bind(.escape, to: .action(.cancel))
-    bind(.pageUp, to: .navigation(.pageUp))
-    bind(.pageDown, to: .navigation(.pageDown))
-    bind(.home, to: .navigation(.home))
-    bind(.end, to: .navigation(.end))
-  }
 }

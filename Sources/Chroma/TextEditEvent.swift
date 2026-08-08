@@ -6,6 +6,7 @@ public enum TextEditEvent: Equatable, Sendable {
   case moveCaretRight
   case moveCaretToStart
   case moveCaretToEnd
+  case selectAll
   case submit
   case endEditing
 }

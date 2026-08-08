@@ -19,7 +19,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
   public var content: (any Block)?
   public var onClose: (() -> Void)?
-  private var keyBindings: KeyBindings = .defaults {
+  private var keyBindings = KeyBindings() {
     didSet { mtkView.keyBindings = keyBindings }
   }
 

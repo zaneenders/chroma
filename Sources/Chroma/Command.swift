@@ -22,6 +22,20 @@ public enum ActionCommand: Hashable, Sendable {
   case dismiss
 }
 
+public enum EditingCommand: Hashable, Sendable {
+  case copy
+  case paste
+  case selectAll
+  case backspace
+  case deleteForward
+  case moveCaretLeft
+  case moveCaretRight
+  case moveCaretToStart
+  case moveCaretToEnd
+  case submit
+  case endEditing
+}
+
 public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
@@ -32,6 +46,7 @@ public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
 public enum Command: Hashable, Sendable {
   case navigation(NavigationCommand)
   case action(ActionCommand)
+  case editing(EditingCommand)
   case application(CommandID)
 }
 
