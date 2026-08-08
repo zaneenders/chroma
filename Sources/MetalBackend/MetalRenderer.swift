@@ -42,6 +42,8 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
     let mtkView = ChromaInputView(frame: frame, device: device)
     mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
+    mtkView.isPaused = true
+    mtkView.enableSetNeedsDisplay = true
     self.mtkView = mtkView
 
     let library: MTLLibrary
@@ -98,7 +100,8 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     window.contentView = mtkView
     window.delegate = self
     window.center()
-    window.makeKeyAndOrderFront(nil)
+window.makeKeyAndOrderFront(nil)
+    mtkView.needsDisplay = true
     window.makeFirstResponder(mtkView)
 
     app.activate(ignoringOtherApps: true)
@@ -149,12 +152,25 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
   private var lastFrameTime: Double = 0
   private var smoothedFrameRate: Double = 0
 
+  private var shapePool: [MTLBuffer] = []
+  private var textPool: [MTLBuffer] = []
+  private var poolBufferIndex = 0
+  private let poolBufferCount = 3
+  private var shapeInstances: [ShapeInstance] = []
+  private var textInstances: [TextInstance] = []
+
   public func draw(in mtkView: MTKView) {
-    guard let drawable = mtkView.currentDrawable,
+    guard
+      let drawable = mtkView.currentDrawable,
       let rpd = mtkView.currentRenderPassDescriptor,
       let cmd = queue.makeCommandBuffer(),
       let enc = cmd.makeRenderCommandEncoder(descriptor: rpd)
-    else { return }
+    else {
+      // The drawable may not be ready yet (e.g. before the view is attached to
+      // a window). Retry next cycle so we don't stall on a blank view.
+      mtkView.needsDisplay = true
+      return
+    }
 
     updateFrameRate()
     interaction.beginFrame(input: self.mtkView.frameInput())
@@ -176,9 +192,13 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     enc.endEncoding()
     cmd.present(drawable)
     cmd.commit()
+
+    poolBufferIndex = (poolBufferIndex + 1) % poolBufferCount
   }
 
-  public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+  public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+    mtkView.needsDisplay = true
+  }
 
   private func updateFrameRate() {
     let now = ProcessInfo.processInfo.systemUptime
@@ -210,16 +230,16 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       SIMD2(-1 + x * pxToNDC.x, 1 - y * pxToNDC.y)
     }
 
-    var shapes = [ShapeInstance]()
-    var textInstances = [TextInstance]()
+    shapeInstances.removeAll(keepingCapacity: true)
+    textInstances.removeAll(keepingCapacity: true)
     var batches: [Batch] = []
     var shapeStart: Int?
     var textStart: Int?
 
     func closeShapes() {
       guard let start = shapeStart else { return }
-      if shapes.count > start {
-        batches.append(.shape(instanceOffset: start, instanceCount: shapes.count - start))
+      if shapeInstances.count > start {
+        batches.append(.shape(instanceOffset: start, instanceCount: shapeInstances.count - start))
       }
       shapeStart = nil
     }
@@ -238,7 +258,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       // Give antialiasing room outside the logical bounds instead of clipping
       // coverage at the quad's edge.
       let edgePadding: Float = 1
-      shapes.append(
+      shapeInstances.append(
         ShapeInstance(
           dst_p0: ndc(rect.minX - edgePadding, rect.minY - edgePadding),
           dst_p1: ndc(rect.maxX + edgePadding, rect.maxY + edgePadding),
@@ -254,19 +274,19 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       switch command {
       case .fillRect(let rect, let color):
         closeText()
-        if shapeStart == nil { shapeStart = shapes.count }
+        if shapeStart == nil { shapeStart = shapeInstances.count }
         appendShape(rect, radii: .zero, borderWidth: 0, color: color)
       case .strokeRect(let rect, let width, let color):
         closeText()
-        if shapeStart == nil { shapeStart = shapes.count }
+        if shapeStart == nil { shapeStart = shapeInstances.count }
         appendShape(rect, radii: .zero, borderWidth: width, color: color)
       case .fillRoundedRect(let rect, let radii, let color):
         closeText()
-        if shapeStart == nil { shapeStart = shapes.count }
+        if shapeStart == nil { shapeStart = shapeInstances.count }
         appendShape(rect, radii: radii, borderWidth: 0, color: color)
       case .strokeRoundedRect(let rect, let radii, let width, let color):
         closeText()
-        if shapeStart == nil { shapeStart = shapes.count }
+        if shapeStart == nil { shapeStart = shapeInstances.count }
         appendShape(rect, radii: radii, borderWidth: width, color: color)
       case .text(let position, let text, let color, let scale):
         closeShapes()
@@ -303,20 +323,20 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     closeText()
 
     guard !batches.isEmpty else { return }
-    let shapeBuffer =
-      shapes.isEmpty
-      ? nil
-      : device.makeBuffer(
-        bytes: shapes,
-        length: MemoryLayout<ShapeInstance>.stride * shapes.count,
-        options: .storageModeShared)
-    let textBuffer =
-      textInstances.isEmpty
-      ? nil
-      : device.makeBuffer(
-        bytes: textInstances,
-        length: MemoryLayout<TextInstance>.stride * textInstances.count,
-        options: .storageModeShared)
+    let shapeBuffer = pooledBuffer(
+      pool: &shapePool,
+      byteCount: MemoryLayout<ShapeInstance>.stride * shapeInstances.count)
+    if let shapeBuffer, !shapeInstances.isEmpty {
+      shapeBuffer.contents().assumingMemoryBound(to: ShapeInstance.self)
+        .update(from: shapeInstances, count: shapeInstances.count)
+    }
+    let textBuffer = pooledBuffer(
+      pool: &textPool,
+      byteCount: MemoryLayout<TextInstance>.stride * textInstances.count)
+    if let textBuffer, !textInstances.isEmpty {
+      textBuffer.contents().assumingMemoryBound(to: TextInstance.self)
+        .update(from: textInstances, count: textInstances.count)
+    }
 
     enc.setFragmentTexture(fontAtlas.texture, index: 0)
     var scissorStack: [Rect] = []
@@ -358,6 +378,20 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
         enc.setScissorRect((scissorStack.last ?? viewportRect).asMtlScissor(scale: rasterScale))
       }
     }
+  }
+
+  private func pooledBuffer(pool: inout [MTLBuffer], byteCount: Int) -> MTLBuffer? {
+    guard byteCount > 0 else { return nil }
+    if pool.count <= poolBufferIndex {
+      let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared)!
+      pool.append(buffer)
+      return buffer
+    }
+    let existing = pool[poolBufferIndex]
+    if existing.length >= byteCount { return existing }
+    let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared)!
+    pool[poolBufferIndex] = buffer
+    return buffer
   }
 
 }

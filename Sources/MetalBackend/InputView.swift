@@ -36,6 +36,10 @@ final class ChromaInputView: MTKView {
     return input
   }
 
+  private func scheduleRedraw() {
+    needsDisplay = true
+  }
+
   override func updateTrackingAreas() {
     super.updateTrackingAreas()
     for area in trackingAreas { removeTrackingArea(area) }
@@ -51,10 +55,12 @@ final class ChromaInputView: MTKView {
 
   override func mouseMoved(with event: NSEvent) {
     updatePointer(with: event)
+    scheduleRedraw()
   }
 
   override func mouseDragged(with event: NSEvent) {
     updatePointer(with: event)
+    scheduleRedraw()
   }
 
   override func mouseDown(with event: NSEvent) {
@@ -63,26 +69,31 @@ final class ChromaInputView: MTKView {
     pointerPressPosition = pointerPosition
     pointerDown = true
     pressedEdge = true
+    scheduleRedraw()
   }
 
   override func mouseUp(with event: NSEvent) {
     updatePointer(with: event)
     pointerDown = false
     releasedEdge = true
+    scheduleRedraw()
   }
 
   override func mouseExited(with event: NSEvent) {
     pointerPosition = Point(x: -1, y: -1)
+    scheduleRedraw()
   }
 
   override func scrollWheel(with event: NSEvent) {
     scroll.x += Float(event.scrollingDeltaX)
     scroll.y += Float(event.scrollingDeltaY)
+    scheduleRedraw()
   }
 
   override var acceptsFirstResponder: Bool { true }
 
   override func keyDown(with event: NSEvent) {
+    scheduleRedraw()
     if event.modifierFlags.contains(.command),
       event.charactersIgnoringModifiers?.lowercased() == "c",
       let text = interaction.onCopy?(),
