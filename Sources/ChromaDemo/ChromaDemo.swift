@@ -26,7 +26,7 @@ struct ChromaDemo: PlatformApp {
       bind("k", to: .navigation(.right))
       bind("l", to: .navigation(.in))
       bind("s", to: .navigation(.out))
-          }
+    }
   }
 
   var body: some Block {
@@ -60,11 +60,11 @@ private struct DemoView: Block {
         DemoHeader()
         HStack(spacing: 0, alignment: .top) {
           DemoSidebar(state: state)
-            .frame(width: 210, alignment: .topLeading)
-            .frame(maxHeight: .infinity, alignment: .topLeading)
+            .sizing(x: .fixed(210))
+            .sizing(y: .grow)
             .background(theme.surface)
           DemoPage(state: state)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .sizing(x: .grow, y: .grow)
             .clipped()
             .background(theme.background)
         }
@@ -106,15 +106,15 @@ private struct DemoSidebar: Block {
         Button("Navigation", id: WidgetID("sidebar.navigation"), fontScale: smallTextScale) {
           state.page = .navigation
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .sizing(x: .grow)
         Button("Text input", id: WidgetID("sidebar.text"), fontScale: smallTextScale) {
           state.page = .textInput
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .sizing(x: .grow)
         Button("Scrolling", id: WidgetID("sidebar.scroll"), fontScale: smallTextScale) {
           state.page = .scrolling
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .sizing(x: .grow)
         Spacer()
       }
       .padding(12)
@@ -214,7 +214,7 @@ private struct TextInputExample: Block {
           onChange: { state.name = $0 },
           onSubmit: { state.message = "Submitted: \($0)" }
         )
-        .frame(maxWidth: 520, alignment: .leading)
+        .sizing(x: .fixed(520))
         Text(state.name.isEmpty ? "No text entered" : "Hello, \(state.name)")
           .fontScale(smallTextScale)
           .foregroundColor(theme.foreground)
@@ -249,13 +249,13 @@ private struct ScrollingExample: Block {
                 .fontScale(smallTextScale)
                 .foregroundColor(index.isMultiple(of: 10) ? theme.accent : theme.foreground)
                 .padding(7)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .sizing(x: .grow)
                 .roundedBackground(theme.surface, radius: 4)
             }
           }
           .padding(8)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .sizing(x: .grow, y: .grow)
         .roundedBorder(theme.border, radius: 8)
       }
       .padding(24)

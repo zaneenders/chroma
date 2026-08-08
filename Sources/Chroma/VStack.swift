@@ -2,6 +2,7 @@ public struct VStack: PrimitiveBlock {
   public var spacing: Float
   public var alignment: HorizontalAlignment
   public var children: [any Block]
+  public var isLayoutReversed = false
 
   public init(
     spacing: Float = 0,
@@ -11,6 +12,13 @@ public struct VStack: PrimitiveBlock {
     self.spacing = spacing
     self.alignment = alignment
     self.children = BlockBuilder.flattenedChildren(content().children)
+  }
+
+  /// Lays out children from bottom to top instead of top to bottom.
+  public func reverseLayout() -> VStack {
+    var copy = self
+    copy.isLayoutReversed.toggle()
+    return copy
   }
 
   @MainActor public var expandsHorizontally: Bool {
@@ -60,7 +68,7 @@ public struct VStack: PrimitiveBlock {
     let interaction = context.interaction
     interaction.beginGroup(.vertical, rect: rect)
     let cursorOnGroup = interaction.isCurrentGroupSelected
-    var y = rect.minY
+    var y = isLayoutReversed ? rect.maxY : rect.minY
     for (child, size) in zip(children, sizes) {
       let width = min(size.width, rect.size.width)
       let x: Float
@@ -69,9 +77,12 @@ public struct VStack: PrimitiveBlock {
       case .center: x = rect.minX + (rect.size.width - width) / 2
       case .trailing: x = rect.maxX - width
       }
+      if isLayoutReversed {
+        y -= size.height
+      }
       BlockEngine.draw(
         child, into: &drawList, in: Rect(x: x, y: y, width: width, height: size.height), context: context)
-      y += size.height + spacing
+      y += isLayoutReversed ? -spacing : size.height + spacing
     }
     let retainedFocusGroup = interaction.endGroup()
     if cursorOnGroup && retainedFocusGroup {

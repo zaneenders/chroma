@@ -1,24 +1,9 @@
 extension Block {
-  public func frame(
-    width: Float? = nil,
-    height: Float? = nil,
-    alignment: Alignment = .center
-  ) -> FrameBlock {
-    FrameBlock(
-      content: self, width: width, height: height,
-      maxWidth: nil, maxHeight: nil, alignment: alignment
-    )
-  }
-
-  public func frame(
-    maxWidth: Float? = nil,
-    maxHeight: Float? = nil,
-    alignment: Alignment = .center
-  ) -> FrameBlock {
-    FrameBlock(
-      content: self, width: nil, height: nil,
-      maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment
-    )
+  public func sizing(
+    x: Sizing = .fit,
+    y: Sizing = .fit
+  ) -> SizingBlock {
+    SizingBlock(content: self, x: x, y: y)
   }
 
   public func padding(_ insets: EdgeInsets) -> PaddingBlock {
@@ -62,32 +47,46 @@ extension Block {
   }
 }
 
-public struct FrameBlock: PrimitiveBlock {
+public struct SizingBlock: PrimitiveBlock {
   public var content: any Block
-  public var width: Float?
-  public var height: Float?
-  public var maxWidth: Float?
-  public var maxHeight: Float?
-  public var alignment: Alignment
+  public var x: Sizing
+  public var y: Sizing
 
-  @MainActor public var expandsHorizontally: Bool { maxWidth != nil }
-  @MainActor public var expandsVertically: Bool { maxHeight != nil }
+  @MainActor public var expandsHorizontally: Bool { x == .grow }
+  @MainActor public var expandsVertically: Bool { y == .grow }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let childSize = BlockEngine.measure(
       content,
-      proposal: Size(width: width ?? proposal.width, height: height ?? proposal.height), context: context)
+      proposal: Size(
+        width: proposedSize(for: x, available: proposal.width),
+        height: proposedSize(for: y, available: proposal.height)
+      ),
+      context: context
+    )
     return Size(
-      width: width ?? maxWidth.map { min(proposal.width, $0) } ?? childSize.width,
-      height: height ?? maxHeight.map { min(proposal.height, $0) } ?? childSize.height
+      width: resolvedSize(for: x, available: proposal.width, fitted: childSize.width),
+      height: resolvedSize(for: y, available: proposal.height, fitted: childSize.height)
     )
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
-    let childSize = BlockEngine.measure(
-      content,
-      proposal: Size(width: width ?? rect.size.width, height: height ?? rect.size.height), context: context)
-    BlockEngine.draw(content, into: &drawList, in: rect.placing(childSize, alignment: alignment), context: context)
+    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+  }
+
+  private func proposedSize(for sizing: Sizing, available: Float) -> Float {
+    switch sizing {
+    case .fit, .grow: available
+    case .fixed(let size): size
+    }
+  }
+
+  private func resolvedSize(for sizing: Sizing, available: Float, fitted: Float) -> Float {
+    switch sizing {
+    case .fit: fitted
+    case .fixed(let size): size
+    case .grow: available
+    }
   }
 }
 
