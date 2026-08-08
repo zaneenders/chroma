@@ -70,7 +70,7 @@ public struct VStack: PrimitiveBlock {
     let cursorOnGroup = interaction.isCurrentGroupSelected
     var y = isLayoutReversed ? rect.maxY : rect.minY
     for (child, size) in zip(children, sizes) {
-      let width = min(size.width, rect.size.width)
+      let width = size.width
       let x: Float
       switch alignment {
       case .leading: x = rect.minX

@@ -70,7 +70,7 @@ public struct HStack: PrimitiveBlock {
     let cursorOnGroup = interaction.isCurrentGroupSelected
     var x = isLayoutReversed ? rect.maxX : rect.minX
     for (child, size) in zip(children, sizes) {
-      let height = min(size.height, rect.size.height)
+      let height = size.height
       let y: Float
       switch alignment {
       case .top: y = rect.minY
