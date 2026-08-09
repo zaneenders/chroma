@@ -1,0 +1,172 @@
+import Chroma
+
+@MainActor
+public final class TerminalRenderer: Renderer {
+  public let name = "Terminal"
+  public var content: (any Block)?
+  public var onClose: (() -> Void)?
+  public private(set) var lastFrame: TerminalFrame?
+
+  package let interaction = Interaction()
+
+  private var keyBindings = KeyBindings()
+  private var minimumRefreshRate: Double = 0
+  private var decoder = TerminalInputDecoder()
+  private var running = false
+  private let rasterizer = TerminalRasterizer()
+
+  public init() {
+    var metrics = FontMetrics()
+    metrics.glyphWidth = 1
+    metrics.glyphHeight = 1
+    metrics.glyphSpacing = 0
+    metrics.lineAdvance = 1
+    interaction.fontMetrics = metrics
+  }
+
+  public func setKeyBindings(_ bindings: KeyBindings) {
+    keyBindings = bindings
+  }
+
+  public func setMinimumRefreshRate(_ refreshRate: Double) {
+    minimumRefreshRate = max(0, refreshRate)
+  }
+
+  public func run(title: String) {
+    let session: TerminalSession
+    do {
+      session = try TerminalSession()
+    } catch {
+      return
+    }
+    running = true
+    defer {
+      running = false
+      session.restore()
+      onClose?()
+    }
+
+    var presenter = TerminalPresenter()
+    var size = session.windowSize()
+    session.write("\u{1B}]0;\(title)\u{7}")
+    session.write(presenter.encode(render(columns: size.columns, rows: size.rows)))
+
+    while running {
+      let timeout: Int32 = minimumRefreshRate > 0
+        ? Int32(max(1, min(Double(Int32.max), 1000 / minimumRefreshRate))) : 100
+      var input = InputState()
+      if let bytes = session.read(timeoutMilliseconds: timeout) {
+        if bytes.isEmpty { break }
+        let decoded = decoder.decode(bytes)
+        if decoded.shouldClose { break }
+        input = translate(decoded.keys)
+      }
+      let newSize = session.windowSize()
+      let resized = newSize.columns != size.columns || newSize.rows != size.rows
+      size = newSize
+      if input != InputState() || resized || minimumRefreshRate > 0 || interaction.consumeRedrawRequest() {
+        session.write(presenter.encode(render(columns: size.columns, rows: size.rows, input: input)))
+      }
+    }
+  }
+
+  public func close() {
+    running = false
+  }
+
+  @discardableResult
+  public func render(
+    columns: Int,
+    rows: Int,
+    input: InputState = InputState()
+  ) -> TerminalFrame {
+    let previousInteraction = Interaction.current
+    Interaction.current = interaction
+    defer { Interaction.current = previousInteraction }
+
+    interaction.beginFrame(input: input)
+    var drawList = DrawList()
+    if let content {
+      BlockEngine.draw(
+        content,
+        into: &drawList,
+        in: Rect(x: 0, y: 0, width: Float(columns), height: Float(rows)),
+        context: context)
+    }
+    interaction.endFrame()
+    let frame = rasterizer.rasterize(drawList.commands, columns: columns, rows: rows)
+    lastFrame = frame
+    return frame
+  }
+
+  private func translate(_ keys: [TerminalKey]) -> InputState {
+    var commands: [Command] = []
+    var edits: [TextEditEvent] = []
+    for key in keys {
+      let chord = key.chord
+      if let chord, let resolution = keyBindings.command(for: chord) {
+        guard let command = resolution else { continue }
+        if interaction.mode == .editing, case .editing(let editing) = command {
+          edits.append(editEvent(editing))
+        } else {
+          commands.append(command)
+        }
+        continue
+      }
+      if interaction.mode == .editing {
+        switch key {
+        case .character(let character): edits.append(.insert(String(character)))
+        case .backspace: edits.append(.backspace)
+        case .delete: edits.append(.deleteForward)
+        case .left: edits.append(.moveCaretLeft)
+        case .right: edits.append(.moveCaretRight)
+        case .home: edits.append(.moveCaretToStart)
+        case .end: edits.append(.moveCaretToEnd)
+        case .enter: edits.append(.submit)
+        case .escape: edits.append(.endEditing)
+        default: break
+        }
+      } else {
+        switch key {
+        case .up: commands.append(.navigation(.up))
+        case .down: commands.append(.navigation(.down))
+        case .left: commands.append(.navigation(.left))
+        case .right: commands.append(.navigation(.right))
+        case .tab: commands.append(.navigation(.next))
+        case .enter, .character(" "): commands.append(.action(.activate))
+        case .pageUp: commands.append(.navigation(.pageUp))
+        case .pageDown: commands.append(.navigation(.pageDown))
+        case .home: commands.append(.navigation(.home))
+        case .end: commands.append(.navigation(.end))
+        default: break
+        }
+      }
+    }
+    return InputState(semanticCommands: commands, textEvents: edits)
+  }
+
+  private func editEvent(_ command: EditingCommand) -> TextEditEvent {
+    switch command {
+    case .backspace: .backspace
+    case .deleteForward: .deleteForward
+    case .moveCaretLeft: .moveCaretLeft
+    case .moveCaretRight: .moveCaretRight
+    case .moveCaretToStart: .moveCaretToStart
+    case .moveCaretToEnd: .moveCaretToEnd
+    case .selectAll: .selectAll
+    case .submit: .submit
+    case .endEditing: .endEditing
+    case .paste, .copy: .insert("")
+    }
+  }
+}
+
+public protocol TerminalApp: App {}
+
+extension TerminalApp {
+  @MainActor
+  public static func main() {
+    let app = Self()
+    app.run(on: TerminalRenderer())
+  }
+}

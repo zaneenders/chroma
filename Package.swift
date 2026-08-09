@@ -8,6 +8,8 @@ let package = Package(
     .library(name: "Chroma", targets: ["Chroma"]),
     .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
     .library(name: "MetalBackend", targets: ["MetalBackend"]),
+    .library(name: "TerminalBackend", targets: ["TerminalBackend"]),
+    .executable(name: "ChromaTerminalDemo", targets: ["ChromaTerminalDemo"]),
     .library(name: "WaylandBackend", targets: ["WaylandBackend"]),
   ],
   traits: [
@@ -46,6 +48,15 @@ let package = Package(
     ),
     .target(name: "Chroma"),
     .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
+    .target(name: "TerminalBackend", dependencies: ["Chroma"]),
+    .executableTarget(
+      name: "ChromaTerminalDemo",
+      dependencies: ["Chroma", "TerminalBackend"]
+    ),
+    .testTarget(
+      name: "TerminalBackendTests",
+      dependencies: ["Chroma", "TerminalBackend"]
+    ),
     .target(
       name: "MetalBackend",
       dependencies: ["Chroma"],
