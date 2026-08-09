@@ -320,8 +320,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
         let advance = metrics.cellAdvance * scale
         var pen = SIMD2<Float>(position.x, position.y)
         for character in text {
-          let byte = character.asciiValue ?? 0x20
-          let (u0, v0, u1, v1) = fontAtlas.glyphUV(byte)
+          let (u0, v0, u1, v1) = fontAtlas.glyphUV(character)
           textInstances.append(
             TextInstance(
               dst_p0: ndc(pen.x, pen.y),

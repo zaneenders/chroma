@@ -9,11 +9,11 @@ struct FontAtlas {
   let glyphWidth: Int = Int(FontMetrics().glyphWidth)
   let glyphHeight: Int = Int(FontMetrics().glyphHeight)
   let glyphSpacing: Int = Int(FontMetrics().glyphSpacing)
-  let firstChar: UInt8 = 32
-  let lastChar: UInt8 = 126
   let columns = 16
+  let characters: [UInt32]
+  let characterIndices: [UInt32: Int]
 
-  var charCount: Int { Int(lastChar - firstChar + 1) }
+  var charCount: Int { characters.count }
   var rows: Int { (charCount + columns - 1) / columns }
   var cellWidth: Int { glyphWidth + glyphSpacing }
   var atlasWidth: Int { columns * cellWidth }
@@ -24,21 +24,20 @@ struct FontAtlas {
     let glyphWidth = Int(metrics.glyphWidth)
     let glyphHeight = Int(metrics.glyphHeight)
     let glyphSpacing = Int(metrics.glyphSpacing)
-    let firstChar: UInt8 = 32
-    let lastChar: UInt8 = 126
     let columns = 16
-    let count = Int(lastChar - firstChar + 1)
-    let atlasRows = (count + columns - 1) / columns
+    let characters = Font20x28.glyphs.keys.sorted()
+    let characterIndices = Dictionary(
+      uniqueKeysWithValues: characters.enumerated().map { ($0.element, $0.offset) })
+    let atlasRows = (characters.count + columns - 1) / columns
     let cellWidth = glyphWidth + glyphSpacing
     let width = columns * cellWidth
     let height = atlasRows * glyphHeight
     var pixels = [UInt8](repeating: 0, count: width * height)
 
-    for byte in firstChar...lastChar {
-      guard let glyph = Font20x28.glyphs[byte] else {
-        fatalError("Missing bitmap for printable ASCII character 0x\(String(byte, radix: 16))")
+    for (index, character) in characters.enumerated() {
+      guard let glyph = Font20x28.glyphs[character] else {
+        fatalError("Missing bitmap for font character U+\(String(character, radix: 16, uppercase: true))")
       }
-      let index = Int(byte - firstChar)
       let xOffset = (index % columns) * cellWidth
       let yOffset = (index / columns) * glyphHeight
       let cleanedRows = Self.closingPinholes(in: glyph.rows, width: glyphWidth)
@@ -68,6 +67,8 @@ struct FontAtlas {
       )
     }
     self.texture = texture
+    self.characters = characters
+    self.characterIndices = characterIndices
   }
 
   private static func closingPinholes(in rows: [UInt32], width: Int) -> [UInt32] {
@@ -116,9 +117,9 @@ struct FontAtlas {
     return result
   }
 
-  func glyphUV(_ byte: UInt8) -> (Float, Float, Float, Float) {
-    let character = (firstChar...lastChar).contains(byte) ? byte : firstChar
-    let index = Int(character - firstChar)
+  func glyphUV(_ character: Character) -> (Float, Float, Float, Float) {
+    let value = character.unicodeScalars.count == 1 ? character.unicodeScalars.first!.value : 0x20
+    let index = characterIndices[value] ?? characterIndices[0x20]!
     let x = (index % columns) * cellWidth
     let y = (index / columns) * glyphHeight
     return (
