@@ -22,9 +22,16 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
   private var keyBindings = KeyBindings() {
     didSet { mtkView.keyBindings = keyBindings }
   }
+  private var minimumRefreshRate: Double = 0
+  private var refreshTimer: Timer?
 
   package func setKeyBindings(_ bindings: KeyBindings) {
     keyBindings = bindings
+  }
+
+  package func setMinimumRefreshRate(_ refreshRate: Double) {
+    minimumRefreshRate = refreshRate.isFinite ? max(0, refreshRate) : 0
+    updateRefreshTimer()
   }
 
   public var contentView: NSView { mtkView }
@@ -86,6 +93,20 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     self.init(frame: CGRect(x: 0, y: 0, width: CGFloat(size.width), height: CGFloat(size.height)))
   }
 
+  private func updateRefreshTimer() {
+    refreshTimer?.invalidate()
+    refreshTimer = nil
+    guard minimumRefreshRate > 0 else { return }
+
+    let timer = Timer(timeInterval: 1 / minimumRefreshRate, repeats: true) { [weak mtkView] _ in
+      MainActor.assumeIsolated {
+        mtkView?.needsDisplay = true
+      }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    refreshTimer = timer
+  }
+
   public func run(title: String = "Hello Triangle") {
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
@@ -100,7 +121,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     window.contentView = mtkView
     window.delegate = self
     window.center()
-window.makeKeyAndOrderFront(nil)
+    window.makeKeyAndOrderFront(nil)
     mtkView.needsDisplay = true
     window.makeFirstResponder(mtkView)
 

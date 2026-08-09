@@ -17,6 +17,7 @@ struct ChromaDemo: PlatformApp {
 
   var title: String { "Chroma Demo" }
   var windowSize: Size { Size(width: 960, height: 640) }
+  var minimumRefreshRate: Double { 30 }
 
   var keyBindings: KeyBindings {
     KeyBindings {
@@ -116,6 +117,11 @@ private struct DemoHeader: Block {
         Text("CHROMA").fontScale(titleTextScale).foregroundColor(theme.accent)
         Text("Demo").fontScale(smallTextScale).foregroundColor(theme.foreground)
         Spacer()
+        Text("30 FPS minimum refresh")
+          .fontScale(smallTextScale)
+          .foregroundColor(theme.secondaryForeground)
+        LowRateAnimation(color: theme.accent)
+          .sizing(x: .fixed(110), y: .fixed(14))
         Text("j/f/d/k move  •  l/s change depth")
           .fontScale(smallTextScale)
           .foregroundColor(theme.secondaryForeground)
@@ -124,6 +130,33 @@ private struct DemoHeader: Block {
       .background(theme.elevatedSurface)
       .border(theme.border)
     }
+  }
+}
+
+private struct LowRateAnimation: PrimitiveBlock {
+  let color: Color
+
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let dotSize: Float = 10
+    let travel = max(0, rect.size.width - dotSize)
+    let elapsed = Date().timeIntervalSinceReferenceDate
+    let phase = Float(elapsed.truncatingRemainder(dividingBy: 4) / 4)
+    let progress = phase < 0.5 ? phase * 2 : (1 - phase) * 2
+    let track = Rect(
+      x: rect.minX,
+      y: rect.minY + rect.size.height / 2 - 1,
+      width: rect.size.width,
+      height: 2)
+    let dot = Rect(
+      x: rect.minX + travel * progress,
+      y: rect.minY + (rect.size.height - dotSize) / 2,
+      width: dotSize,
+      height: dotSize)
+
+    drawList.fillRoundedRect(track, radius: 1, color: Color(r: color.r, g: color.g, b: color.b, a: 0.25))
+    drawList.fillRoundedRect(dot, radius: dotSize / 2, color: color)
   }
 }
 

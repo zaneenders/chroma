@@ -10,9 +10,12 @@ package protocol Renderer: AnyObject {
 
   func setKeyBindings(_ bindings: KeyBindings)
 
+  func setMinimumRefreshRate(_ refreshRate: Double)
+
   func run(title: String)
 }
 
 extension Renderer {
   package func setKeyBindings(_ bindings: KeyBindings) {}
+  package func setMinimumRefreshRate(_ refreshRate: Double) {}
 }
