@@ -6,6 +6,7 @@ let package = Package(
   platforms: [.macOS(.v14)],
   products: [
     .library(name: "Chroma", targets: ["Chroma"]),
+    .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
     .library(name: "MetalBackend", targets: ["MetalBackend"]),
     .library(name: "WaylandBackend", targets: ["WaylandBackend"]),
   ],
@@ -41,9 +42,10 @@ let package = Package(
     ),
     .testTarget(
       name: "ChromaTests",
-      dependencies: ["Chroma"]
+      dependencies: ["Chroma", "HeadlessBackend"]
     ),
     .target(name: "Chroma"),
+    .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
     .target(
       name: "MetalBackend",
       dependencies: ["Chroma"],
