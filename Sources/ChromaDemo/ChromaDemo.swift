@@ -1,6 +1,5 @@
 import Chroma
 import Foundation
-import TerminalBackend
 
 #if METAL_BACKEND
 import MetalBackend
@@ -20,11 +19,6 @@ struct ChromaDemo: App {
   static func main() {
     let app = Self()
 
-    if CommandLine.arguments.dropFirst().contains("--terminal") {
-      app.run(on: TerminalRenderer())
-      return
-    }
-
     #if METAL_BACKEND
     guard let renderer = MetalRenderer(size: app.windowSize) else {
       fatalError("Metal requires Apple Silicon or a supported GPU.")
@@ -33,7 +27,7 @@ struct ChromaDemo: App {
     #elseif WAYLAND_BACKEND
     app.run(on: WaylandRenderer())
     #else
-    app.run(on: TerminalRenderer())
+    fatalError("ChromaDemo requires an enabled graphical backend.")
     #endif
   }
 

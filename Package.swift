@@ -8,7 +8,6 @@ let package = Package(
     .library(name: "Chroma", targets: ["Chroma"]),
     .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
     .library(name: "MetalBackend", targets: ["MetalBackend"]),
-    .library(name: "TerminalBackend", targets: ["TerminalBackend"]),
     .executable(name: "ChromaDemo", targets: ["ChromaDemo"]),
     .library(name: "WaylandBackend", targets: ["WaylandBackend"]),
   ],
@@ -28,7 +27,6 @@ let package = Package(
       name: "ChromaDemo",
       dependencies: [
         "Chroma",
-        "TerminalBackend",
         .target(
           name: "MetalBackend",
           condition: .when(platforms: [.macOS], traits: ["MetalBackend"])
@@ -49,11 +47,6 @@ let package = Package(
     ),
     .target(name: "Chroma"),
     .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
-    .target(name: "TerminalBackend", dependencies: ["Chroma"]),
-    .testTarget(
-      name: "TerminalBackendTests",
-      dependencies: ["Chroma", "TerminalBackend"]
-    ),
     .target(
       name: "MetalBackend",
       dependencies: ["Chroma"],
