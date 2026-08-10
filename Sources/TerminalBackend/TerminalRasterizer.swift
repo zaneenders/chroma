@@ -62,7 +62,8 @@ public struct TerminalRasterizer: Sendable {
     _ commands: [DrawCommand],
     columns: Int,
     rows: Int,
-    background: Color = .black
+    background: Color = .black,
+    pointsPerCell: Size = Size(width: 1, height: 1)
   ) -> TerminalFrame {
     let backgroundRGB = rgb(background, over: .black)
     var frame = TerminalFrame(
@@ -74,24 +75,37 @@ public struct TerminalRasterizer: Sendable {
     for command in commands {
       switch command {
       case .pushClip(let rect):
-        clips.append(clips.last!.intersection(quantized(rect)) ?? .empty)
+        clips.append(clips.last!.intersection(quantized(rect, pointsPerCell: pointsPerCell)) ?? .empty)
       case .popClip:
         if clips.count > 1 { clips.removeLast() }
       case .fillRect(let rect, let color), .fillRoundedRect(let rect, _, let color):
-        fill(rect, color: color, clip: clips.last!, frame: &frame)
-      case .strokeRect(let rect, _, let color), .strokeRoundedRect(let rect, _, _, let color):
-        stroke(rect, color: color, clip: clips.last!, frame: &frame)
+        fill(
+          rect, color: color, clip: clips.last!, pointsPerCell: pointsPerCell,
+          frame: &frame)
+      case .strokeRect(let rect, _, let color):
+        stroke(
+          rect, color: color, clip: clips.last!, pointsPerCell: pointsPerCell,
+          frame: &frame)
+      case .strokeRoundedRect(let rect, _, _, let color):
+        stroke(
+          rect, color: color, clip: clips.last!, pointsPerCell: pointsPerCell,
+          suppressCompactBorder: true, frame: &frame)
       case .text(let position, let text, let color, _):
-        drawText(text, at: position, color: color, clip: clips.last!, frame: &frame)
+        drawText(
+          text, at: position, color: color, clip: clips.last!,
+          pointsPerCell: pointsPerCell, frame: &frame)
       }
     }
     return frame
   }
 
   private func fill(
-    _ rect: Rect, color: Color, clip: CellRect, frame: inout TerminalFrame
+    _ rect: Rect, color: Color, clip: CellRect, pointsPerCell: Size,
+    frame: inout TerminalFrame
   ) {
-    guard let area = quantized(rect).intersection(clip) else { return }
+    guard let area = quantizedFill(rect, pointsPerCell: pointsPerCell).intersection(clip) else {
+      return
+    }
     for y in area.y0..<area.y1 {
       for x in area.x0..<area.x1 {
         var cell = frame[column: x, row: y]
@@ -103,14 +117,27 @@ public struct TerminalRasterizer: Sendable {
   }
 
   private func stroke(
-    _ rect: Rect, color: Color, clip: CellRect, frame: inout TerminalFrame
+    _ rect: Rect, color: Color, clip: CellRect, pointsPerCell: Size,
+    suppressCompactBorder: Bool = false, frame: inout TerminalFrame
   ) {
-    let area = quantized(rect)
+    let area = quantized(rect, pointsPerCell: pointsPerCell)
     guard area.x1 > area.x0, area.y1 > area.y0 else { return }
+
+    // Rounded controls depend on their fill more than their outline in a terminal.
+    // When top and bottom are adjacent, box glyphs consume every interior row and
+    // visually overpower the label. Keep larger rounded containers outlined while
+    // rendering compact controls as clean color-backed cells.
+    if suppressCompactBorder, area.y1 - area.y0 <= 3 { return }
     let foreground = rgb(color, over: .black)
     func put(_ x: Int, _ y: Int, _ glyph: Character) {
       guard clip.contains(x, y), x >= 0, x < frame.columns, y >= 0, y < frame.rows else { return }
       var cell = frame[column: x, row: y]
+
+      // Borders are commonly emitted after their content. A one-point GUI border
+      // can quantize onto the same terminal row as a label, so replacing occupied
+      // cells here would erase headers, footers, and short button labels. Preserve
+      // semantic content and draw the border through otherwise empty cells.
+      guard cell.glyph == " " else { return }
       cell.glyph = glyph
       cell.foreground = foreground
       frame[column: x, row: y] = cell
@@ -150,10 +177,10 @@ public struct TerminalRasterizer: Sendable {
 
   private func drawText(
     _ text: String, at position: Point, color: Color, clip: CellRect,
-    frame: inout TerminalFrame
+    pointsPerCell: Size, frame: inout TerminalFrame
   ) {
-    var x = Int(position.x.rounded())
-    var y = Int(position.y.rounded())
+    var x = Int((position.x / pointsPerCell.width).rounded())
+    var y = Int((position.y / pointsPerCell.height).rounded())
     let foreground = rgb(color, over: .black)
     let startX = x
     for character in text {
@@ -172,10 +199,32 @@ public struct TerminalRasterizer: Sendable {
     }
   }
 
-  private func quantized(_ rect: Rect) -> CellRect {
+  private func quantized(_ rect: Rect, pointsPerCell: Size) -> CellRect {
     CellRect(
-      x0: Int(floor(rect.minX)), y0: Int(floor(rect.minY)),
-      x1: Int(ceil(rect.maxX)), y1: Int(ceil(rect.maxY)))
+      x0: Int(floor(rect.minX / pointsPerCell.width)),
+      y0: Int(floor(rect.minY / pointsPerCell.height)),
+      x1: Int(ceil(rect.maxX / pointsPerCell.width)),
+      y1: Int(ceil(rect.maxY / pointsPerCell.height)))
+  }
+
+  /// Assign a fill to cells by their center point instead of including every cell
+  /// touched by a sub-cell edge. This keeps adjacent GUI controls from bleeding
+  /// into each other's terminal rows and columns while still guaranteeing that a
+  /// very thin caret or scroll indicator occupies at least one cell.
+  private func quantizedFill(_ rect: Rect, pointsPerCell: Size) -> CellRect {
+    func range(_ minimum: Float, _ maximum: Float, cellSize: Float) -> (Int, Int) {
+      var lower = Int(ceil(minimum / cellSize - 0.5))
+      var upper = Int(ceil(maximum / cellSize - 0.5))
+      if upper <= lower, maximum > minimum {
+        lower = Int(floor(minimum / cellSize))
+        upper = lower + 1
+      }
+      return (lower, upper)
+    }
+
+    let x = range(rect.minX, rect.maxX, cellSize: pointsPerCell.width)
+    let y = range(rect.minY, rect.maxY, cellSize: pointsPerCell.height)
+    return CellRect(x0: x.0, y0: y.0, x1: x.1, y1: y.1)
   }
 
   private func rgb(_ color: Color, over background: TerminalRGB) -> TerminalRGB {

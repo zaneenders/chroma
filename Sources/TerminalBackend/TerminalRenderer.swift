@@ -15,13 +15,15 @@ public final class TerminalRenderer: Renderer {
   private var running = false
   private let rasterizer = TerminalRasterizer()
 
-  public init() {
-    var metrics = FontMetrics()
-    metrics.glyphWidth = 1
-    metrics.glyphHeight = 1
-    metrics.glyphSpacing = 0
-    metrics.lineAdvance = 1
-    interaction.fontMetrics = metrics
+  /// Chroma's layout remains in its native point coordinate system. The terminal
+  /// rasterizer projects those points onto character cells at the final step.
+  /// Keeping native metrics means font scales, padding, and fixed dimensions do
+  /// not collapse to fractions of a terminal cell.
+  public let pointsPerCell: Size
+
+  public init(pointsPerCell: Size = Size(width: 11, height: 28)) {
+    precondition(pointsPerCell.width > 0 && pointsPerCell.height > 0)
+    self.pointsPerCell = pointsPerCell
   }
 
   public func setKeyBindings(_ bindings: KeyBindings) {
@@ -103,11 +105,19 @@ public final class TerminalRenderer: Renderer {
       BlockEngine.draw(
         content,
         into: &drawList,
-        in: Rect(x: 0, y: 0, width: Float(columns), height: Float(rows)),
+        in: Rect(
+          x: 0,
+          y: 0,
+          width: Float(columns) * pointsPerCell.width,
+          height: Float(rows) * pointsPerCell.height),
         context: context)
     }
     interaction.endFrame()
-    let frame = rasterizer.rasterize(drawList.commands, columns: columns, rows: rows)
+    let frame = rasterizer.rasterize(
+      drawList.commands,
+      columns: columns,
+      rows: rows,
+      pointsPerCell: pointsPerCell)
     lastFrame = frame
     return frame
   }

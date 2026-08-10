@@ -1,23 +1,41 @@
 import Chroma
 import Foundation
+import TerminalBackend
 
 #if METAL_BACKEND
 import MetalBackend
-typealias PlatformApp = MetalApp
 #elseif WAYLAND_BACKEND
 import WaylandBackend
-typealias PlatformApp = WaylandApp
-#else
-#error("ChromaDemo requires a rendering backend.")
 #endif
 
 @main
-struct ChromaDemo: PlatformApp {
+struct ChromaDemo: App {
   private let state = DemoState()
 
   var title: String { "Chroma Demo" }
   var windowSize: Size { Size(width: 960, height: 640) }
   var minimumRefreshRate: Double { 30 }
+
+  @MainActor
+  static func main() {
+    let app = Self()
+
+    if CommandLine.arguments.dropFirst().contains("--terminal") {
+      app.run(on: TerminalRenderer())
+      return
+    }
+
+    #if METAL_BACKEND
+    guard let renderer = MetalRenderer(size: app.windowSize) else {
+      fatalError("Metal requires Apple Silicon or a supported GPU.")
+    }
+    app.run(on: renderer)
+    #elseif WAYLAND_BACKEND
+    app.run(on: WaylandRenderer())
+    #else
+    app.run(on: TerminalRenderer())
+    #endif
+  }
 
   var keyBindings: KeyBindings {
     KeyBindings {
