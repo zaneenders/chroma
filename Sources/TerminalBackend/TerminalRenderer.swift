@@ -49,10 +49,16 @@ public final class TerminalRenderer: Renderer {
     var presenter = TerminalPresenter()
     var size = session.windowSize()
     session.write("\u{1B}]0;\(title)\u{7}")
+
+    // Chroma discovers the focus tree while drawing its first frame, then selects
+    // the first leaf in endFrame(). Prime that retained tree before presenting so
+    // the initial visible frame already reflects the selection.
+    _ = render(columns: size.columns, rows: size.rows)
     session.write(presenter.encode(render(columns: size.columns, rows: size.rows)))
 
     while running {
-      let timeout: Int32 = minimumRefreshRate > 0
+      let timeout: Int32 =
+        minimumRefreshRate > 0
         ? Int32(max(1, min(Double(Int32.max), 1000 / minimumRefreshRate))) : 100
       var input = InputState()
       if let bytes = session.read(timeoutMilliseconds: timeout) {
@@ -64,8 +70,15 @@ public final class TerminalRenderer: Renderer {
       let newSize = session.windowSize()
       let resized = newSize.columns != size.columns || newSize.rows != size.rows
       size = newSize
-      if input != InputState() || resized || minimumRefreshRate > 0 || interaction.consumeRedrawRequest() {
+      if input != InputState() || resized || minimumRefreshRate > 0 {
         session.write(presenter.encode(render(columns: size.columns, rows: size.rows, input: input)))
+
+        // An action can mutate model state after an earlier sibling has already been
+        // evaluated in this frame. Chroma requests another frame in that case; present
+        // it immediately rather than waiting for the baseline refresh interval.
+        if interaction.consumeRedrawRequest() {
+          session.write(presenter.encode(render(columns: size.columns, rows: size.rows)))
+        }
       }
     }
   }

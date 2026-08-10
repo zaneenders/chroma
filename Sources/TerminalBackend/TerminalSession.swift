@@ -95,7 +95,8 @@ struct TerminalPresenter {
     var lastForeground: TerminalRGB?
     var lastBackground: TerminalRGB?
     for row in 0..<frame.rows {
-      let rowChanged = previous == nil || previous!.columns != frame.columns
+      let rowChanged =
+        previous == nil || previous!.columns != frame.columns
         || previous!.rows != frame.rows
         || (0..<frame.columns).contains { previous![column: $0, row: row] != frame[column: $0, row: row] }
       guard rowChanged else { continue }

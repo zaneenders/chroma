@@ -121,17 +121,30 @@ public struct TerminalRasterizer: Sendable {
     let bottom = area.y1 - 1
     if left == right || top == bottom {
       for x in left...right { put(x, top, top == bottom ? "─" : (x == left ? "┌" : x == right ? "┐" : "─")) }
-      if top != bottom { for y in (top + 1)..<bottom { put(left, y, "│"); if right != left { put(right, y, "│") } } }
+      if top != bottom {
+        for y in (top + 1)..<bottom {
+          put(left, y, "│")
+          if right != left { put(right, y, "│") }
+        }
+      }
       if bottom != top { for x in left...right { put(x, bottom, x == left ? "└" : x == right ? "┘" : "─") } }
       return
     }
-    put(left, top, "┌"); put(right, top, "┐")
-    put(left, bottom, "└"); put(right, bottom, "┘")
+    put(left, top, "┌")
+    put(right, top, "┐")
+    put(left, bottom, "└")
+    put(right, bottom, "┘")
     if right > left + 1 {
-      for x in (left + 1)..<right { put(x, top, "─"); put(x, bottom, "─") }
+      for x in (left + 1)..<right {
+        put(x, top, "─")
+        put(x, bottom, "─")
+      }
     }
     if bottom > top + 1 {
-      for y in (top + 1)..<bottom { put(left, y, "│"); put(right, y, "│") }
+      for y in (top + 1)..<bottom {
+        put(left, y, "│")
+        put(right, y, "│")
+      }
     }
   }
 
@@ -144,7 +157,11 @@ public struct TerminalRasterizer: Sendable {
     let foreground = rgb(color, over: .black)
     let startX = x
     for character in text {
-      if character == "\n" { y += 1; x = startX; continue }
+      if character == "\n" {
+        y += 1
+        x = startX
+        continue
+      }
       if clip.contains(x, y), x >= 0, x < frame.columns, y >= 0, y < frame.rows {
         var cell = frame[column: x, row: y]
         cell.glyph = character

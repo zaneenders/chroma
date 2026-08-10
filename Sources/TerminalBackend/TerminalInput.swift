@@ -40,11 +40,17 @@ struct TerminalInputDecoder {
     var index = 0
     while index < pending.count {
       let byte = pending[index]
-      if byte == 3 || byte == 4 { result.shouldClose = true; index += 1; continue }
+      if byte == 3 || byte == 4 {
+        result.shouldClose = true
+        index += 1
+        continue
+      }
       if byte == 0x1B {
         guard index + 1 < pending.count else { break }
         guard pending[index + 1] == 0x5B else {
-          result.keys.append(.escape); index += 1; continue
+          result.keys.append(.escape)
+          index += 1
+          continue
         }
         guard let end = pending[(index + 2)...].firstIndex(where: { $0 >= 0x40 && $0 <= 0x7E }) else { break }
         let sequence = Array(pending[index...end])
@@ -53,9 +59,15 @@ struct TerminalInputDecoder {
         continue
       }
       switch byte {
-      case 9: result.keys.append(.tab); index += 1
-      case 10, 13: result.keys.append(.enter); index += 1
-      case 8, 127: result.keys.append(.backspace); index += 1
+      case 9:
+        result.keys.append(.tab)
+        index += 1
+      case 10, 13:
+        result.keys.append(.enter)
+        index += 1
+      case 8, 127:
+        result.keys.append(.backspace)
+        index += 1
       case 32...126:
         result.keys.append(.character(Character(UnicodeScalar(byte))))
         index += 1
