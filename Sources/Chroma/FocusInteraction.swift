@@ -57,7 +57,8 @@ extension Interaction {
 
   func routePendingCommands() {
     for (index, command) in pendingCommands.enumerated() where !handledCommandIndices.contains(index) {
-      let handlers = commandHandlers
+      let handlers =
+        commandHandlers
         .filter { $0.command == command && isPrefix($0.path, of: selection ?? []) }
         .sorted { $0.path.count > $1.path.count }
       if handlers.contains(where: { $0.action() == .handled }) { continue }
