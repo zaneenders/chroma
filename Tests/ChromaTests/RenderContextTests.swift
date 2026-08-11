@@ -32,23 +32,18 @@ struct RenderContextTests {
     #expect(!interaction.textSelection.isSelecting)
   }
 
-  @Test func sharedSelectionManagerFollowsAmbientContext() {
-    let first = Interaction()
-    let second = Interaction()
-    Interaction.current = first
-    #expect(TextSelectionManager.shared === first.textSelection)
-    Interaction.current = second
-    #expect(TextSelectionManager.shared === second.textSelection)
-    Interaction.current = Interaction()
+  @Test func contextsOwnIndependentSelectionManagers() {
+    let first = RenderContext()
+    let second = RenderContext()
+
+    #expect(first.selection !== second.selection)
   }
 
   @Test func blockEngineForwardsExplicitContext() {
-    let ambient = Interaction()
     let interaction = Interaction()
     let context = RenderContext(interaction: interaction)
     let recorder = ContextRecorder()
     let block = ContextRecordingBlock(recorder: recorder)
-    Interaction.current = ambient
 
     _ = BlockEngine.measure(block, proposal: Size(width: 20, height: 10), context: context)
     var drawList = DrawList()
@@ -60,9 +55,6 @@ struct RenderContextTests {
 
     #expect(recorder.measuredInteraction === interaction)
     #expect(recorder.drawnInteraction === interaction)
-    #expect(recorder.measuredInteraction !== ambient)
-    #expect(recorder.drawnInteraction !== ambient)
-    Interaction.current = Interaction()
   }
 
   @Test func rendererContextWrapsItsInteraction() {

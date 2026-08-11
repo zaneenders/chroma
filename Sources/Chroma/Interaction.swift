@@ -5,8 +5,6 @@ public enum InteractionMode: Equatable, Sendable {
 
 @MainActor
 package final class Interaction {
-  package static var current = Interaction()
-
   package let textSelection = TextSelectionManager()
 
   package var fontMetrics = FontMetrics()

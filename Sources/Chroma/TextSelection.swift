@@ -47,8 +47,6 @@ struct PlainTextLayoutRegistry {
 
 @MainActor
 public final class TextSelectionManager {
-  public static var shared: TextSelectionManager { Interaction.current.textSelection }
-
   private var originLayoutRect: Rect? = nil
   private var originLayoutID: WidgetID? = nil
   private(set) var selectionStart: Int?

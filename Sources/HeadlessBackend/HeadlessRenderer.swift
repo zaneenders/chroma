@@ -40,10 +40,6 @@ public final class HeadlessRenderer: Renderer {
   /// behavior while retaining focus and interaction state between calls.
   @discardableResult
   public func render(input: InputState = InputState()) -> HeadlessFrame {
-    let previousInteraction = Interaction.current
-    Interaction.current = interaction
-    defer { Interaction.current = previousInteraction }
-
     interaction.beginFrame(input: input)
     var drawList = DrawList()
     if let content {

@@ -92,7 +92,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     mtkView.delegate = self
     mtkView.interaction = interaction
     mtkView.keyBindings = keyBindings
-    Interaction.current = interaction
   }
 
   public convenience init(size: Size) throws {
