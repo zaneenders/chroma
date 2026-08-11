@@ -12,7 +12,7 @@ package protocol Renderer: AnyObject {
 
   func setMinimumRefreshRate(_ refreshRate: Double)
 
-  func run(title: String)
+  func run(title: String) throws
 }
 
 extension Renderer {

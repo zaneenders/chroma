@@ -24,10 +24,10 @@ extension App {
   public var keyBindings: KeyBindings { KeyBindings() }
 
   @MainActor
-  package func run(on renderer: any Renderer) {
+  package func run(on renderer: any Renderer) throws {
     renderer.setMinimumRefreshRate(minimumRefreshRate)
     renderer.setKeyBindings(keyBindings)
     renderer.content = body
-    renderer.run(title: "\(title) — \(renderer.name)")
+    try renderer.run(title: "\(title) — \(renderer.name)")
   }
 }

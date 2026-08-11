@@ -13,8 +13,8 @@ public final class WaylandRenderer: Renderer {
 
   public init() {}
 
-  public func run(title: String = "Hello Triangle") {
-    fatalError("WaylandBackend is not implemented yet.")
+  public func run(title: String = "Hello Triangle") throws {
+    throw BackendError.notImplemented(backend: name)
   }
 }
 

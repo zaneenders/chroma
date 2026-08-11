@@ -16,18 +16,18 @@ struct ChromaDemo: App {
   var minimumRefreshRate: Double { 30 }
 
   @MainActor
-  static func main() {
+  static func main() throws {
     let app = Self()
 
     #if METAL_BACKEND
-    guard let renderer = MetalRenderer(size: app.windowSize) else {
-      fatalError("Metal requires Apple Silicon or a supported GPU.")
-    }
-    app.run(on: renderer)
+    try app.run(on: MetalRenderer(size: app.windowSize))
     #elseif WAYLAND_BACKEND
-    app.run(on: WaylandRenderer())
+    try app.run(on: WaylandRenderer())
     #else
-    fatalError("ChromaDemo requires an enabled graphical backend.")
+    throw BackendError.unavailable(
+      backend: "ChromaDemo",
+      reason: "no graphical backend is enabled"
+    )
     #endif
   }
 
@@ -90,8 +90,7 @@ private struct DemoView: Block {
         ZStack {
           HStack(spacing: 0) {
             DemoSidebar(state: state)
-              .sizing(x: .fixed(210))
-              .sizing(y: .grow)
+              .sizing(x: .fixed(210), y: .grow)
               .background(theme.surface)
             DemoPage(state: state)
               .sizing(x: .grow, y: .grow)

@@ -1,8 +1,5 @@
 extension Block {
-  public func sizing(
-    x: Sizing = .fit,
-    y: Sizing = .fit
-  ) -> SizingBlock {
+  public func sizing(x: Sizing = .fit, y: Sizing = .fit) -> SizingBlock {
     SizingBlock(content: self, x: x, y: y)
   }
 

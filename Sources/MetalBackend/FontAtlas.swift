@@ -19,7 +19,7 @@ struct FontAtlas {
   var atlasWidth: Int { columns * cellWidth }
   var atlasHeight: Int { rows * glyphHeight }
 
-  init(device: MTLDevice) {
+  init(device: MTLDevice) throws {
     let metrics = FontMetrics()
     let glyphWidth = Int(metrics.glyphWidth)
     let glyphHeight = Int(metrics.glyphHeight)
@@ -36,7 +36,11 @@ struct FontAtlas {
 
     for (index, character) in characters.enumerated() {
       guard let glyph = Font20x28.glyphs[character] else {
-        fatalError("Missing bitmap for font character U+\(String(character, radix: 16, uppercase: true))")
+        throw BackendError.initializationFailed(
+          backend: "Metal",
+          stage: "font atlas",
+          reason: "missing bitmap for U+\(String(character, radix: 16, uppercase: true))"
+        )
       }
       let xOffset = (index % columns) * cellWidth
       let yOffset = (index / columns) * glyphHeight
@@ -56,7 +60,11 @@ struct FontAtlas {
       mipmapped: false
     )
     guard let texture = device.makeTexture(descriptor: descriptor) else {
-      fatalError("Failed to create font atlas texture")
+      throw BackendError.initializationFailed(
+        backend: "Metal",
+        stage: "font atlas",
+        reason: "failed to allocate the atlas texture"
+      )
     }
     pixels.withUnsafeBytes { bytes in
       texture.replace(

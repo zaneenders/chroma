@@ -6,9 +6,9 @@ public protocol WaylandApp: App {}
 
 extension WaylandApp {
   @MainActor
-  public static func main() {
+  public static func main() throws {
     let app = Self()
-    app.run(on: WaylandRenderer())
+    try app.run(on: WaylandRenderer())
   }
 }
 

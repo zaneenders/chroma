@@ -36,16 +36,23 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
   public var contentView: NSView { mtkView }
 
-  public init?(frame: CGRect) {
-    guard let device = MTLCreateSystemDefaultDevice(),
-      let queue = device.makeCommandQueue()
-    else {
-      print("Metal requires Apple Silicon or supported GPU.")
-      return nil
+  public init(frame: CGRect) throws {
+    guard let device = MTLCreateSystemDefaultDevice() else {
+      throw BackendError.unavailable(
+        backend: "Metal",
+        reason: "no compatible GPU was found"
+      )
+    }
+    guard let queue = device.makeCommandQueue() else {
+      throw BackendError.initializationFailed(
+        backend: "Metal",
+        stage: "command queue",
+        reason: "the device could not create a command queue"
+      )
     }
     self.device = device
     self.queue = queue
-    self.fontAtlas = FontAtlas(device: device)
+    self.fontAtlas = try FontAtlas(device: device)
 
     let mtkView = ChromaInputView(frame: frame, device: device)
     mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
@@ -57,28 +64,27 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     do {
       library = try device.makeLibrary(source: metalSource, options: nil)
     } catch {
-      print("Shader compile failed:\n\(error)")
-      return nil
+      throw BackendError.initializationFailed(
+        backend: "Metal",
+        stage: "shader library",
+        reason: String(describing: error)
+      )
     }
 
-    guard
-      let shapePipeline = Self.makePipeline(
-        device: device,
-        pixelFormat: mtkView.colorPixelFormat,
-        library: library,
-        vertex: "shape_vertex",
-        fragment: "shape_fragment"
-      ),
-      let textPipeline = Self.makePipeline(
-        device: device,
-        pixelFormat: mtkView.colorPixelFormat,
-        library: library,
-        vertex: "text_vertex",
-        fragment: "text_fragment"
-      )
-    else {
-      return nil
-    }
+    let shapePipeline = try Self.makePipeline(
+      device: device,
+      pixelFormat: mtkView.colorPixelFormat,
+      library: library,
+      vertex: "shape_vertex",
+      fragment: "shape_fragment"
+    )
+    let textPipeline = try Self.makePipeline(
+      device: device,
+      pixelFormat: mtkView.colorPixelFormat,
+      library: library,
+      vertex: "text_vertex",
+      fragment: "text_fragment"
+    )
     self.shapePipeline = shapePipeline
     self.textPipeline = textPipeline
 
@@ -89,8 +95,8 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     Interaction.current = interaction
   }
 
-  public convenience init?(size: Size) {
-    self.init(frame: CGRect(x: 0, y: 0, width: CGFloat(size.width), height: CGFloat(size.height)))
+  public convenience init(size: Size) throws {
+    try self.init(frame: CGRect(x: 0, y: 0, width: CGFloat(size.width), height: CGFloat(size.height)))
   }
 
   private func updateRefreshTimer() {
@@ -140,12 +146,15 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     library: MTLLibrary,
     vertex: String,
     fragment: String
-  ) -> MTLRenderPipelineState? {
+  ) throws -> MTLRenderPipelineState {
     guard let vertexFunction = library.makeFunction(name: vertex),
       let fragmentFunction = library.makeFunction(name: fragment)
     else {
-      print("Shader functions \(vertex)/\(fragment) not found in library")
-      return nil
+      throw BackendError.initializationFailed(
+        backend: "Metal",
+        stage: "render pipeline",
+        reason: "shader functions \(vertex)/\(fragment) were not found"
+      )
     }
 
     let desc = MTLRenderPipelineDescriptor()
@@ -165,8 +174,11 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     do {
       return try device.makeRenderPipelineState(descriptor: desc)
     } catch {
-      print("Pipeline \(vertex)/\(fragment) creation failed:\n\(error)")
-      return nil
+      throw BackendError.initializationFailed(
+        backend: "Metal",
+        stage: "render pipeline \(vertex)/\(fragment)",
+        reason: String(describing: error)
+      )
     }
   }
 
@@ -407,13 +419,17 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
   private func pooledBuffer(pool: inout [MTLBuffer], byteCount: Int) -> MTLBuffer? {
     guard byteCount > 0 else { return nil }
     if pool.count <= poolBufferIndex {
-      let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared)!
+      guard let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared) else {
+        return nil
+      }
       pool.append(buffer)
       return buffer
     }
     let existing = pool[poolBufferIndex]
     if existing.length >= byteCount { return existing }
-    let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared)!
+    guard let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared) else {
+      return nil
+    }
     pool[poolBufferIndex] = buffer
     return buffer
   }
