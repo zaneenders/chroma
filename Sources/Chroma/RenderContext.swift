@@ -53,19 +53,25 @@ public struct RenderContext {
   }
 
   /// Registers an editable leaf and applies text input translated by the backend.
+  ///
+  /// `onEndEditing` can intercept an end-editing request. Return `.handled` to
+  /// keep editing active, or `.ignored` to use the default behavior and leave
+  /// editing mode.
   public func textInputState(
     id: WidgetID,
     in rect: Rect,
     text: String,
     onChange: (String) -> Void,
-    onSubmit: ((String) -> Void)? = nil
+    onSubmit: ((String) -> Void)? = nil,
+    onEndEditing: (() -> CommandResult)? = nil
   ) -> TextInputState {
     interaction.textInputBehavior(
       id: id,
       rect: rect,
       text: text,
       onChange: onChange,
-      onSubmit: onSubmit
+      onSubmit: onSubmit,
+      onEndEditing: onEndEditing
     )
   }
 

@@ -5,7 +5,8 @@ extension Interaction {
     rect: Rect,
     text: String,
     onChange: (String) -> Void,
-    onSubmit: ((String) -> Void)? = nil
+    onSubmit: ((String) -> Void)? = nil,
+    onEndEditing: (() -> CommandResult)? = nil
   ) -> TextInputState {
     guard let parent = builderStack.last else {
       preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")
@@ -87,9 +88,11 @@ extension Interaction {
             break eventLoop
           }
         case .endEditing:
-          endEditing()
-          editing = false
-          break eventLoop
+          if onEndEditing?() != .handled {
+            endEditing()
+            editing = false
+            break eventLoop
+          }
         }
       }
       if changed {

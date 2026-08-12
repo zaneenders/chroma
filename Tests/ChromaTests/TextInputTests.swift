@@ -181,6 +181,25 @@ struct TextInputTests {
     #expect(text == "abc")
   }
 
+  @Test func handledEndEditingKeepsInsertModeActive() {
+    let ctx = Interaction()
+    var text = "abc"
+    enterInsertMode(ctx, text: &text)
+
+    ctx.beginFrame(input: InputState(textEvents: [.endEditing]))
+    ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+    let state = ctx.textInputBehavior(
+      id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
+      text: text, onChange: { text = $0 }, onEndEditing: { .handled })
+    ctx.endGroup()
+    ctx.endFrame()
+
+    #expect(state.editing)
+    #expect(ctx.isTextEditing)
+    #expect(ctx.mode == .editing)
+    #expect(text == "abc")
+  }
+
   @Test func cursorLeavingEndsInsertMode() {
     let ctx = Interaction()
     var text = "abc"
