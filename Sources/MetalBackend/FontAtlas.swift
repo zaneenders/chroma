@@ -25,7 +25,11 @@ struct FontAtlas {
     let glyphHeight = Int(metrics.glyphHeight)
     let glyphSpacing = Int(metrics.glyphSpacing)
     let columns = 16
-    let characters = Font20x28.glyphs.keys.sorted()
+    // Keep the authored bitmap font as the source of truth and fill its
+    // Unicode gaps with deterministic 20×28 procedural glyphs. Everything is
+    // uploaded to the same atlas and rendered by the existing Metal shader.
+    let glyphs = Font20x28.glyphs.merging(GlyphGenerator.generated) { authored, _ in authored }
+    let characters = glyphs.keys.sorted()
     let characterIndices = Dictionary(
       uniqueKeysWithValues: characters.enumerated().map { ($0.element, $0.offset) })
     let atlasRows = (characters.count + columns - 1) / columns
@@ -35,15 +39,9 @@ struct FontAtlas {
     var pixels = [UInt8](repeating: 0, count: width * height)
 
     for (index, character) in characters.enumerated() {
-      guard let glyph = Font20x28.glyphs[character] else {
-        throw BackendError.initializationFailed(
-          backend: "Metal",
-          stage: "font atlas",
-          reason: "missing bitmap for U+\(String(character, radix: 16, uppercase: true))"
-        )
-      }
       let xOffset = (index % columns) * cellWidth
       let yOffset = (index / columns) * glyphHeight
+      guard let glyph = glyphs[character] else { continue }
       let cleanedRows = Self.closingPinholes(in: glyph.rows, width: glyphWidth)
       for y in 0..<glyphHeight {
         let bits = cleanedRows[y]
@@ -126,8 +124,9 @@ struct FontAtlas {
   }
 
   func glyphUV(_ character: Character) -> (Float, Float, Float, Float) {
-    let value = character.unicodeScalars.count == 1 ? character.unicodeScalars.first!.value : 0x20
-    let index = characterIndices[value] ?? characterIndices[0x20]!
+    let value = character.unicodeScalars.count == 1 ? character.unicodeScalars.first!.value : 0xFFFD
+    let fallback = characterIndices[0xFFFD] ?? characterIndices[0x3F]!
+    let index = characterIndices[value] ?? fallback
     let x = (index % columns) * cellWidth
     let y = (index / columns) * glyphHeight
     return (

@@ -1,5 +1,7 @@
 #if METAL_BACKEND
 
+import Darwin
+
 /// Synthesizes bitmaps for the symbol ranges terminal programs emit but the
 /// hand-drawn ASCII font does not cover: box drawing, block elements, braille,
 /// arrows, geometric shapes, and Powerline separators. Without these, the
@@ -491,6 +493,78 @@ private func buildGlyphs() -> [UInt32: Glyph] {
     diamond.fillRect(10 - half, y, 10 + half, y)
   }
   out[0x25C6] = diamond.glyph  // ◆
+
+  // MARK: Common Nerd Font symbols used by LazyVim and terminal prompts
+  // These remain native 20×28 bitmaps in the Metal atlas; no system font is
+  // consulted at build time or runtime.
+  var search = Canvas()
+  search.ring(centerX: 8, centerY: 10, radius: 6, thickness: 2)
+  search.line(12, 15, 18, 22, thickness: 3)
+  out[0xF002] = search.glyph  //  find/search
+
+  var file = Canvas()
+  file.line(5, 3, 13, 3)
+  file.line(5, 3, 5, 24)
+  file.line(5, 24, 16, 24)
+  file.line(16, 10, 16, 24)
+  file.line(13, 3, 16, 10)
+  file.line(13, 3, 13, 10)
+  file.line(13, 10, 16, 10)
+  out[0xF15B] = file.glyph  //  new file
+
+  var list = Canvas()
+  for y in [7, 14, 21] {
+    list.fillRect(2, y - 1, 4, y + 1)
+    list.fillRect(7, y - 1, 18, y + 1)
+  }
+  out[0xF022] = list.glyph  //  find text/list
+
+  var copy = Canvas()
+  copy.line(3, 4, 13, 4)
+  copy.line(3, 4, 3, 20)
+  copy.line(3, 20, 13, 20)
+  copy.line(13, 4, 13, 20)
+  copy.line(7, 8, 17, 8)
+  copy.line(17, 8, 17, 24)
+  copy.line(7, 24, 17, 24)
+  out[0xF0C5] = copy.glyph  //  recent files/copy
+
+  var gear = Canvas()
+  gear.ring(centerX: 10, centerY: 14, radius: 7, thickness: 3)
+  gear.disc(centerX: 10, centerY: 14, radius: 2)
+  for (x, y) in [(9, 2), (9, 23), (0, 13), (17, 13), (2, 5), (15, 20), (15, 5), (2, 20)] {
+    gear.fillRect(x, y, x + 2, y + 2)
+  }
+  out[0xF423] = gear.glyph  //  config
+
+  var history = Canvas()
+  history.ring(centerX: 10, centerY: 14, radius: 8, thickness: 2)
+  history.line(10, 14, 10, 7)
+  history.line(10, 14, 15, 17)
+  history.line(1, 6, 1, 13, thickness: 2)
+  history.line(1, 6, 7, 6, thickness: 2)
+  out[0xE348] = history.glyph  //  restore session
+
+  var sparkle = Canvas()
+  sparkle.line(10, 3, 10, 25)
+  sparkle.line(2, 14, 18, 14)
+  sparkle.line(5, 7, 15, 21)
+  sparkle.line(15, 7, 5, 21)
+  out[0xEACC] = sparkle.glyph  //  extras
+
+  // Visible fallback for unsupported scalars. The old fallback was U+0020,
+  // silently turning every unknown glyph into whitespace and making correct
+  // terminal columns look like broken spacing.
+  var replacement = Canvas()
+  replacement.line(3, 3, 16, 3)
+  replacement.line(16, 3, 16, 24)
+  replacement.line(16, 24, 3, 24)
+  replacement.line(3, 24, 3, 3)
+  replacement.line(7, 9, 10, 6)
+  replacement.line(10, 6, 13, 9)
+  replacement.line(13, 9, 10, 14)
+  replacement.fillRect(9, 19, 11, 21)
+  out[0xFFFD] = replacement.glyph
 
   // MARK: Powerline separators (U+E0B0–E0BF common subset)
   var powerRight = Canvas()
