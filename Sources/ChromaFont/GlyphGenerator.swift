@@ -4,7 +4,7 @@
 /// atlas silently substitutes a blank space, which breaks shell prompts
 /// (`➜`, `✗`), TUI borders (`╭──╮`), and dashboards.
 ///
-/// Hand-drawn glyphs in `Font20x28.baseGlyphs` always win; these fill the
+/// Hand-drawn glyphs in `Font20x28.glyphs` always win; these fill the
 /// gaps around them.
 public enum GlyphGenerator {
   public static let generated: [UInt32: Glyph] = buildGlyphs()
@@ -203,7 +203,9 @@ private enum Box {
       let unitY = Double(step) / 28
       let unitX = (max(0, 1 - unitY * unitY)).squareRoot()
       let x = right ? 19 - Int(unitX * 9.5 + 0.5) : Int(unitX * 9.5 + 0.5)
-      let y = down ? Int(unitY * 13.5 + 0.5) : 27 - Int(unitY * 13.5 + 0.5)
+      // A "down" corner (╭ ╮) opens toward the bottom edge, so its arc lives
+      // in the bottom half of the cell, matching the square corners (┌ ┐).
+      let y = down ? 27 - Int(unitY * 13.5 + 0.5) : Int(unitY * 13.5 + 0.5)
       canvas.fillRect(x - 1, y - 1, x, y)
     }
     return canvas
@@ -309,9 +311,9 @@ private func buildGlyphs() -> [UInt32: Glyph] {
 
   // Shades ░▒▓ as ordered dithers at 25/50/75% coverage.
   let shades: [(codepoint: UInt32, keep: (Int, Int) -> Bool)] = [
-    (0x2591, { x, y in x % 2 == 0 && y % 4 == 0 }),
+    (0x2591, { x, y in (x % 2 == 0 && y % 4 == 0) || (x % 2 == 1 && y % 4 == 2) }),
     (0x2592, { x, y in (x + y) % 2 == 0 }),
-    (0x2593, { x, y in !(x % 2 == 0 && y % 4 == 2) }),
+    (0x2593, { x, y in !((x % 2 == 0 && y % 4 == 2) || (x % 2 == 1 && y % 4 == 0)) }),
   ]
   for (codepoint, keep) in shades {
     var canvas = Canvas()

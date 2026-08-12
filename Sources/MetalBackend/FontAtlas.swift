@@ -26,10 +26,13 @@ struct FontAtlas {
     let glyphHeight = Int(metrics.glyphHeight)
     let glyphSpacing = Int(metrics.glyphSpacing)
     let columns = 16
-    // Keep the authored bitmap font as the source of truth and fill its
-    // Unicode gaps with deterministic 20×28 procedural glyphs. Everything is
-    // uploaded to the same atlas and rendered by the existing Metal shader.
-    let glyphs = Font20x28.glyphs.merging(GlyphGenerator.generated) { authored, _ in authored }
+    // Keep authored bitmaps byte-for-byte intact. Pinhole closing only repairs
+    // small rasterization gaps in procedural glyphs before authored glyphs win
+    // any collisions during the merge.
+    let generatedGlyphs = GlyphGenerator.generated.mapValues { glyph in
+      Glyph(rows: Self.closingPinholes(in: glyph.rows, width: glyphWidth))
+    }
+    let glyphs = Font20x28.glyphs.merging(generatedGlyphs) { authored, _ in authored }
     let characters = glyphs.keys.sorted()
     let characterIndices = Dictionary(
       uniqueKeysWithValues: characters.enumerated().map { ($0.element, $0.offset) })
@@ -43,9 +46,8 @@ struct FontAtlas {
       let xOffset = (index % columns) * cellWidth
       let yOffset = (index / columns) * glyphHeight
       guard let glyph = glyphs[character] else { continue }
-      let cleanedRows = Self.closingPinholes(in: glyph.rows, width: glyphWidth)
       for y in 0..<glyphHeight {
-        let bits = cleanedRows[y]
+        let bits = glyph.rows[y]
         for x in 0..<glyphWidth where bits & (UInt32(1) << UInt32(glyphWidth - x - 1)) != 0 {
           pixels[(yOffset + y) * width + xOffset + x] = 255
         }
@@ -126,7 +128,7 @@ struct FontAtlas {
 
   func glyphUV(_ character: Character) -> (Float, Float, Float, Float) {
     let value = character.unicodeScalars.count == 1 ? character.unicodeScalars.first!.value : 0xFFFD
-    let fallback = characterIndices[0xFFFD] ?? characterIndices[0x3F]!
+    let fallback = characterIndices[0xFFFD] ?? characterIndices[0x3F] ?? 0
     let index = characterIndices[value] ?? fallback
     let x = (index % columns) * cellWidth
     let y = (index / columns) * glyphHeight
