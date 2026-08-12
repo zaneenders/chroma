@@ -1,7 +1,3 @@
-#if METAL_BACKEND
-
-import Darwin
-
 /// Synthesizes bitmaps for the symbol ranges terminal programs emit but the
 /// hand-drawn ASCII font does not cover: box drawing, block elements, braille,
 /// arrows, geometric shapes, and Powerline separators. Without these, the
@@ -10,8 +6,8 @@ import Darwin
 ///
 /// Hand-drawn glyphs in `Font20x28.baseGlyphs` always win; these fill the
 /// gaps around them.
-enum GlyphGenerator {
-  static let generated: [UInt32: Glyph] = buildGlyphs()
+public enum GlyphGenerator {
+  public static let generated: [UInt32: Glyph] = buildGlyphs()
 }
 
 /// 20×28 pixel canvas matching `FontMetrics`.
@@ -200,20 +196,15 @@ private enum Box {
   /// Rounded light corner as a quarter ellipse between the center lines.
   static func roundedCorner(down: Bool, right: Bool) -> Canvas {
     var canvas = Canvas()
-    let centerX = right ? 19.5 : 0.5
-    let centerY = down ? 27.5 : 0.5
-    let startAngle: Double
-    switch (down, right) {
-    case (true, true): startAngle = .pi            // ╭
-    case (true, false): startAngle = .pi * 1.5     // ╮
-    case (false, true): startAngle = .pi / 2       // ╰
-    case (false, false): startAngle = 0            // ╯
-    }
-    for step in 0...96 {
-      let angle = startAngle + Double(step) / 96 * (.pi / 2)
-      let x = centerX + 9.5 * cos(angle)
-      let y = centerY + 13.5 * sin(angle)
-      canvas.fillRect(Int(x) - 1, Int(y) - 1, Int(x), Int(y))
+    // Trace a quarter ellipse without platform math-library imports. Sampling
+    // one coordinate and deriving the other from x²/a² + y²/b² = 1 is enough
+    // at this fixed 20×28 bitmap resolution.
+    for step in 0...28 {
+      let unitY = Double(step) / 28
+      let unitX = (max(0, 1 - unitY * unitY)).squareRoot()
+      let x = right ? 19 - Int(unitX * 9.5 + 0.5) : Int(unitX * 9.5 + 0.5)
+      let y = down ? Int(unitY * 13.5 + 0.5) : 27 - Int(unitY * 13.5 + 0.5)
+      canvas.fillRect(x - 1, y - 1, x, y)
     }
     return canvas
   }
@@ -605,4 +596,3 @@ private func buildGlyphs() -> [UInt32: Glyph] {
 
   return out
 }
-#endif

@@ -1,7 +1,5 @@
-#if METAL_BACKEND
-
-enum Font20x28 {
-  static let glyphs: [UInt32: Glyph] = [
+public enum Font20x28 {
+  public static let glyphs: [UInt32: Glyph] = [
     0x20: Glyph(rows: [
       0x00000, 0x00000, 0x00000, 0x00000,
       0x00000, 0x00000, 0x00000, 0x00000,
@@ -868,5 +866,3 @@ enum Font20x28 {
     ]),
   ]
 }
-
-#endif

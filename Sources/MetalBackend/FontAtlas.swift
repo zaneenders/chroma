@@ -1,6 +1,7 @@
 #if METAL_BACKEND
 
 import Chroma
+import ChromaFont
 import Metal
 
 struct FontAtlas {

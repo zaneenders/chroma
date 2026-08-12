@@ -6,6 +6,7 @@ let package = Package(
   platforms: [.macOS(.v14)],
   products: [
     .library(name: "Chroma", targets: ["Chroma"]),
+    .library(name: "ChromaFont", targets: ["ChromaFont"]),
     .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
     .library(name: "MetalBackend", targets: ["MetalBackend"]),
     .executable(name: "ChromaDemo", targets: ["ChromaDemo"]),
@@ -43,13 +44,14 @@ let package = Package(
     ),
     .testTarget(
       name: "ChromaTests",
-      dependencies: ["Chroma", "HeadlessBackend"]
+      dependencies: ["Chroma", "ChromaFont", "HeadlessBackend"]
     ),
     .target(name: "Chroma"),
+    .target(name: "ChromaFont"),
     .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
     .target(
       name: "MetalBackend",
-      dependencies: ["Chroma"],
+      dependencies: ["Chroma", "ChromaFont"],
       exclude: ["Shaders"],
       swiftSettings: [
         .define("METAL_TRAIT", .when(traits: ["MetalBackend"])),
@@ -61,7 +63,7 @@ let package = Package(
     ),
     .target(
       name: "WaylandBackend",
-      dependencies: ["Chroma"],
+      dependencies: ["Chroma", "ChromaFont"],
       swiftSettings: [
         .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
       ]
