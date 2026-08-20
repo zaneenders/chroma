@@ -29,14 +29,14 @@ struct TextInputTests {
 
   private func enterInsertMode(_ ctx: Interaction, text: inout String) {
     frame(ctx, text: &text)
-    frame(ctx, input: InputState(commands: [.activate]), text: &text)
+    frame(ctx, input: InputState(commands: [.action(.activate)]), text: &text)
   }
 
   @Test func activateEntersInsertMode() {
     let ctx = Interaction()
     var text = "abc"
     frame(ctx, text: &text)
-    let state = frame(ctx, input: InputState(commands: [.activate]), text: &text)
+    let state = frame(ctx, input: InputState(commands: [.action(.activate)]), text: &text)
     #expect(state.editing)
     #expect(state.caretOffset == 3)
     #expect(ctx.isTextEditing)
@@ -47,7 +47,7 @@ struct TextInputTests {
     let ctx = Interaction()
     var text = "hi"
     frame(ctx, text: &text)
-    frame(ctx, input: InputState(commands: [.down]), text: &text)
+    frame(ctx, input: InputState(commands: nav(.down)), text: &text)
     frame(
       ctx,
       input: InputState(
@@ -204,7 +204,7 @@ struct TextInputTests {
     let ctx = Interaction()
     var text = "abc"
     enterInsertMode(ctx, text: &text)
-    let state = frame(ctx, input: InputState(commands: [.down]), text: &text)
+    let state = frame(ctx, input: InputState(commands: nav(.down)), text: &text)
     #expect(ctx.selection == [0, 1], "the cursor moved to the sibling leaf")
     #expect(!state.editing)
     #expect(!ctx.isTextEditing)

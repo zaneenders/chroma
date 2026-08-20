@@ -24,7 +24,7 @@ final class ChromaInputView: MTKView {
       pointerPressed: pressedEdge,
       pointerReleased: releasedEdge,
       scrollDelta: scroll,
-      semanticCommands: pendingCommands,
+      commands: pendingCommands,
       textEvents: pendingTextEvents
     )
     pressedEdge = false
@@ -131,6 +131,9 @@ final class ChromaInputView: MTKView {
   private func handlePlatformCommand(_ command: Command) -> Bool {
     guard case .editing(let editing) = command else { return false }
     switch editing {
+    case .insert(let text):
+      guard interaction.mode == .editing else { return true }
+      pendingTextEvents.append(.insert(text))
     case .copy:
       guard let text = interaction.copyText(), !text.isEmpty else { return true }
       NSPasteboard.general.clearContents()

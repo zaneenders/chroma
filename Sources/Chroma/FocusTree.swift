@@ -105,16 +105,18 @@ extension FocusNode {
     return result
   }
 
-  func macro(from: [Int], to: [Int]) -> [UICommand] {
+  func macro(from: [Int], to: [Int]) -> [Command] {
     var common = 0
     while common < min(from.count, to.count) && from[common] == to[common] {
       common += 1
     }
-    var commands = [UICommand](repeating: .out, count: from.count - common)
+    var commands = [Command](repeating: .navigation(.out), count: from.count - common)
     for level in common..<to.count {
-      commands.append(.in)
-      let forward: UICommand = node(at: Array(to.prefix(level)))?.axis == .horizontal ? .right : .down
-      commands.append(contentsOf: [UICommand](repeating: forward, count: to[level]))
+      commands.append(.navigation(.in))
+      let forward: Command =
+        node(at: Array(to.prefix(level)))?.axis == .horizontal
+        ? .navigation(.right) : .navigation(.down)
+      commands.append(contentsOf: [Command](repeating: forward, count: to[level]))
     }
     return commands
   }

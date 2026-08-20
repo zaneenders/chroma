@@ -50,7 +50,7 @@ public struct ScrollView: PrimitiveBlock {
       horizontalOffset -= interaction.input.scrollDelta.x
     }
 
-    for command in interaction.input.semanticCommands {
+    for command in interaction.input.commands {
       switch command {
       case .navigation(.pageUp): offset -= rect.size.height
       case .navigation(.pageDown): offset += rect.size.height

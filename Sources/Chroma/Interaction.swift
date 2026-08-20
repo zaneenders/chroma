@@ -15,7 +15,7 @@ package final class Interaction {
 
   package internal(set) var selection: [Int]?
 
-  package internal(set) var lastMacro: [UICommand] = []
+  package internal(set) var lastMacro: [Command] = []
 
   package var groupCursorColor = Color(r: 0.35, g: 0.6, b: 1, a: 0.4)
 
@@ -114,7 +114,7 @@ package final class Interaction {
   package func beginFrame(input: InputState) {
     self.input = input
     activatePending = false
-    pendingCommands = input.semanticCommands
+    pendingCommands = input.commands
     handledCommandIndices = []
     routePendingCommands()
     pendingCommands = []
@@ -164,7 +164,7 @@ package final class Interaction {
       if let pressedLeaf, let hovered, hovered == selection,
         tree.node(at: hovered)?.leafID == pressedLeaf
       {
-        apply(.activate)
+        apply(.action(.activate))
       }
       self.pressedLeaf = nil
     }
@@ -172,9 +172,9 @@ package final class Interaction {
     let wheelIsOverScrollView = scrollViewports.contains { $0.contains(input.pointerPosition) }
     if !wheelIsOverScrollView {
       if input.scrollDelta.y > 0 {
-        apply(.up)
+        apply(.navigation(.up))
       } else if input.scrollDelta.y < 0 {
-        apply(.down)
+        apply(.navigation(.down))
       }
     }
 
@@ -259,10 +259,6 @@ extension Interaction {
     prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
   }
 
-  func apply(_ command: UICommand) {
-    apply(command.command)
-  }
-
   func routePendingCommands() {
     for (index, command) in pendingCommands.enumerated() where !handledCommandIndices.contains(index) {
       let handlers =
@@ -309,9 +305,9 @@ extension Interaction {
       }
     case .pageUp, .pageDown:
       return
-    case .home, .first:
+    case .home:
       self.selection = tree.firstLeafPath()
-    case .end, .last:
+    case .end:
       self.selection = tree.lastLeafPath()
     case .next, .previous:
       cycleLeaf(forward: command == .next)

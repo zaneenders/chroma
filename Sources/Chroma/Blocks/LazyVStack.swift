@@ -51,7 +51,7 @@ public struct LazyVStack: PrimitiveBlock {
     if rect.contains(interaction.input.pointerPosition) {
       offset -= interaction.input.scrollDelta.y
     }
-    for command in interaction.input.semanticCommands {
+    for command in interaction.input.commands {
       switch command {
       case .navigation(.pageUp): offset -= rect.size.height
       case .navigation(.pageDown): offset += rect.size.height

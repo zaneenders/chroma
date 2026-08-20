@@ -29,6 +29,10 @@ extension Interaction {
       var changed = false
       eventLoop: for event in input.textEvents {
         switch event {
+        case .copy, .paste:
+          // TODO: is continue the best way to handle this?
+          // Backends own the pasteboard and intercept these before delivery.
+          continue
         case .insert(let inserted):
           if let range = textSelectionRange {
             characters.removeSubrange(range)

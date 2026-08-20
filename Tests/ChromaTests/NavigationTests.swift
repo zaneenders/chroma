@@ -2,6 +2,11 @@ import Testing
 
 @testable import Chroma
 
+/// Shorthand for building navigation command lists in interaction tests.
+func nav(_ commands: NavigationCommand...) -> [Command] {
+  commands.map { .navigation($0) }
+}
+
 @MainActor
 struct NavigationTests {
 
@@ -33,7 +38,7 @@ struct NavigationTests {
     return states
   }
 
-  private func select(_ ctx: Interaction, _ commands: [UICommand]) {
+  private func select(_ ctx: Interaction, _ commands: [Command]) {
     frame(ctx)
     for command in commands {
       frame(ctx, input: InputState(commands: [command]))
@@ -48,41 +53,41 @@ struct NavigationTests {
 
   @Test func verticalMovementWalksAndStops() {
     let ctx = Interaction()
-    select(ctx, [.down])
+    select(ctx, nav(.down))
     #expect(ctx.selection == [0, 1])
-    select(ctx, [.down])
+    select(ctx, nav(.down))
     #expect(ctx.selection == [0, 2], "the horizontal row group is a sibling")
-    select(ctx, [.down])
+    select(ctx, nav(.down))
     #expect(ctx.selection == [0, 2], "past the last sibling the cursor stays put")
-    select(ctx, [.up, .up])
+    select(ctx, nav(.up, .up))
     #expect(ctx.selection == [0, 0])
-    select(ctx, [.up])
+    select(ctx, nav(.up))
     #expect(ctx.selection == [0, 0], "before the first sibling the cursor stays put")
   }
 
   @Test func inAndOutCrossLevels() {
     let ctx = Interaction()
-    select(ctx, [.down, .down])
+    select(ctx, nav(.down, .down))
     #expect(ctx.selection == [0, 2])
-    select(ctx, [.in])
+    select(ctx, nav(.in))
     #expect(ctx.selection == [0, 2, 0])
-    select(ctx, [.out])
+    select(ctx, nav(.out))
     #expect(ctx.selection == [0, 2])
-    select(ctx, [.out, .out])
+    select(ctx, nav(.out, .out))
     #expect(ctx.selection == [], "out climbs to the root group")
-    select(ctx, [.out])
+    select(ctx, nav(.out))
     #expect(ctx.selection == [], "out at the root stays put")
   }
 
   @Test func horizontalMovementBubblesAndStops() {
     let ctx = Interaction()
-    select(ctx, [.down, .down, .in, .right])
+    select(ctx, nav(.down, .down, .in, .right))
     #expect(ctx.selection == [0, 2, 1])
-    select(ctx, [.left])
+    select(ctx, nav(.left))
     #expect(ctx.selection == [0, 2, 0], "a plain sibling move still applies within the row")
-    select(ctx, [.right, .right])
+    select(ctx, nav(.right, .right))
     #expect(ctx.selection == [0, 2, 1], "past the last sibling the cursor stays put")
-    select(ctx, [.down])
+    select(ctx, nav(.down))
     #expect(
       ctx.selection == [0, 2, 1],
       "down bubbles to the root, finds no next sibling, and stays put")
@@ -108,11 +113,11 @@ struct NavigationTests {
     }
     frame(ctx, draw: drawTwoRows)
     #expect(ctx.selection == [0, 0, 0], "cursor starts on a")
-    frame(ctx, input: InputState(commands: [.down]), draw: drawTwoRows)
+    frame(ctx, input: InputState(commands: nav(.down)), draw: drawTwoRows)
     #expect(ctx.selection == [0, 1, 0], "down bubbled out of row1 into row2's first leaf")
-    frame(ctx, input: InputState(commands: [.up]), draw: drawTwoRows)
+    frame(ctx, input: InputState(commands: nav(.up)), draw: drawTwoRows)
     #expect(ctx.selection == [0, 0, 1], "up bubbled back into row1's edge leaf in document order")
-    frame(ctx, input: InputState(commands: [.down]), draw: drawTwoRows)
+    frame(ctx, input: InputState(commands: nav(.down)), draw: drawTwoRows)
     #expect(ctx.selection == [0, 1, 0], "down from b also lands on row2's first leaf")
   }
 
@@ -135,20 +140,20 @@ struct NavigationTests {
       ctx.endGroup()
     }
     frame(ctx, draw: panes)
-    frame(ctx, input: InputState(commands: [.down]), draw: panes)
+    frame(ctx, input: InputState(commands: nav(.down)), draw: panes)
     #expect(ctx.selection == [0, 0, 1])
-    frame(ctx, input: InputState(commands: [.right]), draw: panes)
+    frame(ctx, input: InputState(commands: nav(.right)), draw: panes)
     #expect(ctx.selection == [0, 1, 0], "right crosses from the sidebar to content")
-    frame(ctx, input: InputState(commands: [.left]), draw: panes)
+    frame(ctx, input: InputState(commands: nav(.left)), draw: panes)
     #expect(ctx.selection == [0, 0, 1], "left returns to the sidebar edge")
   }
 
   @Test func directionFromTheRootStops() {
     let ctx = Interaction()
     frame(ctx)
-    select(ctx, [.out, .out])
+    select(ctx, nav(.out, .out))
     #expect(ctx.selection == [])
-    select(ctx, [.down, .up, .left, .right])
+    select(ctx, nav(.down, .up, .left, .right))
     #expect(ctx.selection == [])
   }
 
@@ -156,33 +161,33 @@ struct NavigationTests {
     let ctx = Interaction()
     frame(ctx)
     #expect(ctx.selection == [0, 0])
-    select(ctx, [.nextLeaf])
+    select(ctx, nav(.next))
     #expect(ctx.selection == [0, 1])
-    select(ctx, [.nextLeaf])
+    select(ctx, nav(.next))
     #expect(ctx.selection == [0, 2, 0], "cycling descends into groups")
-    select(ctx, [.nextLeaf])
+    select(ctx, nav(.next))
     #expect(ctx.selection == [0, 2, 1])
-    select(ctx, [.nextLeaf])
+    select(ctx, nav(.next))
     #expect(ctx.selection == [0, 0], "wrapped past the last leaf")
-    select(ctx, [.previousLeaf])
+    select(ctx, nav(.previous))
     #expect(ctx.selection == [0, 2, 1], "wrapped back to the last leaf")
   }
 
   @Test func leafCyclingFromAGroup() {
     let ctx = Interaction()
-    select(ctx, [.down, .down])
+    select(ctx, nav(.down, .down))
     #expect(ctx.selection == [0, 2], "cursor on the row group")
-    select(ctx, [.nextLeaf])
+    select(ctx, nav(.next))
     #expect(ctx.selection == [0, 2, 0])
-    select(ctx, [.out])
-    select(ctx, [.previousLeaf])
+    select(ctx, nav(.out))
+    select(ctx, nav(.previous))
     #expect(ctx.selection == [0, 1])
   }
 
   @Test func activateClicksSelectedLeaf() {
     let ctx = Interaction()
-    select(ctx, [.down])
-    let states = frame(ctx, input: InputState(commands: [.activate]))
+    select(ctx, nav(.down))
+    let states = frame(ctx, input: InputState(commands: [.action(.activate)]))
     #expect(states[WidgetID("b")]?.clicked == true)
     #expect(states[WidgetID("b")]?.hovered == true)
     #expect(states[WidgetID("a")]?.clicked == false)
@@ -191,16 +196,16 @@ struct NavigationTests {
 
   @Test func inActivatesSelectedLeaf() {
     let ctx = Interaction()
-    select(ctx, [.down])
-    let states = frame(ctx, input: InputState(commands: [.in]))
+    select(ctx, nav(.down))
+    let states = frame(ctx, input: InputState(commands: nav(.in)))
     #expect(states[WidgetID("b")]?.clicked == true)
     #expect(states[WidgetID("a")]?.clicked == false)
   }
 
   @Test func activateOnAGroupDoesNotClick() {
     let ctx = Interaction()
-    select(ctx, [.down, .down])
-    let states = frame(ctx, input: InputState(commands: [.activate]))
+    select(ctx, nav(.down, .down))
+    let states = frame(ctx, input: InputState(commands: [.action(.activate)]))
     #expect(states.values.allSatisfy { !$0.clicked })
   }
 
@@ -209,7 +214,7 @@ struct NavigationTests {
     frame(ctx)
     frame(ctx, input: InputState(pointerPosition: Point(x: 75, y: 50)))
     #expect(ctx.selection == [0, 2, 1])
-    #expect(ctx.lastMacro == [.out, .in, .down, .down, .in, .right])
+    #expect(ctx.lastMacro == nav(.out, .in, .down, .down, .in, .right))
   }
 
   @Test func parkedPointerDoesNotFightKeyboard() {
@@ -219,7 +224,7 @@ struct NavigationTests {
     #expect(ctx.selection == [0, 2, 1])
     frame(
       ctx,
-      input: InputState(pointerPosition: Point(x: 75, y: 50), commands: [.out, .out]))
+      input: InputState(pointerPosition: Point(x: 75, y: 50), commands: nav(.out, .out)))
     #expect(ctx.selection == [0], "the still pointer did not re-assert its hover")
   }
 
@@ -289,7 +294,7 @@ struct NavigationTests {
 
   @Test func cursorFollowsWidgetIDAcrossRelayout() {
     let ctx = Interaction()
-    select(ctx, [.down])
+    select(ctx, nav(.down))
     #expect(ctx.selection == [0, 1])
     frame(ctx) { ctx, states in
       ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 80))
@@ -306,7 +311,7 @@ struct NavigationTests {
 
   @Test func focusFallsBackPredictablyAfterCompleteTreeReplacement() {
     let ctx = Interaction()
-    select(ctx, [.down])
+    select(ctx, nav(.down))
     #expect(ctx.selection == [0, 1])
 
     frame(ctx) { ctx, states in
@@ -322,7 +327,7 @@ struct NavigationTests {
 
   @Test func cursorClampsWhenLeafDisappears() {
     let ctx = Interaction()
-    select(ctx, [.down, .down, .in, .right])
+    select(ctx, nav(.down, .down, .in, .right))
     #expect(ctx.selection == [0, 2, 1])
     frame(ctx) { ctx, states in
       ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
@@ -337,7 +342,7 @@ struct NavigationTests {
 
   @Test func scrollMovesTheCursor() {
     let ctx = Interaction()
-    select(ctx, [.down, .down])
+    select(ctx, nav(.down, .down))
     #expect(ctx.selection == [0, 2])
     frame(ctx, input: InputState(scrollDelta: Point(x: 0, y: 1)))
     #expect(ctx.selection == [0, 1])
