@@ -3,7 +3,7 @@ public enum DrawCommand: Equatable, Sendable {
   case strokeRect(rect: Rect, width: Float, color: Color)
   case fillRoundedRect(rect: Rect, radii: CornerRadii, color: Color)
   case strokeRoundedRect(rect: Rect, radii: CornerRadii, width: Float, color: Color)
-  case text(position: Point, text: String, color: Color, scale: Float)
+  case text(position: Point, text: String, color: Color, scale: Float, face: FontFace)
   case pushClip(Rect)
   case popClip
 }

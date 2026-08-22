@@ -29,8 +29,15 @@ public struct DrawList: Sendable {
     commands.append(.strokeRoundedRect(rect: rect, radii: radii, width: width, color: color))
   }
 
-  public mutating func text(_ text: String, at position: Point, color: Color, scale: Float = 1) {
-    commands.append(.text(position: position, text: text, color: color, scale: scale))
+  public mutating func text(
+    _ text: String,
+    at position: Point,
+    color: Color,
+    scale: Float = 1,
+    face: FontFace = .readable
+  ) {
+    commands.append(
+      .text(position: position, text: text, color: color, scale: scale, face: face))
   }
 
   public mutating func pushClip(_ rect: Rect) {

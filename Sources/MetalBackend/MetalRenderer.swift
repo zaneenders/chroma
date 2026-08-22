@@ -10,7 +10,9 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
   private let queue: MTLCommandQueue
   private let shapePipeline: MTLRenderPipelineState
   private let textPipeline: MTLRenderPipelineState
+  private let readableTextPipeline: MTLRenderPipelineState
   private let fontAtlas: FontAtlas
+  private let readableFontAtlas: ReadableFontAtlas
   private let mtkView: ChromaInputView
 
   public let name = "Metal"
@@ -53,6 +55,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     self.device = device
     self.queue = queue
     self.fontAtlas = try FontAtlas(device: device)
+    self.readableFontAtlas = try ReadableFontAtlas(device: device)
 
     let mtkView = ChromaInputView(frame: frame, device: device)
     mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
@@ -85,8 +88,16 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       vertex: "text_vertex",
       fragment: "text_fragment"
     )
+    let readableTextPipeline = try Self.makePipeline(
+      device: device,
+      pixelFormat: mtkView.colorPixelFormat,
+      library: library,
+      vertex: "text_vertex",
+      fragment: "readable_text_fragment"
+    )
     self.shapePipeline = shapePipeline
     self.textPipeline = textPipeline
+    self.readableTextPipeline = readableTextPipeline
 
     super.init()
     mtkView.delegate = self
@@ -118,10 +129,11 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
     let window = NSWindow(
       contentRect: mtkView.frame,
-      styleMask: [.titled, .closable, .resizable],
+      styleMask: [.titled, .closable, .miniaturizable, .resizable],
       backing: .buffered,
       defer: false
     )
+    window.collectionBehavior.insert(.fullScreenPrimary)
     window.title = title
     window.contentView = mtkView
     window.delegate = self
@@ -249,7 +261,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
 
   private enum Batch {
     case shape(instanceOffset: Int, instanceCount: Int)
-    case text(instanceOffset: Int, instanceCount: Int)
+    case text(instanceOffset: Int, instanceCount: Int, face: FontFace)
     case pushClip(Rect)
     case popClip
   }
@@ -271,6 +283,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     var batches: [Batch] = []
     var shapeStart: Int?
     var textStart: Int?
+    var textFace: FontFace?
 
     func closeShapes() {
       guard let start = shapeStart else { return }
@@ -283,9 +296,14 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     func closeText() {
       guard let start = textStart else { return }
       if textInstances.count > start {
-        batches.append(.text(instanceOffset: start, instanceCount: textInstances.count - start))
+        batches.append(
+          .text(
+            instanceOffset: start,
+            instanceCount: textInstances.count - start,
+            face: textFace ?? .readable))
       }
       textStart = nil
+      textFace = nil
     }
 
     func appendShape(_ rect: Rect, radii requestedRadii: CornerRadii, borderWidth: Float, color: Color) {
@@ -324,14 +342,27 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
         closeText()
         if shapeStart == nil { shapeStart = shapeInstances.count }
         appendShape(rect, radii: radii, borderWidth: width, color: color)
-      case .text(let position, let text, let color, let scale):
+      case .text(let position, let text, let color, let scale, let face):
         closeShapes()
-        if textStart == nil { textStart = textInstances.count }
         let glyphSize = SIMD2<Float>(metrics.glyphWidth, metrics.glyphHeight) * scale
-        let advance = metrics.cellAdvance * scale
+        let advance =
+          (face == .readable ? metrics.cellAdvance : metrics.displayCellAdvance) * scale
         var pen = SIMD2<Float>(position.x, position.y)
         for character in text {
-          let (u0, v0, u1, v1) = fontAtlas.glyphUV(character)
+          // The readable CoreText atlas intentionally covers printable ASCII.
+          // Route arrows, diamonds, command keys, bullets, and other UI glyphs
+          // through the complete bitmap atlas instead of showing '?'.
+          let glyphFace: FontFace =
+            face == .readable && !readableFontAtlas.contains(character) ? .display : face
+          if textFace != nil, textFace != glyphFace { closeText() }
+          if textStart == nil {
+            textStart = textInstances.count
+            textFace = glyphFace
+          }
+          let (u0, v0, u1, v1) =
+            glyphFace == .readable
+            ? readableFontAtlas.glyphUV(character)
+            : fontAtlas.glyphUV(character)
           textInstances.append(
             TextInstance(
               dst_p0: ndc(pen.x, pen.y),
@@ -373,7 +404,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
         .update(from: textInstances, count: textInstances.count)
     }
 
-    enc.setFragmentTexture(fontAtlas.texture, index: 0)
     var scissorStack: [Rect] = []
     let viewportRect = Rect(origin: .zero, size: viewport)
 
@@ -391,9 +421,12 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
           vertexStart: 0,
           vertexCount: 4,
           instanceCount: instanceCount)
-      case .text(let instanceOffset, let instanceCount):
+      case .text(let instanceOffset, let instanceCount, let face):
         guard let textBuffer else { continue }
-        enc.setRenderPipelineState(textPipeline)
+        enc.setRenderPipelineState(face == .readable ? readableTextPipeline : textPipeline)
+        enc.setFragmentTexture(
+          face == .readable ? readableFontAtlas.texture : fontAtlas.texture,
+          index: 0)
         enc.setVertexBuffer(
           textBuffer,
           offset: instanceOffset * MemoryLayout<TextInstance>.stride,

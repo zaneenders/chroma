@@ -8,7 +8,7 @@ struct LayoutTests {
 
   private func textPositions(in list: DrawList) -> [(String, Float)] {
     list.commands.compactMap { command in
-      guard case .text(let position, let text, _, _) = command else { return nil }
+      guard case .text(let position, let text, _, _, _) = command else { return nil }
       return (text, position.y)
     }
   }
@@ -205,11 +205,11 @@ struct LayoutTests {
     interaction.endFrame()
 
     let horizontalText = horizontalList.commands.compactMap { command -> (String, Point)? in
-      guard case .text(let position, let text, _, _) = command else { return nil }
+      guard case .text(let position, let text, _, _, _) = command else { return nil }
       return (text, position)
     }
     let verticalText = verticalList.commands.compactMap { command -> (String, Point)? in
-      guard case .text(let position, let text, _, _) = command else { return nil }
+      guard case .text(let position, let text, _, _, _) = command else { return nil }
       return (text, position)
     }
 
