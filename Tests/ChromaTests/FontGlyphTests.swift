@@ -38,6 +38,30 @@ struct FontGlyphTests {
     }
   }
 
+  @Test func coversKeyboardAndInterfaceSymbols() {
+    let required: [UInt32] = [
+      0x2318,  // ⌘ Command
+      0x2325,  // ⌥ Option
+      0x2303,  // ⌃ Control
+      0x21E7,  // ⇧ Shift
+      0x21B5,  // ↵ Return
+      0x2302,  // ⌂ Home/folder
+      0x25A0,  // ■ Stop
+      0x25C7,  // ◇ Outline diamond
+      0x23F5,  // ⏵ Play
+      0x23F9,  // ⏹ Stop control
+    ]
+    for codepoint in required {
+      #expect(glyphs[codepoint] != nil)
+    }
+  }
+
+  @Test func coversPrintableASCII() {
+    for codepoint in UInt32(0x20)...UInt32(0x7E) {
+      #expect(glyphs[codepoint] != nil)
+    }
+  }
+
   @Test func roundedCornersConnectTheSameEdgesAsTheirSquareEquivalents() throws {
     // ╭ ╮ ╯ ╰ must open toward the same cell edges as ┌ ┐ ┘ └: a "down"
     // corner keeps all ink in the bottom half and touches the bottom edge,

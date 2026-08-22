@@ -487,6 +487,83 @@ private func buildGlyphs() -> [UInt32: Glyph] {
   }
   out[0x25C6] = diamond.glyph  // ◆
 
+  var whiteDiamond = Canvas()
+  whiteDiamond.line(10, 5, 18, 14)
+  whiteDiamond.line(18, 14, 10, 23)
+  whiteDiamond.line(10, 23, 2, 14)
+  whiteDiamond.line(2, 14, 10, 5)
+  out[0x25C7] = whiteDiamond.glyph  // ◇
+
+  var blackSquare = Canvas()
+  blackSquare.fillRect(4, 8, 16, 20)
+  out[0x25A0] = blackSquare.glyph  // ■
+
+  // MARK: Keyboard and interface symbols
+  // These are common in shortcut labels and native macOS interfaces. Keeping
+  // them in the bitmap atlas lets clients use concise labels without getting a
+  // replacement box on non-AppKit renderers.
+  var command = Canvas()
+  command.ring(centerX: 6, centerY: 9, radius: 4, thickness: 2)
+  command.ring(centerX: 14, centerY: 9, radius: 4, thickness: 2)
+  command.ring(centerX: 6, centerY: 19, radius: 4, thickness: 2)
+  command.ring(centerX: 14, centerY: 19, radius: 4, thickness: 2)
+  command.fillRect(6, 8, 14, 10)
+  command.fillRect(6, 18, 14, 20)
+  command.fillRect(5, 9, 7, 19)
+  command.fillRect(13, 9, 15, 19)
+  out[0x2318] = command.glyph  // ⌘
+
+  var home = Canvas()
+  home.line(2, 14, 10, 6)
+  home.line(10, 6, 18, 14)
+  home.line(4, 12, 4, 23)
+  home.line(4, 23, 16, 23)
+  home.line(16, 23, 16, 12)
+  home.line(8, 23, 8, 17)
+  home.line(8, 17, 12, 17)
+  home.line(12, 17, 12, 23)
+  out[0x2302] = home.glyph  // ⌂
+
+  var returnArrow = Canvas()
+  returnArrow.fillRect(5, 13, 17, 15)
+  returnArrow.fillRect(15, 7, 17, 15)
+  returnArrow.line(5, 14, 10, 9, thickness: 2)
+  returnArrow.line(5, 14, 10, 19, thickness: 2)
+  out[0x21B5] = returnArrow.glyph  // ↵
+  out[0x23CE] = returnArrow.glyph  // ⏎
+
+  var option = Canvas()
+  option.fillRect(2, 7, 7, 9)
+  option.line(7, 8, 13, 20, thickness: 2)
+  option.fillRect(13, 19, 18, 21)
+  option.fillRect(12, 7, 18, 9)
+  out[0x2325] = option.glyph  // ⌥
+
+  var control = Canvas()
+  control.line(4, 17, 10, 10, thickness: 2)
+  control.line(10, 10, 16, 17, thickness: 2)
+  out[0x2303] = control.glyph  // ⌃
+
+  var shift = Canvas()
+  shift.line(3, 14, 10, 6, thickness: 2)
+  shift.line(10, 6, 17, 14, thickness: 2)
+  shift.line(3, 14, 7, 14, thickness: 2)
+  shift.fillRect(7, 14, 7, 22)
+  shift.fillRect(7, 22, 13, 22)
+  shift.fillRect(13, 14, 13, 22)
+  shift.fillRect(13, 14, 17, 14)
+  out[0x21E7] = shift.glyph  // ⇧
+
+  var play = Canvas()
+  for x in 4...16 {
+    let half = Int((Double(x - 4) / 12.0) * 8 + 0.5)
+    play.fillRect(x, 14 - half, x, 14 + half)
+  }
+  out[0x23F5] = play.glyph  // ⏵
+  var stop = Canvas()
+  stop.fillRect(4, 8, 16, 20)
+  out[0x23F9] = stop.glyph  // ⏹
+
   // MARK: Common Nerd Font symbols used by LazyVim and terminal prompts
   // These remain native 20×28 bitmaps in the Metal atlas; no system font is
   // consulted at build time or runtime.
