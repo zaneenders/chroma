@@ -54,6 +54,8 @@ public final class WaylandRenderer: Renderer {
   private var fontTexture: GLuint = 0
   private var fontAtlasWidth: Float = 1
   private var fontCellWidth: Float = 1
+  private var readableFontTexture: GLuint = 0
+  private var readableFontAtlas: ReadableFontAtlas?
   private var resolutionUniform: GLint = -1
 
   private static var compositorInterface: wl_interface = unsafe wl_compositor_interface
@@ -71,7 +73,7 @@ public final class WaylandRenderer: Renderer {
     do {
       try setUpWayland(title: title)
       try setUpEGL()
-      setUpGL()
+      try setUpGL()
       drawFrame()
 
       while running, let display, unsafe wl_display_dispatch(display) != -1 {
@@ -339,7 +341,7 @@ public final class WaylandRenderer: Renderer {
     return shader
   }
 
-  private func setUpGL() {
+  private func setUpGL() throws {
     let vertex = compileShader(GLenum(GL_VERTEX_SHADER), source: vertexShader)
     let fragment = compileShader(GLenum(GL_FRAGMENT_SHADER), source: fragmentShader)
     program = glCreateProgram()
@@ -381,6 +383,13 @@ public final class WaylandRenderer: Renderer {
 
     whiteTexture = makeTexture(width: 1, height: 1, pixels: [255, 255, 255, 255])
     makeFontTexture()
+    let readableFontAtlas = try ReadableFontAtlas()
+    self.readableFontAtlas = readableFontAtlas
+    readableFontTexture = makeTexture(
+      width: readableFontAtlas.width,
+      height: readableFontAtlas.height,
+      pixels: readableFontAtlas.pixels
+    )
     resolutionUniform = unsafe glGetUniformLocation(program, "uResolution")
     glUseProgram(program)
     glUniform1i(unsafe glGetUniformLocation(program, "uTexture"), 0)
@@ -505,8 +514,23 @@ public final class WaylandRenderer: Renderer {
     let metrics = FontMetrics()
     var x = position.x
     for character in text {
-      let scalar = FontAtlas.scalar(for: character)
-      let offset = Float(scalar - FontAtlas.firstScalar) * fontCellWidth
+      let useReadableFont = face == .readable && readableFontAtlas?.contains(character) == true
+      let uv: (Float, Float, Float, Float)
+      let texture: GLuint
+      if useReadableFont, let readableFontAtlas {
+        uv = readableFontAtlas.uv(for: character)
+        texture = readableFontTexture
+      } else {
+        let scalar = FontAtlas.scalar(for: character)
+        let offset = Float(scalar - FontAtlas.firstScalar) * fontCellWidth
+        uv = (
+          offset / fontAtlasWidth,
+          0,
+          (offset + metrics.glyphWidth) / fontAtlasWidth,
+          1
+        )
+        texture = fontTexture
+      }
       draw(
         Rect(
           x: x,
@@ -515,9 +539,9 @@ public final class WaylandRenderer: Renderer {
           height: metrics.glyphHeight * scale
         ),
         color: color,
-        texture: fontTexture,
-        uv0: (offset / fontAtlasWidth, 0),
-        uv1: ((offset + metrics.glyphWidth) / fontAtlasWidth, 1)
+        texture: texture,
+        uv0: (uv.0, uv.1),
+        uv1: (uv.2, uv.3)
       )
       x += metrics.advance(for: face) * scale
     }
@@ -549,6 +573,9 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func cleanup() {
+    if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
+    if readableFontTexture != 0 { unsafe glDeleteTextures(1, &readableFontTexture) }
+    if whiteTexture != 0 { unsafe glDeleteTextures(1, &whiteTexture) }
     if program != 0 { glDeleteProgram(program) }
     if let eglDisplay {
       _ = unsafe eglMakeCurrent(eglDisplay, nil, nil, nil)

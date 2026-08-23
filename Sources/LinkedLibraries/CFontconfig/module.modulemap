@@ -1,0 +1,5 @@
+module CFontconfig [system] {
+  header "include/CFontconfig.h"
+  link "fontconfig"
+  export *
+}

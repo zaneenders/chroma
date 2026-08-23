@@ -78,6 +78,8 @@ targets.append(contentsOf: [
     dependencies: [
       "Chroma",
       "ChromaFont",
+      "CFreeType",
+      "CFontconfig",
       "CWaylandClient",
       "CWaylandCursor",
       "CWaylandEGL",
@@ -88,6 +90,16 @@ targets.append(contentsOf: [
     swiftSettings: [
       .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
     ]
+  ),
+  .systemLibrary(
+    name: "CFreeType",
+    path: "Sources/LinkedLibraries/CFreeType",
+    pkgConfig: "freetype2"
+  ),
+  .systemLibrary(
+    name: "CFontconfig",
+    path: "Sources/LinkedLibraries/CFontconfig",
+    pkgConfig: "fontconfig"
   ),
   .systemLibrary(
     name: "CWaylandClient",
