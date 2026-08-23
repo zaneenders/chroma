@@ -128,6 +128,7 @@ targets.append(contentsOf: [
   ),
   .target(
     name: "CWaylandProtocols",
+    dependencies: ["CWaylandClient"],
     path: "Sources/LinkedLibraries/CWaylandProtocols",
     publicHeadersPath: "include"
   ),

@@ -7,6 +7,7 @@ import CWaylandClient
 import CWaylandEGL
 import CWaylandProtocols
 import Foundation
+import Glibc
 
 /// A Wayland window backed by EGL and OpenGL ES 3.
 ///
@@ -38,6 +39,7 @@ public final class WaylandRenderer: Renderer {
 
   private let input = InputAccumulator()
   private let cursor = WaylandCursor()
+  private var minimumRefreshRate: Double = 0
   private var lastFrameTime: Double = 0
   private var smoothedFrameRate: Double = 0
 
@@ -68,24 +70,103 @@ public final class WaylandRenderer: Renderer {
     height = max(1, Int32(size.height))
   }
 
+  package func setMinimumRefreshRate(_ refreshRate: Double) {
+    minimumRefreshRate = refreshRate.isFinite ? max(0, refreshRate) : 0
+  }
 
   public func run(title: String = "Hello Triangle") throws {
     do {
       try setUpWayland(title: title)
+      try waitForInitialConfigure()
+      if !running {
+        cleanup()
+        return
+      }
       try setUpEGL()
       try setUpGL()
       drawFrame()
-
-      while running, let display, unsafe wl_display_dispatch(display) != -1 {
-        // The current Block API is static, but redraw after every event so
-        // configure/expose events and future interaction state are reflected.
-        drawFrame()
-      }
+      try runEventLoop()
     } catch {
       cleanup()
       throw error
     }
     cleanup()
+  }
+
+  private func waitForInitialConfigure() throws {
+    guard let display else { throw WaylandError("Wayland display is unavailable") }
+    while running, !configured {
+      guard unsafe wl_display_dispatch(display) != -1 else {
+        throw WaylandError("display disconnected before initial configure")
+      }
+    }
+  }
+
+  private func runEventLoop() throws {
+    guard let display else { throw WaylandError("Wayland display is unavailable") }
+    let displayFD = unsafe wl_display_get_fd(display)
+    let frameInterval = minimumRefreshRate > 0 ? 1 / minimumRefreshRate : nil
+    var nextFrameTime = frameInterval.map { ProcessInfo.processInfo.systemUptime + $0 }
+
+    while running {
+      while unsafe wl_display_prepare_read(display) != 0 {
+        guard unsafe wl_display_dispatch_pending(display) != -1 else {
+          throw WaylandError("Wayland display dispatch failed")
+        }
+        guard running else { return }
+      }
+
+      let flushResult = unsafe wl_display_flush(display)
+      let wantsWrite = flushResult == -1 && errno == EAGAIN
+      guard flushResult != -1 || wantsWrite else {
+        unsafe wl_display_cancel_read(display)
+        throw WaylandError("Wayland display flush failed")
+      }
+
+      let timeout = pollTimeout(until: nextFrameTime)
+      let events = Int16(POLLIN) | (wantsWrite ? Int16(POLLOUT) : 0)
+      var descriptor = pollfd(fd: displayFD, events: events, revents: 0)
+      let result = unsafe poll(&descriptor, 1, timeout)
+      if result < 0 {
+        unsafe wl_display_cancel_read(display)
+        if errno == EINTR { continue }
+        throw WaylandError("polling the Wayland display failed")
+      }
+
+      if result > 0, descriptor.revents & Int16(POLLIN) != 0 {
+        guard unsafe wl_display_read_events(display) != -1 else {
+          throw WaylandError("reading Wayland events failed")
+        }
+        guard unsafe wl_display_dispatch_pending(display) != -1 else {
+          throw WaylandError("Wayland display dispatch failed")
+        }
+        if running { drawFrame() }
+      } else {
+        unsafe wl_display_cancel_read(display)
+        let failures = Int16(POLLERR | POLLHUP | POLLNVAL)
+        if result > 0, descriptor.revents & failures != 0 {
+          throw WaylandError("Wayland display became unavailable")
+        }
+        if wantsWrite, descriptor.revents & Int16(POLLOUT) != 0 {
+          guard unsafe wl_display_flush(display) != -1 || errno == EAGAIN else {
+            throw WaylandError("Wayland display flush failed")
+          }
+        }
+      }
+
+      if let interval = frameInterval,
+        ProcessInfo.processInfo.systemUptime >= (nextFrameTime ?? 0)
+      {
+        if running { drawFrame() }
+        nextFrameTime = ProcessInfo.processInfo.systemUptime + interval
+      }
+    }
+  }
+
+  private func pollTimeout(until deadline: Double?) -> Int32 {
+    guard let deadline else { return -1 }
+    let remaining = max(0, deadline - ProcessInfo.processInfo.systemUptime)
+    return Int32(min(remaining * 1_000, Double(Int32.max)).rounded(.up))
   }
 
   // MARK: Wayland
@@ -269,7 +350,10 @@ public final class WaylandRenderer: Renderer {
     configure: configureCallback,
     close: { data, _ in
       guard let data else { return }
-      unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue().running = false
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      guard renderer.running else { return }
+      renderer.running = false
+      renderer.onClose?()
     },
     configure_bounds: { _, _, _, _ in },
     wm_capabilities: { _, _, _ in }
@@ -548,12 +632,14 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func applyClip(_ rect: Rect, viewport: Size) {
-    let x = max(0, Int32(rect.minX.rounded(.down)))
-    let top = max(0, Int32(rect.minY.rounded(.down)))
-    let clipWidth = max(0, min(width - x, Int32(rect.size.width.rounded(.up))))
-    let clipHeight = max(0, min(height - top, Int32(rect.size.height.rounded(.up))))
+    let left = max(0, min(width, Int32(rect.minX.rounded(.down))))
+    let right = max(0, min(width, Int32(rect.maxX.rounded(.up))))
+    let top = max(0, min(height, Int32(rect.minY.rounded(.down))))
+    let bottom = max(0, min(height, Int32(rect.maxY.rounded(.up))))
+    let clipWidth = max(0, right - left)
+    let clipHeight = max(0, bottom - top)
     glEnable(GLenum(GL_SCISSOR_TEST))
-    glScissor(x, max(0, height - top - clipHeight), clipWidth, clipHeight)
+    glScissor(left, height - bottom, clipWidth, clipHeight)
   }
 
   private func updateFrameRate() {

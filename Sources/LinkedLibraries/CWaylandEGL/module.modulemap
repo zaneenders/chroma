@@ -1,5 +1,5 @@
 module CWaylandEGL [system] {
-  header "/usr/include/wayland-egl.h"
+  header "include/CWaylandEGL.h"
   link "wayland-egl"
   export *
 }

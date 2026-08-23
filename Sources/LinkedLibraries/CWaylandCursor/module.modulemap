@@ -1,5 +1,5 @@
 module CWaylandCursor [system] {
-  header "/usr/include/wayland-cursor.h"
+  header "include/CWaylandCursor.h"
   link "wayland-cursor"
   export *
 }
