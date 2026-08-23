@@ -33,6 +33,8 @@ public final class WaylandRenderer: Renderer {
   private var shm: OpaquePointer?
   private var seat: OpaquePointer?
   private var pointer: OpaquePointer?
+  private var wlKeyboard: OpaquePointer?
+  private let keyboard = WaylandKeyboard()
   private var surface: OpaquePointer?
   private var xdgSurface: OpaquePointer?
   private var toplevel: OpaquePointer?
@@ -74,6 +76,10 @@ public final class WaylandRenderer: Renderer {
     minimumRefreshRate = refreshRate.isFinite ? max(0, refreshRate) : 0
   }
 
+  package func setKeyBindings(_ bindings: KeyBindings) {
+    keyboard.setKeyBindings(bindings)
+  }
+
   public func run(title: String = "Hello Triangle") throws {
     do {
       try setUpWayland(title: title)
@@ -109,6 +115,13 @@ public final class WaylandRenderer: Renderer {
     var nextFrameTime = frameInterval.map { ProcessInfo.processInfo.systemUptime + $0 }
 
     while running {
+      // Unlike AppKit, the native Wayland loop does not run Foundation's main
+      // run loop for us. Swift's MainActor jobs use that run loop on Linux, so
+      // give queued Tasks a chance to advance before blocking in poll. Without
+      // this, UI actions can run synchronously but their Task bodies (history
+      // discovery, session bootstrap, streaming updates) never start.
+      _ = RunLoop.main.run(mode: .default, before: Date())
+
       while unsafe wl_display_prepare_read(display) != 0 {
         guard unsafe wl_display_dispatch_pending(display) != -1 else {
           throw WaylandError("Wayland display dispatch failed")
@@ -123,7 +136,7 @@ public final class WaylandRenderer: Renderer {
         throw WaylandError("Wayland display flush failed")
       }
 
-      let timeout = pollTimeout(until: nextFrameTime)
+      let timeout = pollTimeout(until: earliestDeadline(nextFrameTime, keyboard.repeatDeadline))
       let events = Int16(POLLIN) | (wantsWrite ? Int16(POLLOUT) : 0)
       var descriptor = pollfd(fd: displayFD, events: events, revents: 0)
       let result = unsafe poll(&descriptor, 1, timeout)
@@ -154,12 +167,27 @@ public final class WaylandRenderer: Renderer {
         }
       }
 
-      if let interval = frameInterval,
-        ProcessInfo.processInfo.systemUptime >= (nextFrameTime ?? 0)
-      {
-        if running { drawFrame() }
-        nextFrameTime = ProcessInfo.processInfo.systemUptime + interval
+      let now = ProcessInfo.processInfo.systemUptime
+      let repeated = keyboard.dispatchRepeats(editing: interaction.mode == .editing, now: now)
+      var drewFrame = false
+      if repeated, running {
+        drawFrame()
+        drewFrame = true
       }
+
+      if let interval = frameInterval, now >= (nextFrameTime ?? 0) {
+        if running, !drewFrame { drawFrame() }
+        nextFrameTime = now + interval
+      }
+    }
+  }
+
+  private func earliestDeadline(_ first: Double?, _ second: Double?) -> Double? {
+    switch (first, second) {
+    case (.some(let first), .some(let second)): min(first, second)
+    case (.some(let first), .none): first
+    case (.none, .some(let second)): second
+    case (.none, .none): nil
     }
   }
 
@@ -238,19 +266,71 @@ public final class WaylandRenderer: Renderer {
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       let hasPointer = (capabilities & WL_SEAT_CAPABILITY_POINTER.rawValue) != 0
-      if hasPointer {
-        guard renderer.pointer == nil, let seat else { return }
+      if hasPointer, renderer.pointer == nil, let seat {
         renderer.pointer = unsafe wl_seat_get_pointer(seat)
         if let pointer = renderer.pointer {
           unsafe wl_pointer_add_listener(
             pointer, &pointerListener, Unmanaged.passUnretained(renderer).toOpaque())
         }
-      } else if let pointer = renderer.pointer {
+      } else if !hasPointer, let pointer = renderer.pointer {
         unsafe wl_pointer_destroy(pointer)
         renderer.pointer = nil
       }
+      let hasKeyboard = (capabilities & WL_SEAT_CAPABILITY_KEYBOARD.rawValue) != 0
+      if hasKeyboard, renderer.wlKeyboard == nil, let seat {
+        renderer.wlKeyboard = unsafe wl_seat_get_keyboard(seat)
+        if let keyboard = renderer.wlKeyboard {
+          unsafe wl_keyboard_add_listener(
+            keyboard, &keyboardListener, Unmanaged.passUnretained(renderer).toOpaque())
+        }
+      } else if !hasKeyboard, let keyboard = renderer.wlKeyboard {
+        renderer.keyboard.focusLost()
+        unsafe wl_keyboard_destroy(keyboard)
+        renderer.wlKeyboard = nil
+      }
     },
     name: { _, _, _ in }
+  )
+
+  private static var keyboardListener = unsafe wl_keyboard_listener(
+    keymap: { data, _, format, fd, size in
+      guard let data, format == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1.rawValue else {
+        if fd >= 0 { close(fd) }
+        return
+      }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.keyboard.installKeymap(fd: fd, size: size)
+    },
+    enter: { _, _, _, _, _ in },
+    leave: { data, _, _, _ in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.keyboard.focusLost()
+    },
+    key: { data, _, _, _, key, state in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
+        renderer.keyboard.keyPressed(
+          key,
+          editing: renderer.interaction.mode == .editing,
+          now: ProcessInfo.processInfo.systemUptime
+        )
+      } else {
+        renderer.keyboard.keyReleased(key)
+      }
+    },
+    modifiers: { data, _, _, depressed, latched, locked, group in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.keyboard.updateModifiers(
+        depressed: depressed, latched: latched, locked: locked, group: group)
+    },
+    repeat_info: { data, _, rate, delay in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.keyboard.updateRepeatInfo(rate: rate, delay: delay)
+    }
   )
 
   private static let pointerEnter:
@@ -301,7 +381,10 @@ public final class WaylandRenderer: Renderer {
       data, _, _, axis, value in
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      let delta = fixedToFloat(value)
+      // Wayland axis values describe content movement, while Chroma's scroll
+      // delta follows AppKit's gesture direction. Flip the sign at the backend
+      // boundary so wheel and touchpad scrolling move the viewport naturally.
+      let delta = -fixedToFloat(value)
       switch axis {
       case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
         renderer.input.scrollBy(x: delta, y: 0)
@@ -518,6 +601,7 @@ public final class WaylandRenderer: Renderer {
     // Pointer input is accumulated from the wl_pointer listener and drained
     // once per frame, matching the Metal backend's event coalescing.
     updateFrameRate()
+    input.drainKeyboard(keyboard)
     interaction.beginFrame(input: input.frameInput())
 
     let viewport = Size(width: Float(width), height: Float(height))

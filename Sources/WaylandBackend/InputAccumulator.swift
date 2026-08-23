@@ -16,6 +16,8 @@ final class InputAccumulator {
   private var pressedEdge = false
   private var releasedEdge = false
   private var scroll = Point.zero
+  private var commands: [Command] = []
+  private var textEvents: [TextEditEvent] = []
 
   /// Drains accumulated events into a frame snapshot. Edge-triggered fields
   /// and scroll deltas reset for the next frame.
@@ -26,13 +28,21 @@ final class InputAccumulator {
       pointerDown: pointerDown,
       pointerPressed: pressedEdge,
       pointerReleased: releasedEdge,
-      scrollDelta: scroll
+      scrollDelta: scroll,
+      commands: commands,
+      textEvents: textEvents
     )
     pressedEdge = false
     releasedEdge = false
     pointerPressPosition = Point(x: -1, y: -1)
     scroll = .zero
+    commands.removeAll(keepingCapacity: true)
+    textEvents.removeAll(keepingCapacity: true)
     return input
+  }
+
+  func drainKeyboard(_ keyboard: WaylandKeyboard) {
+    keyboard.drain(commands: &commands, textEvents: &textEvents)
   }
 
   func pointerEntered(x: Float, y: Float) {

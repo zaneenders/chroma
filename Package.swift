@@ -86,6 +86,7 @@ targets.append(contentsOf: [
       "CWaylandProtocols",
       "CEGL",
       "CGLES3",
+      "CXKBKeyboard",
     ],
     swiftSettings: [
       .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
@@ -131,6 +132,12 @@ targets.append(contentsOf: [
     dependencies: ["CWaylandClient"],
     path: "Sources/LinkedLibraries/CWaylandProtocols",
     publicHeadersPath: "include"
+  ),
+  .target(
+    name: "CXKBKeyboard",
+    path: "Sources/LinkedLibraries/CXKBKeyboard",
+    publicHeadersPath: "include",
+    linkerSettings: [.linkedLibrary("xkbcommon")]
   ),
 ])
 #endif
