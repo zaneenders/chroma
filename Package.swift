@@ -39,7 +39,10 @@ let package = Package(
       ],
       swiftSettings: [
         .define("METAL_BACKEND", .when(platforms: [.macOS], traits: ["MetalBackend"])),
-        .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"])),
+        .define(
+          "WAYLAND_BACKEND",
+          .when(platforms: [.linux], traits: ["WaylandBackend"])
+        ),
       ]
     ),
     .testTarget(
