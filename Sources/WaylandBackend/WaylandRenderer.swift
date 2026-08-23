@@ -62,7 +62,6 @@ public final class WaylandRenderer: Renderer {
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
-    Interaction.current = interaction
   }
 
 
@@ -329,7 +328,11 @@ public final class WaylandRenderer: Renderer {
       unsafe glGetShaderiv(shader, GLenum(GL_INFO_LOG_LENGTH), &length)
       var log = [GLchar](repeating: 0, count: max(1, Int(length)))
       unsafe glGetShaderInfoLog(shader, length, nil, &log)
-      fatalError("GLES shader compilation failed: \(String(cString: log))")
+      let message = String(
+        decoding: log.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
+        as: UTF8.self
+      )
+      fatalError("GLES shader compilation failed: \(message)")
     }
     return shader
   }
@@ -357,7 +360,7 @@ public final class WaylandRenderer: Renderer {
       unsafe glBufferData(GLenum(GL_ARRAY_BUFFER), $0.count, $0.baseAddress, GLenum(GL_STATIC_DRAW))
     }
     glEnableVertexAttribArray(0)
-    unsafe glVertexAttribPointer(0, 2, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 8, nil)
+    glVertexAttribPointer(0, 2, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 8, nil)
 
     unsafe glGenBuffers(1, &instanceVBO)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
@@ -440,7 +443,12 @@ public final class WaylandRenderer: Renderer {
     let viewport = Size(width: Float(width), height: Float(height))
     var drawList = DrawList()
     if let content {
-      BlockEngine.draw(content, into: &drawList, in: Rect(origin: .zero, size: viewport))
+      BlockEngine.draw(
+        content,
+        into: &drawList,
+        in: Rect(origin: .zero, size: viewport),
+        context: context
+      )
     }
     interaction.endFrame()
     render(drawList, viewport: viewport)
@@ -455,7 +463,13 @@ public final class WaylandRenderer: Renderer {
         draw(rect, color: color, texture: whiteTexture)
       case .strokeRect(let rect, let width, let color):
         drawStroke(rect, width: width, color: color)
-      case .text(let position, let text, let color, let scale):
+      case .fillRoundedRect(let rect, _, let color):
+        // The GLES backend does not yet have a rounded-rectangle shader;
+        // preserve the command's bounds and color rather than dropping it.
+        draw(rect, color: color, texture: whiteTexture)
+      case .strokeRoundedRect(let rect, _, let width, let color):
+        drawStroke(rect, width: width, color: color)
+      case .text(let position, let text, let color, let scale, _):
         drawText(text, at: position, color: color, scale: scale)
       case .pushClip(let rect):
         let clipped = clips.last.flatMap { rect.intersection($0) } ?? (clips.isEmpty ? rect : .zero)
