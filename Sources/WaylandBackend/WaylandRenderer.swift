@@ -52,6 +52,8 @@ public final class WaylandRenderer: Renderer {
   private var instanceVBO: GLuint = 0
   private var whiteTexture: GLuint = 0
   private var fontTexture: GLuint = 0
+  private var fontAtlasWidth: Float = 1
+  private var fontCellWidth: Float = 1
   private var resolutionUniform: GLint = -1
 
   private static var compositorInterface: wl_interface = unsafe wl_compositor_interface
@@ -403,25 +405,10 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func makeFontTexture() {
-    let metrics = FontMetrics()
-    let first = 32
-    let last = 126
-    let atlasWidth = (last - first + 1) * Int(metrics.cellAdvance)
-    let atlasHeight = Int(metrics.glyphHeight)
-    let glyphs = FontAtlas.buildFont()
-    var pixels = [UInt8](repeating: 0, count: atlasWidth * atlasHeight * 4)
-    for character in first...last {
-      let xOffset = (character - first) * Int(metrics.cellAdvance)
-      for y in 0..<Int(metrics.glyphHeight) {
-        let row = Array(glyphs[character].rows[y])
-        for x in 0..<Int(metrics.glyphWidth) where row[x] == "1" {
-          let offset = (y * atlasWidth + xOffset + x) * 4
-          pixels[offset] = 255; pixels[offset + 1] = 255
-          pixels[offset + 2] = 255; pixels[offset + 3] = 255
-        }
-      }
-    }
-    fontTexture = makeTexture(width: atlasWidth, height: atlasHeight, pixels: pixels)
+    let atlas = FontAtlas()
+    fontAtlasWidth = Float(atlas.width)
+    fontCellWidth = Float(atlas.cellWidth)
+    fontTexture = makeTexture(width: atlas.width, height: atlas.height, pixels: atlas.pixels)
   }
 
   // MARK: DrawList consumption
@@ -469,8 +456,8 @@ public final class WaylandRenderer: Renderer {
         draw(rect, color: color, texture: whiteTexture)
       case .strokeRoundedRect(let rect, _, let width, let color):
         drawStroke(rect, width: width, color: color)
-      case .text(let position, let text, let color, let scale, _):
-        drawText(text, at: position, color: color, scale: scale)
+      case .text(let position, let text, let color, let scale, let face):
+        drawText(text, at: position, color: color, scale: scale, face: face)
       case .pushClip(let rect):
         let clipped = clips.last.flatMap { rect.intersection($0) } ?? (clips.isEmpty ? rect : .zero)
         clips.append(clipped)
@@ -508,18 +495,31 @@ public final class WaylandRenderer: Renderer {
     draw(Rect(x: rect.maxX - border, y: rect.minY + border, width: border, height: rect.size.height - border * 2), color: color, texture: whiteTexture)
   }
 
-  private func drawText(_ text: String, at position: Point, color: Color, scale: Float) {
+  private func drawText(
+    _ text: String,
+    at position: Point,
+    color: Color,
+    scale: Float,
+    face: FontFace
+  ) {
     let metrics = FontMetrics()
-    let atlasWidth = 95 * metrics.cellAdvance
     var x = position.x
-    for byte in text.utf8 {
-      let character = min(126, max(32, Int(byte)))
-      let offset = Float(character - 32) * metrics.cellAdvance
+    for character in text {
+      let scalar = FontAtlas.scalar(for: character)
+      let offset = Float(scalar - FontAtlas.firstScalar) * fontCellWidth
       draw(
-        Rect(x: x, y: position.y, width: metrics.glyphWidth * scale, height: metrics.glyphHeight * scale),
-        color: color, texture: fontTexture,
-        uv0: (offset / atlasWidth, 0), uv1: ((offset + metrics.glyphWidth) / atlasWidth, 1))
-      x += metrics.cellAdvance * scale
+        Rect(
+          x: x,
+          y: position.y,
+          width: metrics.glyphWidth * scale,
+          height: metrics.glyphHeight * scale
+        ),
+        color: color,
+        texture: fontTexture,
+        uv0: (offset / fontAtlasWidth, 0),
+        uv1: ((offset + metrics.glyphWidth) / fontAtlasWidth, 1)
+      )
+      x += metrics.advance(for: face) * scale
     }
   }
 
