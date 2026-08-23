@@ -1,122 +1,81 @@
 // swift-tools-version: 6.3
-
 import PackageDescription
 
 let package = Package(
-  name: "swift-wayland",
+  name: "chroma",
+  platforms: [.macOS(.v14)],
   products: [
-    .library(name: "Wayland", targets: ["Wayland"]),
-    .library(name: "ShapeTree", targets: ["ShapeTree"]),
+    .library(name: "Chroma", targets: ["Chroma"]),
+    .library(name: "ChromaFont", targets: ["ChromaFont"]),
+    .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
+    .library(name: "MetalBackend", targets: ["MetalBackend"]),
+    .executable(name: "ChromaDemo", targets: ["ChromaDemo"]),
+    .library(name: "WaylandBackend", targets: ["WaylandBackend"]),
   ],
-  dependencies: [
-    .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.30.0"),
-    .package(url: "https://github.com/swift-cloud/swift-xxh3", from: "1.0.0"),
-    .package(url: "https://github.com/apple/swift-log.git", from: "1.8.0"),
-    .package(url: "https://github.com/apple/swift-nio.git", from: "2.86.0"),
+  traits: [
+    .trait(
+      name: "MetalBackend",
+      description: "Apple Metal rendering backend (macOS only, enabled by default)."
+    ),
+    .trait(
+      name: "WaylandBackend",
+      description: "Wayland rendering backend (stub, not yet implemented). Build with `--traits WaylandBackend`."
+    ),
+    .default(enabledTraits: ["MetalBackend"]),
   ],
   targets: [
     .executableTarget(
-      name: "SwiftWayland",
+      name: "ChromaDemo",
       dependencies: [
-        "Wayland",
-        "ShapeTree",
-        "Fixtures",
-        .product(name: "AsyncHTTPClient", package: "async-http-client"),
-        .product(name: "_NIOFileSystem", package: "swift-nio"),
+        "Chroma",
+        .target(
+          name: "MetalBackend",
+          condition: .when(platforms: [.macOS], traits: ["MetalBackend"])
+        ),
+        .target(
+          name: "WaylandBackend",
+          condition: .when(platforms: [.linux], traits: ["WaylandBackend"])
+        ),
       ],
-      swiftSettings: swiftSettings
-    ),
-    .target(
-      name: "ShapeTree",
-      dependencies: [
-        .product(name: "XXH3", package: "swift-xxh3"),
-        .product(name: "Logging", package: "swift-log"),
-      ]),
-    .target(name: "Fixtures", dependencies: ["ShapeTree"]),
-    .target(
-      name: "Wayland",
-      dependencies: [
-        "ShapeTree",
-        "CWaylandClient",
-        "CWaylandEGL",
-        "CEGL",
-        "CGLES3",
-        "CWaylandProtocols",
-        .product(name: "XXH3", package: "swift-xxh3"),
-        .product(name: "Logging", package: "swift-log"),
-      ],
-      swiftSettings: swiftSettings,
-      plugins: [
-        .plugin(name: "ShaderGenerator")
+      swiftSettings: [
+        .define("METAL_BACKEND", .when(platforms: [.macOS], traits: ["MetalBackend"])),
+        .define(
+          "WAYLAND_BACKEND",
+          .when(platforms: [.linux], traits: ["WaylandBackend"])
+        ),
       ]
     ),
     .testTarget(
-      name: "WaylandTests",
-      dependencies: [
-        "Wayland", "SwiftWayland", "Fixtures",
+      name: "ChromaTests",
+      dependencies: ["Chroma", "ChromaFont", "HeadlessBackend"]
+    ),
+    .target(name: "Chroma"),
+    .target(name: "ChromaFont"),
+    .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
+    .target(
+      name: "MetalBackend",
+      dependencies: ["Chroma", "ChromaFont"],
+      exclude: ["Shaders"],
+      swiftSettings: [
+        .define("METAL_TRAIT", .when(traits: ["MetalBackend"])),
+        .define("METAL_BACKEND", .when(platforms: [.macOS], traits: ["MetalBackend"])),
       ],
-      swiftSettings: swiftSettings),
-    // Linked Libraries
-    .systemLibrary(
-      name: "CWaylandClient",
-      path: "Sources/LinkedLibraries/CWaylandClient",
-      pkgConfig: "wayland-client",
-      providers: [
-        .yum(["wayland-devel"])
-      ]
-    ),
-    .systemLibrary(
-      name: "CWaylandEGL",
-      path: "Sources/LinkedLibraries/CWaylandEGL",
-      pkgConfig: "wayland-egl",
-      providers: [
-        .yum(["wayland-protocols", "wayland-devel"])
-      ],
-    ),
-    .systemLibrary(
-      name: "CEGL",
-      path: "Sources/LinkedLibraries/CEGL",
-      pkgConfig: "egl",
-      providers: [
-        .yum(["mesa-libEGL-devel"])
-      ]
-    ),
-    .systemLibrary(
-      name: "CGLES3",
-      path: "Sources/LinkedLibraries/CGLES3",
-      pkgConfig: "glesv3",
-      providers: [
-        .yum(["mesa-libGLES-devel"])
+      plugins: [
+        .plugin(name: "MetalSourcePlugin")
       ]
     ),
     .target(
-      name: "CWaylandProtocols",
-      path: "Sources/LinkedLibraries/CWaylandProtocols",
-      publicHeadersPath: "include",
-      swiftSettings: swiftSettings
-    ),
-    // Plugin targets
-    .executableTarget(
-      name: "ShaderGeneratorTool",
-      dependencies: []
-    ),
-    .plugin(
-      name: "ShaderGenerator",
-      capability: .buildTool(),
-      dependencies: [
-        "ShaderGeneratorTool"
+      name: "WaylandBackend",
+      dependencies: ["Chroma", "ChromaFont"],
+      swiftSettings: [
+        .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
       ]
+    ),
+    .executableTarget(name: "MetalSourceGenerator"),
+    .plugin(
+      name: "MetalSourcePlugin",
+      capability: .buildTool(),
+      dependencies: ["MetalSourceGenerator"]
     ),
   ]
 )
-
-let swiftSettings: [SwiftSetting] = [
-  .strictMemorySafety(),
-  .treatAllWarnings(as: .error),
-  .enableUpcomingFeature("ExistentialAny"),
-  .enableExperimentalFeature("LifetimeDependence"),
-  .enableExperimentalFeature("Lifetimes"),
-  .enableExperimentalFeature("Span"),
-  .enableUpcomingFeature("MemberImportVisibility"),
-  .enableUpcomingFeature("InternalImportsByDefault"),
-]
