@@ -24,7 +24,7 @@ struct ReadableFontAtlas {
     height = glyphHeight
 
     guard FcInit() != 0 else { throw FontAtlasError("fontconfig initialization failed") }
-    guard let pattern = FcNameParse("monospace:weight=bold".withCString {
+    guard let pattern = FcNameParse("monospace:weight=demibold".withCString {
       UnsafePointer<FcChar8>(OpaquePointer($0))
     }) else { throw FontAtlasError("could not create a monospace font pattern") }
     defer { FcPatternDestroy(pattern) }
@@ -51,24 +51,31 @@ struct ReadableFontAtlas {
     else { throw FontAtlasError("FreeType could not load the matched font") }
     defer { FT_Done_Face(face) }
 
-    // Match the native 20 pt readable face used by the Metal backend, but
-    // rasterize at final resolution so GLES does not scale bitmap glyphs.
-    guard FT_Set_Pixel_Sizes(face, 0, FT_UInt(glyphWidth)) == 0 else {
+    // Rasterize one pixel larger than the original face and at final
+    // resolution. Hinting and a small synthetic embolden keep stems crisp
+    // without returning to scaled bitmap text.
+    let rasterSize = glyphWidth + 1
+    guard FT_Set_Pixel_Sizes(face, 0, FT_UInt(rasterSize)) == 0 else {
       throw FontAtlasError("FreeType could not set the readable font size")
     }
 
     var pixels = [UInt8](repeating: 0, count: width * height * 4)
     for scalar in Self.firstScalar...Self.lastScalar {
-      guard FT_Load_Char(face, FT_ULong(scalar), Int32(FT_LOAD_RENDER)) == 0,
+      // FT_LOAD_TARGET_LIGHT is a function-like C macro and is not imported by
+      // Swift. FreeType encodes the LIGHT render target as 1 << 16.
+      let loadFlags = Int32(FT_LOAD_DEFAULT) | (1 << 16)
+      guard FT_Load_Char(face, FT_ULong(scalar), loadFlags) == 0,
         let slot = face.pointee.glyph
       else { continue }
+      FT_GlyphSlot_Embolden(slot)
+      guard FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL) == 0 else { continue }
       let bitmap = slot.pointee.bitmap
       guard let buffer = bitmap.buffer else { continue }
       let cellX = Int(scalar - Self.firstScalar) * glyphWidth
       let left = (glyphWidth - Int(bitmap.width)) / 2
       // FreeType's bitmap_top is measured upward from the baseline. Center the
       // font's nominal pixel size in Chroma's 28 px line box.
-      let baseline = (glyphHeight + glyphWidth) / 2
+      let baseline = (glyphHeight + rasterSize) / 2
       let top = baseline - Int(slot.pointee.bitmap_top)
       let pitch = Int(bitmap.pitch)
 
