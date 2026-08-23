@@ -80,23 +80,15 @@ public final class WaylandRenderer: Renderer {
     keyboard.setKeyBindings(bindings)
   }
 
-  public func run(title: String = "Hello Triangle") throws {
-    do {
-      try setUpWayland(title: title)
-      try waitForInitialConfigure()
-      if !running {
-        cleanup()
-        return
-      }
-      try setUpEGL()
-      try setUpGL()
-      drawFrame()
-      try runEventLoop()
-    } catch {
-      cleanup()
-      throw error
-    }
-    cleanup()
+  public func run(title: String) throws {
+    defer { cleanup() }
+    try setUpWayland(title: title)
+    try waitForInitialConfigure()
+    guard running else { return }
+    try setUpEGL()
+    try setUpGL()
+    drawFrame()
+    try runEventLoop()
   }
 
   private func waitForInitialConfigure() throws {
@@ -484,7 +476,7 @@ public final class WaylandRenderer: Renderer {
     _ = unsafe eglSwapInterval(eglDisplay, 1)
   }
 
-  private func compileShader(_ type: GLenum, source: String) -> GLuint {
+  private func compileShader(_ type: GLenum, source: String, stage: String) throws -> GLuint {
     let shader = glCreateShader(type)
     source.withCString { sourcePointer in
       var pointer: UnsafePointer<GLchar>? = unsafe UnsafePointer(sourcePointer)
@@ -503,14 +495,27 @@ public final class WaylandRenderer: Renderer {
         decoding: log.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
         as: UTF8.self
       )
-      fatalError("GLES shader compilation failed: \(message)")
+      glDeleteShader(shader)
+      throw BackendError.initializationFailed(
+        backend: "Wayland",
+        stage: stage,
+        reason: message.isEmpty ? "shader compilation failed without a driver log" : message
+      )
     }
     return shader
   }
 
   private func setUpGL() throws {
-    let vertex = compileShader(GLenum(GL_VERTEX_SHADER), source: vertexShader)
-    let fragment = compileShader(GLenum(GL_FRAGMENT_SHADER), source: fragmentShader)
+    let vertex = try compileShader(
+      GLenum(GL_VERTEX_SHADER), source: vertexShader, stage: "vertex shader")
+    let fragment: GLuint
+    do {
+      fragment = try compileShader(
+        GLenum(GL_FRAGMENT_SHADER), source: fragmentShader, stage: "fragment shader")
+    } catch {
+      glDeleteShader(vertex)
+      throw error
+    }
     program = glCreateProgram()
     glAttachShader(program, vertex)
     glAttachShader(program, fragment)
@@ -520,7 +525,23 @@ public final class WaylandRenderer: Renderer {
 
     var linked: GLint = 0
     unsafe glGetProgramiv(program, GLenum(GL_LINK_STATUS), &linked)
-    guard linked != 0 else { fatalError("GLES shader program failed to link") }
+    guard linked != 0 else {
+      var length: GLint = 0
+      unsafe glGetProgramiv(program, GLenum(GL_INFO_LOG_LENGTH), &length)
+      var log = [GLchar](repeating: 0, count: max(1, Int(length)))
+      unsafe glGetProgramInfoLog(program, length, nil, &log)
+      let message = String(
+        decoding: log.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
+        as: UTF8.self
+      )
+      glDeleteProgram(program)
+      program = 0
+      throw BackendError.initializationFailed(
+        backend: "Wayland",
+        stage: "shader program",
+        reason: message.isEmpty ? "linking failed without a driver log" : message
+      )
+    }
 
     let corners: [Float] = [-1, -1, 1, -1, -1, 1, 1, 1]
     unsafe glGenVertexArrays(1, &vao)
@@ -641,13 +662,14 @@ public final class WaylandRenderer: Renderer {
         applyClip(clipped, viewport: viewport)
       case .popClip:
         _ = clips.popLast()
-        if let clip = clips.last { applyClip(clip, viewport: viewport) }
-        else { glDisable(GLenum(GL_SCISSOR_TEST)) }
+        if let clip = clips.last { applyClip(clip, viewport: viewport) } else { glDisable(GLenum(GL_SCISSOR_TEST)) }
       }
     }
   }
 
-  private func draw(_ rect: Rect, color: Color, texture: GLuint, uv0: (Float, Float) = (0, 0), uv1: (Float, Float) = (1, 1)) {
+  private func draw(
+    _ rect: Rect, color: Color, texture: GLuint, uv0: (Float, Float) = (0, 0), uv1: (Float, Float) = (1, 1)
+  ) {
     guard rect.size.width > 0, rect.size.height > 0 else { return }
     var quad = GLQuad(
       dst0: (rect.minX, rect.minY), dst1: (rect.maxX, rect.maxY), uv0: uv0, uv1: uv1,
@@ -664,12 +686,19 @@ public final class WaylandRenderer: Renderer {
     let border = max(0, width)
     guard border > 0 else { return }
     if rect.size.width <= border * 2 || rect.size.height <= border * 2 {
-      draw(rect, color: color, texture: whiteTexture); return
+      draw(rect, color: color, texture: whiteTexture)
+      return
     }
     draw(Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: border), color: color, texture: whiteTexture)
-    draw(Rect(x: rect.minX, y: rect.maxY - border, width: rect.size.width, height: border), color: color, texture: whiteTexture)
-    draw(Rect(x: rect.minX, y: rect.minY + border, width: border, height: rect.size.height - border * 2), color: color, texture: whiteTexture)
-    draw(Rect(x: rect.maxX - border, y: rect.minY + border, width: border, height: rect.size.height - border * 2), color: color, texture: whiteTexture)
+    draw(
+      Rect(x: rect.minX, y: rect.maxY - border, width: rect.size.width, height: border), color: color,
+      texture: whiteTexture)
+    draw(
+      Rect(x: rect.minX, y: rect.minY + border, width: border, height: rect.size.height - border * 2), color: color,
+      texture: whiteTexture)
+    draw(
+      Rect(x: rect.maxX - border, y: rect.minY + border, width: border, height: rect.size.height - border * 2),
+      color: color, texture: whiteTexture)
   }
 
   private func drawText(
@@ -746,7 +775,20 @@ public final class WaylandRenderer: Renderer {
     if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
     if readableFontTexture != 0 { unsafe glDeleteTextures(1, &readableFontTexture) }
     if whiteTexture != 0 { unsafe glDeleteTextures(1, &whiteTexture) }
+    if instanceVBO != 0 { unsafe glDeleteBuffers(1, &instanceVBO) }
+    if quadVBO != 0 { unsafe glDeleteBuffers(1, &quadVBO) }
+    if vao != 0 { unsafe glDeleteVertexArrays(1, &vao) }
     if program != 0 { glDeleteProgram(program) }
+    fontTexture = 0
+    readableFontTexture = 0
+    whiteTexture = 0
+    instanceVBO = 0
+    quadVBO = 0
+    vao = 0
+    program = 0
+    resolutionUniform = -1
+    readableFontAtlas = nil
+
     if let eglDisplay {
       _ = unsafe eglMakeCurrent(eglDisplay, nil, nil, nil)
       if let eglSurface { _ = unsafe eglDestroySurface(eglDisplay, eglSurface) }
@@ -754,8 +796,15 @@ public final class WaylandRenderer: Renderer {
       _ = unsafe eglTerminate(eglDisplay)
     }
     if let eglWindow { unsafe wl_egl_window_destroy(eglWindow) }
+    eglSurface = nil
+    eglContext = nil
+    eglDisplay = nil
+    self.eglWindow = nil
+
     cursor.cleanup()
+    keyboard.cleanup()
     if let pointer { unsafe wl_pointer_destroy(pointer) }
+    if let wlKeyboard { unsafe wl_keyboard_destroy(wlKeyboard) }
     if let seat { unsafe wl_seat_destroy(seat) }
     if let shm { unsafe wl_shm_destroy(shm) }
     if let toplevel { unsafe xdg_toplevel_destroy(toplevel) }
@@ -765,7 +814,18 @@ public final class WaylandRenderer: Renderer {
     if let compositor { unsafe wl_compositor_destroy(compositor) }
     if let registry { unsafe wl_registry_destroy(registry) }
     if let display { unsafe wl_display_disconnect(display) }
-
+    pointer = nil
+    wlKeyboard = nil
+    seat = nil
+    shm = nil
+    toplevel = nil
+    xdgSurface = nil
+    surface = nil
+    wmBase = nil
+    compositor = nil
+    registry = nil
+    display = nil
+    configured = false
   }
 }
 

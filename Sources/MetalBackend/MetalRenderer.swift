@@ -123,7 +123,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     refreshTimer = timer
   }
 
-  public func run(title: String = "Hello Triangle") {
+  public func run(title: String) {
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
 

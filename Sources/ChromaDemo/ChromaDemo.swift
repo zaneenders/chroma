@@ -22,7 +22,7 @@ struct ChromaDemo: App {
     #if METAL_BACKEND
     try app.run(on: MetalRenderer(size: app.windowSize))
     #elseif WAYLAND_BACKEND
-    try app.run(on: WaylandRenderer())
+    try app.run(on: WaylandRenderer(size: app.windowSize))
     #else
     throw BackendError.unavailable(
       backend: "ChromaDemo",

@@ -18,6 +18,14 @@ final class WaylandKeyboard {
     self.bindings = bindings
   }
 
+  func cleanup() {
+    if let keyboard { chroma_xkb_keyboard_destroy(keyboard) }
+    keyboard = nil
+    pendingCommands.removeAll(keepingCapacity: false)
+    pendingTextEvents.removeAll(keepingCapacity: false)
+    cancelRepeat()
+  }
+
   func installKeymap(fd: Int32, size: UInt32) {
     if let keyboard { chroma_xkb_keyboard_destroy(keyboard) }
     keyboard = chroma_xkb_keyboard_create(fd, size)
