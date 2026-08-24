@@ -20,3 +20,9 @@ swift run --traits WaylandBackend ChromaDemo
 
 SwiftPM options such as `--traits` must appear before the executable name;
 arguments after `ChromaDemo` are passed to the demo itself.
+
+## Fonts
+
+Chroma ships one monospaced bitmap font in `ChromaFont`. Graphical backends
+build their glyph atlas from that bundled data and do not require HarfBuzz,
+FreeType, Fontconfig, or an installed system font.

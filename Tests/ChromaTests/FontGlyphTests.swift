@@ -62,6 +62,21 @@ struct FontGlyphTests {
     }
   }
 
+  @Test func highResolutionAtlasSharesCoverageAndMappingAcrossBackends() {
+    let atlas = HighResolutionFontAtlas()
+    #expect(atlas.glyphWidth == 60)
+    #expect(atlas.glyphHeight == 84)
+    #expect(atlas.pixels.count == atlas.width * atlas.height)
+    #expect(Set(atlas.pixels) == [0, 255])
+
+    let a = atlas.glyphUV("A")
+    let b = atlas.glyphUV("B")
+    let fallback = atlas.glyphUV("�")
+    #expect(a != b)
+    #expect(atlas.glyphUV("🙂") == fallback)
+    #expect(a.0 >= 0 && a.1 >= 0 && a.2 <= 1 && a.3 <= 1)
+  }
+
   @Test func roundedCornersConnectTheSameEdgesAsTheirSquareEquivalents() throws {
     // ╭ ╮ ╯ ╰ must open toward the same cell edges as ┌ ┐ ┘ └: a "down"
     // corner keeps all ink in the bottom half and touches the bottom edge,

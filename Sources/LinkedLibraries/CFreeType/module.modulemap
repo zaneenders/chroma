@@ -1,5 +1,0 @@
-module CFreeType [system] {
-  header "include/CFreeType.h"
-  link "freetype"
-  export *
-}

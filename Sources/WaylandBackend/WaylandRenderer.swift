@@ -56,10 +56,7 @@ public final class WaylandRenderer: Renderer {
   private var instanceVBO: GLuint = 0
   private var whiteTexture: GLuint = 0
   private var fontTexture: GLuint = 0
-  private var fontAtlasWidth: Float = 1
-  private var fontCellWidth: Float = 1
-  private var readableFontTexture: GLuint = 0
-  private var readableFontAtlas: ReadableFontAtlas?
+  private var fontAtlas: FontAtlas?
   private var resolutionUniform: GLint = -1
 
   private static var compositorInterface: wl_interface = unsafe wl_compositor_interface
@@ -571,13 +568,6 @@ public final class WaylandRenderer: Renderer {
 
     whiteTexture = makeTexture(width: 1, height: 1, pixels: [255, 255, 255, 255])
     makeFontTexture()
-    let readableFontAtlas = try ReadableFontAtlas()
-    self.readableFontAtlas = readableFontAtlas
-    readableFontTexture = makeTexture(
-      width: readableFontAtlas.width,
-      height: readableFontAtlas.height,
-      pixels: readableFontAtlas.pixels
-    )
     resolutionUniform = unsafe glGetUniformLocation(program, "uResolution")
     glUseProgram(program)
     glUniform1i(unsafe glGetUniformLocation(program, "uTexture"), 0)
@@ -585,7 +575,12 @@ public final class WaylandRenderer: Renderer {
     glBlendFunc(GLenum(GL_SRC_ALPHA), GLenum(GL_ONE_MINUS_SRC_ALPHA))
   }
 
-  private func makeTexture(width: Int, height: Int, pixels: [UInt8]) -> GLuint {
+  private func makeTexture(
+    width: Int,
+    height: Int,
+    pixels: [UInt8],
+    filter: GLint = GL_NEAREST
+  ) -> GLuint {
     var texture: GLuint = 0
     unsafe glGenTextures(1, &texture)
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
@@ -594,8 +589,8 @@ public final class WaylandRenderer: Renderer {
         GLenum(GL_TEXTURE_2D), 0, GLint(GL_RGBA), GLsizei(width), GLsizei(height), 0,
         GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), $0.baseAddress)
     }
-    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_NEAREST)
-    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), GL_NEAREST)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), filter)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), filter)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_S), GL_CLAMP_TO_EDGE)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_T), GL_CLAMP_TO_EDGE)
     return texture
@@ -603,9 +598,9 @@ public final class WaylandRenderer: Renderer {
 
   private func makeFontTexture() {
     let atlas = FontAtlas()
-    fontAtlasWidth = Float(atlas.width)
-    fontCellWidth = Float(atlas.cellWidth)
-    fontTexture = makeTexture(width: atlas.width, height: atlas.height, pixels: atlas.pixels)
+    fontAtlas = atlas
+    fontTexture = makeTexture(
+      width: atlas.width, height: atlas.height, pixels: atlas.pixels, filter: GL_LINEAR)
   }
 
   // MARK: DrawList consumption
@@ -709,25 +704,10 @@ public final class WaylandRenderer: Renderer {
     face: FontFace
   ) {
     let metrics = FontMetrics()
+    guard let fontAtlas else { return }
     var x = position.x
     for character in text {
-      let useReadableFont = face == .readable && readableFontAtlas?.contains(character) == true
-      let uv: (Float, Float, Float, Float)
-      let texture: GLuint
-      if useReadableFont, let readableFontAtlas {
-        uv = readableFontAtlas.uv(for: character)
-        texture = readableFontTexture
-      } else {
-        let scalar = FontAtlas.scalar(for: character)
-        let offset = Float(scalar - FontAtlas.firstScalar) * fontCellWidth
-        uv = (
-          offset / fontAtlasWidth,
-          0,
-          (offset + metrics.glyphWidth) / fontAtlasWidth,
-          1
-        )
-        texture = fontTexture
-      }
+      let uv = fontAtlas.glyphUV(character)
       draw(
         Rect(
           x: x,
@@ -736,7 +716,7 @@ public final class WaylandRenderer: Renderer {
           height: metrics.glyphHeight * scale
         ),
         color: color,
-        texture: texture,
+        texture: fontTexture,
         uv0: (uv.0, uv.1),
         uv1: (uv.2, uv.3)
       )
@@ -773,21 +753,19 @@ public final class WaylandRenderer: Renderer {
 
   private func cleanup() {
     if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
-    if readableFontTexture != 0 { unsafe glDeleteTextures(1, &readableFontTexture) }
     if whiteTexture != 0 { unsafe glDeleteTextures(1, &whiteTexture) }
     if instanceVBO != 0 { unsafe glDeleteBuffers(1, &instanceVBO) }
     if quadVBO != 0 { unsafe glDeleteBuffers(1, &quadVBO) }
     if vao != 0 { unsafe glDeleteVertexArrays(1, &vao) }
     if program != 0 { glDeleteProgram(program) }
     fontTexture = 0
-    readableFontTexture = 0
+    fontAtlas = nil
     whiteTexture = 0
     instanceVBO = 0
     quadVBO = 0
     vao = 0
     program = 0
     resolutionUniform = -1
-    readableFontAtlas = nil
 
     if let eglDisplay {
       _ = unsafe eglMakeCurrent(eglDisplay, nil, nil, nil)

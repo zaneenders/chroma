@@ -1,61 +1,28 @@
 #if WAYLAND_BACKEND
 
-import Chroma
 import ChromaFont
 
-/// Builds the printable-ASCII portion of Chroma's 20×28 bitmap font as an
-/// RGBA texture for OpenGL ES. The full glyph map remains owned by ChromaFont;
-/// this backend uses `?` for glyphs outside the initial ASCII atlas.
+/// Converts the shared single-channel atlas to RGBA for the GLES texture path.
+/// Coverage lives in alpha; RGB stays white so the renderer can tint glyphs.
 struct FontAtlas {
-  static let firstScalar: UInt32 = 32
-  static let lastScalar: UInt32 = 126
-
-  let width: Int
-  let height: Int
-  let glyphWidth: Int
-  let glyphHeight: Int
-  let cellWidth: Int
+  let shared: HighResolutionFontAtlas
   let pixels: [UInt8]
 
-  init(metrics: FontMetrics = FontMetrics()) {
-    glyphWidth = Int(metrics.glyphWidth)
-    glyphHeight = Int(metrics.glyphHeight)
-    // The texture cells must fit the bitmap even though readable text advances
-    // by fewer pixels to provide tighter visual spacing.
-    cellWidth = glyphWidth + Int(metrics.glyphSpacing)
-    width = Int(Self.lastScalar - Self.firstScalar + 1) * cellWidth
-    height = glyphHeight
+  var width: Int { shared.width }
+  var height: Int { shared.height }
 
-    var pixels = [UInt8](repeating: 0, count: width * height * 4)
-    let fallback = Font20x28.glyphs[UInt32(Character("?").asciiValue!)] ?? Glyph()
-
-    for scalar in Self.firstScalar...Self.lastScalar {
-      let glyph = Font20x28.glyphs[scalar] ?? fallback
-      let xOffset = Int(scalar - Self.firstScalar) * cellWidth
-      for y in 0..<glyphHeight {
-        let bits = glyph.rows[y]
-        for x in 0..<glyphWidth
-        where bits & (UInt32(1) << UInt32(glyphWidth - x - 1)) != 0 {
-          let offset = (y * width + xOffset + x) * 4
-          pixels[offset] = 255
-          pixels[offset + 1] = 255
-          pixels[offset + 2] = 255
-          pixels[offset + 3] = 255
-        }
-      }
+  init() {
+    let shared = HighResolutionFontAtlas()
+    var pixels = [UInt8](repeating: 255, count: shared.pixels.count * 4)
+    for (index, coverage) in shared.pixels.enumerated() {
+      pixels[index * 4 + 3] = coverage
     }
+    self.shared = shared
     self.pixels = pixels
   }
 
-  static func scalar(for character: Character) -> UInt32 {
-    guard character.unicodeScalars.count == 1,
-      let value = character.unicodeScalars.first?.value,
-      value >= firstScalar,
-      value <= lastScalar
-    else {
-      return 63 // "?"
-    }
-    return value
+  func glyphUV(_ character: Character) -> (Float, Float, Float, Float) {
+    shared.glyphUV(character)
   }
 }
 

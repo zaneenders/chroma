@@ -45,8 +45,14 @@ private struct Canvas {
       fillRect(x - half, y - half, x - half + thickness - 1, y - half + thickness - 1)
       if x == x1 && y == y1 { break }
       let doubled = 2 * error
-      if doubled > -dy { error -= dy; x += sx }
-      if doubled < dx { error += dx; y += sy }
+      if doubled > -dy {
+        error -= dy
+        x += sx
+      }
+      if doubled < dx {
+        error += dx
+        y += sy
+      }
     }
   }
 
@@ -218,8 +224,12 @@ private func buildGlyphs() -> [UInt32: Glyph] {
   var out: [UInt32: Glyph] = [:]
 
   // MARK: Box drawing (U+2500–257F)
-  let n = Stroke.none, l = Stroke.light, h = Stroke.heavy, d = Stroke.double
-  let dl = Stroke.dashedLight, dh = Stroke.dashedHeavy
+  let n = Stroke.none
+  let l = Stroke.light
+  let h = Stroke.heavy
+  let d = Stroke.double
+  let dl = Stroke.dashedLight
+  let dh = Stroke.dashedHeavy
   let boxArms: [UInt32: (up: Stroke, down: Stroke, left: Stroke, right: Stroke)] = [
     0x2500: (n, n, l, l), 0x2501: (n, n, h, h), 0x2502: (l, l, n, n), 0x2503: (h, h, n, n),
     0x2504: (n, n, dl, dl), 0x2505: (n, n, dh, dh), 0x2506: (dl, dl, n, n), 0x2507: (dh, dh, n, n),
@@ -262,14 +272,14 @@ private func buildGlyphs() -> [UInt32: Glyph] {
     out[codepoint] = canvas.glyph
   }
 
-  out[0x2554] = Box.doubleCorner(down: true, right: true).glyph     // ╔
-  out[0x2557] = Box.doubleCorner(down: true, right: false).glyph    // ╗
-  out[0x255A] = Box.doubleCorner(down: false, right: true).glyph    // ╚
-  out[0x255D] = Box.doubleCorner(down: false, right: false).glyph   // ╝
-  out[0x256D] = Box.roundedCorner(down: true, right: true).glyph    // ╭
-  out[0x256E] = Box.roundedCorner(down: true, right: false).glyph   // ╮
+  out[0x2554] = Box.doubleCorner(down: true, right: true).glyph  // ╔
+  out[0x2557] = Box.doubleCorner(down: true, right: false).glyph  // ╗
+  out[0x255A] = Box.doubleCorner(down: false, right: true).glyph  // ╚
+  out[0x255D] = Box.doubleCorner(down: false, right: false).glyph  // ╝
+  out[0x256D] = Box.roundedCorner(down: true, right: true).glyph  // ╭
+  out[0x256E] = Box.roundedCorner(down: true, right: false).glyph  // ╮
   out[0x256F] = Box.roundedCorner(down: false, right: false).glyph  // ╯
-  out[0x2570] = Box.roundedCorner(down: false, right: true).glyph   // ╰
+  out[0x2570] = Box.roundedCorner(down: false, right: true).glyph  // ╰
 
   var slashForward = Canvas()
   slashForward.line(0, Canvas.height - 1, Canvas.width - 1, 0)
@@ -289,24 +299,24 @@ private func buildGlyphs() -> [UInt32: Glyph] {
     if let cols { canvas.fillRect(cols.lowerBound, 0, cols.upperBound, Canvas.height - 1) }
     out[codepoint] = canvas.glyph
   }
-  block(0x2580, rows: 0...13)   // ▀ upper half
+  block(0x2580, rows: 0...13)  // ▀ upper half
   block(0x2581, rows: 24...27)  // ▁ lower 1/8
   block(0x2582, rows: 21...27)  // ▂
   block(0x2583, rows: 17...27)  // ▃
   block(0x2584, rows: 14...27)  // ▄ lower half
   block(0x2585, rows: 10...27)  // ▅
-  block(0x2586, rows: 7...27)   // ▆
-  block(0x2587, rows: 3...27)   // ▇
-  block(0x2588, rows: 0...27)   // █ full
-  block(0x2589, cols: 0...16)   // ▉ left 7/8
-  block(0x258A, cols: 0...14)   // ▊
-  block(0x258B, cols: 0...11)   // ▋
-  block(0x258C, cols: 0...9)    // ▌ left half
-  block(0x258D, cols: 0...6)    // ▍
-  block(0x258E, cols: 0...4)    // ▎
-  block(0x258F, cols: 0...1)    // ▏ left 1/8
+  block(0x2586, rows: 7...27)  // ▆
+  block(0x2587, rows: 3...27)  // ▇
+  block(0x2588, rows: 0...27)  // █ full
+  block(0x2589, cols: 0...16)  // ▉ left 7/8
+  block(0x258A, cols: 0...14)  // ▊
+  block(0x258B, cols: 0...11)  // ▋
+  block(0x258C, cols: 0...9)  // ▌ left half
+  block(0x258D, cols: 0...6)  // ▍
+  block(0x258E, cols: 0...4)  // ▎
+  block(0x258F, cols: 0...1)  // ▏ left 1/8
   block(0x2590, cols: 10...19)  // ▐ right half
-  block(0x2594, rows: 0...3)    // ▔ upper 1/8
+  block(0x2594, rows: 0...3)  // ▔ upper 1/8
   block(0x2595, cols: 18...19)  // ▕ right 1/8
 
   // Shades ░▒▓ as ordered dithers at 25/50/75% coverage.
@@ -332,16 +342,16 @@ private func buildGlyphs() -> [UInt32: Glyph] {
     if lowerRight { canvas.fillRect(10, 14, 19, 27) }
     out[codepoint] = canvas.glyph
   }
-  quadrants(0x2596, upperLeft: false, upperRight: false, lowerLeft: true, lowerRight: false)   // ▖
-  quadrants(0x2597, upperLeft: false, upperRight: false, lowerLeft: false, lowerRight: true)   // ▗
-  quadrants(0x2598, upperLeft: true, upperRight: false, lowerLeft: false, lowerRight: false)   // ▘
-  quadrants(0x2599, upperLeft: true, upperRight: false, lowerLeft: true, lowerRight: true)     // ▙
-  quadrants(0x259A, upperLeft: true, upperRight: false, lowerLeft: false, lowerRight: true)    // ▚
-  quadrants(0x259B, upperLeft: true, upperRight: true, lowerLeft: true, lowerRight: false)     // ▛
-  quadrants(0x259C, upperLeft: true, upperRight: true, lowerLeft: false, lowerRight: true)     // ▜
-  quadrants(0x259D, upperLeft: false, upperRight: true, lowerLeft: false, lowerRight: false)   // ▝
-  quadrants(0x259E, upperLeft: false, upperRight: true, lowerLeft: true, lowerRight: false)    // ▞
-  quadrants(0x259F, upperLeft: false, upperRight: true, lowerLeft: true, lowerRight: true)     // ▟
+  quadrants(0x2596, upperLeft: false, upperRight: false, lowerLeft: true, lowerRight: false)  // ▖
+  quadrants(0x2597, upperLeft: false, upperRight: false, lowerLeft: false, lowerRight: true)  // ▗
+  quadrants(0x2598, upperLeft: true, upperRight: false, lowerLeft: false, lowerRight: false)  // ▘
+  quadrants(0x2599, upperLeft: true, upperRight: false, lowerLeft: true, lowerRight: true)  // ▙
+  quadrants(0x259A, upperLeft: true, upperRight: false, lowerLeft: false, lowerRight: true)  // ▚
+  quadrants(0x259B, upperLeft: true, upperRight: true, lowerLeft: true, lowerRight: false)  // ▛
+  quadrants(0x259C, upperLeft: true, upperRight: true, lowerLeft: false, lowerRight: true)  // ▜
+  quadrants(0x259D, upperLeft: false, upperRight: true, lowerLeft: false, lowerRight: false)  // ▝
+  quadrants(0x259E, upperLeft: false, upperRight: true, lowerLeft: true, lowerRight: false)  // ▞
+  quadrants(0x259F, upperLeft: false, upperRight: true, lowerLeft: true, lowerRight: true)  // ▟
 
   // MARK: Braille patterns (U+2800–28FF): 2×4 dot grid, used by spinners.
   for pattern in 0...255 {
@@ -565,8 +575,8 @@ private func buildGlyphs() -> [UInt32: Glyph] {
   out[0x23F9] = stop.glyph  // ⏹
 
   // MARK: Common Nerd Font symbols used by LazyVim and terminal prompts
-  // These remain native 20×28 bitmaps in the Metal atlas; no system font is
-  // consulted at build time or runtime.
+  // These remain native 20×28 bitmaps in each graphical backend's atlas; no
+  // system font is consulted at build time or runtime.
   var search = Canvas()
   search.ring(centerX: 8, centerY: 10, radius: 6, thickness: 2)
   search.line(12, 15, 18, 22, thickness: 3)

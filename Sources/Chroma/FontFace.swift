@@ -1,8 +1,8 @@
-/// The two text treatments shipped by Chroma.
+/// Text layout treatments backed by Chroma's bundled monospaced bitmap font.
 ///
-/// `readable` uses the platform monospaced system face in graphical backends.
-/// `display` preserves Chroma's hand-authored bitmap face for branding and
-/// terminal-style accents.
+/// Both cases use the same dependency-free glyph data. `display` is retained
+/// as an API-compatible layout treatment for branding and terminal-style
+/// accents; it may use a different configured advance.
 public enum FontFace: UInt8, Equatable, Sendable {
   case readable
   case display

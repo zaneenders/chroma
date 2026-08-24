@@ -1,10 +1,9 @@
 public struct FontMetrics: Equatable, Sendable {
   public var glyphWidth: Float = 20
   public var glyphHeight: Float = 28
-  // The readable system face occupies a narrower advance than the 20 px atlas
-  // canvas. Drawing the full canvas on a 16 px advance removes the typewriter-
-  // like tracking while retaining room for antialiased glyph edges.
-  public var readableAdvance: Float = 16
+  // The antialiased readable face includes generous side bearings, so a
+  // slightly tighter cell gives body text normal letter spacing.
+  public var readableAdvance: Float = 18
   public var glyphSpacing: Float = 0
   public var lineAdvance: Float = 32
 
