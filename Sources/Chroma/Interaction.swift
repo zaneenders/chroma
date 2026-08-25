@@ -34,6 +34,7 @@ package final class Interaction {
 
   var activatePending = false
   private var redrawRequested = false
+  package var onRedrawRequested: (() -> Void)?
   var pendingCommands: [Command] = []
   var handledCommandIndices: Set<Int> = []
   struct ScopedCommandHandler {
@@ -103,7 +104,9 @@ package final class Interaction {
   }
 
   func requestRedraw() {
+    guard !redrawRequested else { return }
     redrawRequested = true
+    onRedrawRequested?()
   }
 
   package func consumeRedrawRequest() -> Bool {

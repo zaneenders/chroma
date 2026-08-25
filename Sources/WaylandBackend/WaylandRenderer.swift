@@ -6,6 +6,8 @@ import Chroma
 import CWaylandClient
 import CWaylandEGL
 import CWaylandProtocols
+import CoreFoundation
+import Dispatch
 import Foundation
 import Glibc
 
@@ -46,6 +48,14 @@ public final class WaylandRenderer: Renderer {
   private let input = InputAccumulator()
   private let cursor = WaylandCursor()
   private var minimumRefreshRate: Double = 0
+  private var displayReadSource: DispatchSourceRead?
+  private var displayWriteSource: DispatchSourceWrite?
+  private var refreshTimer: DispatchSourceTimer?
+  private var keyboardRepeatTimer: DispatchSourceTimer?
+  private var frameCallback: OpaquePointer?
+  private var framePending = false
+  private var dirty = false
+  private var eventLoopError: Error?
   private var lastFrameTime: Double = 0
   private var smoothedFrameRate: Double = 0
 
@@ -82,14 +92,27 @@ public final class WaylandRenderer: Renderer {
   }
 
   public func run(title: String) throws {
+    running = true
+    eventLoopError = nil
     defer { cleanup() }
     try setUpWayland(title: title)
     try waitForInitialConfigure()
     guard running else { return }
     try setUpEGL()
     try setUpGL()
-    drawFrame()
-    try runEventLoop()
+
+    interaction.onRedrawRequested = { [weak self] in
+      self?.requestFrame()
+    }
+    startEventSources()
+    requestFrame()
+
+    // Foundation/libdispatch owns the outer event loop. Wayland, timers, and
+    // MainActor jobs are all sources on this loop, so none can starve another.
+    while running {
+      _ = RunLoop.main.run(mode: .default, before: .distantFuture)
+    }
+    if let eventLoopError { throw eventLoopError }
   }
 
   private func waitForInitialConfigure() throws {
@@ -101,93 +124,134 @@ public final class WaylandRenderer: Renderer {
     }
   }
 
-  private func runEventLoop() throws {
-    guard let display else { throw WaylandError("Wayland display is unavailable") }
-    let displayFD = unsafe wl_display_get_fd(display)
-    let frameInterval = minimumRefreshRate > 0 ? 1 / minimumRefreshRate : nil
-    var nextFrameTime = frameInterval.map { ProcessInfo.processInfo.systemUptime + $0 }
-
-    while running {
-      // Unlike AppKit, the native Wayland loop does not run Foundation's main
-      // run loop for us. Swift's MainActor jobs use that run loop on Linux, so
-      // give queued Tasks a chance to advance before blocking in poll. Without
-      // this, UI actions can run synchronously but their Task bodies (history
-      // discovery, session bootstrap, streaming updates) never start.
-      _ = RunLoop.main.run(mode: .default, before: Date())
-
-      while unsafe wl_display_prepare_read(display) != 0 {
-        guard unsafe wl_display_dispatch_pending(display) != -1 else {
-          throw WaylandError("Wayland display dispatch failed")
-        }
-        guard running else { return }
-      }
-
-      let flushResult = unsafe wl_display_flush(display)
-      let wantsWrite = flushResult == -1 && errno == EAGAIN
-      guard flushResult != -1 || wantsWrite else {
-        unsafe wl_display_cancel_read(display)
-        throw WaylandError("Wayland display flush failed")
-      }
-
-      let timeout = pollTimeout(until: earliestDeadline(nextFrameTime, keyboard.repeatDeadline))
-      let events = Int16(POLLIN) | (wantsWrite ? Int16(POLLOUT) : 0)
-      var descriptor = pollfd(fd: displayFD, events: events, revents: 0)
-      let result = unsafe poll(&descriptor, 1, timeout)
-      if result < 0 {
-        unsafe wl_display_cancel_read(display)
-        if errno == EINTR { continue }
-        throw WaylandError("polling the Wayland display failed")
-      }
-
-      if result > 0, descriptor.revents & Int16(POLLIN) != 0 {
-        guard unsafe wl_display_read_events(display) != -1 else {
-          throw WaylandError("reading Wayland events failed")
-        }
-        guard unsafe wl_display_dispatch_pending(display) != -1 else {
-          throw WaylandError("Wayland display dispatch failed")
-        }
-        if running { drawFrame() }
-      } else {
-        unsafe wl_display_cancel_read(display)
-        let failures = Int16(POLLERR | POLLHUP | POLLNVAL)
-        if result > 0, descriptor.revents & failures != 0 {
-          throw WaylandError("Wayland display became unavailable")
-        }
-        if wantsWrite, descriptor.revents & Int16(POLLOUT) != 0 {
-          guard unsafe wl_display_flush(display) != -1 || errno == EAGAIN else {
-            throw WaylandError("Wayland display flush failed")
-          }
-        }
-      }
-
-      let now = ProcessInfo.processInfo.systemUptime
-      let repeated = keyboard.dispatchRepeats(editing: interaction.mode == .editing, now: now)
-      var drewFrame = false
-      if repeated, running {
-        drawFrame()
-        drewFrame = true
-      }
-
-      if let interval = frameInterval, now >= (nextFrameTime ?? 0) {
-        if running, !drewFrame { drawFrame() }
-        nextFrameTime = now + interval
-      }
+  private func startEventSources() {
+    guard let display else { return }
+    let fd = unsafe wl_display_get_fd(display)
+    let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
+    source.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.displayBecameReadable() }
     }
+    displayReadSource = source
+    source.resume()
+    updateRefreshTimer()
+    updateKeyboardRepeatTimer()
+    flushWayland()
   }
 
-  private func earliestDeadline(_ first: Double?, _ second: Double?) -> Double? {
-    switch (first, second) {
-    case (.some(let first), .some(let second)): min(first, second)
-    case (.some(let first), .none): first
-    case (.none, .some(let second)): second
-    case (.none, .none): nil
+  private func displayBecameReadable() {
+    guard running, let display else { return }
+    guard unsafe wl_display_dispatch(display) != -1 else {
+      failEventLoop(WaylandError("Wayland display dispatch failed"))
+      return
     }
+    // Listener callbacks invalidate only when they change visible state. Frame
+    // callbacks therefore do not accidentally create a perpetual render loop.
+    updateKeyboardRepeatTimer()
+    flushWayland()
   }
 
-  private func pollTimeout(until deadline: Double?) -> Int32 {
-    guard let deadline else { return -1 }
-    let remaining = max(0, deadline - ProcessInfo.processInfo.systemUptime)
-    return Int32(min(remaining * 1_000, Double(Int32.max)).rounded(.up))
+  private func flushWayland() {
+    guard running, let display else { return }
+    let result = unsafe wl_display_flush(display)
+    if result >= 0 {
+      displayWriteSource?.cancel()
+      displayWriteSource = nil
+      return
+    }
+    guard errno == EAGAIN else {
+      failEventLoop(WaylandError("Wayland display flush failed"))
+      return
+    }
+    guard displayWriteSource == nil else { return }
+    let fd = unsafe wl_display_get_fd(display)
+    let source = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: .main)
+    source.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.flushWayland() }
+    }
+    displayWriteSource = source
+    source.resume()
+  }
+
+  private func updateRefreshTimer() {
+    refreshTimer?.cancel()
+    refreshTimer = nil
+    guard running, minimumRefreshRate > 0 else { return }
+    let interval = 1 / minimumRefreshRate
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(1))
+    timer.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.requestFrame() }
+    }
+    refreshTimer = timer
+    timer.resume()
+  }
+
+  private func updateKeyboardRepeatTimer() {
+    keyboardRepeatTimer?.cancel()
+    keyboardRepeatTimer = nil
+    guard running, let deadline = keyboard.repeatDeadline else { return }
+    let delay = max(0, deadline - ProcessInfo.processInfo.systemUptime)
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.schedule(deadline: .now() + delay, leeway: .milliseconds(1))
+    timer.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.keyboardRepeatTimerFired() }
+    }
+    keyboardRepeatTimer = timer
+    timer.resume()
+  }
+
+  private func keyboardRepeatTimerFired() {
+    keyboardRepeatTimer?.cancel()
+    keyboardRepeatTimer = nil
+    let repeated = keyboard.dispatchRepeats(
+      editing: interaction.mode == .editing,
+      now: ProcessInfo.processInfo.systemUptime)
+    if repeated { requestFrame() }
+    updateKeyboardRepeatTimer()
+  }
+
+  private func requestFrame() {
+    guard running, configured, eglSurface != nil else { return }
+    dirty = true
+    renderIfPossible()
+  }
+
+  private func renderIfPossible() {
+    guard dirty, !framePending, running else { return }
+    guard let surface else { return }
+    dirty = false
+    guard let callback = unsafe wl_surface_frame(surface) else {
+      failEventLoop(WaylandError("could not create Wayland frame callback"))
+      return
+    }
+    frameCallback = callback
+    framePending = true
+    unsafe wl_callback_add_listener(
+      callback, &Self.frameListener, Unmanaged.passUnretained(self).toOpaque())
+    drawFrame()
+    flushWayland()
+  }
+
+  private static var frameListener = unsafe wl_callback_listener(
+    done: { data, callback, _ in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let callback { unsafe wl_callback_destroy(callback) }
+      if renderer.frameCallback == callback { renderer.frameCallback = nil }
+      renderer.framePending = false
+      renderer.renderIfPossible()
+    }
+  )
+
+  private func failEventLoop(_ error: Error) {
+    guard running else { return }
+    eventLoopError = error
+    stopEventLoop()
+  }
+
+  private func stopEventLoop() {
+    running = false
+    CFRunLoopStop(CFRunLoopGetMain())
   }
 
   // MARK: Wayland
@@ -311,6 +375,7 @@ public final class WaylandRenderer: Renderer {
           editing: renderer.interaction.mode == .editing,
           now: ProcessInfo.processInfo.systemUptime
         )
+        renderer.requestFrame()
       } else {
         renderer.keyboard.keyReleased(key)
       }
@@ -337,6 +402,7 @@ public final class WaylandRenderer: Renderer {
       if let pointer { renderer.cursor.apply(pointer: pointer, serial: serial) }
       renderer.input.pointerEntered(
         x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+      renderer.requestFrame()
     }
 
   private static let pointerLeave:
@@ -346,6 +412,7 @@ public final class WaylandRenderer: Renderer {
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       guard eventSurface == renderer.surface else { return }
       renderer.input.pointerLeft()
+      renderer.requestFrame()
     }
 
   private static let pointerMotion:
@@ -355,6 +422,7 @@ public final class WaylandRenderer: Renderer {
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       renderer.input.pointerMoved(
         x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+      renderer.requestFrame()
     }
 
   private static let pointerButton:
@@ -369,6 +437,7 @@ public final class WaylandRenderer: Renderer {
         renderer.input.pointerReleased()
       default: break
       }
+      renderer.requestFrame()
     }
 
   private static let pointerAxis:
@@ -387,6 +456,7 @@ public final class WaylandRenderer: Renderer {
         renderer.input.scrollBy(x: 0, y: delta)
       default: break
       }
+      renderer.requestFrame()
     }
 
   private static var pointerListener = unsafe wl_pointer_listener(
@@ -413,6 +483,7 @@ public final class WaylandRenderer: Renderer {
       renderer.bufferScale = factor
       unsafe wl_surface_set_buffer_scale(surface, factor)
       renderer.resizeEGLWindow()
+      renderer.requestFrame()
     },
     preferred_buffer_transform: { _, _, _ in }
   )
@@ -423,6 +494,7 @@ public final class WaylandRenderer: Renderer {
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       renderer.configured = true
+      renderer.requestFrame()
     }
   )
 
@@ -434,6 +506,7 @@ public final class WaylandRenderer: Renderer {
       renderer.width = width
       renderer.height = height
       renderer.resizeEGLWindow()
+      renderer.requestFrame()
     }
 
   private func resizeEGLWindow() {
@@ -448,8 +521,8 @@ public final class WaylandRenderer: Renderer {
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       guard renderer.running else { return }
-      renderer.running = false
       renderer.onClose?()
+      renderer.stopEventLoop()
     },
     configure_bounds: { _, _, _, _ in },
     wm_capabilities: { _, _, _ in }
@@ -674,6 +747,7 @@ public final class WaylandRenderer: Renderer {
       )
     }
     interaction.endFrame()
+    _ = interaction.consumeRedrawRequest()
     render(drawList, viewport: viewport)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
   }
@@ -797,6 +871,20 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func cleanup() {
+    interaction.onRedrawRequested = nil
+    refreshTimer?.cancel()
+    keyboardRepeatTimer?.cancel()
+    displayReadSource?.cancel()
+    displayWriteSource?.cancel()
+    refreshTimer = nil
+    keyboardRepeatTimer = nil
+    displayReadSource = nil
+    displayWriteSource = nil
+    if let frameCallback { unsafe wl_callback_destroy(frameCallback) }
+    frameCallback = nil
+    framePending = false
+    dirty = false
+
     if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
     if whiteTexture != 0 { unsafe glDeleteTextures(1, &whiteTexture) }
     if instanceVBO != 0 { unsafe glDeleteBuffers(1, &instanceVBO) }

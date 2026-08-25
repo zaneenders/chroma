@@ -92,6 +92,9 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     mtkView.delegate = self
     mtkView.interaction = interaction
     mtkView.keyBindings = keyBindings
+    interaction.onRedrawRequested = { [weak mtkView] in
+      mtkView?.needsDisplay = true
+    }
   }
 
   public convenience init(size: Size) throws {

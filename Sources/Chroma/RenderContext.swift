@@ -97,6 +97,12 @@ public struct RenderContext {
     return try body()
   }
 
+  /// Invalidates the current view and asks the active renderer for another frame.
+  /// Call this after asynchronous state changes that affect visible output.
+  public func requestRedraw() {
+    interaction.requestRedraw()
+  }
+
   /// Moves keyboard focus to a registered interactive leaf.
   public func focus(_ id: WidgetID, editing: Bool = false) {
     interaction.focus(id, editing: editing)
