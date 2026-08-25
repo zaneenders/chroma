@@ -23,6 +23,7 @@ arguments after `ChromaDemo` are passed to the demo itself.
 
 ## Fonts
 
-Chroma ships one monospaced bitmap font in `ChromaFont`. Graphical backends
-build their glyph atlas from that bundled data and do not require HarfBuzz,
-FreeType, Fontconfig, or an installed system font.
+Chroma ships its authored monospaced bitmap display glyphs plus a pre-rasterized
+Bedstead readable face in `ChromaFont`. Bedstead is CC0/public-domain dedicated.
+Graphical backends build one shared atlas from that bundled data and do not
+require HarfBuzz, FreeType, Fontconfig, or an installed system font.

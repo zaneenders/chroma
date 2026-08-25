@@ -21,8 +21,12 @@ public final class WaylandRenderer: Renderer {
 
   package let interaction = Interaction()
 
+  // xdg-shell configures surfaces in logical coordinates. The EGL window and
+  // GL viewport use buffer pixels so HiDPI outputs are rendered at native
+  // resolution instead of being upscaled by the compositor.
   private var width: Int32
   private var height: Int32
+  private var bufferScale: Int32 = 1
   private var running = true
   private var configured = false
 
@@ -202,6 +206,8 @@ public final class WaylandRenderer: Renderer {
 
     surface = unsafe wl_compositor_create_surface(compositor)
     guard let surface else { throw WaylandError("could not create wl_surface") }
+    unsafe wl_surface_add_listener(
+      surface, &Self.surfaceListener, Unmanaged.passUnretained(self).toOpaque())
     xdgSurface = unsafe xdg_wm_base_get_xdg_surface(wmBase, surface)
     guard let xdgSurface else { throw WaylandError("could not create xdg_surface") }
     unsafe xdg_surface_add_listener(xdgSurface, &Self.xdgSurfaceListener, Unmanaged.passUnretained(self).toOpaque())
@@ -220,7 +226,7 @@ public final class WaylandRenderer: Renderer {
       switch unsafe String(cString: interface) {
       case "wl_compositor":
         renderer.compositor = unsafe OpaquePointer(
-          wl_registry_bind(registry, name, &compositorInterface, min(version, 4)))
+          wl_registry_bind(registry, name, &compositorInterface, min(version, 6)))
         renderer.setUpCursorIfReady()
       case "xdg_wm_base":
         renderer.wmBase = unsafe OpaquePointer(
@@ -397,6 +403,20 @@ public final class WaylandRenderer: Renderer {
     axis_relative_direction: { _, _, _, _ in }
   )
 
+  private static var surfaceListener = unsafe wl_surface_listener(
+    enter: { _, _, _ in },
+    leave: { _, _, _ in },
+    preferred_buffer_scale: { data, surface, factor in
+      guard let data, let surface, factor > 0 else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      guard factor != renderer.bufferScale else { return }
+      renderer.bufferScale = factor
+      unsafe wl_surface_set_buffer_scale(surface, factor)
+      renderer.resizeEGLWindow()
+    },
+    preferred_buffer_transform: { _, _, _ in }
+  )
+
   private static var xdgSurfaceListener = unsafe xdg_surface_listener(
     configure: { data, xdgSurface, serial in
       unsafe xdg_surface_ack_configure(xdgSurface, serial)
@@ -413,10 +433,14 @@ public final class WaylandRenderer: Renderer {
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       renderer.width = width
       renderer.height = height
-      if let eglWindow = renderer.eglWindow {
-        unsafe wl_egl_window_resize(eglWindow, width, height, 0, 0)
-      }
+      renderer.resizeEGLWindow()
     }
+
+  private func resizeEGLWindow() {
+    guard let eglWindow else { return }
+    unsafe wl_egl_window_resize(
+      eglWindow, width * bufferScale, height * bufferScale, 0, 0)
+  }
 
   private static var toplevelListener = unsafe xdg_toplevel_listener(
     configure: configureCallback,
@@ -462,7 +486,9 @@ public final class WaylandRenderer: Renderer {
     }
     guard eglContext != nil else { throw WaylandError("eglCreateContext failed") }
 
-    eglWindow = unsafe wl_egl_window_create(surface, width, height)
+    unsafe wl_surface_set_buffer_scale(surface, bufferScale)
+    eglWindow = unsafe wl_egl_window_create(
+      surface, width * bufferScale, height * bufferScale)
     guard let eglWindow else { throw WaylandError("wl_egl_window_create failed") }
     eglSurface = unsafe eglCreateWindowSurface(
       eglDisplay, config, EGLNativeWindowType(bitPattern: eglWindow), nil)
@@ -599,18 +625,35 @@ public final class WaylandRenderer: Renderer {
   private func makeFontTexture() {
     let atlas = FontAtlas()
     fontAtlas = atlas
-    fontTexture = makeTexture(
-      width: atlas.width, height: atlas.height, pixels: atlas.pixels, filter: GL_LINEAR)
+
+    var texture: GLuint = 0
+    unsafe glGenTextures(1, &texture)
+    glBindTexture(GLenum(GL_TEXTURE_2D), texture)
+    for (level, mip) in atlas.mipLevels.enumerated() {
+      mip.pixels.withUnsafeBytes {
+        unsafe glTexImage2D(
+          GLenum(GL_TEXTURE_2D), GLint(level), GLint(GL_RED), GLsizei(mip.width),
+          GLsizei(mip.height), 0, GLenum(GL_RED), GLenum(GL_UNSIGNED_BYTE), $0.baseAddress)
+      }
+    }
+    glTexParameteri(
+      GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_LINEAR_MIPMAP_LINEAR)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), GL_LINEAR)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_S), GL_CLAMP_TO_EDGE)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_T), GL_CLAMP_TO_EDGE)
+    fontTexture = texture
   }
 
   // MARK: DrawList consumption
 
   private func drawFrame() {
     guard eglDisplay != nil, eglSurface != nil else { return }
-    glViewport(0, 0, width, height)
+    glViewport(0, 0, width * bufferScale, height * bufferScale)
     glClearColor(0.1, 0.1, 0.2, 1)
     glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
     glUseProgram(program)
+    // Geometry stays in logical surface coordinates; the larger viewport gives
+    // each logical unit bufferScale pixels without changing app layout.
     glUniform2f(resolutionUniform, Float(width), Float(height))
     glBindVertexArray(vao)
 
@@ -707,7 +750,7 @@ public final class WaylandRenderer: Renderer {
     guard let fontAtlas else { return }
     var x = position.x
     for character in text {
-      let uv = fontAtlas.glyphUV(character)
+      let uv = fontAtlas.glyphUV(character, readable: face == .readable)
       draw(
         Rect(
           x: x,
@@ -732,7 +775,9 @@ public final class WaylandRenderer: Renderer {
     let clipWidth = max(0, right - left)
     let clipHeight = max(0, bottom - top)
     glEnable(GLenum(GL_SCISSOR_TEST))
-    glScissor(left, height - bottom, clipWidth, clipHeight)
+    glScissor(
+      left * bufferScale, (height - bottom) * bufferScale,
+      clipWidth * bufferScale, clipHeight * bufferScale)
   }
 
   private func updateFrameRate() {

@@ -13,7 +13,7 @@ struct FontAtlas {
       pixelFormat: .r8Unorm,
       width: atlas.width,
       height: atlas.height,
-      mipmapped: false
+      mipmapped: true
     )
     guard let texture = device.makeTexture(descriptor: descriptor) else {
       throw BackendError.initializationFailed(
@@ -22,20 +22,24 @@ struct FontAtlas {
         reason: "failed to allocate the atlas texture"
       )
     }
-    atlas.pixels.withUnsafeBytes { bytes in
-      texture.replace(
-        region: MTLRegionMake2D(0, 0, atlas.width, atlas.height),
-        mipmapLevel: 0,
-        withBytes: bytes.baseAddress!,
-        bytesPerRow: atlas.width
-      )
+    for (level, mip) in atlas.mipLevels().enumerated() {
+      mip.pixels.withUnsafeBytes { bytes in
+        texture.replace(
+          region: MTLRegionMake2D(0, 0, mip.width, mip.height),
+          mipmapLevel: level,
+          withBytes: bytes.baseAddress!,
+          bytesPerRow: mip.width
+        )
+      }
     }
     self.texture = texture
     self.atlas = atlas
   }
 
-  func glyphUV(_ character: Character) -> (Float, Float, Float, Float) {
-    atlas.glyphUV(character)
+  func glyphUV(
+    _ character: Character, readable: Bool = false
+  ) -> (Float, Float, Float, Float) {
+    atlas.glyphUV(character, readable: readable)
   }
 }
 

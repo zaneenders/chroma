@@ -67,14 +67,40 @@ struct FontGlyphTests {
     #expect(atlas.glyphWidth == 60)
     #expect(atlas.glyphHeight == 84)
     #expect(atlas.pixels.count == atlas.width * atlas.height)
-    #expect(Set(atlas.pixels) == [0, 255])
+    #expect(atlas.pixels.contains(0))
+    #expect(atlas.pixels.contains(255))
+    #expect(atlas.pixels.contains { $0 > 0 && $0 < 255 })
 
     let a = atlas.glyphUV("A")
     let b = atlas.glyphUV("B")
+    #expect(atlas.glyphUV("A", readable: true) != a)
     let fallback = atlas.glyphUV("�")
     #expect(a != b)
     #expect(atlas.glyphUV("🙂") == fallback)
     #expect(a.0 >= 0 && a.1 >= 0 && a.2 <= 1 && a.3 <= 1)
+  }
+
+  @Test func atlasMipmapsPreserveCoverageWhileReducingForGPUOutput() {
+    let atlas = HighResolutionFontAtlas()
+    let levels = atlas.mipLevels()
+
+    #expect(levels.first?.width == atlas.width)
+    #expect(levels.first?.height == atlas.height)
+    #expect(levels.first?.pixels == atlas.pixels)
+    #expect(levels.last?.width == 1)
+    #expect(levels.last?.height == 1)
+
+    for (parent, child) in zip(levels, levels.dropFirst()) {
+      #expect(child.width == max(1, parent.width / 2))
+      #expect(child.height == max(1, parent.height / 2))
+      #expect(child.pixels.count == child.width * child.height)
+    }
+
+    // Filtering binary glyph coverage must produce intermediate edge samples;
+    // otherwise minified GPU text would still have hard, unstable stair steps.
+    #expect(levels.dropFirst().contains { level in
+      level.pixels.contains { $0 > 0 && $0 < 255 }
+    })
   }
 
   @Test func roundedCornersConnectTheSameEdgesAsTheirSquareEquivalents() throws {

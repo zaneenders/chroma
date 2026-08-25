@@ -2,27 +2,25 @@
 
 import ChromaFont
 
-/// Converts the shared single-channel atlas to RGBA for the GLES texture path.
-/// Coverage lives in alpha; RGB stays white so the renderer can tint glyphs.
+/// Holds the shared single-channel coverage atlas and its prefiltered mip chain
+/// for the GLES texture path.
 struct FontAtlas {
   let shared: HighResolutionFontAtlas
-  let pixels: [UInt8]
+  let mipLevels: [FontAtlasMipLevel]
 
   var width: Int { shared.width }
   var height: Int { shared.height }
 
   init() {
     let shared = HighResolutionFontAtlas()
-    var pixels = [UInt8](repeating: 255, count: shared.pixels.count * 4)
-    for (index, coverage) in shared.pixels.enumerated() {
-      pixels[index * 4 + 3] = coverage
-    }
     self.shared = shared
-    self.pixels = pixels
+    mipLevels = shared.mipLevels()
   }
 
-  func glyphUV(_ character: Character) -> (Float, Float, Float, Float) {
-    shared.glyphUV(character)
+  func glyphUV(
+    _ character: Character, readable: Bool = false
+  ) -> (Float, Float, Float, Float) {
+    shared.glyphUV(character, readable: readable)
   }
 }
 

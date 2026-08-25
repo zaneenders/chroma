@@ -28,7 +28,10 @@ uniform sampler2D uTexture;
 in vec2 vUV;
 in vec4 vColor;
 out vec4 outColor;
-void main() { outColor = texture(uTexture, vUV) * vColor; }
+void main() {
+  float coverage = texture(uTexture, vUV).r;
+  outColor = vec4(vColor.rgb, vColor.a * coverage);
+}
 """
 
 #endif

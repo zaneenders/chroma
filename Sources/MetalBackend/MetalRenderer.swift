@@ -343,7 +343,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
             textStart = textInstances.count
             textFace = face
           }
-          let (u0, v0, u1, v1) = fontAtlas.glyphUV(character)
+          let (u0, v0, u1, v1) = fontAtlas.glyphUV(character, readable: face == .readable)
           textInstances.append(
             TextInstance(
               dst_p0: ndc(pen.x, pen.y),
