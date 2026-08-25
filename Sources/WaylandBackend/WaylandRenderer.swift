@@ -654,9 +654,9 @@ public final class WaylandRenderer: Renderer {
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
     glBufferData(GLenum(GL_ARRAY_BUFFER), MemoryLayout<GLQuad>.stride, nil, GLenum(GL_DYNAMIC_DRAW))
     let stride = GLsizei(MemoryLayout<GLQuad>.stride)
-    let offsets = [0, 8, 16, 24, 32]
-    let sizes: [GLint] = [2, 2, 2, 2, 4]
-    for index in 0..<5 {
+    let offsets = [0, 8, 16, 24, 32, 48, 56, 72]
+    let sizes: [GLint] = [2, 2, 2, 2, 4, 2, 4, 4]
+    for index in offsets.indices {
       let attribute = GLuint(index + 1)
       glEnableVertexAttribArray(attribute)
       unsafe glVertexAttribPointer(
@@ -760,12 +760,10 @@ public final class WaylandRenderer: Renderer {
         draw(rect, color: color, texture: whiteTexture)
       case .strokeRect(let rect, let width, let color):
         drawStroke(rect, width: width, color: color)
-      case .fillRoundedRect(let rect, _, let color):
-        // The GLES backend does not yet have a rounded-rectangle shader;
-        // preserve the command's bounds and color rather than dropping it.
-        draw(rect, color: color, texture: whiteTexture)
-      case .strokeRoundedRect(let rect, _, let width, let color):
-        drawStroke(rect, width: width, color: color)
+      case .fillRoundedRect(let rect, let radii, let color):
+        drawShape(rect, radii: radii, color: color)
+      case .strokeRoundedRect(let rect, let radii, let width, let color):
+        drawShape(rect, radii: radii, borderWidth: width, color: color)
       case .text(let position, let text, let color, let scale, let face):
         drawText(text, at: position, color: color, scale: scale, face: face)
       case .pushClip(let rect):
@@ -787,6 +785,39 @@ public final class WaylandRenderer: Renderer {
       dst0: (rect.minX, rect.minY), dst1: (rect.maxX, rect.maxY), uv0: uv0, uv1: uv1,
       color: (color.r, color.g, color.b, color.a))
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
+    glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
+    withUnsafeBytes(of: &quad) {
+      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, $0.count, $0.baseAddress)
+    }
+    glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
+  }
+
+  private func drawShape(
+    _ rect: Rect,
+    radii requestedRadii: CornerRadii,
+    borderWidth: Float = 0,
+    color: Color
+  ) {
+    guard rect.size.width > 0, rect.size.height > 0 else { return }
+    let radii = requestedRadii.normalized(for: rect.size)
+    // Extend the quad so derivative-based antialiasing is not clipped at the
+    // shape's logical bounds.
+    let edgePadding: Float = 1
+    let padded = Rect(
+      x: rect.minX - edgePadding,
+      y: rect.minY - edgePadding,
+      width: rect.size.width + edgePadding * 2,
+      height: rect.size.height + edgePadding * 2)
+    var quad = GLQuad(
+      dst0: (padded.minX, padded.minY),
+      dst1: (padded.maxX, padded.maxY),
+      uv0: (0, 0),
+      uv1: (1, 1),
+      color: (color.r, color.g, color.b, color.a),
+      size: (rect.size.width, rect.size.height),
+      radii: (radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft),
+      shape: (max(0, borderWidth), edgePadding, 1, 0))
+    glBindTexture(GLenum(GL_TEXTURE_2D), whiteTexture)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
     withUnsafeBytes(of: &quad) {
       unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, $0.count, $0.baseAddress)
