@@ -57,6 +57,7 @@ final class WaylandKeyboard {
 
   func focusLost() {
     cancelRepeat()
+    chroma_xkb_keyboard_reset_compose(keyboard)
   }
 
   func dispatchRepeats(editing: Bool, now: Double) -> Bool {

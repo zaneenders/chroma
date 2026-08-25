@@ -19,6 +19,7 @@ int32_t chroma_xkb_keyboard_key_repeats(
     chroma_xkb_keyboard *keyboard, uint32_t wayland_key);
 int32_t chroma_xkb_keyboard_utf8(
     chroma_xkb_keyboard *keyboard, uint32_t wayland_key, char *buffer, int32_t capacity);
+void chroma_xkb_keyboard_reset_compose(chroma_xkb_keyboard *keyboard);
 int32_t chroma_xkb_keyboard_modifier_active(chroma_xkb_keyboard *keyboard, const char *name);
 
 #ifdef __cplusplus
