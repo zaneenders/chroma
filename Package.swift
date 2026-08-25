@@ -5,45 +5,12 @@ var products: [Product] = [
   .library(name: "Chroma", targets: ["Chroma"]),
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
   .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
-  .library(name: "MetalBackend", targets: ["MetalBackend"]),
   .executable(name: "ChromaDemo", targets: ["ChromaDemo"]),
 ]
 
-var demoDependencies: [Target.Dependency] = [
-  "Chroma",
-  .target(
-    name: "MetalBackend",
-    condition: .when(platforms: [.macOS], traits: ["MetalBackend"])
-  ),
-]
-
-var demoSwiftSettings: [SwiftSetting] = [
-  .define("METAL_BACKEND", .when(platforms: [.macOS], traits: ["MetalBackend"]))
-]
-
-// Wayland only exists on Linux; don't declare these targets at all on other
-// platforms so they are never compiled (or probed via pkg-config) there.
-#if os(Linux)
-products.append(
-  .library(name: "WaylandBackend", targets: ["WaylandBackend"])
-)
-demoDependencies.append(
-  .target(
-    name: "WaylandBackend",
-    condition: .when(platforms: [.linux], traits: ["WaylandBackend"])
-  )
-)
-demoSwiftSettings.append(
-  .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
-)
-#endif
-
+var demoDependencies: [Target.Dependency] = ["Chroma"]
+var demoSwiftSettings: [SwiftSetting] = []
 var targets: [Target] = [
-  .executableTarget(
-    name: "ChromaDemo",
-    dependencies: demoDependencies,
-    swiftSettings: demoSwiftSettings
-  ),
   .testTarget(
     name: "ChromaTests",
     dependencies: ["Chroma", "ChromaFont", "HeadlessBackend"]
@@ -51,17 +18,36 @@ var targets: [Target] = [
   .target(name: "Chroma"),
   .target(name: "ChromaFont"),
   .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
+]
+var backendTraits: Set<Trait> = []
+var defaultBackendTraits: Set<String> = []
+
+// Native backends and their build tooling are host-specific. SwiftPM traits can
+// condition dependency edges and settings, but cannot condition products or
+// target declarations; declaring both backends would make `swift build` probe
+// Wayland system libraries on macOS and Metal build tooling on Linux.
+#if os(macOS)
+backendTraits.insert(
+  .trait(
+    name: "MetalBackend",
+    description: "Use the native Metal backend for ChromaDemo on macOS."
+  )
+)
+defaultBackendTraits.insert("MetalBackend")
+products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))
+demoDependencies.append(
+  .target(name: "MetalBackend", condition: .when(traits: ["MetalBackend"]))
+)
+demoSwiftSettings.append(.define("METAL_BACKEND", .when(traits: ["MetalBackend"])))
+targets.append(contentsOf: [
   .target(
     name: "MetalBackend",
     dependencies: ["Chroma", "ChromaFont"],
     exclude: ["Shaders"],
-    swiftSettings: [
-      .define("METAL_TRAIT", .when(traits: ["MetalBackend"])),
-      .define("METAL_BACKEND", .when(platforms: [.macOS], traits: ["MetalBackend"])),
-    ],
-    plugins: [
-      .plugin(name: "MetalSourcePlugin")
-    ]
+    // The product is only declared on macOS. Its API remains available whether
+    // or not the demo-selection trait is enabled.
+    swiftSettings: [.define("METAL_BACKEND")],
+    plugins: [.plugin(name: "MetalSourcePlugin")]
   ),
   .executableTarget(name: "MetalSourceGenerator"),
   .plugin(
@@ -69,9 +55,22 @@ var targets: [Target] = [
     capability: .buildTool(),
     dependencies: ["MetalSourceGenerator"]
   ),
-]
+])
+#endif
 
 #if os(Linux)
+backendTraits.insert(
+  .trait(
+    name: "WaylandBackend",
+    description: "Use the native Wayland/EGL/OpenGL ES backend for ChromaDemo on Linux."
+  )
+)
+defaultBackendTraits.insert("WaylandBackend")
+products.append(.library(name: "WaylandBackend", targets: ["WaylandBackend"]))
+demoDependencies.append(
+  .target(name: "WaylandBackend", condition: .when(traits: ["WaylandBackend"]))
+)
+demoSwiftSettings.append(.define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"])))
 targets.append(contentsOf: [
   .target(
     name: "WaylandBackend",
@@ -86,9 +85,9 @@ targets.append(contentsOf: [
       "CGLES3",
       "CXKBKeyboard",
     ],
-    swiftSettings: [
-      .define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"]))
-    ]
+    // The product is only declared on Linux. Its API remains available whether
+    // or not the demo-selection trait is enabled.
+    swiftSettings: [.define("WAYLAND_BACKEND")]
   ),
   .systemLibrary(
     name: "CWaylandClient",
@@ -130,20 +129,21 @@ targets.append(contentsOf: [
 ])
 #endif
 
+targets.insert(
+  .executableTarget(
+    name: "ChromaDemo",
+    dependencies: demoDependencies,
+    swiftSettings: demoSwiftSettings
+  ),
+  at: 0
+)
+
 let package = Package(
   name: "chroma",
-  platforms: [.macOS(.v14)],
+  platforms: [.macOS(.v26)],
   products: products,
-  traits: [
-    .trait(
-      name: "MetalBackend",
-      description: "Apple Metal rendering backend (macOS only, enabled by default)."
-    ),
-    .trait(
-      name: "WaylandBackend",
-      description: "Wayland/EGL/OpenGL ES rendering backend (Linux only). Build with `--traits WaylandBackend`."
-    ),
-    .default(enabledTraits: ["MetalBackend"]),
-  ],
+  traits: backendTraits.union([
+    .default(enabledTraits: defaultBackendTraits)
+  ]),
   targets: targets
 )

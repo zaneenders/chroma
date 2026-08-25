@@ -15,9 +15,11 @@ swift run ChromaDemo
 Run the Wayland/EGL/OpenGL ES demo on Linux:
 
 ```sh
-swift run --traits WaylandBackend ChromaDemo
+swift run ChromaDemo
 ```
 
+The native backend is selected by default on each platform. To build the demo
+without a graphical backend, use `swift build --disable-default-traits`.
 SwiftPM options such as `--traits` must appear before the executable name;
 arguments after `ChromaDemo` are passed to the demo itself.
 
