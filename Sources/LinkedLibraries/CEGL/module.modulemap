@@ -1,0 +1,5 @@
+module CEGL [system] {
+  header "include/CEGL.h"
+  link "EGL"
+  export *
+}

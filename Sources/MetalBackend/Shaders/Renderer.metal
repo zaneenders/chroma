@@ -38,17 +38,8 @@ vertex TextVertexOut text_vertex(uint vid [[vertex_id]],
 
 fragment float4 text_fragment(TextVertexOut in [[stage_in]],
                               texture2d<float> fontTex [[texture(0)]]) {
-    constexpr sampler s(filter::nearest);
-    float a = fontTex.sample(s, in.texCoord).r;
-    return float4(in.color.rgb, in.color.a * a);
-}
-
-// The readable face is rasterized at 2× atlas resolution. Linear sampling
-// downsamples that coverage cleanly, while the display face keeps its crisp
-// nearest-neighbor bitmap treatment in text_fragment.
-fragment float4 readable_text_fragment(TextVertexOut in [[stage_in]],
-                                       texture2d<float> fontTex [[texture(0)]]) {
-    constexpr sampler s(min_filter::linear, mag_filter::linear);
+    constexpr sampler s(min_filter::linear, mag_filter::linear,
+                        mip_filter::linear);
     float a = fontTex.sample(s, in.texCoord).r;
     return float4(in.color.rgb, in.color.a * a);
 }

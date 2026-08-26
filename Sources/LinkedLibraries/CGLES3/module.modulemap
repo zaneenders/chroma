@@ -1,0 +1,5 @@
+module CGLES3 [system] {
+  header "include/CGLES3.h"
+  link "GLESv2"
+  export *
+}

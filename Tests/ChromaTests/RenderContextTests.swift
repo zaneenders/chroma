@@ -62,6 +62,21 @@ struct RenderContextTests {
     #expect(renderer.context.interaction === renderer.interaction)
     #expect(renderer.context.selection === renderer.interaction.textSelection)
   }
+
+  @Test func redrawInvalidationIsCoalescedUntilConsumed() {
+    let interaction = Interaction()
+    var invalidations = 0
+    interaction.onRedrawRequested = { invalidations += 1 }
+
+    interaction.requestRedraw()
+    interaction.requestRedraw()
+    #expect(invalidations == 1)
+    #expect(interaction.consumeRedrawRequest())
+    #expect(!interaction.consumeRedrawRequest())
+
+    interaction.requestRedraw()
+    #expect(invalidations == 2)
+  }
 }
 
 @MainActor

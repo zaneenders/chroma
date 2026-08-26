@@ -10,9 +10,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
   private let queue: MTLCommandQueue
   private let shapePipeline: MTLRenderPipelineState
   private let textPipeline: MTLRenderPipelineState
-  private let readableTextPipeline: MTLRenderPipelineState
   private let fontAtlas: FontAtlas
-  private let readableFontAtlas: ReadableFontAtlas
   private let mtkView: ChromaInputView
 
   public let name = "Metal"
@@ -55,7 +53,6 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     self.device = device
     self.queue = queue
     self.fontAtlas = try FontAtlas(device: device)
-    self.readableFontAtlas = try ReadableFontAtlas(device: device)
 
     let mtkView = ChromaInputView(frame: frame, device: device)
     mtkView.clearColor = MTLClearColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1.0)
@@ -88,21 +85,16 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
       vertex: "text_vertex",
       fragment: "text_fragment"
     )
-    let readableTextPipeline = try Self.makePipeline(
-      device: device,
-      pixelFormat: mtkView.colorPixelFormat,
-      library: library,
-      vertex: "text_vertex",
-      fragment: "readable_text_fragment"
-    )
     self.shapePipeline = shapePipeline
     self.textPipeline = textPipeline
-    self.readableTextPipeline = readableTextPipeline
 
     super.init()
     mtkView.delegate = self
     mtkView.interaction = interaction
     mtkView.keyBindings = keyBindings
+    interaction.onRedrawRequested = { [weak mtkView] in
+      mtkView?.needsDisplay = true
+    }
   }
 
   public convenience init(size: Size) throws {
@@ -123,7 +115,7 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
     refreshTimer = timer
   }
 
-  public func run(title: String = "Hello Triangle") {
+  public func run(title: String) {
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
 
@@ -349,20 +341,12 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
           (face == .readable ? metrics.cellAdvance : metrics.displayCellAdvance) * scale
         var pen = SIMD2<Float>(position.x, position.y)
         for character in text {
-          // The readable CoreText atlas intentionally covers printable ASCII.
-          // Route arrows, diamonds, command keys, bullets, and other UI glyphs
-          // through the complete bitmap atlas instead of showing '?'.
-          let glyphFace: FontFace =
-            face == .readable && !readableFontAtlas.contains(character) ? .display : face
-          if textFace != nil, textFace != glyphFace { closeText() }
+          if textFace != nil, textFace != face { closeText() }
           if textStart == nil {
             textStart = textInstances.count
-            textFace = glyphFace
+            textFace = face
           }
-          let (u0, v0, u1, v1) =
-            glyphFace == .readable
-            ? readableFontAtlas.glyphUV(character)
-            : fontAtlas.glyphUV(character)
+          let (u0, v0, u1, v1) = fontAtlas.glyphUV(character, readable: face == .readable)
           textInstances.append(
             TextInstance(
               dst_p0: ndc(pen.x, pen.y),
@@ -423,10 +407,8 @@ public final class MetalRenderer: NSObject, MTKViewDelegate, NSWindowDelegate, R
           instanceCount: instanceCount)
       case .text(let instanceOffset, let instanceCount, let face):
         guard let textBuffer else { continue }
-        enc.setRenderPipelineState(face == .readable ? readableTextPipeline : textPipeline)
-        enc.setFragmentTexture(
-          face == .readable ? readableFontAtlas.texture : fontAtlas.texture,
-          index: 0)
+        enc.setRenderPipelineState(textPipeline)
+        enc.setFragmentTexture(fontAtlas.texture, index: 0)
         enc.setVertexBuffer(
           textBuffer,
           offset: instanceOffset * MemoryLayout<TextInstance>.stride,
