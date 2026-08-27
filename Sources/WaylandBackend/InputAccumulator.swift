@@ -45,6 +45,11 @@ final class InputAccumulator {
     keyboard.drain(commands: &commands, textEvents: &textEvents)
   }
 
+  func insertText(_ text: String) {
+    guard !text.isEmpty else { return }
+    textEvents.append(.insert(text))
+  }
+
   func pointerEntered(x: Float, y: Float) {
     pointerPosition = Point(x: x, y: y)
   }

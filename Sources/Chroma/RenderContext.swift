@@ -6,6 +6,13 @@ public struct RenderContext {
 
   public var selection: TextSelectionManager { interaction.textSelection }
 
+  /// Installs a provider for text copied outside Chroma's built-in selectable
+  /// text and editable controls. The provider is consulted first by platform
+  /// clipboard backends.
+  public func setCopyTextProvider(_ provider: (@MainActor () -> String?)?) {
+    interaction.onCopy = provider
+  }
+
   /// The current input mode. Activating an editable control enters editing mode;
   /// ending editing or moving focus returns to movement mode.
   public var interactionMode: InteractionMode { interaction.mode }

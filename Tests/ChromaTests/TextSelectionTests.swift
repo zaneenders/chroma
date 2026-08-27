@@ -194,6 +194,13 @@ struct TextSelectionTests {
     #expect(ctx.copyText() == "custom copy")
   }
 
+  @Test func renderContextCanInstallCustomCopyProvider() {
+    let ctx = RenderContext()
+    ctx.setCopyTextProvider { "custom copy" }
+
+    #expect(ctx.interaction.copyText() == "custom copy")
+  }
+
   @Test func contextsTrackSelectionsIndependently() {
     let a = Interaction()
     let b = Interaction()

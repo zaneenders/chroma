@@ -13,6 +13,8 @@ final class WaylandKeyboard {
   private var repeatDelay: Int32 = 0
   private var repeatingKey: UInt32?
   private var nextRepeatTime: Double?
+  var onCopy: (() -> Void)?
+  var onPaste: (() -> Void)?
 
   func setKeyBindings(_ bindings: KeyBindings) {
     self.bindings = bindings
@@ -23,6 +25,8 @@ final class WaylandKeyboard {
     keyboard = nil
     pendingCommands.removeAll(keepingCapacity: false)
     pendingTextEvents.removeAll(keepingCapacity: false)
+    onCopy = nil
+    onPaste = nil
     cancelRepeat()
   }
 
@@ -120,9 +124,10 @@ final class WaylandKeyboard {
 
   private func applyEditingEvent(_ event: TextEditEvent) {
     switch event {
-    case .copy, .paste:
-      // Wayland clipboard protocol support is not wired up yet.
-      break
+    case .copy:
+      onCopy?()
+    case .paste:
+      onPaste?()
     default:
       pendingTextEvents.append(event)
     }
