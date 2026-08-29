@@ -61,15 +61,23 @@ package final class Interaction {
   }
 
   package var onCopy: (() -> String?)?
+  package var onSelectAll: (() -> Bool)?
 
   package func copyText() -> String? {
-    if let text = onCopy?(), !text.isEmpty { return text }
+    // An active editor owns its selection. App-level providers are a fallback for
+    // custom selectable content and must not shadow a text field selection.
     if isTextEditing, let range = textSelectionRange, let editingText {
       let characters = Array(editingText)
       guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
       return String(characters[range])
     }
+    if let text = onCopy?(), !text.isEmpty { return text }
     return textSelection.selectedText()
+  }
+
+  package func selectAll(at point: Point) {
+    if onSelectAll?() == true { return }
+    textSelection.selectAll(at: point)
   }
 
   var scrollOffsets: [WidgetID: Float] = [:]
@@ -132,7 +140,13 @@ package final class Interaction {
     buildingScrollViewports = []
 
     if input.pointerPressed {
+      dragOrigin = input.pointerPressPosition
+      dragCurrent = input.pointerPosition
       textSelection.clear()
+    } else if input.pointerReleased {
+      dragOrigin = nil
+    } else if isDragging {
+      dragCurrent = input.pointerPosition
     }
     textSelection.updateFromDrag(interaction: self)
     textSelection.layoutRegistry.clear()
@@ -143,15 +157,6 @@ package final class Interaction {
         endEditing()
       }
       lastPointerPosition = input.pointerPosition
-      if input.pointerPressed {
-        dragOrigin = input.pointerPressPosition
-      }
-      if input.pointerReleased {
-        dragOrigin = nil
-      }
-      if isDragging {
-        dragCurrent = input.pointerPosition
-      }
     }
 
     guard let tree else { return }

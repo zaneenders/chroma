@@ -6,7 +6,9 @@ extension Interaction {
     text: String,
     onChange: (String) -> Void,
     onSubmit: ((String) -> Void)? = nil,
-    onEndEditing: (() -> CommandResult)? = nil
+    onEndEditing: (() -> CommandResult)? = nil,
+    pointerOffset: ((Point) -> Int)? = nil,
+    verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     guard let parent = builderStack.last else {
       preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")
@@ -18,7 +20,14 @@ extension Interaction {
 
     if selected && activatePending {
       activatePending = false
-      beginEditing(id, caretOffset: text.count)
+      if editingLeaf != id {
+        beginEditing(id, caretOffset: text.count)
+      }
+    }
+
+    if selected, editingLeaf != id, isDragging, let origin = dragOrigin, rect.contains(origin) {
+      let offset = pointerOffset?(origin) ?? text.count
+      beginEditing(id, caretOffset: max(0, min(text.count, offset)))
     }
 
     var editing = editingLeaf == id
@@ -26,10 +35,23 @@ extension Interaction {
       editingText = text
       var characters = Array(text)
       caretOffset = min(caretOffset, characters.count)
+
+      if isDragging, let origin = dragOrigin, rect.contains(origin) {
+        let offset: (Point) -> Int = pointerOffset ?? { point in
+          let cellWidth = self.fontMetrics.cellAdvance
+          guard cellWidth > 0, cellWidth.isFinite else { return 0 }
+          return Int(((point.x - rect.minX) / cellWidth).rounded(.toNearestOrAwayFromZero))
+        }
+        let anchor = max(0, min(characters.count, offset(origin)))
+        let current = max(0, min(characters.count, offset(dragCurrent)))
+        caretOffset = current
+        textSelectionRange = anchor == current ? nil : min(anchor, current)..<max(anchor, current)
+      }
+
       var changed = false
       eventLoop: for event in input.textEvents {
         switch event {
-        case .copy, .paste:
+        case .copy, .cut, .paste:
           // TODO: is continue the best way to handle this?
           // Backends own the pasteboard and intercept these before delivery.
           continue
@@ -70,6 +92,25 @@ extension Interaction {
         case .moveCaretRight:
           caretOffset = textSelectionRange?.upperBound ?? min(characters.count, caretOffset + 1)
           textSelectionRange = nil
+        case .moveCaretUp:
+          caretOffset = verticalOffset?(caretOffset, -1) ?? 0
+          textSelectionRange = nil
+        case .moveCaretDown:
+          caretOffset = verticalOffset?(caretOffset, 1) ?? characters.count
+          textSelectionRange = nil
+        case .selectCaretUp, .selectCaretDown:
+          let direction = event == .selectCaretUp ? -1 : 1
+          let anchor: Int
+          if let selection = textSelectionRange {
+            anchor = caretOffset == selection.lowerBound ? selection.upperBound : selection.lowerBound
+          } else {
+            anchor = caretOffset
+          }
+          caretOffset = verticalOffset?(caretOffset, direction)
+            ?? (direction < 0 ? 0 : characters.count)
+          textSelectionRange = anchor == caretOffset
+            ? nil
+            : min(anchor, caretOffset)..<max(anchor, caretOffset)
         case .moveCaretToStart:
           caretOffset = 0
           textSelectionRange = nil
@@ -107,7 +148,8 @@ extension Interaction {
     }
     return TextInputState(
       hovered: selected, held: held, editing: editing,
-      caretOffset: editing ? caretOffset : nil)
+      caretOffset: editing ? caretOffset : nil,
+      selectionRange: editing ? textSelectionRange : nil)
   }
 
 }

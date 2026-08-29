@@ -7,10 +7,17 @@ public struct RenderContext {
   public var selection: TextSelectionManager { interaction.textSelection }
 
   /// Installs a provider for text copied outside Chroma's built-in selectable
-  /// text and editable controls. The provider is consulted first by platform
-  /// clipboard backends.
+  /// text and editable controls. Platform clipboard backends consult it when an
+  /// editable control does not own an active text selection.
   public func setCopyTextProvider(_ provider: (@MainActor () -> String?)?) {
     interaction.onCopy = provider
+  }
+
+  /// Installs a handler for Select All outside editable controls. Return `true`
+  /// when the app selected its custom content, or `false` to fall back to
+  /// Chroma's built-in selectable text.
+  public func setSelectAllHandler(_ handler: (@MainActor () -> Bool)?) {
+    interaction.onSelectAll = handler
   }
 
   /// The current input mode. Activating an editable control enters editing mode;
@@ -26,6 +33,16 @@ public struct RenderContext {
   ///
   /// Custom primitives should inspect this snapshot instead of mutating engine state.
   public var input: InputState { interaction.input }
+
+  /// The persisted origin of the active pointer drag. Unlike
+  /// `input.pointerPressPosition`, this remains available after the press frame.
+  public var pointerDragOrigin: Point? { interaction.dragOrigin }
+
+  /// The latest pointer position captured for the active drag.
+  public var pointerDragPosition: Point { interaction.dragCurrent }
+
+  /// Whether a pointer drag is currently active.
+  public var isPointerDragging: Bool { interaction.isDragging }
 
   public init(theme: ChromaTheme = .dark, textScale: Float = 1) {
     self.interaction = Interaction()
@@ -70,7 +87,9 @@ public struct RenderContext {
     text: String,
     onChange: (String) -> Void,
     onSubmit: ((String) -> Void)? = nil,
-    onEndEditing: (() -> CommandResult)? = nil
+    onEndEditing: (() -> CommandResult)? = nil,
+    pointerOffset: ((Point) -> Int)? = nil,
+    verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     interaction.textInputBehavior(
       id: id,
@@ -78,7 +97,9 @@ public struct RenderContext {
       text: text,
       onChange: onChange,
       onSubmit: onSubmit,
-      onEndEditing: onEndEditing
+      onEndEditing: onEndEditing,
+      pointerOffset: pointerOffset,
+      verticalOffset: verticalOffset
     )
   }
 

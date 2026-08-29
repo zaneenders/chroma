@@ -45,8 +45,13 @@ public struct TextField: PrimitiveBlock {
     let metrics = context.fontMetrics
     let scale = fontScale * context.textScale
     let style = style ?? context.theme.textField
+    let cellWidth = metrics.cellAdvance * scale
+    let textOriginX = rect.minX + padding
     let state = context.textInputState(
-      id: id, in: rect, text: getText(), onChange: onChange, onSubmit: onSubmit)
+      id: id, in: rect, text: getText(), onChange: onChange, onSubmit: onSubmit,
+      pointerOffset: { point in
+        Int(((point.x - textOriginX) / cellWidth).rounded(.toNearestOrAwayFromZero))
+      })
 
     drawList.fillRoundedRect(
       rect,
@@ -63,7 +68,6 @@ public struct TextField: PrimitiveBlock {
       y: rect.minY + padding + 1,
       width: max(0, rect.size.width - 2 * padding),
       height: metrics.glyphHeight * scale)
-    let cellWidth = metrics.cellAdvance * scale
 
     var textOffset: Float = 0
     if let caret = state.caretOffset {
@@ -81,7 +85,7 @@ public struct TextField: PrimitiveBlock {
     let text = getText()
     if text.isEmpty && !state.editing {
       drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: scale)
-    } else if state.editing, let selection = context.interaction.textSelectionRange {
+    } else if state.editing, let selection = state.selectionRange {
       let selectionRect = Rect(
         x: inner.minX + textOffset + Float(selection.lowerBound) * cellWidth,
         y: inner.minY,
@@ -110,7 +114,7 @@ public struct TextField: PrimitiveBlock {
         color: style.foreground,
         scale: scale)
     }
-    if let caret = state.caretOffset, context.interaction.textSelectionRange == nil,
+    if let caret = state.caretOffset, state.selectionRange == nil,
       Self.caretVisible
     {
       drawList.fillRect(

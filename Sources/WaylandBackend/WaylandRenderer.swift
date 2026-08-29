@@ -91,7 +91,9 @@ public final class WaylandRenderer: Renderer {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
     keyboard.onCopy = { [weak self] in self?.copyToClipboard() }
+    keyboard.onCut = { [weak self] in self?.cutToClipboard() }
     keyboard.onPaste = { [weak self] in self?.pasteFromClipboard() }
+    keyboard.onSelectAll = { [weak self] in self?.selectAll() }
   }
 
   package func setMinimumRefreshRate(_ refreshRate: Double) {
@@ -301,6 +303,22 @@ public final class WaylandRenderer: Renderer {
       unsafe wl_data_device_add_listener(
         dataDevice, &Self.dataDeviceListener, Unmanaged.passUnretained(self).toOpaque())
     }
+  }
+
+  private func selectAll() {
+    if interaction.mode == .editing {
+      input.insertTextEvent(.selectAll)
+    } else {
+      interaction.selectAll(at: input.pointerPositionSnapshot)
+    }
+    requestFrame()
+  }
+
+  private func cutToClipboard() {
+    guard interaction.mode == .editing, interaction.copyText()?.isEmpty == false else { return }
+    copyToClipboard()
+    input.insertTextEvent(.deleteForward)
+    requestFrame()
   }
 
   private func copyToClipboard() {
