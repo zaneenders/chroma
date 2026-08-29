@@ -13,7 +13,20 @@ public struct KeyModifiers: OptionSet, Hashable, Sendable {
   public static let shift = Self(rawValue: 1 << 0)
   public static let control = Self(rawValue: 1 << 1)
   public static let option = Self(rawValue: 1 << 2)
+  /// The physical Command modifier on Apple keyboards.
   public static let command = Self(rawValue: 1 << 3)
+  /// The physical Logo/Super modifier used by Linux desktop environments.
+  public static let superKey = Self(rawValue: 1 << 4)
+
+  /// The platform's conventional application-shortcut modifier: Command on
+  /// macOS and Super on Linux.
+  #if os(macOS)
+  public static let primary = command
+  #elseif os(Linux)
+  public static let primary = superKey
+  #else
+  public static let primary = control
+  #endif
 }
 
 public struct KeyChord: Hashable, Sendable {

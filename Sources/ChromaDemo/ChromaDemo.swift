@@ -33,10 +33,10 @@ struct ChromaDemo: App {
 
   var keyBindings: KeyBindings {
     KeyBindings {
-      bind("c", modifiers: .command, to: .editing(.copy))
-      bind("x", modifiers: .command, to: .editing(.cut))
-      bind("v", modifiers: .command, to: .editing(.paste))
-      bind("a", modifiers: .command, to: .editing(.selectAll))
+      bind("c", modifiers: .primary, to: .editing(.copy))
+      bind("x", modifiers: .primary, to: .editing(.cut))
+      bind("v", modifiers: .primary, to: .editing(.paste))
+      bind("a", modifiers: .primary, to: .editing(.selectAll))
       bind(.backspace, to: .editing(.backspace))
       bind(.delete, to: .editing(.deleteForward))
       bind(.leftArrow, to: .editing(.moveCaretLeft))
