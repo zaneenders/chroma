@@ -9,24 +9,16 @@ struct KeyBindingsTests {
     #expect(!KeyModifiers.superKey.contains(.command))
   }
 
-  @Test func primaryUsesThePlatformApplicationModifier() {
-    #if os(macOS)
-    #expect(KeyModifiers.primary == .command)
-    #elseif os(Linux)
-    #expect(KeyModifiers.primary == .superKey)
-    #else
-    #expect(KeyModifiers.primary == .control)
-    #endif
-  }
+  @Test func physicalModifiersCombineWithOtherModifiers() {
+    for systemModifier in [KeyModifiers.command, .superKey] {
+      let bindings = KeyBindings {
+        bind("l", modifiers: [systemModifier, .shift], to: .editing(.selectAll))
+      }
 
-  @Test func primaryCombinesWithOtherModifiers() {
-    let bindings = KeyBindings {
-      bind("l", modifiers: [.primary, .shift], to: .editing(.selectAll))
+      #expect(
+        bindings.command(for: KeyChord("l", modifiers: [systemModifier, .shift]))
+          == .some(.some(.editing(.selectAll))))
+      #expect(bindings.command(for: KeyChord("l", modifiers: systemModifier)) == nil)
     }
-
-    #expect(
-      bindings.command(for: KeyChord("l", modifiers: [.primary, .shift]))
-        == .some(.some(.editing(.selectAll))))
-    #expect(bindings.command(for: KeyChord("l", modifiers: .primary)) == nil)
   }
 }

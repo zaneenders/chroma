@@ -17,16 +17,6 @@ public struct KeyModifiers: OptionSet, Hashable, Sendable {
   public static let command = Self(rawValue: 1 << 3)
   /// The physical Logo/Super modifier used by Linux desktop environments.
   public static let superKey = Self(rawValue: 1 << 4)
-
-  /// The platform's conventional application-shortcut modifier: Command on
-  /// macOS and Super on Linux.
-  #if os(macOS)
-  public static let primary = command
-  #elseif os(Linux)
-  public static let primary = superKey
-  #else
-  public static let primary = control
-  #endif
 }
 
 public struct KeyChord: Hashable, Sendable {
