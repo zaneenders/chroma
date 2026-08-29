@@ -176,7 +176,11 @@ package final class Interaction {
     if input.pointerPressed {
       if let hovered { moveCursor(to: hovered) }
       pressedLeaf = hovered.flatMap { tree.node(at: $0)?.leafID }
-    } else if input.pointerPosition != lastPointerPosition, let hovered, hovered != selection {
+    } else if dragOrigin == nil, input.pointerPosition != lastPointerPosition, let hovered,
+      hovered != selection
+    {
+      // Preserve the control that owns an active drag. In particular, dragging a
+      // text selection across another focusable leaf must not end editing.
       moveCursor(to: hovered)
     }
     if input.pointerReleased {

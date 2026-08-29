@@ -257,6 +257,29 @@ struct TextInputTests {
     #expect(text == "ho")
   }
 
+  @Test func pointerDragKeepsEditingWhenCrossingAnotherFocusableControl() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    let cellWidth = ctx.fontMetrics.cellAdvance
+    let origin = Point(x: cellWidth, y: 10)
+    frame(
+      ctx,
+      input: InputState(
+        pointerPosition: origin, pointerPressPosition: origin,
+        pointerDown: true, pointerPressed: true),
+      text: &text)
+    let state = frame(
+      ctx,
+      input: InputState(pointerPosition: Point(x: 4 * cellWidth, y: 30), pointerDown: true),
+      text: &text)
+
+    #expect(state.editing)
+    #expect(state.selectionRange == 1..<4)
+    #expect(ctx.editingLeaf == WidgetID("name"))
+  }
+
   @Test func cutDeletionEventRemovesTheSelectedRange() {
     let ctx = Interaction()
     var text = "hello"

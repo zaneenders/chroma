@@ -44,6 +44,7 @@ public final class WaylandRenderer: Renderer {
   private var dataDevice: OpaquePointer?
   private var dataDeviceVersion: UInt32 = 0
   private var selectionOffer: OpaquePointer?
+  private var dragOffer: OpaquePointer?
   private var offeredMIMETypes: [OpaquePointer: Set<String>] = [:]
   private var clipboardSources: [OpaquePointer: Data] = [:]
   private struct ClipboardRead {
@@ -422,14 +423,41 @@ public final class WaylandRenderer: Renderer {
       unsafe wl_data_offer_add_listener(
         offer, &dataOfferListener, Unmanaged.passUnretained(renderer).toOpaque())
     },
-    enter: { _, _, _, _, _, _, _ in },
-    leave: { _, _ in },
+    enter: { data, _, _, _, _, _, offer in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let previous = renderer.dragOffer, previous != offer,
+        previous != renderer.selectionOffer
+      {
+        renderer.offeredMIMETypes.removeValue(forKey: previous)
+        unsafe wl_data_offer_destroy(previous)
+      }
+      renderer.dragOffer = offer
+    },
+    leave: { data, _ in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
+        renderer.offeredMIMETypes.removeValue(forKey: offer)
+        unsafe wl_data_offer_destroy(offer)
+      }
+      renderer.dragOffer = nil
+    },
     motion: { _, _, _, _, _ in },
-    drop: { _, _ in },
+    drop: { data, _ in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
+        renderer.offeredMIMETypes.removeValue(forKey: offer)
+        unsafe wl_data_offer_destroy(offer)
+      }
+      renderer.dragOffer = nil
+    },
     selection: { data, _, offer in
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       if let previous = renderer.selectionOffer, previous != offer {
+        if renderer.dragOffer == previous { renderer.dragOffer = nil }
         renderer.offeredMIMETypes.removeValue(forKey: previous)
         unsafe wl_data_offer_destroy(previous)
       }
@@ -1147,7 +1175,11 @@ public final class WaylandRenderer: Renderer {
     keyboard.cleanup()
     for transfer in clipboardReads.values { transfer.source.cancel() }
     clipboardReads.removeAll()
+    if let dragOffer, dragOffer != selectionOffer {
+      unsafe wl_data_offer_destroy(dragOffer)
+    }
     if let selectionOffer { unsafe wl_data_offer_destroy(selectionOffer) }
+    dragOffer = nil
     selectionOffer = nil
     offeredMIMETypes.removeAll()
     for source in clipboardSources.keys { unsafe wl_data_source_destroy(source) }
