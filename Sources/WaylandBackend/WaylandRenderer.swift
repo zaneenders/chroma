@@ -42,6 +42,7 @@ public final class WaylandRenderer: Renderer {
   private var wlKeyboard: OpaquePointer?
   private var dataDeviceManager: OpaquePointer?
   private var dataDevice: OpaquePointer?
+  private var dataDeviceVersion: UInt32 = 0
   private var selectionOffer: OpaquePointer?
   private var offeredMIMETypes: [OpaquePointer: Set<String>] = [:]
   private var clipboardSources: [OpaquePointer: Data] = [:]
@@ -450,7 +451,8 @@ public final class WaylandRenderer: Renderer {
           guard let base = rawBuffer.baseAddress else { return }
           var offset = 0
           while offset < rawBuffer.count {
-            let count = write(fd, base.advanced(by: offset), rawBuffer.count - offset)
+            let count = chroma_write_no_sigpipe(
+              fd, base.advanced(by: offset), rawBuffer.count - offset)
             if count > 0 { offset += count } else if errno != EINTR { break }
           }
         }
@@ -493,8 +495,10 @@ public final class WaylandRenderer: Renderer {
         }
         renderer.setUpDataDeviceIfReady()
       case "wl_data_device_manager":
+        renderer.dataDeviceVersion = min(version, 3)
         renderer.dataDeviceManager = unsafe OpaquePointer(
-          wl_registry_bind(registry, name, &dataDeviceManagerInterface, min(version, 3)))
+          wl_registry_bind(
+            registry, name, &dataDeviceManagerInterface, renderer.dataDeviceVersion))
         renderer.setUpDataDeviceIfReady()
       case "wl_shm":
         renderer.shm = unsafe OpaquePointer(
@@ -1148,7 +1152,13 @@ public final class WaylandRenderer: Renderer {
     offeredMIMETypes.removeAll()
     for source in clipboardSources.keys { unsafe wl_data_source_destroy(source) }
     clipboardSources.removeAll()
-    if let dataDevice { unsafe wl_data_device_release(dataDevice) }
+    if let dataDevice {
+      if dataDeviceVersion >= UInt32(WL_DATA_DEVICE_RELEASE_SINCE_VERSION) {
+        unsafe wl_data_device_release(dataDevice)
+      } else {
+        unsafe wl_proxy_destroy(dataDevice)
+      }
+    }
     if let dataDeviceManager { unsafe wl_data_device_manager_destroy(dataDeviceManager) }
     if let pointer { unsafe wl_pointer_destroy(pointer) }
     if let wlKeyboard { unsafe wl_keyboard_destroy(wlKeyboard) }
@@ -1165,6 +1175,7 @@ public final class WaylandRenderer: Renderer {
     wlKeyboard = nil
     dataDevice = nil
     dataDeviceManager = nil
+    dataDeviceVersion = 0
     seat = nil
     shm = nil
     toplevel = nil
