@@ -726,7 +726,8 @@ public final class WaylandRenderer: Renderer {
     axis_stop: { _, _, _, _ in },
     axis_discrete: { _, _, _, _ in },
     axis_value120: { _, _, _, _ in },
-    axis_relative_direction: { _, _, _, _ in }
+    axis_relative_direction: { _, _, _, _ in },
+    warp: { _, _, _, _ in }
   )
 
   private static var surfaceListener = unsafe wl_surface_listener(
