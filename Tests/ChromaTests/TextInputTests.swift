@@ -11,6 +11,7 @@ struct TextInputTests {
     input: InputState = InputState(),
     text: inout String,
     includeField: Bool = true,
+    pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     ctx.beginFrame(input: input)
@@ -19,7 +20,8 @@ struct TextInputTests {
     if includeField {
       result = ctx.textInputBehavior(
         id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
-        text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
+        text: text, onChange: { text = $0 }, pointerOffset: pointerOffset,
+        verticalOffset: verticalOffset)
     }
     _ = ctx.interactiveBehavior(
       id: WidgetID("b"), rect: Rect(x: 0, y: 20, width: 100, height: 20))
@@ -61,6 +63,29 @@ struct TextInputTests {
     #expect(state.editing)
     #expect(state.caretOffset == 2)
     #expect(ctx.isTextEditing)
+  }
+
+  @Test func clickPlacesCaretUsingTheControlHitTest() {
+    let ctx = Interaction()
+    var text = "hello"
+    frame(ctx, text: &text)
+    frame(ctx, input: InputState(commands: nav(.down)), text: &text)
+    let click = Point(x: 10, y: 10)
+    frame(
+      ctx,
+      input: InputState(
+        pointerPosition: click, pointerPressPosition: click,
+        pointerDown: true, pointerPressed: true),
+      text: &text,
+      pointerOffset: { _, _ in 1 })
+    let state = frame(
+      ctx,
+      input: InputState(pointerPosition: click, pointerReleased: true),
+      text: &text,
+      pointerOffset: { _, _ in 1 })
+
+    #expect(state.editing)
+    #expect(state.caretOffset == 1)
   }
 
   @Test func typingInsertsAtCaret() {
@@ -241,6 +266,16 @@ struct TextInputTests {
     _ = frame(ctx, input: InputState(textEvents: [.deleteForward]), text: &text)
 
     #expect(text.isEmpty)
+  }
+
+  @Test func customCopyProviderDoesNotCreateAnEditableSelectionForCut() {
+    let ctx = Interaction()
+    ctx.onCopy = { "custom selection" }
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    #expect(ctx.copyText() == "custom selection")
+    #expect(ctx.editableSelectionText() == nil)
   }
 
   @Test func activeTextSelectionTakesPrecedenceOverCustomCopyProvider() {

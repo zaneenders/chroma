@@ -45,7 +45,13 @@ public final class WaylandRenderer: Renderer {
   private var selectionOffer: OpaquePointer?
   private var offeredMIMETypes: [OpaquePointer: Set<String>] = [:]
   private var clipboardSources: [OpaquePointer: Data] = [:]
-  private var clipboardReads: [Int32: (source: DispatchSourceRead, data: Data)] = [:]
+  private struct ClipboardRead {
+    var source: DispatchSourceRead
+    var data: Data
+    var editingLeaf: WidgetID
+    var editingSessionGeneration: Int
+  }
+  private var clipboardReads: [Int32: ClipboardRead] = [:]
   private var latestInputSerial: UInt32 = 0
   private let keyboard = WaylandKeyboard()
   private var surface: OpaquePointer?
@@ -315,15 +321,17 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func cutToClipboard() {
-    guard interaction.mode == .editing, copyToClipboard() else { return }
+    guard let text = interaction.editableSelectionText(), !text.isEmpty,
+      copyToClipboard(text)
+    else { return }
     input.insertTextEvent(.deleteForward)
     requestFrame()
   }
 
   @discardableResult
-  private func copyToClipboard() -> Bool {
+  private func copyToClipboard(_ explicitText: String? = nil) -> Bool {
     guard let dataDeviceManager, let dataDevice, latestInputSerial != 0,
-      let text = interaction.copyText(), !text.isEmpty,
+      let text = explicitText ?? interaction.copyText(), !text.isEmpty,
       let source = unsafe wl_data_device_manager_create_data_source(dataDeviceManager)
     else { return false }
     let sourceKey = source
@@ -339,10 +347,11 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func pasteFromClipboard() {
-    guard interaction.mode == .editing, let offer = selectionOffer,
+    guard let editingLeaf = interaction.editingLeaf, let offer = selectionOffer,
       let offered = offeredMIMETypes[offer],
       let mimeType = Self.clipboardMIMETypes.first(where: offered.contains)
     else { return }
+    let editingSessionGeneration = interaction.editingSessionGeneration
     var descriptors = [Int32](repeating: -1, count: 2)
     guard pipe(&descriptors) == 0 else { return }
     let readFD = descriptors[0]
@@ -350,7 +359,11 @@ public final class WaylandRenderer: Renderer {
     let flags = fcntl(readFD, F_GETFL)
     if flags >= 0 { _ = fcntl(readFD, F_SETFL, flags | O_NONBLOCK) }
     let source = DispatchSource.makeReadSource(fileDescriptor: readFD, queue: .main)
-    clipboardReads[readFD] = (source, Data())
+    clipboardReads[readFD] = ClipboardRead(
+      source: source,
+      data: Data(),
+      editingLeaf: editingLeaf,
+      editingSessionGeneration: editingSessionGeneration)
     source.setEventHandler { [weak self] in
       MainActor.assumeIsolated { self?.readClipboard(fd: readFD) }
     }
@@ -372,6 +385,9 @@ public final class WaylandRenderer: Renderer {
       } else if count == 0 {
         clipboardReads.removeValue(forKey: fd)
         transfer.source.cancel()
+        guard interaction.editingLeaf == transfer.editingLeaf,
+          interaction.editingSessionGeneration == transfer.editingSessionGeneration
+        else { return }
         let text = String(decoding: transfer.data, as: UTF8.self)
         input.insertText(text)
         requestFrame()

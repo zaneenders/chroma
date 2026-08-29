@@ -139,9 +139,7 @@ final class ChromaInputView: MTKView {
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(text, forType: .string)
     case .cut:
-      guard interaction.mode == .editing,
-        let text = interaction.copyText(), !text.isEmpty
-      else { return true }
+      guard let text = interaction.editableSelectionText(), !text.isEmpty else { return true }
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(text, forType: .string)
       pendingTextEvents.append(.deleteForward)

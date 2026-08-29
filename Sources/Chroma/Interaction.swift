@@ -24,6 +24,7 @@ package final class Interaction {
   var pressedLeaf: WidgetID?
 
   package internal(set) var editingLeaf: WidgetID?
+  package private(set) var editingSessionGeneration: Int = 0
 
   package internal(set) var caretOffset: Int = 0
   package internal(set) var textSelectionRange: Range<Int>?
@@ -64,14 +65,17 @@ package final class Interaction {
   package var onCopy: (() -> String?)?
   package var onSelectAll: (() -> Bool)?
 
+  package func editableSelectionText() -> String? {
+    guard isTextEditing, let range = textSelectionRange, let editingText else { return nil }
+    let characters = Array(editingText)
+    guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
+    return String(characters[range])
+  }
+
   package func copyText() -> String? {
     // An active editor owns its selection. App-level providers are a fallback for
     // custom selectable content and must not shadow a text field selection.
-    if isTextEditing, let range = textSelectionRange, let editingText {
-      let characters = Array(editingText)
-      guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
-      return String(characters[range])
-    }
+    if let text = editableSelectionText() { return text }
     if let text = onCopy?(), !text.isEmpty { return text }
     return textSelection.selectedText()
   }
@@ -99,6 +103,7 @@ package final class Interaction {
   package init() {}
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
+    editingSessionGeneration &+= 1
     editingLeaf = id
     self.caretOffset = caretOffset
     textSelectionRange = nil
@@ -106,6 +111,7 @@ package final class Interaction {
   }
 
   func endEditing() {
+    if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
     editingText = nil
     textSelectionRange = nil
@@ -146,7 +152,8 @@ package final class Interaction {
       textDragAnchor = nil
       textSelection.clear()
     } else if input.pointerReleased {
-      dragOrigin = nil
+      // Keep the press origin through this frame so a control activated on release
+      // can place its caret at the original click position.
       textDragAnchor = nil
     } else if isDragging {
       dragCurrent = input.pointerPosition
@@ -159,6 +166,7 @@ package final class Interaction {
       if let editingLeaf, editingLeaf != selectedLeafID {
         endEditing()
       }
+      if input.pointerReleased { dragOrigin = nil }
       lastPointerPosition = input.pointerPosition
     }
 

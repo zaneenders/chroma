@@ -21,7 +21,13 @@ extension Interaction {
     if selected && activatePending {
       activatePending = false
       if editingLeaf != id {
-        beginEditing(id, caretOffset: text.count)
+        let clickedOffset: Int?
+        if input.pointerReleased, let origin = dragOrigin, rect.contains(origin) {
+          clickedOffset = pointerOffset?(origin, nil)
+        } else {
+          clickedOffset = nil
+        }
+        beginEditing(id, caretOffset: max(0, min(text.count, clickedOffset ?? text.count)))
       }
     }
 
