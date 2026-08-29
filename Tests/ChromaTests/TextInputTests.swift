@@ -223,6 +223,28 @@ struct TextInputTests {
     #expect(state.caretOffset == 5)
   }
 
+  @Test func externalTextChangeClampsSelectionBeforeEditing() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+    #expect(ctx.textSelectionRange == 0..<5)
+
+    text = "hi"
+    var state = frame(ctx, input: InputState(textEvents: [.insert("!")]), text: &text)
+    #expect(text == "!")
+    #expect(state.caretOffset == 1)
+    #expect(state.selectionRange == nil)
+
+    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+    text = ""
+    state = frame(ctx, input: InputState(textEvents: [.deleteForward]), text: &text)
+    #expect(text == "")
+    #expect(state.caretOffset == 0)
+    #expect(state.selectionRange == nil)
+  }
+
   @Test func pointerDragSelectsPartOfAnEditingField() {
     let ctx = Interaction()
     var text = "hello"

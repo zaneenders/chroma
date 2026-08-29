@@ -41,6 +41,11 @@ extension Interaction {
       editingText = text
       var characters = Array(text)
       caretOffset = max(0, min(caretOffset, characters.count))
+      if let selection = textSelectionRange {
+        let lowerBound = max(0, min(selection.lowerBound, characters.count))
+        let upperBound = max(lowerBound, min(selection.upperBound, characters.count))
+        textSelectionRange = lowerBound == upperBound ? nil : lowerBound..<upperBound
+      }
 
       if isProcessingDrag, let origin = dragOrigin, rect.contains(origin) {
         // Keep the origin's hit-test stable if moving the caret scrolls the viewport
