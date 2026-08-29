@@ -58,7 +58,7 @@ public final class TextSelectionManager {
   public init() {}
 
   func updateFromDrag(interaction: Interaction) {
-    guard interaction.isDragging else {
+    guard interaction.isProcessingDrag else {
       if isSelecting { isSelecting = false }
       return
     }

@@ -31,7 +31,7 @@ extension Interaction {
       }
     }
 
-    if selected, editingLeaf != id, isDragging, let origin = dragOrigin, rect.contains(origin) {
+    if selected, editingLeaf != id, isProcessingDrag, let origin = dragOrigin, rect.contains(origin) {
       let offset = pointerOffset?(origin, nil) ?? text.count
       beginEditing(id, caretOffset: max(0, min(text.count, offset)))
     }
@@ -42,7 +42,7 @@ extension Interaction {
       var characters = Array(text)
       caretOffset = max(0, min(caretOffset, characters.count))
 
-      if isDragging, let origin = dragOrigin, rect.contains(origin) {
+      if isProcessingDrag, let origin = dragOrigin, rect.contains(origin) {
         // Keep the origin's hit-test stable if moving the caret scrolls the viewport
         // on a later drag frame.
         let viewportCaret = caretOffset

@@ -53,6 +53,7 @@ package final class Interaction {
   package private(set) var dragOrigin: Point? = nil
   package private(set) var dragCurrent: Point = Point(x: -1, y: -1)
   package var isDragging: Bool { dragOrigin != nil && input.pointerDown }
+  var isProcessingDrag: Bool { isDragging || (dragOrigin != nil && input.pointerReleased) }
   package var dragRect: Rect? {
     guard let origin = dragOrigin, isDragging else { return nil }
     return Rect(
@@ -153,8 +154,9 @@ package final class Interaction {
       textSelection.clear()
     } else if input.pointerReleased {
       // Keep the press origin through this frame so a control activated on release
-      // can place its caret at the original click position.
-      textDragAnchor = nil
+      // can place its caret at the original click position, and include the final
+      // pointer position in any drag selection.
+      dragCurrent = input.pointerPosition
     } else if isDragging {
       dragCurrent = input.pointerPosition
     }
@@ -166,7 +168,6 @@ package final class Interaction {
       if let editingLeaf, editingLeaf != selectedLeafID {
         endEditing()
       }
-      if input.pointerReleased { dragOrigin = nil }
       lastPointerPosition = input.pointerPosition
     }
 
@@ -204,6 +205,12 @@ package final class Interaction {
   }
 
   package func endFrame() {
+    defer {
+      if input.pointerReleased {
+        dragOrigin = nil
+        textDragAnchor = nil
+      }
+    }
     routePendingCommands()
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {

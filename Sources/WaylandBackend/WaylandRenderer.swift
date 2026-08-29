@@ -49,6 +49,7 @@ public final class WaylandRenderer: Renderer {
   private var clipboardSources: [OpaquePointer: Data] = [:]
   private struct ClipboardRead {
     var source: DispatchSourceRead
+    var timeout: DispatchSourceTimer
     var data: Data
     var pasteID: Int32
     var editingLeaf: WidgetID
@@ -96,6 +97,7 @@ public final class WaylandRenderer: Renderer {
   private static var dataDeviceManagerInterface: wl_interface = unsafe wl_data_device_manager_interface
   private static let clipboardMIMETypes = ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING"]
   private static let maximumClipboardBytes = 16 * 1024 * 1024
+  private static let clipboardReadTimeout: DispatchTimeInterval = .seconds(5)
 
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
@@ -365,8 +367,10 @@ public final class WaylandRenderer: Renderer {
     let flags = fcntl(readFD, F_GETFL)
     if flags >= 0 { _ = fcntl(readFD, F_SETFL, flags | O_NONBLOCK) }
     let source = DispatchSource.makeReadSource(fileDescriptor: readFD, queue: .main)
+    let timeout = DispatchSource.makeTimerSource(queue: .main)
     clipboardReads[readFD] = ClipboardRead(
       source: source,
+      timeout: timeout,
       data: Data(),
       pasteID: id,
       editingLeaf: editingLeaf,
@@ -375,7 +379,12 @@ public final class WaylandRenderer: Renderer {
       MainActor.assumeIsolated { self?.readClipboard(fd: readFD) }
     }
     source.setCancelHandler { close(readFD) }
+    timeout.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.cancelClipboardRead(fd: readFD) }
+    }
+    timeout.schedule(deadline: .now() + Self.clipboardReadTimeout)
     source.resume()
+    timeout.resume()
     unsafe wl_data_offer_receive(offer, mimeType, writeFD)
     close(writeFD)
     flushWayland()
@@ -409,8 +418,14 @@ public final class WaylandRenderer: Renderer {
     }
   }
 
+  private func cancelClipboardRead(fd: Int32) {
+    guard let transfer = clipboardReads[fd] else { return }
+    finishClipboardRead(fd: fd, transfer: transfer, text: nil)
+  }
+
   private func finishClipboardRead(fd: Int32, transfer: ClipboardRead, text: String?) {
     clipboardReads.removeValue(forKey: fd)
+    transfer.timeout.cancel()
     transfer.source.cancel()
     keyboard.completePaste(id: transfer.pasteID, text: text)
     requestFrame()
@@ -1186,7 +1201,10 @@ public final class WaylandRenderer: Renderer {
 
     cursor.cleanup()
     keyboard.cleanup()
-    for transfer in clipboardReads.values { transfer.source.cancel() }
+    for transfer in clipboardReads.values {
+      transfer.timeout.cancel()
+      transfer.source.cancel()
+    }
     clipboardReads.removeAll()
     if let dragOffer, dragOffer != selectionOffer {
       unsafe wl_data_offer_destroy(dragOffer)
