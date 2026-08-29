@@ -14,6 +14,25 @@ struct RenderContextTests {
     #expect(context.fontMetrics == interaction.fontMetrics)
   }
 
+  @Test func contextExposesPersistedPointerDragState() {
+    let interaction = Interaction()
+    let origin = Point(x: 10, y: 20)
+    let current = Point(x: 30, y: 40)
+
+    interaction.beginFrame(
+      input: InputState(
+        pointerPosition: origin, pointerPressPosition: origin,
+        pointerDown: true, pointerPressed: true))
+    interaction.endFrame()
+    interaction.beginFrame(
+      input: InputState(pointerPosition: current, pointerDown: true))
+
+    let context = RenderContext(interaction: interaction)
+    #expect(context.isPointerDragging)
+    #expect(context.pointerDragOrigin == origin)
+    #expect(context.pointerDragPosition == current)
+  }
+
   @Test func contextFontMetricsWriteThroughToInteraction() {
     let interaction = Interaction()
     let context = RenderContext(interaction: interaction)

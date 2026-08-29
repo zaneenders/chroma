@@ -24,9 +24,11 @@ package final class Interaction {
   var pressedLeaf: WidgetID?
 
   package internal(set) var editingLeaf: WidgetID?
+  package private(set) var editingSessionGeneration: Int = 0
 
   package internal(set) var caretOffset: Int = 0
   package internal(set) var textSelectionRange: Range<Int>?
+  var textDragAnchor: Int?
   package internal(set) var editingText: String?
 
   public package(set) var mode: InteractionMode = .movement
@@ -51,6 +53,7 @@ package final class Interaction {
   package private(set) var dragOrigin: Point? = nil
   package private(set) var dragCurrent: Point = Point(x: -1, y: -1)
   package var isDragging: Bool { dragOrigin != nil && input.pointerDown }
+  var isProcessingDrag: Bool { isDragging || (dragOrigin != nil && input.pointerReleased) }
   package var dragRect: Rect? {
     guard let origin = dragOrigin, isDragging else { return nil }
     return Rect(
@@ -61,15 +64,26 @@ package final class Interaction {
   }
 
   package var onCopy: (() -> String?)?
+  package var onSelectAll: (() -> Bool)?
+
+  package func editableSelectionText() -> String? {
+    guard isTextEditing, let range = textSelectionRange, let editingText else { return nil }
+    let characters = Array(editingText)
+    guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
+    return String(characters[range])
+  }
 
   package func copyText() -> String? {
+    // An active editor owns its selection. App-level providers are a fallback for
+    // custom selectable content and must not shadow a text field selection.
+    if let text = editableSelectionText() { return text }
     if let text = onCopy?(), !text.isEmpty { return text }
-    if isTextEditing, let range = textSelectionRange, let editingText {
-      let characters = Array(editingText)
-      guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
-      return String(characters[range])
-    }
     return textSelection.selectedText()
+  }
+
+  package func selectAll(at point: Point) {
+    if onSelectAll?() == true { return }
+    textSelection.selectAll(at: point)
   }
 
   var scrollOffsets: [WidgetID: Float] = [:]
@@ -90,6 +104,7 @@ package final class Interaction {
   package init() {}
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
+    editingSessionGeneration &+= 1
     editingLeaf = id
     self.caretOffset = caretOffset
     textSelectionRange = nil
@@ -97,6 +112,7 @@ package final class Interaction {
   }
 
   func endEditing() {
+    if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
     editingText = nil
     textSelectionRange = nil
@@ -132,7 +148,17 @@ package final class Interaction {
     buildingScrollViewports = []
 
     if input.pointerPressed {
+      dragOrigin = input.pointerPressPosition
+      dragCurrent = input.pointerPosition
+      textDragAnchor = nil
       textSelection.clear()
+    } else if input.pointerReleased {
+      // Keep the press origin through this frame so a control activated on release
+      // can place its caret at the original click position, and include the final
+      // pointer position in any drag selection.
+      dragCurrent = input.pointerPosition
+    } else if isDragging {
+      dragCurrent = input.pointerPosition
     }
     textSelection.updateFromDrag(interaction: self)
     textSelection.layoutRegistry.clear()
@@ -143,15 +169,6 @@ package final class Interaction {
         endEditing()
       }
       lastPointerPosition = input.pointerPosition
-      if input.pointerPressed {
-        dragOrigin = input.pointerPressPosition
-      }
-      if input.pointerReleased {
-        dragOrigin = nil
-      }
-      if isDragging {
-        dragCurrent = input.pointerPosition
-      }
     }
 
     guard let tree else { return }
@@ -160,7 +177,11 @@ package final class Interaction {
     if input.pointerPressed {
       if let hovered { moveCursor(to: hovered) }
       pressedLeaf = hovered.flatMap { tree.node(at: $0)?.leafID }
-    } else if input.pointerPosition != lastPointerPosition, let hovered, hovered != selection {
+    } else if dragOrigin == nil, input.pointerPosition != lastPointerPosition, let hovered,
+      hovered != selection
+    {
+      // Preserve the control that owns an active drag. In particular, dragging a
+      // text selection across another focusable leaf must not end editing.
       moveCursor(to: hovered)
     }
     if input.pointerReleased {
@@ -184,6 +205,12 @@ package final class Interaction {
   }
 
   package func endFrame() {
+    defer {
+      if input.pointerReleased {
+        dragOrigin = nil
+        textDragAnchor = nil
+      }
+    }
     routePendingCommands()
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {

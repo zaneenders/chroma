@@ -40,6 +40,23 @@ public final class WaylandRenderer: Renderer {
   private var seat: OpaquePointer?
   private var pointer: OpaquePointer?
   private var wlKeyboard: OpaquePointer?
+  private var dataDeviceManager: OpaquePointer?
+  private var dataDevice: OpaquePointer?
+  private var dataDeviceVersion: UInt32 = 0
+  private var selectionOffer: OpaquePointer?
+  private var dragOffer: OpaquePointer?
+  private var offeredMIMETypes: [OpaquePointer: Set<String>] = [:]
+  private var clipboardSources: [OpaquePointer: Data] = [:]
+  private struct ClipboardRead {
+    var source: DispatchSourceRead
+    var timeout: DispatchSourceTimer
+    var data: Data
+    var pasteID: Int32
+    var editingLeaf: WidgetID
+    var editingSessionGeneration: Int
+  }
+  private var clipboardReads: [Int32: ClipboardRead] = [:]
+  private var latestInputSerial: UInt32 = 0
   private let keyboard = WaylandKeyboard()
   private var surface: OpaquePointer?
   private var xdgSurface: OpaquePointer?
@@ -77,10 +94,18 @@ public final class WaylandRenderer: Renderer {
   private static var wmBaseInterface: wl_interface = unsafe xdg_wm_base_interface
   private static var seatInterface: wl_interface = unsafe wl_seat_interface
   private static var shmInterface: wl_interface = unsafe wl_shm_interface
+  private static var dataDeviceManagerInterface: wl_interface = unsafe wl_data_device_manager_interface
+  private static let clipboardMIMETypes = ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING"]
+  private static let maximumClipboardBytes = 16 * 1024 * 1024
+  private static let clipboardReadTimeout: DispatchTimeInterval = .seconds(5)
 
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
+    keyboard.onCopy = { [weak self] in self?.copyToClipboard() }
+    keyboard.onCut = { [weak self] in self?.copyEditableSelectionToClipboard() ?? false }
+    keyboard.onPaste = { [weak self] id in self?.pasteFromClipboard(id: id) }
+    keyboard.onSelectAll = { [weak self] in self?.selectAllOutsideEditor() ?? false }
   }
 
   package func setMinimumRefreshRate(_ refreshRate: Double) {
@@ -205,6 +230,7 @@ public final class WaylandRenderer: Renderer {
     keyboardRepeatTimer = nil
     let repeated = keyboard.dispatchRepeats(
       editing: interaction.mode == .editing,
+      editingSession: interaction.editingSessionGeneration,
       now: ProcessInfo.processInfo.systemUptime)
     if repeated { requestFrame() }
     updateKeyboardRepeatTimer()
@@ -283,6 +309,222 @@ public final class WaylandRenderer: Renderer {
     unsafe wl_surface_commit(surface)
   }
 
+  private func setUpDataDeviceIfReady() {
+    guard dataDevice == nil, let dataDeviceManager, let seat else { return }
+    dataDevice = unsafe wl_data_device_manager_get_data_device(dataDeviceManager, seat)
+    if let dataDevice {
+      unsafe wl_data_device_add_listener(
+        dataDevice, &Self.dataDeviceListener, Unmanaged.passUnretained(self).toOpaque())
+    }
+  }
+
+  private func selectAllOutsideEditor() -> Bool {
+    guard interaction.mode != .editing else { return false }
+    interaction.selectAll(at: input.pointerPositionSnapshot)
+    requestFrame()
+    return true
+  }
+
+  private func copyEditableSelectionToClipboard() -> Bool {
+    guard let text = interaction.editableSelectionText(), !text.isEmpty else { return false }
+    return copyToClipboard(text)
+  }
+
+  @discardableResult
+  private func copyToClipboard(_ explicitText: String? = nil) -> Bool {
+    guard let dataDeviceManager, let dataDevice, latestInputSerial != 0,
+      let text = explicitText ?? interaction.copyText(), !text.isEmpty,
+      let source = unsafe wl_data_device_manager_create_data_source(dataDeviceManager)
+    else { return false }
+    let sourceKey = source
+    clipboardSources[sourceKey] = Data(text.utf8)
+    unsafe wl_data_source_add_listener(
+      source, &Self.dataSourceListener, Unmanaged.passUnretained(self).toOpaque())
+    for mimeType in Self.clipboardMIMETypes {
+      unsafe wl_data_source_offer(source, mimeType)
+    }
+    unsafe wl_data_device_set_selection(dataDevice, source, latestInputSerial)
+    flushWayland()
+    return true
+  }
+
+  private func pasteFromClipboard(id: Int32) {
+    guard let editingLeaf = interaction.editingLeaf, let offer = selectionOffer,
+      let offered = offeredMIMETypes[offer],
+      let mimeType = Self.clipboardMIMETypes.first(where: offered.contains)
+    else {
+      keyboard.completePaste(id: id, text: nil)
+      return
+    }
+    let editingSessionGeneration = interaction.editingSessionGeneration
+    var descriptors = [Int32](repeating: -1, count: 2)
+    guard pipe(&descriptors) == 0 else {
+      keyboard.completePaste(id: id, text: nil)
+      return
+    }
+    let readFD = descriptors[0]
+    let writeFD = descriptors[1]
+    let flags = fcntl(readFD, F_GETFL)
+    if flags >= 0 { _ = fcntl(readFD, F_SETFL, flags | O_NONBLOCK) }
+    let source = DispatchSource.makeReadSource(fileDescriptor: readFD, queue: .main)
+    let timeout = DispatchSource.makeTimerSource(queue: .main)
+    clipboardReads[readFD] = ClipboardRead(
+      source: source,
+      timeout: timeout,
+      data: Data(),
+      pasteID: id,
+      editingLeaf: editingLeaf,
+      editingSessionGeneration: editingSessionGeneration)
+    source.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.readClipboard(fd: readFD) }
+    }
+    source.setCancelHandler { close(readFD) }
+    timeout.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.cancelClipboardRead(fd: readFD) }
+    }
+    timeout.schedule(deadline: .now() + Self.clipboardReadTimeout)
+    source.resume()
+    timeout.resume()
+    unsafe wl_data_offer_receive(offer, mimeType, writeFD)
+    close(writeFD)
+    flushWayland()
+  }
+
+  private func readClipboard(fd: Int32) {
+    guard var transfer = clipboardReads[fd] else { return }
+    var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+    while true {
+      let count = read(fd, &buffer, buffer.count)
+      if count > 0 {
+        guard transfer.data.count <= Self.maximumClipboardBytes - count else {
+          finishClipboardRead(fd: fd, transfer: transfer, text: nil)
+          return
+        }
+        transfer.data.append(contentsOf: buffer.prefix(count))
+        clipboardReads[fd] = transfer
+      } else if count == 0 {
+        let sessionIsCurrent =
+          interaction.editingLeaf == transfer.editingLeaf
+          && interaction.editingSessionGeneration == transfer.editingSessionGeneration
+        let text = sessionIsCurrent ? String(decoding: transfer.data, as: UTF8.self) : nil
+        finishClipboardRead(fd: fd, transfer: transfer, text: text)
+        return
+      } else if errno == EAGAIN || errno == EWOULDBLOCK {
+        return
+      } else {
+        finishClipboardRead(fd: fd, transfer: transfer, text: nil)
+        return
+      }
+    }
+  }
+
+  private func cancelClipboardRead(fd: Int32) {
+    guard let transfer = clipboardReads[fd] else { return }
+    finishClipboardRead(fd: fd, transfer: transfer, text: nil)
+  }
+
+  private func finishClipboardRead(fd: Int32, transfer: ClipboardRead, text: String?) {
+    clipboardReads.removeValue(forKey: fd)
+    transfer.timeout.cancel()
+    transfer.source.cancel()
+    keyboard.completePaste(id: transfer.pasteID, text: text)
+    requestFrame()
+  }
+
+  private static var dataOfferListener = unsafe wl_data_offer_listener(
+    offer: { data, offer, mimeType in
+      guard let data, let offer, let mimeType else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.offeredMIMETypes[offer, default: []].insert(
+        unsafe String(cString: mimeType))
+    },
+    source_actions: { _, _, _ in },
+    action: { _, _, _ in }
+  )
+
+  private static var dataDeviceListener = unsafe wl_data_device_listener(
+    data_offer: { data, _, offer in
+      guard let data, let offer else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.offeredMIMETypes[offer] = []
+      unsafe wl_data_offer_add_listener(
+        offer, &dataOfferListener, Unmanaged.passUnretained(renderer).toOpaque())
+    },
+    enter: { data, _, _, _, _, _, offer in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let previous = renderer.dragOffer, previous != offer,
+        previous != renderer.selectionOffer
+      {
+        renderer.offeredMIMETypes.removeValue(forKey: previous)
+        unsafe wl_data_offer_destroy(previous)
+      }
+      renderer.dragOffer = offer
+    },
+    leave: { data, _ in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
+        renderer.offeredMIMETypes.removeValue(forKey: offer)
+        unsafe wl_data_offer_destroy(offer)
+      }
+      renderer.dragOffer = nil
+    },
+    motion: { _, _, _, _, _ in },
+    drop: { data, _ in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
+        renderer.offeredMIMETypes.removeValue(forKey: offer)
+        unsafe wl_data_offer_destroy(offer)
+      }
+      renderer.dragOffer = nil
+    },
+    selection: { data, _, offer in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      if let previous = renderer.selectionOffer, previous != offer {
+        if renderer.dragOffer == previous { renderer.dragOffer = nil }
+        renderer.offeredMIMETypes.removeValue(forKey: previous)
+        unsafe wl_data_offer_destroy(previous)
+      }
+      renderer.selectionOffer = offer
+    }
+  )
+
+  private static var dataSourceListener = unsafe wl_data_source_listener(
+    target: { _, _, _ in },
+    send: { data, source, _, fd in
+      guard let data, let source else {
+        close(fd)
+        return
+      }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      let bytes = renderer.clipboardSources[source] ?? Data()
+      DispatchQueue.global().async {
+        bytes.withUnsafeBytes { rawBuffer in
+          guard let base = rawBuffer.baseAddress else { return }
+          var offset = 0
+          while offset < rawBuffer.count {
+            let count = chroma_write_no_sigpipe(
+              fd, base.advanced(by: offset), rawBuffer.count - offset)
+            if count > 0 { offset += count } else if errno != EINTR { break }
+          }
+        }
+        close(fd)
+      }
+    },
+    cancelled: { data, source in
+      guard let data, let source else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.clipboardSources.removeValue(forKey: source)
+      unsafe wl_data_source_destroy(source)
+    },
+    dnd_drop_performed: { _, _ in },
+    dnd_finished: { _, _ in },
+    action: { _, _, _ in }
+  )
+
   private static var registryListener = unsafe wl_registry_listener(
     global: { data, registry, name, interface, version in
       guard let data, let registry, let interface else { return }
@@ -306,6 +548,13 @@ public final class WaylandRenderer: Renderer {
           unsafe wl_seat_add_listener(
             seat, &seatListener, Unmanaged.passUnretained(renderer).toOpaque())
         }
+        renderer.setUpDataDeviceIfReady()
+      case "wl_data_device_manager":
+        renderer.dataDeviceVersion = min(version, 3)
+        renderer.dataDeviceManager = unsafe OpaquePointer(
+          wl_registry_bind(
+            registry, name, &dataDeviceManagerInterface, renderer.dataDeviceVersion))
+        renderer.setUpDataDeviceIfReady()
       case "wl_shm":
         renderer.shm = unsafe OpaquePointer(
           wl_registry_bind(registry, name, &shmInterface, min(version, 1)))
@@ -360,19 +609,25 @@ public final class WaylandRenderer: Renderer {
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       renderer.keyboard.installKeymap(fd: fd, size: size)
     },
-    enter: { _, _, _, _, _ in },
+    enter: { data, _, serial, _, _ in
+      guard let data else { return }
+      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.latestInputSerial = serial
+    },
     leave: { data, _, _, _ in
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       renderer.keyboard.focusLost()
     },
-    key: { data, _, _, _, key, state in
+    key: { data, _, serial, _, key, state in
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.latestInputSerial = serial
       if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
         renderer.keyboard.keyPressed(
           key,
           editing: renderer.interaction.mode == .editing,
+          editingSession: renderer.interaction.editingSessionGeneration,
           now: ProcessInfo.processInfo.systemUptime
         )
         renderer.requestFrame()
@@ -427,9 +682,10 @@ public final class WaylandRenderer: Renderer {
 
   private static let pointerButton:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, UInt32, UInt32, UInt32) -> Void = {
-      data, _, _, _, button, state in
+      data, _, serial, _, button, state in
       guard let data, button == btnLeft else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+      renderer.latestInputSerial = serial
       switch state {
       case WL_POINTER_BUTTON_STATE_PRESSED.rawValue:
         renderer.input.pointerPressed()
@@ -470,7 +726,8 @@ public final class WaylandRenderer: Renderer {
     axis_stop: { _, _, _, _ in },
     axis_discrete: { _, _, _, _ in },
     axis_value120: { _, _, _, _ in },
-    axis_relative_direction: { _, _, _, _ in }
+    axis_relative_direction: { _, _, _, _ in },
+    warp: { _, _, _, _ in }
   )
 
   private static var surfaceListener = unsafe wl_surface_listener(
@@ -733,7 +990,7 @@ public final class WaylandRenderer: Renderer {
     // Pointer input is accumulated from the wl_pointer listener and drained
     // once per frame, matching the Metal backend's event coalescing.
     updateFrameRate()
-    input.drainKeyboard(keyboard)
+    input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
     interaction.beginFrame(input: input.frameInput())
 
     let viewport = Size(width: Float(width), height: Float(height))
@@ -945,6 +1202,28 @@ public final class WaylandRenderer: Renderer {
 
     cursor.cleanup()
     keyboard.cleanup()
+    for transfer in clipboardReads.values {
+      transfer.timeout.cancel()
+      transfer.source.cancel()
+    }
+    clipboardReads.removeAll()
+    if let dragOffer, dragOffer != selectionOffer {
+      unsafe wl_data_offer_destroy(dragOffer)
+    }
+    if let selectionOffer { unsafe wl_data_offer_destroy(selectionOffer) }
+    dragOffer = nil
+    selectionOffer = nil
+    offeredMIMETypes.removeAll()
+    for source in clipboardSources.keys { unsafe wl_data_source_destroy(source) }
+    clipboardSources.removeAll()
+    if let dataDevice {
+      if dataDeviceVersion >= UInt32(WL_DATA_DEVICE_RELEASE_SINCE_VERSION) {
+        unsafe wl_data_device_release(dataDevice)
+      } else {
+        unsafe wl_proxy_destroy(dataDevice)
+      }
+    }
+    if let dataDeviceManager { unsafe wl_data_device_manager_destroy(dataDeviceManager) }
     if let pointer { unsafe wl_pointer_destroy(pointer) }
     if let wlKeyboard { unsafe wl_keyboard_destroy(wlKeyboard) }
     if let seat { unsafe wl_seat_destroy(seat) }
@@ -958,6 +1237,9 @@ public final class WaylandRenderer: Renderer {
     if let display { unsafe wl_display_disconnect(display) }
     pointer = nil
     wlKeyboard = nil
+    dataDevice = nil
+    dataDeviceManager = nil
+    dataDeviceVersion = 0
     seat = nil
     shm = nil
     toplevel = nil

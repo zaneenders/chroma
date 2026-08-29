@@ -10,7 +10,9 @@ struct TextInputTests {
     _ ctx: Interaction,
     input: InputState = InputState(),
     text: inout String,
-    includeField: Bool = true
+    includeField: Bool = true,
+    pointerOffset: ((Point, Int?) -> Int)? = nil,
+    verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     ctx.beginFrame(input: input)
     var result = TextInputState(hovered: false, held: false, editing: false, caretOffset: nil)
@@ -18,7 +20,8 @@ struct TextInputTests {
     if includeField {
       result = ctx.textInputBehavior(
         id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
-        text: text, onChange: { text = $0 })
+        text: text, onChange: { text = $0 }, pointerOffset: pointerOffset,
+        verticalOffset: verticalOffset)
     }
     _ = ctx.interactiveBehavior(
       id: WidgetID("b"), rect: Rect(x: 0, y: 20, width: 100, height: 20))
@@ -62,6 +65,29 @@ struct TextInputTests {
     #expect(ctx.isTextEditing)
   }
 
+  @Test func clickPlacesCaretUsingTheControlHitTest() {
+    let ctx = Interaction()
+    var text = "hello"
+    frame(ctx, text: &text)
+    frame(ctx, input: InputState(commands: nav(.down)), text: &text)
+    let click = Point(x: 10, y: 10)
+    frame(
+      ctx,
+      input: InputState(
+        pointerPosition: click, pointerPressPosition: click,
+        pointerDown: true, pointerPressed: true),
+      text: &text,
+      pointerOffset: { _, _ in 1 })
+    let state = frame(
+      ctx,
+      input: InputState(pointerPosition: click, pointerReleased: true),
+      text: &text,
+      pointerOffset: { _, _ in 1 })
+
+    #expect(state.editing)
+    #expect(state.caretOffset == 1)
+  }
+
   @Test func typingInsertsAtCaret() {
     let ctx = Interaction()
     var text = "abc"
@@ -100,6 +126,57 @@ struct TextInputTests {
     #expect(state.caretOffset == 0, "clamped at the start")
     state = frame(ctx, input: InputState(textEvents: [.moveCaretToEnd]), text: &text)
     #expect(state.caretOffset == 2)
+  }
+
+  @Test func verticalMovementAndSelectionUseTheControlLayout() {
+    let ctx = Interaction()
+    var text = "abcdefghi"
+    enterInsertMode(ctx, text: &text)
+    let verticalOffset: (Int, Int) -> Int = { offset, direction in
+      max(0, min(text.count, offset + direction * 3))
+    }
+
+    ctx.beginFrame(input: InputState(textEvents: [.moveCaretUp]))
+    ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+    var state = ctx.textInputBehavior(
+      id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
+      text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
+    _ = ctx.interactiveBehavior(
+      id: WidgetID("b"), rect: Rect(x: 0, y: 20, width: 100, height: 20))
+    ctx.endGroup()
+    ctx.endFrame()
+    #expect(state.caretOffset == 6)
+
+    ctx.beginFrame(input: InputState(textEvents: [.selectCaretUp]))
+    ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+    state = ctx.textInputBehavior(
+      id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
+      text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
+    _ = ctx.interactiveBehavior(
+      id: WidgetID("b"), rect: Rect(x: 0, y: 20, width: 100, height: 20))
+    ctx.endGroup()
+    ctx.endFrame()
+    #expect(state.caretOffset == 3)
+    #expect(state.selectionRange == 3..<6)
+  }
+
+  @Test func verticalMovementClampsControlOffsetsToTextBounds() {
+    let ctx = Interaction()
+    var text = "abc"
+    enterInsertMode(ctx, text: &text)
+
+    _ = frame(
+      ctx, input: InputState(textEvents: [.moveCaretUp]), text: &text,
+      verticalOffset: { _, _ in -100 })
+    var state = frame(ctx, input: InputState(textEvents: [.insert("x")]), text: &text)
+    #expect(text == "xabc")
+    #expect(state.caretOffset == 1)
+
+    state = frame(
+      ctx, input: InputState(textEvents: [.selectCaretDown]), text: &text,
+      verticalOffset: { _, _ in 100 })
+    #expect(state.caretOffset == text.count)
+    #expect(state.selectionRange == 1..<text.count)
   }
 
   @Test func eventsWithoutSessionDoNothing() {
@@ -144,6 +221,141 @@ struct TextInputTests {
     #expect(text == "world")
     #expect(ctx.textSelectionRange == nil)
     #expect(state.caretOffset == 5)
+  }
+
+  @Test func externalTextChangeClampsSelectionBeforeEditing() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+    #expect(ctx.textSelectionRange == 0..<5)
+
+    text = "hi"
+    var state = frame(ctx, input: InputState(textEvents: [.insert("!")]), text: &text)
+    #expect(text == "!")
+    #expect(state.caretOffset == 1)
+    #expect(state.selectionRange == nil)
+
+    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+    text = ""
+    state = frame(ctx, input: InputState(textEvents: [.deleteForward]), text: &text)
+    #expect(text == "")
+    #expect(state.caretOffset == 0)
+    #expect(state.selectionRange == nil)
+  }
+
+  @Test func pointerDragSelectsPartOfAnEditingField() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    let cellWidth = ctx.fontMetrics.cellAdvance
+    let origin = Point(x: cellWidth, y: 10)
+    frame(
+      ctx,
+      input: InputState(
+        pointerPosition: origin, pointerPressPosition: origin,
+        pointerDown: true, pointerPressed: true),
+      text: &text)
+    let state = frame(
+      ctx,
+      input: InputState(pointerPosition: Point(x: 4 * cellWidth, y: 10), pointerDown: true),
+      text: &text)
+
+    #expect(state.selectionRange == 1..<4)
+    #expect(ctx.copyText() == "ell")
+
+    let released = frame(
+      ctx,
+      input: InputState(
+        pointerPosition: Point(x: 4 * cellWidth, y: 10),
+        pointerReleased: true),
+      text: &text)
+    #expect(released.selectionRange == 1..<4)
+    #expect(ctx.copyText() == "ell")
+
+    _ = frame(ctx, input: InputState(textEvents: [.deleteForward]), text: &text)
+    #expect(text == "ho")
+  }
+
+  @Test func pointerReleaseUsesItsFinalPositionForSelection() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    let cellWidth = ctx.fontMetrics.cellAdvance
+    let origin = Point(x: cellWidth, y: 10)
+    frame(
+      ctx,
+      input: InputState(
+        pointerPosition: origin, pointerPressPosition: origin,
+        pointerDown: true, pointerPressed: true),
+      text: &text)
+    let state = frame(
+      ctx,
+      input: InputState(
+        pointerPosition: Point(x: 4 * cellWidth, y: 10),
+        pointerReleased: true),
+      text: &text)
+
+    #expect(state.selectionRange == 1..<4)
+    #expect(ctx.copyText() == "ell")
+  }
+
+  @Test func pointerDragKeepsEditingWhenCrossingAnotherFocusableControl() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    let cellWidth = ctx.fontMetrics.cellAdvance
+    let origin = Point(x: cellWidth, y: 10)
+    frame(
+      ctx,
+      input: InputState(
+        pointerPosition: origin, pointerPressPosition: origin,
+        pointerDown: true, pointerPressed: true),
+      text: &text)
+    let state = frame(
+      ctx,
+      input: InputState(pointerPosition: Point(x: 4 * cellWidth, y: 30), pointerDown: true),
+      text: &text)
+
+    #expect(state.editing)
+    #expect(state.selectionRange == 1..<4)
+    #expect(ctx.editingLeaf == WidgetID("name"))
+  }
+
+  @Test func cutDeletionEventRemovesTheSelectedRange() {
+    let ctx = Interaction()
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+
+    _ = frame(ctx, input: InputState(textEvents: [.deleteForward]), text: &text)
+
+    #expect(text.isEmpty)
+  }
+
+  @Test func customCopyProviderDoesNotCreateAnEditableSelectionForCut() {
+    let ctx = Interaction()
+    ctx.onCopy = { "custom selection" }
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    #expect(ctx.copyText() == "custom selection")
+    #expect(ctx.editableSelectionText() == nil)
+  }
+
+  @Test func activeTextSelectionTakesPrecedenceOverCustomCopyProvider() {
+    let ctx = Interaction()
+    ctx.onCopy = { "custom selection" }
+    var text = "hello"
+    enterInsertMode(ctx, text: &text)
+
+    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+
+    #expect(ctx.copyText() == "hello")
   }
 
   @Test func selectAllThenDeleteClearsTheField() {
