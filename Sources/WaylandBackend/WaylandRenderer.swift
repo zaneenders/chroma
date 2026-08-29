@@ -50,6 +50,7 @@ public final class WaylandRenderer: Renderer {
   private struct ClipboardRead {
     var source: DispatchSourceRead
     var data: Data
+    var pasteID: Int32
     var editingLeaf: WidgetID
     var editingSessionGeneration: Int
   }
@@ -94,14 +95,15 @@ public final class WaylandRenderer: Renderer {
   private static var shmInterface: wl_interface = unsafe wl_shm_interface
   private static var dataDeviceManagerInterface: wl_interface = unsafe wl_data_device_manager_interface
   private static let clipboardMIMETypes = ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING"]
+  private static let maximumClipboardBytes = 16 * 1024 * 1024
 
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
     keyboard.onCopy = { [weak self] in self?.copyToClipboard() }
-    keyboard.onCut = { [weak self] in self?.cutToClipboard() }
-    keyboard.onPaste = { [weak self] in self?.pasteFromClipboard() }
-    keyboard.onSelectAll = { [weak self] in self?.selectAll() }
+    keyboard.onCut = { [weak self] in self?.copyEditableSelectionToClipboard() ?? false }
+    keyboard.onPaste = { [weak self] id in self?.pasteFromClipboard(id: id) }
+    keyboard.onSelectAll = { [weak self] in self?.selectAllOutsideEditor() ?? false }
   }
 
   package func setMinimumRefreshRate(_ refreshRate: Double) {
@@ -226,6 +228,7 @@ public final class WaylandRenderer: Renderer {
     keyboardRepeatTimer = nil
     let repeated = keyboard.dispatchRepeats(
       editing: interaction.mode == .editing,
+      editingSession: interaction.editingSessionGeneration,
       now: ProcessInfo.processInfo.systemUptime)
     if repeated { requestFrame() }
     updateKeyboardRepeatTimer()
@@ -313,21 +316,16 @@ public final class WaylandRenderer: Renderer {
     }
   }
 
-  private func selectAll() {
-    if interaction.mode == .editing {
-      input.insertTextEvent(.selectAll)
-    } else {
-      interaction.selectAll(at: input.pointerPositionSnapshot)
-    }
+  private func selectAllOutsideEditor() -> Bool {
+    guard interaction.mode != .editing else { return false }
+    interaction.selectAll(at: input.pointerPositionSnapshot)
     requestFrame()
+    return true
   }
 
-  private func cutToClipboard() {
-    guard let text = interaction.editableSelectionText(), !text.isEmpty,
-      copyToClipboard(text)
-    else { return }
-    input.insertTextEvent(.deleteForward)
-    requestFrame()
+  private func copyEditableSelectionToClipboard() -> Bool {
+    guard let text = interaction.editableSelectionText(), !text.isEmpty else { return false }
+    return copyToClipboard(text)
   }
 
   @discardableResult
@@ -348,14 +346,20 @@ public final class WaylandRenderer: Renderer {
     return true
   }
 
-  private func pasteFromClipboard() {
+  private func pasteFromClipboard(id: Int32) {
     guard let editingLeaf = interaction.editingLeaf, let offer = selectionOffer,
       let offered = offeredMIMETypes[offer],
       let mimeType = Self.clipboardMIMETypes.first(where: offered.contains)
-    else { return }
+    else {
+      keyboard.completePaste(id: id, text: nil)
+      return
+    }
     let editingSessionGeneration = interaction.editingSessionGeneration
     var descriptors = [Int32](repeating: -1, count: 2)
-    guard pipe(&descriptors) == 0 else { return }
+    guard pipe(&descriptors) == 0 else {
+      keyboard.completePaste(id: id, text: nil)
+      return
+    }
     let readFD = descriptors[0]
     let writeFD = descriptors[1]
     let flags = fcntl(readFD, F_GETFL)
@@ -364,6 +368,7 @@ public final class WaylandRenderer: Renderer {
     clipboardReads[readFD] = ClipboardRead(
       source: source,
       data: Data(),
+      pasteID: id,
       editingLeaf: editingLeaf,
       editingSessionGeneration: editingSessionGeneration)
     source.setEventHandler { [weak self] in
@@ -382,26 +387,33 @@ public final class WaylandRenderer: Renderer {
     while true {
       let count = read(fd, &buffer, buffer.count)
       if count > 0 {
+        guard transfer.data.count <= Self.maximumClipboardBytes - count else {
+          finishClipboardRead(fd: fd, transfer: transfer, text: nil)
+          return
+        }
         transfer.data.append(contentsOf: buffer.prefix(count))
         clipboardReads[fd] = transfer
       } else if count == 0 {
-        clipboardReads.removeValue(forKey: fd)
-        transfer.source.cancel()
-        guard interaction.editingLeaf == transfer.editingLeaf,
-          interaction.editingSessionGeneration == transfer.editingSessionGeneration
-        else { return }
-        let text = String(decoding: transfer.data, as: UTF8.self)
-        input.insertText(text)
-        requestFrame()
+        let sessionIsCurrent =
+          interaction.editingLeaf == transfer.editingLeaf
+          && interaction.editingSessionGeneration == transfer.editingSessionGeneration
+        let text = sessionIsCurrent ? String(decoding: transfer.data, as: UTF8.self) : nil
+        finishClipboardRead(fd: fd, transfer: transfer, text: text)
         return
       } else if errno == EAGAIN || errno == EWOULDBLOCK {
         return
       } else {
-        clipboardReads.removeValue(forKey: fd)
-        transfer.source.cancel()
+        finishClipboardRead(fd: fd, transfer: transfer, text: nil)
         return
       }
     }
+  }
+
+  private func finishClipboardRead(fd: Int32, transfer: ClipboardRead, text: String?) {
+    clipboardReads.removeValue(forKey: fd)
+    transfer.source.cancel()
+    keyboard.completePaste(id: transfer.pasteID, text: text)
+    requestFrame()
   }
 
   private static var dataOfferListener = unsafe wl_data_offer_listener(
@@ -600,6 +612,7 @@ public final class WaylandRenderer: Renderer {
         renderer.keyboard.keyPressed(
           key,
           editing: renderer.interaction.mode == .editing,
+          editingSession: renderer.interaction.editingSessionGeneration,
           now: ProcessInfo.processInfo.systemUptime
         )
         renderer.requestFrame()
@@ -961,7 +974,7 @@ public final class WaylandRenderer: Renderer {
     // Pointer input is accumulated from the wl_pointer listener and drained
     // once per frame, matching the Metal backend's event coalescing.
     updateFrameRate()
-    input.drainKeyboard(keyboard)
+    input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
     interaction.beginFrame(input: input.frameInput())
 
     let viewport = Size(width: Float(width), height: Float(height))
