@@ -27,6 +27,7 @@ package final class Interaction {
 
   package internal(set) var caretOffset: Int = 0
   package internal(set) var textSelectionRange: Range<Int>?
+  var textDragAnchor: Int?
   package internal(set) var editingText: String?
 
   public package(set) var mode: InteractionMode = .movement
@@ -142,9 +143,11 @@ package final class Interaction {
     if input.pointerPressed {
       dragOrigin = input.pointerPressPosition
       dragCurrent = input.pointerPosition
+      textDragAnchor = nil
       textSelection.clear()
     } else if input.pointerReleased {
       dragOrigin = nil
+      textDragAnchor = nil
     } else if isDragging {
       dragCurrent = input.pointerPosition
     }

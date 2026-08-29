@@ -7,7 +7,7 @@ extension Interaction {
     onChange: (String) -> Void,
     onSubmit: ((String) -> Void)? = nil,
     onEndEditing: (() -> CommandResult)? = nil,
-    pointerOffset: ((Point) -> Int)? = nil,
+    pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     guard let parent = builderStack.last else {
@@ -26,7 +26,7 @@ extension Interaction {
     }
 
     if selected, editingLeaf != id, isDragging, let origin = dragOrigin, rect.contains(origin) {
-      let offset = pointerOffset?(origin) ?? text.count
+      let offset = pointerOffset?(origin, nil) ?? text.count
       beginEditing(id, caretOffset: max(0, min(text.count, offset)))
     }
 
@@ -34,15 +34,22 @@ extension Interaction {
     if editing {
       editingText = text
       var characters = Array(text)
-      caretOffset = min(caretOffset, characters.count)
+      caretOffset = max(0, min(caretOffset, characters.count))
 
       if isDragging, let origin = dragOrigin, rect.contains(origin) {
-        let offset: (Point) -> Int = pointerOffset ?? { point in
+        // Keep the origin's hit-test stable if moving the caret scrolls the viewport
+        // on a later drag frame.
+        let viewportCaret = caretOffset
+        let offset: (Point) -> Int = { point in
+          if let pointerOffset { return pointerOffset(point, viewportCaret) }
           let cellWidth = self.fontMetrics.cellAdvance
           guard cellWidth > 0, cellWidth.isFinite else { return 0 }
           return Int(((point.x - rect.minX) / cellWidth).rounded(.toNearestOrAwayFromZero))
         }
-        let anchor = max(0, min(characters.count, offset(origin)))
+        if textDragAnchor == nil {
+          textDragAnchor = max(0, min(characters.count, offset(origin)))
+        }
+        let anchor = textDragAnchor ?? caretOffset
         let current = max(0, min(characters.count, offset(dragCurrent)))
         caretOffset = current
         textSelectionRange = anchor == current ? nil : min(anchor, current)..<max(anchor, current)
@@ -93,10 +100,12 @@ extension Interaction {
           caretOffset = textSelectionRange?.upperBound ?? min(characters.count, caretOffset + 1)
           textSelectionRange = nil
         case .moveCaretUp:
-          caretOffset = verticalOffset?(caretOffset, -1) ?? 0
+          let offset = verticalOffset?(caretOffset, -1) ?? 0
+          caretOffset = max(0, min(characters.count, offset))
           textSelectionRange = nil
         case .moveCaretDown:
-          caretOffset = verticalOffset?(caretOffset, 1) ?? characters.count
+          let offset = verticalOffset?(caretOffset, 1) ?? characters.count
+          caretOffset = max(0, min(characters.count, offset))
           textSelectionRange = nil
         case .selectCaretUp, .selectCaretDown:
           let direction = event == .selectCaretUp ? -1 : 1
@@ -106,8 +115,9 @@ extension Interaction {
           } else {
             anchor = caretOffset
           }
-          caretOffset = verticalOffset?(caretOffset, direction)
+          let offset = verticalOffset?(caretOffset, direction)
             ?? (direction < 0 ? 0 : characters.count)
+          caretOffset = max(0, min(characters.count, offset))
           textSelectionRange = anchor == caretOffset
             ? nil
             : min(anchor, caretOffset)..<max(anchor, caretOffset)

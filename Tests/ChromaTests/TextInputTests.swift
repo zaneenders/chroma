@@ -10,7 +10,8 @@ struct TextInputTests {
     _ ctx: Interaction,
     input: InputState = InputState(),
     text: inout String,
-    includeField: Bool = true
+    includeField: Bool = true,
+    verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     ctx.beginFrame(input: input)
     var result = TextInputState(hovered: false, held: false, editing: false, caretOffset: nil)
@@ -18,7 +19,7 @@ struct TextInputTests {
     if includeField {
       result = ctx.textInputBehavior(
         id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
-        text: text, onChange: { text = $0 })
+        text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
     }
     _ = ctx.interactiveBehavior(
       id: WidgetID("b"), rect: Rect(x: 0, y: 20, width: 100, height: 20))
@@ -132,6 +133,25 @@ struct TextInputTests {
     ctx.endFrame()
     #expect(state.caretOffset == 3)
     #expect(state.selectionRange == 3..<6)
+  }
+
+  @Test func verticalMovementClampsControlOffsetsToTextBounds() {
+    let ctx = Interaction()
+    var text = "abc"
+    enterInsertMode(ctx, text: &text)
+
+    _ = frame(
+      ctx, input: InputState(textEvents: [.moveCaretUp]), text: &text,
+      verticalOffset: { _, _ in -100 })
+    var state = frame(ctx, input: InputState(textEvents: [.insert("x")]), text: &text)
+    #expect(text == "xabc")
+    #expect(state.caretOffset == 1)
+
+    state = frame(
+      ctx, input: InputState(textEvents: [.selectCaretDown]), text: &text,
+      verticalOffset: { _, _ in 100 })
+    #expect(state.caretOffset == text.count)
+    #expect(state.selectionRange == 1..<text.count)
   }
 
   @Test func eventsWithoutSessionDoNothing() {

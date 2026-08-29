@@ -47,10 +47,26 @@ public struct TextField: PrimitiveBlock {
     let style = style ?? context.theme.textField
     let cellWidth = metrics.cellAdvance * scale
     let textOriginX = rect.minX + padding
+    let innerWidth = max(0, rect.size.width - 2 * padding)
+    let viewportOffset: (Int?) -> Float = { caret in
+      guard let caret, cellWidth > 0, cellWidth.isFinite else { return 0 }
+      let caretX = Float(caret) * cellWidth
+      var offset: Float = 0
+      if caretX > innerWidth - cellWidth {
+        offset = innerWidth - cellWidth - caretX
+      }
+      if caretX + offset < 0 {
+        offset = -caretX
+      }
+      return min(0, offset)
+    }
     let state = context.textInputState(
       id: id, in: rect, text: getText(), onChange: onChange, onSubmit: onSubmit,
-      pointerOffset: { point in
-        Int(((point.x - textOriginX) / cellWidth).rounded(.toNearestOrAwayFromZero))
+      pointerOffset: { point, viewportCaret in
+        guard cellWidth > 0, cellWidth.isFinite else { return 0 }
+        return Int(
+          ((point.x - textOriginX - viewportOffset(viewportCaret)) / cellWidth)
+            .rounded(.toNearestOrAwayFromZero))
       })
 
     drawList.fillRoundedRect(
@@ -66,20 +82,10 @@ public struct TextField: PrimitiveBlock {
     let inner = Rect(
       x: rect.minX + padding,
       y: rect.minY + padding + 1,
-      width: max(0, rect.size.width - 2 * padding),
+      width: innerWidth,
       height: metrics.glyphHeight * scale)
 
-    var textOffset: Float = 0
-    if let caret = state.caretOffset {
-      let caretX = Float(caret) * cellWidth
-      if caretX + textOffset > inner.size.width - cellWidth {
-        textOffset = inner.size.width - cellWidth - caretX
-      }
-      if caretX + textOffset < 0 {
-        textOffset = -caretX
-      }
-      textOffset = min(0, textOffset)
-    }
+    let textOffset = viewportOffset(state.caretOffset)
 
     drawList.pushClip(inner)
     let text = getText()

@@ -88,7 +88,7 @@ public struct RenderContext {
     onChange: (String) -> Void,
     onSubmit: ((String) -> Void)? = nil,
     onEndEditing: (() -> CommandResult)? = nil,
-    pointerOffset: ((Point) -> Int)? = nil,
+    pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     interaction.textInputBehavior(

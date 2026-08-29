@@ -315,17 +315,17 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func cutToClipboard() {
-    guard interaction.mode == .editing, interaction.copyText()?.isEmpty == false else { return }
-    copyToClipboard()
+    guard interaction.mode == .editing, copyToClipboard() else { return }
     input.insertTextEvent(.deleteForward)
     requestFrame()
   }
 
-  private func copyToClipboard() {
+  @discardableResult
+  private func copyToClipboard() -> Bool {
     guard let dataDeviceManager, let dataDevice, latestInputSerial != 0,
       let text = interaction.copyText(), !text.isEmpty,
       let source = unsafe wl_data_device_manager_create_data_source(dataDeviceManager)
-    else { return }
+    else { return false }
     let sourceKey = source
     clipboardSources[sourceKey] = Data(text.utf8)
     unsafe wl_data_source_add_listener(
@@ -335,6 +335,7 @@ public final class WaylandRenderer: Renderer {
     }
     unsafe wl_data_device_set_selection(dataDevice, source, latestInputSerial)
     flushWayland()
+    return true
   }
 
   private func pasteFromClipboard() {
