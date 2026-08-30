@@ -85,9 +85,17 @@ targets.append(contentsOf: [
       "CGLES3",
       "CXKBKeyboard",
     ],
+    exclude: ["Shaders"],
     // The product is only declared on Linux. Its API remains available whether
     // or not the demo-selection trait is enabled.
-    swiftSettings: [.define("WAYLAND_BACKEND")]
+    swiftSettings: [.define("WAYLAND_BACKEND")],
+    plugins: [.plugin(name: "WaylandSourcePlugin")]
+  ),
+  .executableTarget(name: "WaylandSourceGenerator"),
+  .plugin(
+    name: "WaylandSourcePlugin",
+    capability: .buildTool(),
+    dependencies: ["WaylandSourceGenerator"]
   ),
   .systemLibrary(
     name: "CWaylandClient",
