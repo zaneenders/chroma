@@ -34,10 +34,8 @@ struct ChromaDemo: App {
   var keyBindings: KeyBindings {
     #if os(macOS)
     let shortcutModifier = KeyModifiers.command
-    #elseif os(Linux)
-    let shortcutModifier = KeyModifiers.superKey
     #else
-    let shortcutModifier = KeyModifiers.control
+    let shortcutModifier = KeyModifiers.superKey
     #endif
 
     return KeyBindings {
