@@ -114,7 +114,13 @@ final class WaylandKeyboard {
     let resolution = bindings.command(for: chord)
     if editing {
       if case .some(.some(let command)) = resolution, case .editing(let event) = command {
-        applyEditingEvent(event, session: editingSession)
+        if event == .selectAll {
+          // An active editor owns Select All. The app-level handler is only a
+          // fallback for custom selectable content while not editing.
+          pendingTextEvents.append(.event(event, session: editingSession))
+        } else {
+          applyEditingEvent(event, session: editingSession)
+        }
         return
       }
       if case .some(.none) = resolution { return }
@@ -190,7 +196,9 @@ final class WaylandKeyboard {
       pendingTextEvents.append(.paste(id, session: session))
       onPaste?(id)
     case .selectAll:
-      if onSelectAll?() != true { pendingTextEvents.append(.event(event, session: session)) }
+      // An active editor owns Select All. The app-level handler is only a
+      // fallback for custom selectable content while not editing.
+      pendingTextEvents.append(.event(event, session: session))
     default:
       pendingTextEvents.append(.event(event, session: session))
     }
