@@ -233,7 +233,7 @@ final class WaylandKeyboard {
     if modifier("Shift", keyboard: keyboard) { modifiers.insert(.shift) }
     if modifier("Control", keyboard: keyboard) { modifiers.insert(.control) }
     if modifier("Mod1", keyboard: keyboard) { modifiers.insert(.option) }
-    if modifier("Logo", keyboard: keyboard) { modifiers.insert(.command) }
+    if modifier("Logo", keyboard: keyboard) { modifiers.insert(.superKey) }
     return KeyChord(key, modifiers: modifiers)
   }
 

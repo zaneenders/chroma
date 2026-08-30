@@ -32,11 +32,17 @@ struct ChromaDemo: App {
   }
 
   var keyBindings: KeyBindings {
-    KeyBindings {
-      bind("c", modifiers: .command, to: .editing(.copy))
-      bind("x", modifiers: .command, to: .editing(.cut))
-      bind("v", modifiers: .command, to: .editing(.paste))
-      bind("a", modifiers: .command, to: .editing(.selectAll))
+    #if os(macOS)
+    let shortcutModifier = KeyModifiers.command
+    #else
+    let shortcutModifier = KeyModifiers.superKey
+    #endif
+
+    return KeyBindings {
+      bind("c", modifiers: shortcutModifier, to: .editing(.copy))
+      bind("x", modifiers: shortcutModifier, to: .editing(.cut))
+      bind("v", modifiers: shortcutModifier, to: .editing(.paste))
+      bind("a", modifiers: shortcutModifier, to: .editing(.selectAll))
       bind(.backspace, to: .editing(.backspace))
       bind(.delete, to: .editing(.deleteForward))
       bind(.leftArrow, to: .editing(.moveCaretLeft))
