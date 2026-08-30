@@ -138,6 +138,11 @@ final class ChromaInputView: MTKView {
       guard let text = interaction.copyText(), !text.isEmpty else { return true }
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(text, forType: .string)
+    case .cut:
+      guard let text = interaction.editableSelectionText(), !text.isEmpty else { return true }
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(text, forType: .string)
+      pendingTextEvents.append(.deleteForward)
     case .paste:
       guard interaction.mode == .editing,
         let pasted = NSPasteboard.general.string(forType: .string),
@@ -148,7 +153,7 @@ final class ChromaInputView: MTKView {
       if interaction.mode == .editing {
         pendingTextEvents.append(.selectAll)
       } else {
-        interaction.textSelection.selectAll(at: pointerPosition)
+        interaction.selectAll(at: pointerPosition)
       }
     case .backspace:
       guard interaction.mode == .editing else { return true }
@@ -162,6 +167,9 @@ final class ChromaInputView: MTKView {
     case .moveCaretRight:
       guard interaction.mode == .editing else { return false }
       pendingTextEvents.append(.moveCaretRight)
+    case .moveCaretUp, .moveCaretDown, .selectCaretUp, .selectCaretDown:
+      guard interaction.mode == .editing else { return false }
+      pendingTextEvents.append(editing)
     case .moveCaretToStart:
       guard interaction.mode == .editing else { return false }
       pendingTextEvents.append(.moveCaretToStart)

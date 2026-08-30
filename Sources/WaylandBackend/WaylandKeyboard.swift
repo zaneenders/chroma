@@ -7,12 +7,33 @@ import CXKBKeyboard
 final class WaylandKeyboard {
   private var keyboard: OpaquePointer?
   private var bindings = KeyBindings()
+  private enum PendingTextEvent {
+    case event(TextEditEvent, session: Int)
+    case paste(Int32, session: Int)
+
+    var session: Int {
+      switch self {
+      case .event(_, let session), .paste(_, let session): session
+      }
+    }
+  }
+
+  private enum PasteResult {
+    case completed(String?)
+  }
+
   private var pendingCommands: [Command] = []
-  private var pendingTextEvents: [TextEditEvent] = []
+  private var pendingTextEvents: [PendingTextEvent] = []
   private var repeatRate: Int32 = 0
   private var repeatDelay: Int32 = 0
   private var repeatingKey: UInt32?
   private var nextRepeatTime: Double?
+  var onCopy: (() -> Void)?
+  var onCut: (() -> Bool)?
+  var onPaste: ((Int32) -> Void)?
+  var onSelectAll: (() -> Bool)?
+  private var nextPasteID: Int32 = 0
+  private var completedPastes: [Int32: PasteResult] = [:]
 
   func setKeyBindings(_ bindings: KeyBindings) {
     self.bindings = bindings
@@ -23,6 +44,11 @@ final class WaylandKeyboard {
     keyboard = nil
     pendingCommands.removeAll(keepingCapacity: false)
     pendingTextEvents.removeAll(keepingCapacity: false)
+    onCopy = nil
+    onCut = nil
+    onPaste = nil
+    onSelectAll = nil
+    completedPastes.removeAll(keepingCapacity: false)
     cancelRepeat()
   }
 
@@ -41,9 +67,9 @@ final class WaylandKeyboard {
     if repeatRate == 0 { cancelRepeat() }
   }
 
-  func keyPressed(_ key: UInt32, editing: Bool, now: Double) {
+  func keyPressed(_ key: UInt32, editing: Bool, editingSession: Int, now: Double) {
     cancelRepeat()
-    dispatchKey(key, editing: editing)
+    dispatchKey(key, editing: editing, editingSession: editingSession)
     guard repeatRate > 0, let keyboard,
       chroma_xkb_keyboard_key_repeats(keyboard, key) != 0
     else { return }
@@ -60,13 +86,13 @@ final class WaylandKeyboard {
     chroma_xkb_keyboard_reset_compose(keyboard)
   }
 
-  func dispatchRepeats(editing: Bool, now: Double) -> Bool {
+  func dispatchRepeats(editing: Bool, editingSession: Int, now: Double) -> Bool {
     guard let key = repeatingKey, var deadline = nextRepeatTime, repeatRate > 0,
       now >= deadline
     else { return false }
     let interval = 1 / Double(repeatRate)
     repeat {
-      dispatchKey(key, editing: editing)
+      dispatchKey(key, editing: editing, editingSession: editingSession)
       deadline += interval
     } while now >= deadline
     nextRepeatTime = deadline
@@ -75,12 +101,12 @@ final class WaylandKeyboard {
 
   var repeatDeadline: Double? { nextRepeatTime }
 
-  private func dispatchKey(_ key: UInt32, editing: Bool) {
+  private func dispatchKey(_ key: UInt32, editing: Bool, editingSession: Int) {
     guard let keyboard else { return }
     let symbol = chroma_xkb_keyboard_keysym(keyboard, key)
     guard let chord = keyChord(symbol: symbol, keyboard: keyboard) else {
       if editing, let text = text(for: key, keyboard: keyboard) {
-        pendingTextEvents.append(.insert(text))
+        pendingTextEvents.append(.event(.insert(text), session: editingSession))
       }
       return
     }
@@ -88,29 +114,68 @@ final class WaylandKeyboard {
     let resolution = bindings.command(for: chord)
     if editing {
       if case .some(.some(let command)) = resolution, case .editing(let event) = command {
-        applyEditingEvent(event)
+        if event == .selectAll {
+          // An active editor owns Select All. The app-level handler is only a
+          // fallback for custom selectable content while not editing.
+          pendingTextEvents.append(.event(event, session: editingSession))
+        } else {
+          applyEditingEvent(event, session: editingSession)
+        }
         return
       }
       if case .some(.none) = resolution { return }
       if let text = text(for: key, keyboard: keyboard) {
-        pendingTextEvents.append(.insert(text))
+        pendingTextEvents.append(.event(.insert(text), session: editingSession))
         return
       }
     }
     if let resolution, let command = resolution {
       if case .editing(let event) = command {
-        applyEditingEvent(event)
+        applyEditingEvent(event, session: editingSession)
       } else {
         pendingCommands.append(command)
       }
     }
   }
 
-  func drain(commands: inout [Command], textEvents: inout [TextEditEvent]) {
+  func drain(
+    editingSession: Int,
+    commands: inout [Command],
+    textEvents: inout [TextEditEvent]
+  ) {
     commands.append(contentsOf: pendingCommands)
-    textEvents.append(contentsOf: pendingTextEvents)
     pendingCommands.removeAll(keepingCapacity: true)
+
+    var drainedCount = 0
+    for pending in pendingTextEvents {
+      guard pending.session == editingSession else {
+        if case .paste(let id, _) = pending { completedPastes.removeValue(forKey: id) }
+        drainedCount += 1
+        continue
+      }
+      switch pending {
+      case .event(let event, _):
+        textEvents.append(event)
+      case .paste(let id, _):
+        guard case .completed(let text)? = completedPastes.removeValue(forKey: id) else {
+          if drainedCount > 0 { pendingTextEvents.removeFirst(drainedCount) }
+          return
+        }
+        if let text, !text.isEmpty { textEvents.append(.insert(text)) }
+      }
+      drainedCount += 1
+    }
     pendingTextEvents.removeAll(keepingCapacity: true)
+  }
+
+  func completePaste(id: Int32, text: String?) {
+    guard
+      pendingTextEvents.contains(where: {
+        if case .paste(let pendingID, _) = $0 { return pendingID == id }
+        return false
+      })
+    else { return }
+    completedPastes[id] = .completed(text)
   }
 
   private func cancelRepeat() {
@@ -118,13 +183,24 @@ final class WaylandKeyboard {
     nextRepeatTime = nil
   }
 
-  private func applyEditingEvent(_ event: TextEditEvent) {
+  private func applyEditingEvent(_ event: TextEditEvent, session: Int) {
     switch event {
-    case .copy, .paste:
-      // Wayland clipboard protocol support is not wired up yet.
-      break
+    case .copy:
+      onCopy?()
+    case .cut:
+      guard onCut?() == true else { return }
+      pendingTextEvents.append(.event(.deleteForward, session: session))
+    case .paste:
+      let id = nextPasteID
+      nextPasteID &+= 1
+      pendingTextEvents.append(.paste(id, session: session))
+      onPaste?(id)
+    case .selectAll:
+      // An active editor owns Select All. The app-level handler is only a
+      // fallback for custom selectable content while not editing.
+      pendingTextEvents.append(.event(event, session: session))
     default:
-      pendingTextEvents.append(event)
+      pendingTextEvents.append(.event(event, session: session))
     }
   }
 
@@ -165,7 +241,7 @@ final class WaylandKeyboard {
     if modifier("Shift", keyboard: keyboard) { modifiers.insert(.shift) }
     if modifier("Control", keyboard: keyboard) { modifiers.insert(.control) }
     if modifier("Mod1", keyboard: keyboard) { modifiers.insert(.option) }
-    if modifier("Logo", keyboard: keyboard) { modifiers.insert(.command) }
+    if modifier("Logo", keyboard: keyboard) { modifiers.insert(.superKey) }
     return KeyChord(key, modifiers: modifiers)
   }
 

@@ -41,9 +41,12 @@ final class InputAccumulator {
     return input
   }
 
-  func drainKeyboard(_ keyboard: WaylandKeyboard) {
-    keyboard.drain(commands: &commands, textEvents: &textEvents)
+  func drainKeyboard(_ keyboard: WaylandKeyboard, editingSession: Int) {
+    keyboard.drain(
+      editingSession: editingSession, commands: &commands, textEvents: &textEvents)
   }
+
+  var pointerPositionSnapshot: Point { pointerPosition }
 
   func pointerEntered(x: Float, y: Float) {
     pointerPosition = Point(x: x, y: y)

@@ -25,12 +25,20 @@ public struct TextInputState: Equatable, Sendable {
   public var held: Bool
   public var editing: Bool
   public var caretOffset: Int?
+  public var selectionRange: Range<Int>?
 
-  public init(hovered: Bool, held: Bool, editing: Bool, caretOffset: Int?) {
+  public init(
+    hovered: Bool,
+    held: Bool,
+    editing: Bool,
+    caretOffset: Int?,
+    selectionRange: Range<Int>? = nil
+  ) {
     self.hovered = hovered
     self.held = held
     self.editing = editing
     self.caretOffset = caretOffset
+    self.selectionRange = selectionRange
   }
 
   public var phase: InteractionPhase {

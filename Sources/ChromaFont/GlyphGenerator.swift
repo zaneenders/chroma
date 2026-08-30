@@ -508,6 +508,14 @@ private func buildGlyphs() -> [UInt32: Glyph] {
   blackSquare.fillRect(4, 8, 16, 20)
   out[0x25A0] = blackSquare.glyph  // ■
 
+  var pencil = Canvas()
+  pencil.line(4, 21, 15, 7, thickness: 3)
+  pencil.line(6, 23, 17, 9, thickness: 3)
+  pencil.line(15, 7, 17, 9, thickness: 3)
+  pencil.line(4, 21, 6, 23, thickness: 3)
+  pencil.set(3, 24)
+  out[0x270E] = pencil.glyph  // ✎ lower-right pencil
+
   // MARK: Keyboard and interface symbols
   // These are common in shortcut labels and native macOS interfaces. Keeping
   // them in the bitmap atlas lets clients use concise labels without getting a

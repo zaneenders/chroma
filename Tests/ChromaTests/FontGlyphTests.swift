@@ -48,6 +48,7 @@ struct FontGlyphTests {
       0x2302,  // ⌂ Home/folder
       0x25A0,  // ■ Stop
       0x25C7,  // ◇ Outline diamond
+      0x270E,  // ✎ Rename/edit pencil
       0x23F5,  // ⏵ Play
       0x23F9,  // ⏹ Stop control
     ]

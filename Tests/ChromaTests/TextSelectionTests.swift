@@ -187,11 +187,31 @@ struct TextSelectionTests {
     #expect(ctx.copyText() == text)
   }
 
-  @Test func customCopyProviderTakesPrecedenceOverTextSelection() {
+  @Test func customCopyProviderTakesPrecedenceOverSelectableText() {
     let ctx = Interaction()
     ctx.onCopy = { "custom copy" }
 
     #expect(ctx.copyText() == "custom copy")
+  }
+
+  @Test func renderContextCanInstallCustomCopyProvider() {
+    let ctx = RenderContext()
+    ctx.setCopyTextProvider { "custom copy" }
+
+    #expect(ctx.interaction.copyText() == "custom copy")
+  }
+
+  @Test func customSelectAllHandlerPrecedesBuiltInSelection() {
+    let ctx = RenderContext()
+    var handled = false
+    ctx.setSelectAllHandler {
+      handled = true
+      return true
+    }
+
+    ctx.interaction.selectAll(at: .zero)
+
+    #expect(handled)
   }
 
   @Test func contextsTrackSelectionsIndependently() {
