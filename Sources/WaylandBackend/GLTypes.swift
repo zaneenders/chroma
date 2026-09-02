@@ -12,7 +12,7 @@ struct GLQuad {
   var size: (Float, Float) = (0, 0)
   /// Top-left, top-right, bottom-right, bottom-left.
   var radii: (Float, Float, Float, Float) = (0, 0, 0, 0)
-  /// Border width, geometry padding, shape flag, unused.
+  /// Border width, geometry padding, shape flag, RGBA image flag.
   var shape: (Float, Float, Float, Float) = (0, 0, 0, 0)
 }
 

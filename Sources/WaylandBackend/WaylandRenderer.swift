@@ -90,6 +90,20 @@ public final class WaylandRenderer: Renderer {
   private var fontAtlas: FontAtlas?
   private var resolutionUniform: GLint = -1
 
+  private struct CachedImageTexture {
+    var generation: UInt64
+    var width: Int
+    var height: Int
+    var texture: GLuint
+    var byteCount: Int
+    var lastUsedFrame: UInt64
+  }
+  private var imageTextures: [ImageID: CachedImageTexture] = [:]
+  private var imageTextureBytes = 0
+  private var imageFrame: UInt64 = 0
+  private let maximumImageTextureCount = 128
+  private let maximumImageTextureBytes = 256 * 1024 * 1024
+
   private static var compositorInterface: wl_interface = unsafe wl_compositor_interface
   private static var wmBaseInterface: wl_interface = unsafe xdg_wm_base_interface
   private static var seatInterface: wl_interface = unsafe wl_seat_interface
@@ -1010,6 +1024,7 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func render(_ drawList: DrawList, viewport: Size) {
+    imageFrame &+= 1
     var clips: [Rect] = []
     for command in drawList.commands {
       switch command {
@@ -1023,6 +1038,20 @@ public final class WaylandRenderer: Renderer {
         drawShape(rect, radii: radii, borderWidth: width, color: color)
       case .text(let position, let text, let color, let scale, let face):
         drawText(text, at: position, color: color, scale: scale, face: face)
+      case .image(let destination, let image, let contentMode):
+        guard
+          let rect = contentMode.drawRect(sourceSize: image.size, in: destination),
+          let texture = imageTexture(for: image)
+        else { continue }
+        let activeClip = clips.last ?? Rect(origin: .zero, size: viewport)
+        guard let clip = activeClip.intersection(destination) else { continue }
+        applyClip(clip, viewport: viewport)
+        drawImage(rect, texture: texture)
+        if let current = clips.last {
+          applyClip(current, viewport: viewport)
+        } else {
+          glDisable(GLenum(GL_SCISSOR_TEST))
+        }
       case .pushClip(let rect):
         let clipped = clips.last.flatMap { rect.intersection($0) } ?? (clips.isEmpty ? rect : .zero)
         clips.append(clipped)
@@ -1031,6 +1060,70 @@ public final class WaylandRenderer: Renderer {
         _ = clips.popLast()
         if let clip = clips.last { applyClip(clip, viewport: viewport) } else { glDisable(GLenum(GL_SCISSOR_TEST)) }
       }
+    }
+    evictImageTexturesIfNeeded()
+  }
+
+  private func drawImage(_ rect: Rect, texture: GLuint) {
+    guard rect.size.width > 0, rect.size.height > 0 else { return }
+    var quad = GLQuad(
+      dst0: (rect.minX, rect.minY), dst1: (rect.maxX, rect.maxY),
+      uv0: (0, 0), uv1: (1, 1), color: (1, 1, 1, 1),
+      shape: (0, 0, 0, 1))
+    glBindTexture(GLenum(GL_TEXTURE_2D), texture)
+    glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
+    withUnsafeBytes(of: &quad) {
+      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, $0.count, $0.baseAddress)
+    }
+    glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
+  }
+
+  private func imageTexture(for image: ImageResource) -> GLuint? {
+    if var cached = imageTextures[image.id],
+      cached.generation == image.generation,
+      cached.width == image.width,
+      cached.height == image.height
+    {
+      cached.lastUsedFrame = imageFrame
+      imageTextures[image.id] = cached
+      return cached.texture
+    }
+    if let stale = imageTextures.removeValue(forKey: image.id) {
+      var texture = stale.texture
+      unsafe glDeleteTextures(1, &texture)
+      imageTextureBytes -= stale.byteCount
+    }
+    var texture: GLuint = 0
+    unsafe glGenTextures(1, &texture)
+    glBindTexture(GLenum(GL_TEXTURE_2D), texture)
+    image.rgba8.withUnsafeBytes {
+      unsafe glTexImage2D(
+        GLenum(GL_TEXTURE_2D), 0, GLint(GL_RGBA), GLsizei(image.width), GLsizei(image.height), 0,
+        GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), $0.baseAddress)
+    }
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_LINEAR)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), GL_LINEAR)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_S), GL_CLAMP_TO_EDGE)
+    glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_T), GL_CLAMP_TO_EDGE)
+    let byteCount = image.width * image.height * 4
+    imageTextures[image.id] = CachedImageTexture(
+      generation: image.generation, width: image.width, height: image.height,
+      texture: texture, byteCount: byteCount, lastUsedFrame: imageFrame)
+    imageTextureBytes += byteCount
+    return texture
+  }
+
+  private func evictImageTexturesIfNeeded() {
+    while imageTextures.count > maximumImageTextureCount
+      || imageTextureBytes > maximumImageTextureBytes
+    {
+      guard let oldest = imageTextures.min(by: { $0.value.lastUsedFrame < $1.value.lastUsedFrame }) else {
+        break
+      }
+      var texture = oldest.value.texture
+      unsafe glDeleteTextures(1, &texture)
+      imageTextureBytes -= oldest.value.byteCount
+      imageTextures.removeValue(forKey: oldest.key)
     }
   }
 
@@ -1173,6 +1266,12 @@ public final class WaylandRenderer: Renderer {
     framePending = false
     dirty = false
 
+    for cached in imageTextures.values {
+      var texture = cached.texture
+      unsafe glDeleteTextures(1, &texture)
+    }
+    imageTextures.removeAll()
+    imageTextureBytes = 0
     if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
     if whiteTexture != 0 { unsafe glDeleteTextures(1, &whiteTexture) }
     if instanceVBO != 0 { unsafe glDeleteBuffers(1, &instanceVBO) }
