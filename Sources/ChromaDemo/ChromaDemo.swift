@@ -446,7 +446,7 @@ private struct ImageExample: Block {
         PageHeading(
           title: "Mandelbrot image",
           detail: "Generated as RGBA8 pixels and displayed with aspect-fit and linear filtering.")
-        Image(Self.mandelbrot, contentMode: .aspectFit)
+        Image(Self.mandelbrot, scaling: .contain)
           .sizing(x: .grow, y: .grow)
           .roundedBackground(theme.surface, radius: 8)
           .roundedBorder(theme.border, radius: 8)

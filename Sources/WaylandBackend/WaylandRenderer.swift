@@ -1038,9 +1038,10 @@ public final class WaylandRenderer: Renderer {
         drawShape(rect, radii: radii, borderWidth: width, color: color)
       case .text(let position, let text, let color, let scale, let face):
         drawText(text, at: position, color: color, scale: scale, face: face)
-      case .image(let destination, let image, let contentMode):
+      case .image(let destination, let image, let scaling, let alignment):
         guard
-          let rect = contentMode.drawRect(sourceSize: image.size, in: destination),
+          let rect = scaling.drawRect(
+            sourceSize: image.size, in: destination, alignment: alignment),
           let texture = imageTexture(for: image)
         else { continue }
         let activeClip = clips.last ?? Rect(origin: .zero, size: viewport)

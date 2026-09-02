@@ -56,14 +56,22 @@ public struct ImageResource: Equatable, Sendable {
   }
 }
 
-public enum ImageContentMode: Equatable, Sendable {
+/// How image pixels are scaled within the rectangle assigned by layout.
+public enum ImageScaling: Equatable, Sendable {
+  /// Distort the image to exactly match the destination rectangle.
   case stretch
-  case aspectFit
-  case aspectFill
+  /// Preserve aspect ratio while keeping the entire image visible.
+  case contain
+  /// Preserve aspect ratio while covering the destination, cropping overflow.
+  case cover
 
-  /// Resolves the textured quad inside `destination`. Aspect-fill can return a
-  /// quad larger than the destination and must therefore be clipped to it.
-  public func drawRect(sourceSize: Size, in destination: Rect) -> Rect? {
+  /// Resolves the textured quad inside `destination`. Cover can return a quad
+  /// larger than the destination and must therefore be clipped to it.
+  public func drawRect(
+    sourceSize: Size,
+    in destination: Rect,
+    alignment: ImageAlignment = .center
+  ) -> Rect? {
     guard
       sourceSize.width > 0, sourceSize.height > 0,
       destination.size.width > 0, destination.size.height > 0,
@@ -74,14 +82,39 @@ public enum ImageContentMode: Equatable, Sendable {
     guard self != .stretch else { return destination }
     let xScale = destination.size.width / sourceSize.width
     let yScale = destination.size.height / sourceSize.height
-    let scale = self == .aspectFit ? min(xScale, yScale) : max(xScale, yScale)
+    let scale = self == .contain ? min(xScale, yScale) : max(xScale, yScale)
     let width = sourceSize.width * scale
     let height = sourceSize.height * scale
     return Rect(
-      x: destination.minX + (destination.size.width - width) / 2,
-      y: destination.minY + (destination.size.height - height) / 2,
+      x: destination.minX + (destination.size.width - width) * alignment.x,
+      y: destination.minY + (destination.size.height - height) * alignment.y,
       width: width,
       height: height
     )
   }
+}
+
+/// Positions a scaled image within its destination rectangle.
+///
+/// Components use normalized coordinates and are clamped to `0...1`. For
+/// example, `(0, 0)` preserves the top-leading region when an image is cropped,
+/// while `(1, 1)` preserves the bottom-trailing region.
+public struct ImageAlignment: Equatable, Sendable {
+  public let x: Float
+  public let y: Float
+
+  public init(x: Float, y: Float) {
+    self.x = x.isFinite ? min(1, max(0, x)) : 0.5
+    self.y = y.isFinite ? min(1, max(0, y)) : 0.5
+  }
+
+  public static let topLeading = ImageAlignment(x: 0, y: 0)
+  public static let top = ImageAlignment(x: 0.5, y: 0)
+  public static let topTrailing = ImageAlignment(x: 1, y: 0)
+  public static let leading = ImageAlignment(x: 0, y: 0.5)
+  public static let center = ImageAlignment(x: 0.5, y: 0.5)
+  public static let trailing = ImageAlignment(x: 1, y: 0.5)
+  public static let bottomLeading = ImageAlignment(x: 0, y: 1)
+  public static let bottom = ImageAlignment(x: 0.5, y: 1)
+  public static let bottomTrailing = ImageAlignment(x: 1, y: 1)
 }

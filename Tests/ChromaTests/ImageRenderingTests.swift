@@ -26,25 +26,57 @@ struct ImageRenderingTests {
     }
   }
 
-  @Test func contentModesResolveCenteredGeometry() {
+  @Test func scalingModesResolveCenteredGeometry() {
     let destination = Rect(x: 10, y: 20, width: 100, height: 100)
     let source = Size(width: 200, height: 100)
 
-    #expect(ImageContentMode.stretch.drawRect(sourceSize: source, in: destination) == destination)
+    #expect(ImageScaling.stretch.drawRect(sourceSize: source, in: destination) == destination)
     #expect(
-      ImageContentMode.aspectFit.drawRect(sourceSize: source, in: destination)
+      ImageScaling.contain.drawRect(sourceSize: source, in: destination)
         == Rect(x: 10, y: 45, width: 100, height: 50))
     #expect(
-      ImageContentMode.aspectFill.drawRect(sourceSize: source, in: destination)
+      ImageScaling.cover.drawRect(sourceSize: source, in: destination)
         == Rect(x: -40, y: 20, width: 200, height: 100))
+    #expect(ImageScaling.contain.drawRect(sourceSize: source, in: .zero) == nil)
+  }
+
+  @Test func alignmentPositionsContainedImageInUnusedSpace() {
+    let destination = Rect(x: 10, y: 20, width: 100, height: 100)
+    let source = Size(width: 200, height: 100)
+
     #expect(
-      ImageContentMode.aspectFit.drawRect(sourceSize: source, in: .zero) == nil)
+      ImageScaling.contain.drawRect(
+        sourceSize: source, in: destination, alignment: .topLeading)
+        == Rect(x: 10, y: 20, width: 100, height: 50))
+    #expect(
+      ImageScaling.contain.drawRect(
+        sourceSize: source, in: destination, alignment: .bottomTrailing)
+        == Rect(x: 10, y: 70, width: 100, height: 50))
+  }
+
+  @Test func alignmentSelectsTheRegionPreservedByCover() {
+    let destination = Rect(x: 10, y: 20, width: 100, height: 100)
+    let source = Size(width: 200, height: 100)
+
+    #expect(
+      ImageScaling.cover.drawRect(
+        sourceSize: source, in: destination, alignment: .leading)
+        == Rect(x: 10, y: 20, width: 200, height: 100))
+    #expect(
+      ImageScaling.cover.drawRect(
+        sourceSize: source, in: destination, alignment: .trailing)
+        == Rect(x: -90, y: 20, width: 200, height: 100))
+  }
+
+  @Test func customAlignmentIsClampedAndNonFiniteValuesCenter() {
+    #expect(ImageAlignment(x: -2, y: 3) == .bottomLeading)
+    #expect(ImageAlignment(x: .infinity, y: .nan) == .center)
   }
 
   @Test func imageBlockEmitsDeterministicHeadlessCommand() throws {
     let image = try resource()
     let renderer = HeadlessRenderer(size: Size(width: 120, height: 80))
-    renderer.content = Image(image, contentMode: .aspectFit)
+    renderer.content = Image(image, scaling: .cover, alignment: .top)
 
     let first = renderer.render()
     let second = renderer.render()
@@ -55,7 +87,23 @@ struct ImageRenderingTests {
         .image(
           rect: Rect(x: 0, y: 0, width: 120, height: 80),
           image: image,
-          contentMode: .aspectFit)
+          scaling: .cover,
+          alignment: .top)
+      ])
+  }
+
+  @Test func imageDefaultsToContainAndCenter() throws {
+    let image = try resource()
+    var list = DrawList()
+    list.image(image, in: Rect(x: 1, y: 2, width: 3, height: 4))
+
+    #expect(
+      list.commands == [
+        .image(
+          rect: Rect(x: 1, y: 2, width: 3, height: 4),
+          image: image,
+          scaling: .contain,
+          alignment: .center)
       ])
   }
 
