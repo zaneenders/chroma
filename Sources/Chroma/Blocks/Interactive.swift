@@ -1,12 +1,12 @@
 public struct Interactive<Content: Block>: PrimitiveBlock {
   public var id: WidgetID
-  public var action: () -> Void
-  public var content: (InteractionPhase) -> Content
+  public var action: @MainActor () -> Void
+  public var content: @MainActor (InteractionPhase) -> Content
 
   public init(
     id: WidgetID,
-    action: @escaping () -> Void,
-    content: @escaping (InteractionPhase) -> Content
+    action: @escaping @MainActor () -> Void,
+    content: @escaping @MainActor (InteractionPhase) -> Content
   ) {
     self.id = id
     self.action = action
@@ -15,8 +15,8 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
 
   public init(
     id: String,
-    action: @escaping () -> Void,
-    content: @escaping (InteractionPhase) -> Content
+    action: @escaping @MainActor () -> Void,
+    content: @escaping @MainActor (InteractionPhase) -> Content
   ) {
     self.init(id: WidgetID(id), action: action, content: content)
   }

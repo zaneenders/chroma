@@ -1,3 +1,4 @@
+@MainActor
 public protocol App {
   associatedtype Body: Block
 

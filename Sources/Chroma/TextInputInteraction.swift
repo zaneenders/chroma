@@ -4,11 +4,11 @@ extension Interaction {
     id: WidgetID,
     rect: Rect,
     text: String,
-    onChange: (String) -> Void,
-    onSubmit: ((String) -> Void)? = nil,
-    onEndEditing: (() -> CommandResult)? = nil,
-    pointerOffset: ((Point, Int?) -> Int)? = nil,
-    verticalOffset: ((Int, Int) -> Int)? = nil
+    onChange: @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
   ) -> TextInputState {
     guard let parent = builderStack.last else {
       preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")

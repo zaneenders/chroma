@@ -1,7 +1,7 @@
 public struct Button: PrimitiveBlock {
   public var label: String
   public var id: WidgetID
-  public var action: () -> Void
+  public var action: @MainActor () -> Void
   public var role: ActionRole
   public var fontScale: Float
   public var style: ButtonStyle?
@@ -14,7 +14,7 @@ public struct Button: PrimitiveBlock {
     fontScale: Float = 1,
     style: ButtonStyle? = nil,
     padding: EdgeInsets = EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16),
-    action: @escaping () -> Void
+    action: @escaping @MainActor () -> Void
   ) {
     self.label = label
     self.id = id

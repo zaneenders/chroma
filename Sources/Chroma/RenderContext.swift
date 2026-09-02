@@ -85,11 +85,11 @@ public struct RenderContext {
     id: WidgetID,
     in rect: Rect,
     text: String,
-    onChange: (String) -> Void,
-    onSubmit: ((String) -> Void)? = nil,
-    onEndEditing: (() -> CommandResult)? = nil,
-    pointerOffset: ((Point, Int?) -> Int)? = nil,
-    verticalOffset: ((Int, Int) -> Int)? = nil
+    onChange: @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
   ) -> TextInputState {
     interaction.textInputBehavior(
       id: id,

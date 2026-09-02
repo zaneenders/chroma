@@ -3,9 +3,9 @@ import Foundation
 public struct TextField: PrimitiveBlock {
   public var id: WidgetID
   public var placeholder: String
-  public var getText: () -> String
-  public var onChange: (String) -> Void
-  public var onSubmit: ((String) -> Void)?
+  public var getText: @MainActor () -> String
+  public var onChange: @MainActor (String) -> Void
+  public var onSubmit: (@MainActor (String) -> Void)?
   public var fontScale: Float
   public var padding: Float
   public var style: TextFieldStyle?
@@ -16,9 +16,9 @@ public struct TextField: PrimitiveBlock {
     fontScale: Float = 1,
     padding: Float = 8,
     style: TextFieldStyle? = nil,
-    text getText: @escaping () -> String,
-    onChange: @escaping (String) -> Void,
-    onSubmit: ((String) -> Void)? = nil
+    text getText: @escaping @MainActor () -> String,
+    onChange: @escaping @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil
   ) {
     self.id = id
     self.placeholder = placeholder
