@@ -126,10 +126,12 @@ extension Interaction {
           } else {
             anchor = caretOffset
           }
-          let offset = verticalOffset?(caretOffset, direction)
+          let offset =
+            verticalOffset?(caretOffset, direction)
             ?? (direction < 0 ? 0 : characters.count)
           caretOffset = max(0, min(characters.count, offset))
-          textSelectionRange = anchor == caretOffset
+          textSelectionRange =
+            anchor == caretOffset
             ? nil
             : min(anchor, caretOffset)..<max(anchor, caretOffset)
         case .moveCaretToStart:

@@ -99,9 +99,10 @@ struct FontGlyphTests {
 
     // Filtering binary glyph coverage must produce intermediate edge samples;
     // otherwise minified GPU text would still have hard, unstable stair steps.
-    #expect(levels.dropFirst().contains { level in
-      level.pixels.contains { $0 > 0 && $0 < 255 }
-    })
+    #expect(
+      levels.dropFirst().contains { level in
+        level.pixels.contains { $0 > 0 && $0 < 255 }
+      })
   }
 
   @Test func roundedCornersConnectTheSameEdgesAsTheirSquareEquivalents() throws {

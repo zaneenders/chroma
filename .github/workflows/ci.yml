@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Show Swift version
+        run: swift --version
+      - name: Build native backend
+        run: swift build
+      - name: Test native backend
+        run: swift test
+      - name: Build without a graphical backend
+        run: swift build --disable-default-traits
+      - name: Build examples as a public API client
+        run: swift build --package-path Example
+
+  arch:
+    name: Arch Linux
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 30
+    env:
+      SWIFTLY_HOME_DIR: /github/home/.local/share/swiftly
+      SWIFTLY_BIN_DIR: /github/home/.local/bin
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Swift and native development libraries
+        run: |
+          pacman -Syu --noconfirm \
+            binutils \
+            ca-certificates \
+            clang \
+            cmake \
+            curl \
+            git \
+            gnupg \
+            gzip \
+            icu \
+            libbsd \
+            libedit \
+            libxkbcommon \
+            libxml2 \
+            libxml2-legacy \
+            mesa \
+            ncurses \
+            ninja \
+            openssl \
+            pkgconf \
+            python \
+            sqlite \
+            tar \
+            unzip \
+            wayland \
+            wayland-protocols \
+            z3 \
+            zlib
+          ln -sf /usr/lib/libncursesw.so.6 /usr/lib/libncurses.so.6
+          curl -fsSL https://download.swift.org/swiftly/linux/swiftly-x86_64.tar.gz \
+            -o /tmp/swiftly.tar.gz
+          tar -xzf /tmp/swiftly.tar.gz -C /tmp
+          /tmp/swiftly init \
+            --platform ubuntu24.04 \
+            --skip-install \
+            --no-modify-profile \
+            --assume-yes \
+            --quiet-shell-followup
+          "$SWIFTLY_BIN_DIR/swiftly" install --use 6.3 --assume-yes || true
+          toolchain_path=$("$SWIFTLY_BIN_DIR/swiftly" use --print-location)
+          "$toolchain_path/usr/bin/swift" --version
+          echo "$toolchain_path/usr/bin" >> "$GITHUB_PATH"
+      - name: Show Swift version
+        run: swift --version
+      - name: Build native backend
+        run: swift build
+      - name: Test native backend
+        run: swift test
+      - name: Build without a graphical backend
+        run: swift build --disable-default-traits
+      - name: Build examples as a public API client
+        run: swift build --package-path Example
+
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-24.04
+    container: swift:6.3-noble
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Trust checkout ownership
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Determine changed range
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$EVENT_BASE_SHA" ] && git cat-file -e "$EVENT_BASE_SHA^{commit}" 2>/dev/null; then
+            echo "BASE_SHA=$EVENT_BASE_SHA" >> "$GITHUB_ENV"
+          else
+            echo "BASE_SHA=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
+          fi
+      - name: Check whitespace
+        run: git diff --check "$BASE_SHA" "$GITHUB_SHA"
+      - name: Check Swift formatting
+        run: |
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$GITHUB_SHA" -- '*.swift' |
+            while IFS= read -r swift_file; do
+              swift format lint --strict "$swift_file"
+            done

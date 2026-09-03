@@ -5,11 +5,8 @@ var products: [Product] = [
   .library(name: "Chroma", targets: ["Chroma"]),
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
   .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
-  .executable(name: "ChromaDemo", targets: ["ChromaDemo"]),
 ]
 
-var demoDependencies: [Target.Dependency] = ["Chroma"]
-var demoSwiftSettings: [SwiftSetting] = []
 var targets: [Target] = [
   .testTarget(
     name: "ChromaTests",
@@ -30,15 +27,11 @@ var defaultBackendTraits: Set<String> = []
 backendTraits.insert(
   .trait(
     name: "MetalBackend",
-    description: "Use the native Metal backend for ChromaDemo on macOS."
+    description: "Build the native Metal backend on macOS."
   )
 )
 defaultBackendTraits.insert("MetalBackend")
 products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))
-demoDependencies.append(
-  .target(name: "MetalBackend", condition: .when(traits: ["MetalBackend"]))
-)
-demoSwiftSettings.append(.define("METAL_BACKEND", .when(traits: ["MetalBackend"])))
 targets.append(contentsOf: [
   .target(
     name: "MetalBackend",
@@ -62,15 +55,11 @@ targets.append(contentsOf: [
 backendTraits.insert(
   .trait(
     name: "WaylandBackend",
-    description: "Use the native Wayland/EGL/OpenGL ES backend for ChromaDemo on Linux."
+    description: "Build the native Wayland/EGL/OpenGL ES backend on Linux."
   )
 )
 defaultBackendTraits.insert("WaylandBackend")
 products.append(.library(name: "WaylandBackend", targets: ["WaylandBackend"]))
-demoDependencies.append(
-  .target(name: "WaylandBackend", condition: .when(traits: ["WaylandBackend"]))
-)
-demoSwiftSettings.append(.define("WAYLAND_BACKEND", .when(traits: ["WaylandBackend"])))
 targets.append(contentsOf: [
   .target(
     name: "WaylandBackend",
@@ -136,15 +125,6 @@ targets.append(contentsOf: [
   ),
 ])
 #endif
-
-targets.insert(
-  .executableTarget(
-    name: "ChromaDemo",
-    dependencies: demoDependencies,
-    swiftSettings: demoSwiftSettings
-  ),
-  at: 0
-)
 
 let package = Package(
   name: "chroma",

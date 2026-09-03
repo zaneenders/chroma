@@ -9,19 +9,19 @@ UI library written in Swift
 Run the native Metal demo on macOS:
 
 ```sh
-swift run ChromaDemo
+swift run --package-path Example ChromaDemo
 ```
 
 Run the Wayland/EGL/OpenGL ES demo on Linux:
 
 ```sh
-swift run ChromaDemo
+swift run --package-path Example ChromaDemo
 ```
 
-The native backend is selected by default on each platform. To build the demo
-without a graphical backend, use `swift build --disable-default-traits`.
-SwiftPM options such as `--traits` must appear before the executable name;
-arguments after `ChromaDemo` are passed to the demo itself.
+The example is a separate package and selects the native backend for its host
+platform. Building it also verifies that Chroma can be consumed through its
+public API. To build only the libraries without a graphical backend, run
+`swift build --disable-default-traits` from the repository root.
 
 ## Fonts
 
