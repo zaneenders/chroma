@@ -66,9 +66,7 @@
     "UseSynthesizedInitializer" : true,
     "UseTripleSlashForDocumentationComments" : true,
     "UseWhereClausesInForLoops" : false,
-    "ValidateDocumentationComments" : false,
-    "indentConditionalCompilationBlocks" : false,
-    "lineBreakBeforeEachArgument" : true
+    "ValidateDocumentationComments" : false
   },
   "spacesAroundRangeFormationOperators" : false,
   "spacesBeforeEndOfLineComments" : 2,

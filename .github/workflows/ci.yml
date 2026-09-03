@@ -61,17 +61,30 @@ jobs:
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-24.04
+    container: swift:6.3-noble
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Check whitespace
+      - name: Trust checkout ownership
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Determine changed range
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
-            git diff --check "$BASE_SHA" "$GITHUB_SHA"
+          if [ -n "$EVENT_BASE_SHA" ] && git cat-file -e "$EVENT_BASE_SHA^{commit}" 2>/dev/null; then
+            echo "BASE_SHA=$EVENT_BASE_SHA" >> "$GITHUB_ENV"
           else
-            git diff --check HEAD^ HEAD
+            echo "BASE_SHA=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
+          fi
+      - name: Check whitespace
+        run: git diff --check "$BASE_SHA" "$GITHUB_SHA"
+      - name: Check Swift formatting
+        run: |
+          mapfile -t swift_files < <(
+            git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$GITHUB_SHA" -- '*.swift'
+          )
+          if [ "${#swift_files[@]}" -gt 0 ]; then
+            swift format lint --strict "${swift_files[@]}"
           fi
