@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Swift version
+        run: swift --version
+      - name: Test native backend
+        run: swift test
+      - name: Build native backend
+        run: swift build
+      - name: Build without a graphical backend
+        run: swift build --disable-default-traits
+      - name: Build examples as a public API client
+        run: swift build --package-path Example
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    container: swift:6.3-noble
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Wayland development libraries
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            pkg-config
+      - name: Show Swift version
+        run: swift --version
+      - name: Test native backend
+        run: swift test
+      - name: Build native backend
+        run: swift build
+      - name: Build without a graphical backend
+        run: swift build --disable-default-traits
+      - name: Build examples as a public API client
+        run: swift build --package-path Example
+
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-24.04
+    container: swift:6.3-noble
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whitespace
+        run: git diff --check
