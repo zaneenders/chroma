@@ -31,38 +31,14 @@ jobs:
       - name: Build examples as a public API client
         run: swift build --package-path Example
 
-  linux:
-    name: Linux
-    runs-on: ubuntu-24.04
-    container: swift:6.3-noble
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Wayland development libraries
-        run: |
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            libegl1-mesa-dev \
-            libgles2-mesa-dev \
-            libwayland-dev \
-            libxkbcommon-dev \
-            pkg-config
-      - name: Show Swift version
-        run: swift --version
-      - name: Test native backend
-        run: swift test
-      - name: Build native backend
-        run: swift build
-      - name: Build without a graphical backend
-        run: swift build --disable-default-traits
-      - name: Build examples as a public API client
-        run: swift build --package-path Example
-
   arch:
     name: Arch Linux
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     timeout-minutes: 30
+    env:
+      SWIFTLY_HOME_DIR: /github/home/.local/share/swiftly
+      SWIFTLY_BIN_DIR: /github/home/.local/bin
     steps:
       - uses: actions/checkout@v4
       - name: Install Swift and native development libraries
@@ -105,8 +81,8 @@ jobs:
             --no-modify-profile \
             --assume-yes \
             --quiet-shell-followup
-          "$HOME/.local/bin/swiftly" install --use 6.3 --assume-yes
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$SWIFTLY_BIN_DIR/swiftly" install --use 6.3 --assume-yes
+          echo "$SWIFTLY_BIN_DIR" >> "$GITHUB_PATH"
       - name: Show Swift version
         run: swift --version
       - name: Test native backend
