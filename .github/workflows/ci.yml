@@ -82,7 +82,7 @@ jobs:
             --assume-yes \
             --quiet-shell-followup
           "$SWIFTLY_BIN_DIR/swiftly" install --use 6.3 --assume-yes || true
-          toolchain_path=$("$SWIFTLY_BIN_DIR/swiftly" use --print-location 6.3)
+          toolchain_path=$("$SWIFTLY_BIN_DIR/swiftly" use --print-location)
           "$toolchain_path/usr/bin/swift" --version
           echo "$toolchain_path/usr/bin" >> "$GITHUB_PATH"
       - name: Show Swift version
