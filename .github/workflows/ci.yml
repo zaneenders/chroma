@@ -61,9 +61,17 @@ jobs:
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-24.04
-    container: swift:6.3-noble
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check whitespace
-        run: git diff --check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            git diff --check "$BASE_SHA" "$GITHUB_SHA"
+          else
+            git diff --check HEAD^ HEAD
+          fi
