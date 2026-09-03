@@ -58,6 +58,66 @@ jobs:
       - name: Build examples as a public API client
         run: swift build --package-path Example
 
+  arch:
+    name: Arch Linux
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift and native development libraries
+        run: |
+          pacman -Syu --noconfirm \
+            binutils \
+            ca-certificates \
+            clang \
+            cmake \
+            curl \
+            git \
+            gnupg \
+            gzip \
+            icu \
+            libbsd \
+            libedit \
+            libxkbcommon \
+            libxml2 \
+            libxml2-legacy \
+            mesa \
+            ncurses \
+            ninja \
+            openssl \
+            pkgconf \
+            python \
+            sqlite \
+            tar \
+            unzip \
+            wayland \
+            wayland-protocols \
+            z3 \
+            zlib
+          ln -sf /usr/lib/libncursesw.so.6 /usr/lib/libncurses.so.6
+          curl -fsSL https://download.swift.org/swiftly/linux/swiftly-x86_64.tar.gz \
+            -o /tmp/swiftly.tar.gz
+          tar -xzf /tmp/swiftly.tar.gz -C /tmp
+          /tmp/swiftly init \
+            --platform ubuntu24.04 \
+            --skip-install \
+            --no-modify-profile \
+            --assume-yes \
+            --quiet-shell-followup
+          "$HOME/.local/bin/swiftly" install --use 6.3 --assume-yes
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Show Swift version
+        run: swift --version
+      - name: Test native backend
+        run: swift test
+      - name: Build native backend
+        run: swift build
+      - name: Build without a graphical backend
+        run: swift build --disable-default-traits
+      - name: Build examples as a public API client
+        run: swift build --package-path Example
+
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-24.04
@@ -82,9 +142,7 @@ jobs:
         run: git diff --check "$BASE_SHA" "$GITHUB_SHA"
       - name: Check Swift formatting
         run: |
-          mapfile -t swift_files < <(
-            git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$GITHUB_SHA" -- '*.swift'
-          )
-          if [ "${#swift_files[@]}" -gt 0 ]; then
-            swift format lint --strict "${swift_files[@]}"
-          fi
+          git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$GITHUB_SHA" -- '*.swift' |
+            while IFS= read -r swift_file; do
+              swift format lint --strict "$swift_file"
+            done
