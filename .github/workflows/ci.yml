@@ -19,13 +19,13 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Show Swift version
         run: swift --version
-      - name: Test native backend
-        run: swift test
       - name: Build native backend
         run: swift build
+      - name: Test native backend
+        run: swift test
       - name: Build without a graphical backend
         run: swift build --disable-default-traits
       - name: Build examples as a public API client
@@ -40,7 +40,7 @@ jobs:
       SWIFTLY_HOME_DIR: /github/home/.local/share/swiftly
       SWIFTLY_BIN_DIR: /github/home/.local/bin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Swift and native development libraries
         run: |
           pacman -Syu --noconfirm \
@@ -81,14 +81,16 @@ jobs:
             --no-modify-profile \
             --assume-yes \
             --quiet-shell-followup
-          "$SWIFTLY_BIN_DIR/swiftly" install --use 6.3 --assume-yes
-          echo "$SWIFTLY_BIN_DIR" >> "$GITHUB_PATH"
+          "$SWIFTLY_BIN_DIR/swiftly" install --use 6.3 --assume-yes || true
+          toolchain_path=$("$SWIFTLY_BIN_DIR/swiftly" use --print-location 6.3)
+          "$toolchain_path/usr/bin/swift" --version
+          echo "$toolchain_path/usr/bin" >> "$GITHUB_PATH"
       - name: Show Swift version
         run: swift --version
-      - name: Test native backend
-        run: swift test
       - name: Build native backend
         run: swift build
+      - name: Test native backend
+        run: swift test
       - name: Build without a graphical backend
         run: swift build --disable-default-traits
       - name: Build examples as a public API client
@@ -100,7 +102,7 @@ jobs:
     container: swift:6.3-noble
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Trust checkout ownership
