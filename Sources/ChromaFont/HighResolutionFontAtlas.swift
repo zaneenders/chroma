@@ -127,7 +127,8 @@ public struct HighResolutionFontAtlas: Sendable {
   public func glyphUV(
     _ character: Character, readable: Bool = false
   ) -> (Float, Float, Float, Float) {
-    let scalar = character.unicodeScalars.count == 1
+    let scalar =
+      character.unicodeScalars.count == 1
       ? character.unicodeScalars.first!.value : UInt32(0xFFFD)
     let readableRange = BedsteadReadableFont.firstScalar...BedsteadReadableFont.lastScalar
     let index: Int
