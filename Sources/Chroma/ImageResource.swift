@@ -20,11 +20,11 @@ public enum ImageResourceError: Error, Equatable, Sendable {
 /// alpha bytes. Image decoding and color-profile conversion are intentionally
 /// left to the application.
 public struct ImageResource: Equatable, Sendable {
-  public var id: ImageID
-  public var generation: UInt64
-  public var width: Int
-  public var height: Int
-  public var rgba8: Data
+  public let id: ImageID
+  public let generation: UInt64
+  public let width: Int
+  public let height: Int
+  public let rgba8: Data
 
   public init(
     id: ImageID,
