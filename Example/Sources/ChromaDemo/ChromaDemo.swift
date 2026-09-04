@@ -7,29 +7,31 @@ import MetalBackend
 import WaylandBackend
 #endif
 
+#if METAL_BACKEND
+private protocol DemoApp: MetalApp {}
+#elseif WAYLAND_BACKEND
+private protocol DemoApp: WaylandApp {}
+#else
+private protocol DemoApp: App {}
+
+extension DemoApp {
+  @MainActor
+  static func main() throws {
+    throw BackendError.unavailable(
+      backend: "ChromaDemo",
+      reason: "no graphical backend is enabled"
+    )
+  }
+}
+#endif
+
 @main
-struct ChromaDemo: App {
+struct ChromaDemo: DemoApp {
   private let state = DemoState()
 
   var title: String { "Chroma Demo" }
   var windowSize: Size { Size(width: 960, height: 640) }
   var minimumRefreshRate: Double { 30 }
-
-  @MainActor
-  static func main() throws {
-    let app = Self()
-
-    #if METAL_BACKEND
-    try app.run(on: MetalRenderer(size: app.windowSize))
-    #elseif WAYLAND_BACKEND
-    try app.run(on: WaylandRenderer(size: app.windowSize))
-    #else
-    throw BackendError.unavailable(
-      backend: "ChromaDemo",
-      reason: "no graphical backend is enabled"
-    )
-    #endif
-  }
 
   var keyBindings: KeyBindings {
     #if os(macOS)
