@@ -40,6 +40,15 @@ public struct DrawList: Sendable {
       .text(position: position, text: text, color: color, scale: scale, face: face))
   }
 
+  public mutating func image(
+    _ image: ImageResource,
+    in rect: Rect,
+    scaling: ImageScaling = .contain,
+    alignment: ImageAlignment = .center
+  ) {
+    commands.append(.image(rect: rect, image: image, scaling: scaling, alignment: alignment))
+  }
+
   public mutating func pushClip(_ rect: Rect) {
     commands.append(.pushClip(rect))
   }

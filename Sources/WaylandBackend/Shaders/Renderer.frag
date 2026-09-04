@@ -45,7 +45,10 @@ float shapeCoverage(float distance) {
 
 void main() {
   float coverage;
-  if (vShape.z > 0.5) {
+  if (vShape.w > 0.5) {
+    outColor = texture(uTexture, vUV) * vColor;
+    return;
+  } else if (vShape.z > 0.5) {
     float outerDistance = roundedRectDistance(vLocalPosition, vSize, vRadii);
     coverage = shapeCoverage(outerDistance);
     float borderWidth = vShape.x;

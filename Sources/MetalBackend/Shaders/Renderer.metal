@@ -44,6 +44,13 @@ fragment float4 text_fragment(TextVertexOut in [[stage_in]],
     return float4(in.color.rgb, in.color.a * a);
 }
 
+fragment float4 image_fragment(TextVertexOut in [[stage_in]],
+                               texture2d<float> image [[texture(0)]]) {
+    constexpr sampler s(min_filter::linear, mag_filter::linear,
+                        mip_filter::none, address::clamp_to_edge);
+    return image.sample(s, in.texCoord) * in.color;
+}
+
 struct ShapeInstance {
   float2 dst_p0;
   float2 dst_p1;
