@@ -43,7 +43,7 @@ public struct ImageResource: Equatable, Sendable {
     width: Int,
     height: Int,
     rgba8: Data
-  ) throws {
+  ) throws(ImageResourceError) {
     guard width > 0, height > 0 else {
       throw ImageResourceError.invalidDimensions(width: width, height: height)
     }
@@ -72,7 +72,7 @@ public struct ImageResource: Equatable, Sendable {
     width: Int,
     height: Int,
     rgba8: Data
-  ) throws -> ImageResource {
+  ) throws(ImageResourceError) -> ImageResource {
     guard generation < .max else {
       throw ImageResourceError.generationOverflow
     }

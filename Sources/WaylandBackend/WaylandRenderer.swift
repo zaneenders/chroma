@@ -254,6 +254,9 @@ public final class WaylandRenderer: Renderer {
     flushWayland()
   }
 
+  // libwayland invokes listeners synchronously on our main-actor dispatch path.
+  // Listener tables have static storage; user data borrows this renderer. cleanup
+  // destroys proxies before run() returns and before the renderer can be released.
   private static var frameListener = unsafe wl_callback_listener(
     done: { data, callback, _ in
       guard let data else { return }
@@ -301,7 +304,7 @@ public final class WaylandRenderer: Renderer {
     toplevel = unsafe xdg_surface_get_toplevel(xdgSurface)
     guard let toplevel else { throw WaylandError("could not create xdg_toplevel") }
     unsafe xdg_toplevel_add_listener(toplevel, &Self.toplevelListener, Unmanaged.passUnretained(self).toOpaque())
-    title.withCString { unsafe xdg_toplevel_set_title(toplevel, $0) }
+    unsafe title.withCString { unsafe xdg_toplevel_set_title(toplevel, $0) }
     unsafe wl_surface_commit(surface)
   }
 
@@ -354,7 +357,7 @@ public final class WaylandRenderer: Renderer {
     }
     let editingSessionGeneration = interaction.editingSessionGeneration
     var descriptors = [Int32](repeating: -1, count: 2)
-    guard pipe(&descriptors) == 0 else {
+    guard unsafe pipe(&descriptors) == 0 else {
       keyboard.completePaste(id: id, text: nil)
       return
     }
@@ -390,7 +393,10 @@ public final class WaylandRenderer: Renderer {
     guard var transfer = clipboardReads[fd] else { return }
     var buffer = [UInt8](repeating: 0, count: 16 * 1024)
     while true {
-      let count = read(fd, &buffer, buffer.count)
+      // read receives exactly the capacity of this initialized, borrowed buffer.
+      let count = unsafe buffer.withUnsafeMutableBytes { bytes in
+        unsafe read(fd, bytes.baseAddress, bytes.count)
+      }
       if count > 0 {
         guard transfer.data.count <= Self.maximumClipboardBytes - count else {
           finishClipboardRead(fd: fd, transfer: transfer, text: nil)
@@ -498,11 +504,11 @@ public final class WaylandRenderer: Renderer {
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
       let bytes = renderer.clipboardSources[source] ?? Data()
       DispatchQueue.global().async {
-        bytes.withUnsafeBytes { rawBuffer in
-          guard let base = rawBuffer.baseAddress else { return }
+        bytes.bytes.withUnsafeBytes { rawBuffer in
+          guard let base = unsafe rawBuffer.baseAddress else { return }
           var offset = 0
           while offset < rawBuffer.count {
-            let count = chroma_write_no_sigpipe(
+            let count = unsafe chroma_write_no_sigpipe(
               fd, base.advanced(by: offset), rawBuffer.count - offset)
             if count > 0 { offset += count } else if errno != EINTR { break }
           }
@@ -795,19 +801,19 @@ public final class WaylandRenderer: Renderer {
 
     var config: EGLConfig?
     var count: EGLint = 0
-    var attributes: [EGLint] = [
+    let attributes: [EGLint] = [
       EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
       EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
       EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
       EGL_NONE,
     ]
-    attributes.withUnsafeMutableBufferPointer {
+    unsafe attributes.withUnsafeBufferPointer {
       _ = unsafe eglChooseConfig(eglDisplay, $0.baseAddress, &config, 1, &count)
     }
     guard count > 0, config != nil else { throw WaylandError("no EGL ES3 window config") }
 
-    var contextAttributes: [EGLint] = [EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE]
-    eglContext = contextAttributes.withUnsafeMutableBufferPointer {
+    let contextAttributes: [EGLint] = [EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE]
+    eglContext = unsafe contextAttributes.withUnsafeBufferPointer {
       unsafe eglCreateContext(eglDisplay, config, nil, $0.baseAddress)
     }
     guard eglContext != nil else { throw WaylandError("eglCreateContext failed") }

@@ -1,7 +1,9 @@
 #include "xkb_keyboard.h"
 
 #include <stdlib.h>
-#include <sys/mman.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <errno.h>
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-compose.h>
@@ -24,13 +26,43 @@ static const char *compose_locale(void) {
 }
 
 chroma_xkb_keyboard *chroma_xkb_keyboard_create(int32_t fd, uint32_t size) {
-  void *mapping = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+  // Read into owned storage: a compositor shrinking an mmap-backed file could
+  // otherwise SIGBUS the parser even after a successful fstat. Bound allocation
+  // and require a terminator before passing bytes to the C string parser.
+  const uint32_t maximum_keymap_bytes = 16 * 1024 * 1024;
+  struct stat info;
+  if (size == 0 || size > maximum_keymap_bytes ||
+      fstat(fd, &info) != 0 || info.st_size < (off_t)size) {
+    close(fd);
+    return NULL;
+  }
+  char *mapping = malloc(size);
+  if (mapping == NULL) {
+    close(fd);
+    return NULL;
+  }
+  size_t offset = 0;
+  while (offset < size) {
+    ssize_t count = pread(fd, mapping + offset, size - offset, (off_t)offset);
+    if (count > 0) {
+      offset += (size_t)count;
+    } else if (count < 0 && errno == EINTR) {
+      continue;
+    } else {
+      free(mapping);
+      close(fd);
+      return NULL;
+    }
+  }
   close(fd);
-  if (mapping == MAP_FAILED) return NULL;
+  if (memchr(mapping, '\0', size) == NULL) {
+    free(mapping);
+    return NULL;
+  }
 
   chroma_xkb_keyboard *keyboard = calloc(1, sizeof(*keyboard));
   if (keyboard == NULL) {
-    munmap(mapping, size);
+    free(mapping);
     return NULL;
   }
   keyboard->context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
@@ -38,7 +70,7 @@ chroma_xkb_keyboard *chroma_xkb_keyboard_create(int32_t fd, uint32_t size) {
     keyboard->keymap = xkb_keymap_new_from_string(
         keyboard->context, mapping, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
   }
-  munmap(mapping, size);
+  free(mapping);
   if (keyboard->keymap != NULL) {
     keyboard->state = xkb_state_new(keyboard->keymap);
   }

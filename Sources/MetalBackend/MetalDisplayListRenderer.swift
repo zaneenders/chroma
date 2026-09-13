@@ -38,10 +38,6 @@ public final class MetalDisplayListRenderer {
       vertex: "text_vertex", fragment: "image_fragment")
   }
 
-  public func finishFrame() {
-    poolBufferIndex = (poolBufferIndex + 1) % poolBufferCount
-  }
-
   private static func makePipeline(
     device: MTLDevice,
     pixelFormat: MTLPixelFormat,
@@ -84,10 +80,9 @@ public final class MetalDisplayListRenderer {
     }
   }
 
-  private var shapePool: [MTLBuffer] = []
-  private var textPool: [MTLBuffer] = []
-  private var poolBufferIndex = 0
-  private let poolBufferCount = 3
+  private let frameSlots = MetalFrameSlots()
+  private var shapePool: [MTLBuffer?] = Array(repeating: nil, count: 3)
+  private var textPool: [MTLBuffer?] = Array(repeating: nil, count: 3)
   private var shapeInstances: [ShapeInstance] = []
   private var textInstances: [TextInstance] = []
   public private(set) var lastDrawCallCount = 0
@@ -137,12 +132,34 @@ public final class MetalDisplayListRenderer {
     case popClip
   }
 
-  public func encode(
+  /// Returns nil when all three slots are reserved or in flight. No waiting or
+  /// unbounded allocation occurs. The returned frame must be consumed to submit.
+  public func prepareFrame(
+    _ drawList: DrawList, viewport: Size, rasterScale: Point,
+    queue: MTLCommandQueue, renderPass: MTLRenderPassDescriptor
+  ) throws -> MetalPreparedFrame? {
+    guard let reservation = frameSlots.acquire() else { return nil }
+    guard queue.device === device,
+      let command = queue.makeCommandBuffer(),
+      let encoder = command.makeRenderCommandEncoder(descriptor: renderPass)
+    else {
+      throw BackendError.initializationFailed(
+        backend: "Metal", stage: "frame", reason: "Command creation failed or queue uses a different device")
+    }
+    defer { encoder.endEncoding() }
+    try encode(
+      drawList, viewport: viewport, rasterScale: rasterScale, into: encoder,
+      slot: reservation.index)
+    return MetalPreparedFrame(command: command, reservation: reservation)
+  }
+
+  private func encode(
     _ drawList: DrawList,
     viewport: Size,
     rasterScale: Point,
-    into enc: MTLRenderCommandEncoder
-  ) {
+    into enc: MTLRenderCommandEncoder,
+    slot: Int
+  ) throws {
     lastDrawCallCount = 0
     lastInstanceCount = 0
     let metrics = FontMetrics()
@@ -263,19 +280,17 @@ public final class MetalDisplayListRenderer {
 
     lastInstanceCount = shapeInstances.count + textInstances.count
     guard !batches.isEmpty else { return }
-    let shapeBuffer = pooledBuffer(
-      pool: &shapePool,
+    let shapeBuffer = try pooledBuffer(
+      pool: &shapePool, slot: slot,
       byteCount: MemoryLayout<ShapeInstance>.stride * shapeInstances.count)
     if let shapeBuffer, !shapeInstances.isEmpty {
-      shapeBuffer.contents().assumingMemoryBound(to: ShapeInstance.self)
-        .update(from: shapeInstances, count: shapeInstances.count)
+      MetalUpload.copy(shapeInstances, to: shapeBuffer)
     }
-    let textBuffer = pooledBuffer(
-      pool: &textPool,
+    let textBuffer = try pooledBuffer(
+      pool: &textPool, slot: slot,
       byteCount: MemoryLayout<TextInstance>.stride * textInstances.count)
     if let textBuffer, !textInstances.isEmpty {
-      textBuffer.contents().assumingMemoryBound(to: TextInstance.self)
-        .update(from: textInstances, count: textInstances.count)
+      MetalUpload.copy(textInstances, to: textBuffer)
     }
 
     var scissorStack: [Rect] = []
@@ -318,7 +333,7 @@ public final class MetalDisplayListRenderer {
         enc.setScissorRect(clip.asMtlScissor(scale: rasterScale))
         enc.setRenderPipelineState(imagePipeline)
         enc.setFragmentTexture(texture, index: 0)
-        enc.setVertexBytes(&instance, length: MemoryLayout<TextInstance>.stride, index: 0)
+        MetalUpload.setVertexValue(&instance, encoder: enc, index: 0)
         lastDrawCallCount += 1
         enc.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         enc.setScissorRect((scissorStack.last ?? viewportRect).asMtlScissor(scale: rasterScale))
@@ -352,13 +367,9 @@ public final class MetalDisplayListRenderer {
       pixelFormat: .rgba8Unorm, width: image.width, height: image.height, mipmapped: false)
     descriptor.usage = .shaderRead
     guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
-    image.rgba8.withUnsafeBytes { bytes in
-      texture.replace(
-        region: MTLRegionMake2D(0, 0, image.width, image.height),
-        mipmapLevel: 0,
-        withBytes: bytes.baseAddress!,
-        bytesPerRow: image.width * 4)
-    }
+    MetalUpload.replace(
+      texture, bytes: image.rgba8.bytes, width: image.width, height: image.height,
+      bytesPerPixel: 4, level: 0)
     let byteCount = image.width * image.height * 4
     imageTextures[image.id] = CachedImageTexture(
       generation: image.generation, width: image.width, height: image.height,
@@ -379,21 +390,14 @@ public final class MetalDisplayListRenderer {
     }
   }
 
-  private func pooledBuffer(pool: inout [MTLBuffer], byteCount: Int) -> MTLBuffer? {
+  private func pooledBuffer(pool: inout [MTLBuffer?], slot: Int, byteCount: Int) throws -> MTLBuffer? {
     guard byteCount > 0 else { return nil }
-    if pool.count <= poolBufferIndex {
-      guard let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared) else {
-        return nil
-      }
-      pool.append(buffer)
-      return buffer
-    }
-    let existing = pool[poolBufferIndex]
-    if existing.length >= byteCount { return existing }
+    if let existing = pool[slot], existing.length >= byteCount { return existing }
     guard let buffer = device.makeBuffer(length: byteCount, options: .storageModeShared) else {
-      return nil
+      throw BackendError.initializationFailed(
+        backend: "Metal", stage: "frame buffer", reason: "Failed to allocate \(byteCount) bytes")
     }
-    pool[poolBufferIndex] = buffer
+    pool[slot] = buffer
     return buffer
   }
 }

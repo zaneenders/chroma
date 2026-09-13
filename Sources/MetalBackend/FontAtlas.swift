@@ -8,7 +8,7 @@ struct FontAtlas {
   let texture: MTLTexture
   let atlas: HighResolutionFontAtlas
 
-  init(device: MTLDevice) throws {
+  @MainActor init(device: MTLDevice) throws {
     let atlas = HighResolutionFontAtlas()
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
       pixelFormat: .r8Unorm,
@@ -24,14 +24,9 @@ struct FontAtlas {
       )
     }
     for (level, mip) in atlas.mipLevels().enumerated() {
-      mip.pixels.withUnsafeBytes { bytes in
-        texture.replace(
-          region: MTLRegionMake2D(0, 0, mip.width, mip.height),
-          mipmapLevel: level,
-          withBytes: bytes.baseAddress!,
-          bytesPerRow: mip.width
-        )
-      }
+      MetalUpload.replace(
+        texture, bytes: mip.pixels.span.bytes, width: mip.width, height: mip.height,
+        bytesPerPixel: 1, level: level)
     }
     self.texture = texture
     self.atlas = atlas

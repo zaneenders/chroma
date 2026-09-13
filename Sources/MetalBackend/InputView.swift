@@ -59,7 +59,8 @@ public final class ChromaInputView: MTKView {
   }
 
   public override func mouseDown(with event: NSEvent) {
-    window?.makeFirstResponder(self)
+    // AppKit invokes responder callbacks synchronously; self remains alive for the call.
+    unsafe window?.makeFirstResponder(self)
     updatePointer(with: event)
     pointerPressPosition = pointerPosition
     pointerDown = true

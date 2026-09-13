@@ -32,7 +32,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   private var isShuttingDown = false
   private var requestStartedAt: TimeInterval = 0
   // Protect the renderer's three shared instance-buffer slots from GPU reuse.
-  private let inFlight = DispatchSemaphore(value: 3)
   private var frameRequestTimer: Timer?
   private var frameRequestOutstanding: Bool {
     get { frameState.requestOutstanding }
@@ -216,45 +215,38 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
   public func draw(in view: MTKView) {
-    guard inFlight.wait(timeout: .now()) == .success else {
-      view.needsDisplay = true
-      return
-    }
-    var submitted = false
-    defer { if !submitted { inFlight.signal() } }
     guard
       let frame = latestFrame,
       let drawable = view.currentDrawable,
-      let descriptor = view.currentRenderPassDescriptor,
-      let command = queue.makeCommandBuffer(),
-      let encoder = command.makeRenderCommandEncoder(descriptor: descriptor)
+      let descriptor = view.currentRenderPassDescriptor
     else { return }
     let renderStarted = ProcessInfo.processInfo.systemUptime
-    displayRenderer.encode(
-      DrawList(commands: frame.commands), viewport: frame.viewport,
-      rasterScale: Point(
-        x: Float(drawable.texture.width) / max(1, frame.viewport.width),
-        y: Float(drawable.texture.height) / max(1, frame.viewport.height)),
-      into: encoder)
-    encoder.endEncoding()
-    command.present(drawable)
-    let semaphore = inFlight
-    command.addCompletedHandler { [weak self] command in
-      semaphore.signal()
-      let duration = command.gpuEndTime - command.gpuStartTime
-      let valid = command.status == .completed && command.gpuStartTime > 0 && duration >= 0
-      DispatchQueue.main.async {
-        guard let self, valid else { return }
-        self.statistics.gpuTime += duration
-        self.statistics.gpuFrames += 1
+    do {
+      guard let prepared = try displayRenderer.prepareFrame(
+        DrawList(commands: frame.commands), viewport: frame.viewport,
+        rasterScale: Point(
+          x: Float(drawable.texture.width) / max(1, frame.viewport.width),
+          y: Float(drawable.texture.height) / max(1, frame.viewport.height)),
+        queue: queue, renderPass: descriptor)
+      else {
+        view.needsDisplay = true
+        return
       }
+      _ = prepared.submit(presenting: drawable) { [weak self] completion in
+        guard let duration = completion.gpuDuration else { return }
+        DispatchQueue.main.async {
+          guard let self else { return }
+          self.statistics.gpuTime += duration
+          self.statistics.gpuFrames += 1
+        }
+      }
+    } catch {
+      view.needsDisplay = true
+      return
     }
-    submitted = true
-    command.commit()
     statistics.draws += 1
     statistics.drawCalls += displayRenderer.lastDrawCallCount
     statistics.instances += displayRenderer.lastInstanceCount
-    displayRenderer.finishFrame()
     statistics.renderTime += ProcessInfo.processInfo.systemUptime - renderStarted
   }
 

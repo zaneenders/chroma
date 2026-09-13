@@ -83,7 +83,8 @@ final class NotificationBanner: NSVisualEffectView {
     }
     label.stringValue = message
     isHidden = false
-    NSAccessibility.post(
+    // AppKit receives the live view and owned notification payload for this call.
+    unsafe NSAccessibility.post(
       element: self, notification: .announcementRequested,
       userInfo: [
         .announcement: message,

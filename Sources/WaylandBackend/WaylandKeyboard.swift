@@ -209,8 +209,11 @@ final class WaylandKeyboard {
       return nil
     }
     var buffer = [CChar](repeating: 0, count: 64)
-    let count = chroma_xkb_keyboard_utf8(keyboard, key, &buffer, Int32(buffer.count))
-    guard count > 0 else { return nil }
+    // xkb may return the required length when the supplied buffer is too short.
+    let count = unsafe buffer.withUnsafeMutableBufferPointer { bytes in
+      unsafe chroma_xkb_keyboard_utf8(keyboard, key, bytes.baseAddress, Int32(bytes.count))
+    }
+    guard count > 0, count < buffer.count else { return nil }
     return String(decoding: buffer.prefix(Int(count)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
   }
 
@@ -246,7 +249,7 @@ final class WaylandKeyboard {
   }
 
   private func modifier(_ name: String, keyboard: OpaquePointer) -> Bool {
-    name.withCString { chroma_xkb_keyboard_modifier_active(keyboard, $0) != 0 }
+    unsafe name.withCString { unsafe chroma_xkb_keyboard_modifier_active(keyboard, $0) != 0 }
   }
 }
 

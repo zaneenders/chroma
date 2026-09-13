@@ -51,9 +51,10 @@ Initialization, shader compilation, sequence construction, and first-frame
 round-trip validation are outside the timed phases. First replay is reported
 separately; 30 additional frames warm caches before the 300 measured frames.
 
-Metal CPU timing covers `encode` plus `endEncoding`, including renderer culling,
-instance preparation and buffer uploads. It excludes command creation,
-commit, and completion waits. GPU time comes from completed command-buffer
+Metal CPU timing covers `prepareFrame`, including command creation, renderer
+culling, instance preparation, buffer uploads, and `endEncoding`. It excludes
+commit and completion waits. This boundary changed with the frame-lease API;
+compare results only with baselines using the same timing boundary. GPU time comes from completed command-buffer
 timestamps. Replay waits for each command buffer before reusing pooled buffers;
 this is intentionally serial, **not** a maximum-throughput/presentation benchmark.
 Failures to create/use Metal are errors, never silently reported as zero work.

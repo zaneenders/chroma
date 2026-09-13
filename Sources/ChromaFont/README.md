@@ -63,6 +63,13 @@ No per-level dimensions, compression, or trailing bytes are stored. The loader
 checks version, dimensions, lengths, scalar validity and uniqueness, and the
 presence of the replacement glyph. Character keys preserve canonical equality.
 
+The loader borrows the input `Data` through `RawSpan` and uses Swift 6.4's
+endian-aware integer loads, avoiding a whole-asset `[UInt8]` copy. Length checks
+precede each load so malformed assets throw `AssetError` rather than triggering
+a bounds trap. Each mip still owns its pixel array after parsing; no borrowed
+storage escapes the input's lifetime. `ChromaFont`, `Chroma`, and `RemoteProtocol`
+enable Swift's strict memory-safety diagnostics.
+
 ## Latin accents
 
 All 190 supported accented letters now use Noto's actual complete glyph designs.

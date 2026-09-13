@@ -37,6 +37,67 @@ struct FontGlyphTests {
     }
   }
 
+  // A small valid atlas with deliberately nonuniform bytes to catch endian,
+  // cursor, and mip-copy mistakes without depending on the bundled asset.
+  private func fixture(scalars: [UInt32] = [0xFFFD]) -> (Data, [[UInt8]]) {
+    var data = Data()
+    for value: UInt32 in [0x4C54_4143, 1, 2112, 90, UInt32(scalars.count)] + scalars {
+      for shift in stride(from: 0, to: 32, by: 8) {
+        data.append(UInt8(truncatingIfNeeded: value >> shift))
+      }
+    }
+    var levels: [[UInt8]] = []
+    var width = 2112
+    var height = 90
+    while true {
+      let pixels = (0..<(width * height)).map { UInt8(truncatingIfNeeded: $0 + levels.count) }
+      levels.append(pixels)
+      data.append(contentsOf: pixels)
+      if width == 1 && height == 1 { break }
+      width = max(1, width / 2)
+      height = max(1, height / 2)
+    }
+    return (data, levels)
+  }
+
+  @Test func borrowedAtlasSupportsSlicesAndOwnsItsMipPixels() throws {
+    let (data, pixels) = fixture()
+    var padded = Data([0xAA])
+    padded.append(data)
+    // Preserve a nonzero Data startIndex and offset the first word by one byte.
+    var slice = padded.dropFirst()
+    #expect(slice.startIndex == 1)
+    let atlas = try HighResolutionFontAtlas(data: slice)
+    slice.resetBytes(in: slice.startIndex..<slice.endIndex)
+    #expect(atlas.width == 2112)
+    #expect(atlas.height == 90)
+    #expect(atlas.characterIndices == [0xFFFD: 0])
+    #expect(atlas.mipLevels().map(\.pixels) == pixels)
+  }
+
+  @Test func borrowedAtlasRejectsTruncatedWordsAndMipLevels() {
+    let (data, levels) = fixture()
+    var cuts = Array(0..<24)
+    var cursor = 24
+    for pixels in levels {
+      cuts.append(cursor)
+      cursor += pixels.count
+      cuts.append(cursor - 1)
+    }
+    for cut in cuts {
+      #expect(throws: HighResolutionFontAtlas.AssetError.self) {
+        _ = try HighResolutionFontAtlas(data: Data(data.prefix(cut)))
+      }
+    }
+  }
+
+  @Test func borrowedAtlasRejectsDuplicateScalars() {
+    let (data, _) = fixture(scalars: [0xFFFD, 0xFFFD])
+    #expect(throws: HighResolutionFontAtlas.AssetError.self) {
+      _ = try HighResolutionFontAtlas(data: data)
+    }
+  }
+
   @Test func coversTerminalStructureAndPromptSymbols() {
     let required: [UInt32] = [
       0x2500,  // ─ box drawing

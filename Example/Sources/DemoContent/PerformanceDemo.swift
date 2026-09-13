@@ -96,7 +96,11 @@ final class PerformanceDemoState {
     lastAction = "Burst #\(burst) randomized every phase"
   }
 
-  var speedLabel: String { String(format: "%.1f×", speed) }
+  var speedLabel: String {
+    speed.formatted(
+      .number.locale(Locale(identifier: "en_US_POSIX"))
+        .grouping(.never).precision(.fractionLength(1))) + "×"
+  }
 
   func elapsedTime() -> Float {
     let now = pauseStartedAt ?? clock()

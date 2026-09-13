@@ -29,13 +29,15 @@ var targets: [Target] = [
       .product(name: "NIOCore", package: "swift-nio"),
     ]
   ),
-  .target(name: "Chroma"),
+  .target(name: "Chroma", swiftSettings: [.strictMemorySafety()]),
   .target(
-    name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")]),
+    name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")],
+    swiftSettings: [.strictMemorySafety()]),
   .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
   .target(
     name: "RemoteProtocol",
-    dependencies: ["Chroma", .product(name: "NIOCore", package: "swift-nio")]
+    dependencies: ["Chroma", .product(name: "NIOCore", package: "swift-nio")],
+    swiftSettings: [.strictMemorySafety()]
   ),
   .target(
     name: "RemoteServer",
@@ -44,7 +46,8 @@ var targets: [Target] = [
       .product(name: "Logging", package: "swift-log"),
       .product(name: "NIOCore", package: "swift-nio"),
       .product(name: "NIOPosix", package: "swift-nio"),
-    ]
+    ],
+    swiftSettings: [.strictMemorySafety()]
   ),
 ]
 var backendTraits: Set<Trait> = []
@@ -65,6 +68,7 @@ defaultBackendTraits.insert("MetalBackend")
 products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))
 products.append(.library(name: "RemoteMetalClient", targets: ["RemoteMetalClient"]))
 targets.append(contentsOf: [
+  .testTarget(name: "MetalBackendTests", dependencies: ["MetalBackend"]),
   .testTarget(name: "RemoteMetalClientTests", dependencies: ["RemoteMetalClient", "Chroma", "RemoteProtocol"]),
   .target(
     name: "MetalBackend",
@@ -72,7 +76,7 @@ targets.append(contentsOf: [
     exclude: ["Shaders"],
     // The product is only declared on macOS. Its API remains available whether
     // or not the demo-selection trait is enabled.
-    swiftSettings: [.define("METAL_BACKEND")],
+    swiftSettings: [.define("METAL_BACKEND"), .strictMemorySafety()],
     plugins: [.plugin(name: "MetalSourcePlugin")]
   ),
   .target(
@@ -82,7 +86,7 @@ targets.append(contentsOf: [
       .product(name: "NIOCore", package: "swift-nio"),
       .product(name: "NIOPosix", package: "swift-nio"),
     ],
-    swiftSettings: [.define("METAL_BACKEND")]
+    swiftSettings: [.define("METAL_BACKEND"), .strictMemorySafety()]
   ),
   .executableTarget(name: "MetalSourceGenerator"),
   .plugin(
@@ -119,7 +123,7 @@ targets.append(contentsOf: [
     exclude: ["Shaders"],
     // The product is only declared on Linux. Its API remains available whether
     // or not the demo-selection trait is enabled.
-    swiftSettings: [.define("WAYLAND_BACKEND")],
+    swiftSettings: [.define("WAYLAND_BACKEND"), .strictMemorySafety()],
     plugins: [.plugin(name: "WaylandSourcePlugin")]
   ),
   .executableTarget(name: "WaylandSourceGenerator"),
