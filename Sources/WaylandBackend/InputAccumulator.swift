@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import Chroma
 
 @MainActor
@@ -68,5 +66,3 @@ final class InputAccumulator {
     scroll.y += y
   }
 }
-
-#endif

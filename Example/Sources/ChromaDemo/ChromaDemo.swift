@@ -2,11 +2,11 @@
 import Chroma
 import DemoContent
 
-#if WAYLAND_BACKEND
+#if os(Linux)
 import WaylandBackend
 #endif
 
-#if WAYLAND_BACKEND
+#if os(Linux)
 private protocol DemoApp: WaylandApp {}
 #else
 private protocol DemoApp: App {}

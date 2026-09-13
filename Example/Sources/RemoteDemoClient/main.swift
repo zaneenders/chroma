@@ -1,4 +1,3 @@
-#if METAL_BACKEND
 import Chroma
 import Foundation
 import RemoteMetalClient
@@ -27,6 +26,3 @@ struct RemoteDemoClient {
     client.run()
   }
 }
-#else
-#error("The remote demo client currently requires macOS and Metal.")
-#endif

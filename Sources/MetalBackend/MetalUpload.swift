@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import Metal
 
 @MainActor
@@ -42,5 +40,3 @@ enum MetalUpload {
     }
   }
 }
-
-#endif

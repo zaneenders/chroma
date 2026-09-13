@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import CWaylandClient
 import CWaylandCursor
 import Foundation
@@ -55,5 +53,3 @@ final class WaylandCursor {
     cursor = nil
   }
 }
-
-#endif

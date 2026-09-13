@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 struct ShapeInstance {
   var dst_p0: SIMD2<Float>
   var dst_p1: SIMD2<Float>
@@ -9,5 +7,3 @@ struct ShapeInstance {
   var borderWidth: Float
   var padding: SIMD3<Float> = .zero
 }
-
-#endif

@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import ChromaFont
 
 struct FontAtlas {
@@ -21,5 +19,3 @@ struct FontAtlas {
     shared.glyphUV(character)
   }
 }
-
-#endif

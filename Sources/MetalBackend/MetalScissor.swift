@@ -1,4 +1,3 @@
-#if METAL_BACKEND
 import Chroma
 import Metal
 
@@ -14,4 +13,3 @@ extension Rect {
     return MTLScissorRect(x: Int(values[0]), y: Int(values[1]), width: Int(values[2]), height: Int(values[3]))
   }
 }
-#endif

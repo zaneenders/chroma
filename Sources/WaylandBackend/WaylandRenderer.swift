@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import CEGL
 import Chroma
 import CWaylandClient
@@ -1038,5 +1036,3 @@ private func fixedToFloat(_ value: Int32) -> Float {
 }
 
 private let btnLeft: UInt32 = 0x110
-
-#endif

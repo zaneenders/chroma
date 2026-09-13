@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import Chroma
 import CXKBKeyboard
 
@@ -250,5 +248,3 @@ final class WaylandKeyboard {
     name.withCString { unsafe chroma_xkb_keyboard_modifier_active(keyboard, $0) != 0 }
   }
 }
-
-#endif

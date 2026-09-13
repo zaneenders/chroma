@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import AppKit
 import Chroma
 import MetalKit
@@ -146,5 +144,3 @@ public final class ChromaInputView: MTKView {
     )
   }
 }
-
-#endif

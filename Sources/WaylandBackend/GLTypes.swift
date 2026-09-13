@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import Chroma
 
 struct GLQuad {
@@ -12,5 +10,3 @@ struct GLQuad {
   var radii: (Float, Float, Float, Float) = (0, 0, 0, 0)
   var shape: (Float, Float, Float, Float) = (0, 0, 0, 0)
 }
-
-#endif
