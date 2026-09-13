@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import Chroma
 import ChromaFont
 import Metal
@@ -38,7 +36,3 @@ struct FontAtlas {
     atlas.glyphUV(character)
   }
 }
-
-#elseif METAL_TRAIT
-#error("The Metal backend requires macOS.")
-#endif

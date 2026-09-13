@@ -2,6 +2,8 @@
 
 Swift UI library. Metal on macOS 27+; Wayland/EGL/OpenGL ES on Linux.
 Swift tools 6.4+; pinned toolchain in `.swift-version`.
+Backend targets are selected by platform; no package traits or backend defines are needed.
+A shared build plugin embeds Metal/GLSL shader sources, so shaders need no resource bundle.
 
 ```sh
 swiftly install

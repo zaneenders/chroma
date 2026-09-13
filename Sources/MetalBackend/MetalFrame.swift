@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import Metal
 import Synchronization
 
@@ -93,5 +91,3 @@ public struct MetalSubmittedFrame: ~Copyable {
     return MetalFrameCompletion(command)
   }
 }
-
-#endif

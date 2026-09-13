@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import CGLES3
 import Chroma
 
@@ -467,5 +465,3 @@ final class OpenGLRenderer {
     resolutionUniform = -1
   }
 }
-
-#endif

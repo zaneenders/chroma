@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import Chroma
 import Metal
 
@@ -391,5 +389,3 @@ public final class MetalDisplayListRenderer {
     return buffer
   }
 }
-
-#endif

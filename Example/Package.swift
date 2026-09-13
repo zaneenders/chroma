@@ -5,8 +5,6 @@ var dependencies: [Target.Dependency] = [
   "DemoContent",
   .product(name: "Chroma", package: "chroma"),
 ]
-var swiftSettings: [SwiftSetting] = []
-var chromaTraits: Set<Package.Dependency.Trait> = []
 var targets: [Target] = [
   .target(
     name: "DemoBackend",
@@ -45,31 +43,25 @@ var targets: [Target] = [
 ]
 
 #if os(macOS)
-chromaTraits.insert("MetalBackend")
 dependencies.append("DemoBackend")
 dependencies.append(.product(name: "RemoteMetalClient", package: "chroma"))
-swiftSettings.append(.define("METAL_BACKEND"))
 targets.append(
   .executableTarget(
     name: "RemoteDemoClient",
     dependencies: [
       .product(name: "Chroma", package: "chroma"),
       .product(name: "RemoteMetalClient", package: "chroma"),
-    ],
-    swiftSettings: swiftSettings
+    ]
   )
 )
 #elseif os(Linux)
-chromaTraits.insert("WaylandBackend")
 dependencies.append(.product(name: "WaylandBackend", package: "chroma"))
-swiftSettings.append(.define("WAYLAND_BACKEND"))
 #endif
 
 targets.append(
   .executableTarget(
     name: "ChromaDemo",
-    dependencies: dependencies,
-    swiftSettings: swiftSettings
+    dependencies: dependencies
   )
 )
 
@@ -77,7 +69,7 @@ let package = Package(
   name: "ChromaExample",
   platforms: [.macOS(.v27)],
   dependencies: [
-    .package(path: "..", traits: chromaTraits)
+    .package(path: "..")
   ],
   targets: targets
 )

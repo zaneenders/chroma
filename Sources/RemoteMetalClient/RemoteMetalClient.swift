@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import AppKit
 import Chroma
 import Metal
@@ -411,5 +409,3 @@ private final class RemoteClientHandler: ChannelInboundHandler, Sendable {
     context.close(promise: nil)
   }
 }
-
-#endif
