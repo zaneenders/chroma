@@ -3,6 +3,10 @@
 import CGLES3
 import Chroma
 
+@diagnose(
+  StrictMemorySafety, as: ignored,
+  reason:
+    "OpenGL copies scoped upload buffers synchronously; buffer sizes and vertex offsets are checked before C calls.")
 @MainActor
 final class OpenGLRenderer {
   private var program: GLuint = 0
@@ -30,7 +34,7 @@ final class OpenGLRenderer {
 
   private func compileShader(_ type: GLenum, source: String, stage: String) throws -> GLuint {
     let shader = glCreateShader(type)
-    unsafe source.withCString { sourcePointer in
+    source.withCString { sourcePointer in
       var pointer: UnsafePointer<GLchar>? = sourcePointer
       let length = GLint(exactly: source.utf8.count)
       precondition(length != nil)
@@ -106,11 +110,11 @@ final class OpenGLRenderer {
       unsafe glBufferData(GLenum(GL_ARRAY_BUFFER), $0.count, $0.baseAddress, GLenum(GL_STATIC_DRAW))
     }
     glEnableVertexAttribArray(0)
-    unsafe glVertexAttribPointer(0, 2, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 8, nil)
+    glVertexAttribPointer(0, 2, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 8, nil)
 
     unsafe glGenBuffers(1, &instanceVBO)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    unsafe glBufferData(GLenum(GL_ARRAY_BUFFER), MemoryLayout<GLQuad>.stride, nil, GLenum(GL_DYNAMIC_DRAW))
+    glBufferData(GLenum(GL_ARRAY_BUFFER), MemoryLayout<GLQuad>.stride, nil, GLenum(GL_DYNAMIC_DRAW))
     let stride = GLsizei(MemoryLayout<GLQuad>.stride)
     let offsets = [
       MemoryLayout<GLQuad>.offset(of: \.dst0)!, MemoryLayout<GLQuad>.offset(of: \.dst1)!,

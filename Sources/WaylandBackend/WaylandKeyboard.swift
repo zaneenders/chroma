@@ -3,6 +3,9 @@
 import Chroma
 import CXKBKeyboard
 
+@diagnose(
+  StrictMemorySafety, as: ignored,
+  reason: "XKB handle ownership is managed by installKeymap/cleanup; C buffer access is scoped to the call.")
 @MainActor
 final class WaylandKeyboard {
   private var keyboard: OpaquePointer?
@@ -205,7 +208,7 @@ final class WaylandKeyboard {
       return nil
     }
     var buffer = [CChar](repeating: 0, count: 64)
-    let count = unsafe buffer.withUnsafeMutableBufferPointer { bytes in
+    let count = buffer.withUnsafeMutableBufferPointer { bytes in
       unsafe chroma_xkb_keyboard_utf8(keyboard, key, bytes.baseAddress, Int32(bytes.count))
     }
     guard count > 0, count < buffer.count else { return nil }
@@ -244,7 +247,7 @@ final class WaylandKeyboard {
   }
 
   private func modifier(_ name: String, keyboard: OpaquePointer) -> Bool {
-    unsafe name.withCString { unsafe chroma_xkb_keyboard_modifier_active(keyboard, $0) != 0 }
+    name.withCString { unsafe chroma_xkb_keyboard_modifier_active(keyboard, $0) != 0 }
   }
 }
 

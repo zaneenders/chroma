@@ -70,14 +70,17 @@ struct ObservationTests {
   @Test func nonObservableConditionRefreshesDependenciesWithoutModelMutation() async {
     let model = Model()
     let renderer = HeadlessRenderer()
-    var primary = true
+    @MainActor final class Condition {
+      var primary = true
+    }
+    let condition = Condition()
     renderer.content = DeferredBlock {
-      if primary { model.first } else { model.second }
+      if condition.primary { model.first } else { model.second }
     }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
-    primary = false
+    condition.primary = false
     renderer.render()
     await drainChanges()
     #expect(redraws == 0)

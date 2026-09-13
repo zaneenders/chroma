@@ -4,6 +4,9 @@ import CWaylandClient
 import CWaylandCursor
 import Foundation
 
+@diagnose(
+  StrictMemorySafety, as: ignored,
+  reason: "Wayland cursor pointers are borrowed from the owned theme and used only until cleanup on the main actor.")
 @MainActor
 final class WaylandCursor {
   private var theme: OpaquePointer?
@@ -15,7 +18,7 @@ final class WaylandCursor {
     surface = unsafe wl_compositor_create_surface(compositor)
     let themeName = ProcessInfo.processInfo.environment["XCURSOR_THEME"] ?? "default"
     let themeSize = Int32(ProcessInfo.processInfo.environment["XCURSOR_SIZE"] ?? "") ?? 24
-    theme = unsafe themeName.withCString { name in
+    theme = themeName.withCString { name in
       unsafe wl_cursor_theme_load(name, Int32(themeSize), shm)
     }
     guard let theme else { return }

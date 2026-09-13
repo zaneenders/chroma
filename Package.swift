@@ -164,6 +164,14 @@ targets.append(contentsOf: [
 ])
 #endif
 
+for target in targets where target.type != .plugin && target.type != .system {
+  if ["CWaylandProtocols", "CXKBKeyboard"].contains(target.name) {
+    target.cSettings = (target.cSettings ?? []) + [.treatAllWarnings(as: .error)]
+  } else {
+    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+  }
+}
+
 let package = Package(
   name: "chroma",
   platforms: [.macOS(.v27)],

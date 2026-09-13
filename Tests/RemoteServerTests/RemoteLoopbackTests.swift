@@ -46,7 +46,10 @@ private final class Peer {
     channel = try await ClientBootstrap(group: group)
       .connectTimeout(.seconds(2))
       .channelInitializer { channel in
-        channel.pipeline.addHandlers(ByteToMessageHandler(RemoteMessageDecoder()), replies)
+        channel.eventLoop.makeCompletedFuture {
+          try channel.pipeline.syncOperations.addHandlers(
+            ByteToMessageHandler(RemoteMessageDecoder()), replies)
+        }
       }
       .connect(host: "127.0.0.1", port: port).get()
   }
