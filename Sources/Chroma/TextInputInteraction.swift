@@ -214,6 +214,20 @@ extension Interaction {
         pointerOffset: pointerOffset, verticalOffset: verticalOffset)
     }
     let editing = editingLeaf == id
+    if editing {
+      let currentText = text()
+      if inputLengthText != currentText {
+        inputLengthText = currentText
+        inputLength = currentText.count
+      }
+      editingText = currentText
+      caretOffset = max(0, min(caretOffset, inputLength))
+      if let selection = textSelectionRange {
+        let lower = max(0, min(selection.lowerBound, inputLength))
+        let upper = max(lower, min(selection.upperBound, inputLength))
+        textSelectionRange = lower == upper ? nil : lower..<upper
+      }
+    }
     return TextInputState(
       hovered: selectedLeafID == id, held: pressedLeaf == id && input.pointerDown,
       editing: editing, caretOffset: editing ? caretOffset : nil,

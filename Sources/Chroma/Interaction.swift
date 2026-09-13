@@ -158,7 +158,21 @@ package final class Interaction {
     return redrawRequested
   }
 
+  @ObservationIgnored var refreshingRegistrations = false
+
   package func beginFrame(input: InputState) {
+    if refreshingRegistrations {
+      let root = FocusNode(kind: .group(.vertical), rect: .zero)
+      builderRoot = root
+      builderStack = [root]
+      builderPath = []
+      clipStack = []
+      buildingInputHandlers = [:]
+      buildingButtonActions = [:]
+      buildingCommandHandlers = []
+      buildingScrollViewports = []
+      return
+    }
     self.input = input
     activatePending = false
     pendingCommands = input.commands
@@ -237,6 +251,14 @@ package final class Interaction {
   }
 
   package func endFrame() {
+    if refreshingRegistrations {
+      inputHandlers = buildingInputHandlers
+      buttonActions = buildingButtonActions
+      commandHandlers = buildingCommandHandlers
+      builderRoot = nil
+      builderStack = []
+      return
+    }
     defer {
       if input.pointerReleased {
         dragOrigin = nil

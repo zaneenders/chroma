@@ -1,0 +1,119 @@
+import HeadlessBackend
+import Observation
+import Testing
+
+@testable import Chroma
+
+@MainActor
+struct ReviewRegressionTests {
+  @Observable final class Model {
+    var text = "abcdef"
+    var height: Float = 20
+  }
+
+  final class Capture {
+    var range: Range<Int>?
+    var measurements = 0
+    var drawnHeight: Float = 0
+  }
+
+  struct Editor: PrimitiveBlock {
+    let text: String
+    let model: Model
+    let capture: Capture
+
+    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+
+    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+      let state = context.textInputState(
+        id: WidgetID("editor"), in: rect, text: { text }, onChange: { model.text = $0 })
+      capture.range = state.selectionRange
+    }
+  }
+
+  struct Row: PrimitiveBlock {
+    let model: Model
+    let capture: Capture
+
+    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+      capture.measurements += 1
+      return Size(width: proposal.width, height: model.height)
+    }
+
+    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+      capture.drawnHeight = rect.size.height
+      list.fillRect(rect, color: .white)
+    }
+  }
+
+  @Test func capturedTextSelectionIsClampedToCurrentText() {
+    let model = Model()
+    let capture = Capture()
+    let renderer = HeadlessRenderer()
+    renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
+    renderer.render()
+    renderer.render(input: InputState(commands: [.action(.activate)]))
+    renderer.render(input: InputState(textEvents: [.selectAll]))
+    model.text = "a"
+    renderer.render()
+    #expect(capture.range == 0..<1)
+    renderer.close()
+  }
+
+  @Test func editsUseCurrentCapturedText() {
+    let model = Model()
+    let capture = Capture()
+    let renderer = HeadlessRenderer()
+    renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
+    renderer.render()
+    renderer.render(input: InputState(commands: [.action(.activate)]))
+    model.text = "a"
+    renderer.render(input: InputState(textEvents: [.insert("!")]))
+    #expect(model.text == "a!")
+    renderer.close()
+  }
+
+  @Test func builtInTextFieldHandlesShrinkingCapturedText() {
+    let model = Model()
+    let renderer = HeadlessRenderer()
+    func field(_ text: String) -> TextField {
+      TextField(id: WidgetID("editor"), text: { text }, onChange: { model.text = $0 })
+    }
+    renderer.content = DeferredBlock { field(model.text) }
+    renderer.render()
+    renderer.render(input: InputState(commands: [.action(.activate)]))
+    renderer.render(input: InputState(textEvents: [.selectAll]))
+    model.text = "a"
+    renderer.render()
+    model.text = ""
+    renderer.render()
+    renderer.close()
+  }
+
+  @Test func lazyMeasurementsInvalidateAndResubscribe() async {
+    let model = Model()
+    let capture = Capture()
+    let controller = ScrollViewController()
+    let renderer = HeadlessRenderer()
+    renderer.content = LazyVStack(
+      id: WidgetID("stack"), controller: controller,
+      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
+    var redraws = 0
+    renderer.onRedrawRequested = { redraws += 1 }
+    renderer.render()
+    #expect(capture.measurements == 1)
+    for height: Float in [50, 80] {
+      try? await Task.sleep(for: .milliseconds(20))
+      redraws = 0
+      model.height = height
+      try? await Task.sleep(for: .milliseconds(20))
+      #expect(redraws > 0)
+      renderer.render()
+      #expect(capture.drawnHeight == height)
+    }
+    #expect(capture.measurements == 3)
+    renderer.render()
+    #expect(capture.measurements == 3)
+    renderer.close()
+  }
+}

@@ -87,6 +87,17 @@ package final class FrameProducer {
         interaction.textSelectionRange = selection
       }
     }
+    // Value-capturing text getters must be refreshed before applying edits.
+    if !input.textEvents.isEmpty {
+      interaction.refreshingRegistrations = true
+      interaction.beginFrame(input: InputState())
+      var registrations = DrawList()
+      if let content {
+        BlockEngine.draw(content, into: &registrations, in: Rect(origin: .zero, size: viewport), context: context)
+      }
+      interaction.endFrame()
+      interaction.refreshingRegistrations = false
+    }
     interaction.animationRequested = false
     interaction.beginFrame(input: input)
     let subscription = FrameTrackingSubscription(onChange)

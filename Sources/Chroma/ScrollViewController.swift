@@ -1,3 +1,4 @@
+import Dispatch
 import Observation
 
 enum ScrollRequest: Equatable, Sendable {
@@ -23,5 +24,30 @@ public final class ScrollViewController {
 struct LazyStackCache {
   var width: Float?
   var rowIDs: [WidgetID] = []
-  var rowSizes: [Size] = []
+  var measurements: [LazyRowMeasurement] = []
+  @MainActor var rowSizes: [Size] { measurements.map(\.size) }
+}
+
+@Observable
+@MainActor
+final class LazyRowMeasurement {
+  private(set) var size: Size
+  private(set) var valid = true
+  @ObservationIgnored private var subscription: FrameTrackingSubscription?
+
+  init(measure: () -> Size) {
+    size = .zero
+    let subscription = FrameTrackingSubscription { [weak self] in self?.valid = false }
+    self.subscription = subscription
+    size = withObservationTracking(options: .didSet) {
+      subscription.trackCancellation()
+      return measure()
+    } onChange: { event in
+      event.cancel()
+      guard let invalidate = subscription.takeCallback() else { return }
+      DispatchQueue.main.async { invalidate() }
+    }
+  }
+
+  deinit { subscription?.cancel() }
 }

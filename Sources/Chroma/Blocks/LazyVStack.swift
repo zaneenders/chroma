@@ -135,7 +135,7 @@ public struct LazyVStack: PrimitiveBlock {
     } else {
       var y: Float = 0
       for index in rows.indices {
-        let height = controller.lazyStackCache.rowSizes[index].height
+        let height = controller.lazyStackCache.measurements[index].size.height
         let bottom = y + height
         if bottom >= visibleTop && y <= visibleBottom {
           BlockEngine.draw(
@@ -168,29 +168,32 @@ public struct LazyVStack: PrimitiveBlock {
     let cache = controller.lazyStackCache
     if cache.width == width && cache.rowIDs.count == rows.count
       && zip(cache.rowIDs, rows).allSatisfy({ $0.0 == $0.1.id })
+      && cache.measurements.allSatisfy(\.valid)
     {
       return
     }
-    var oldSizes: [WidgetID: Size] = [:]
+    var oldSizes: [WidgetID: LazyRowMeasurement] = [:]
     if cache.width == width {
-      for (id, size) in zip(cache.rowIDs, cache.rowSizes) {
-        oldSizes[id] = size
+      for (id, size) in zip(cache.rowIDs, cache.measurements) {
+        if size.valid { oldSizes[id] = size }
       }
     }
 
-    var sizes: [Size] = []
+    var sizes: [LazyRowMeasurement] = []
     sizes.reserveCapacity(rows.count)
     for row in rows {
       if let size = oldSizes[row.id] {
         sizes.append(size)
       } else {
         sizes.append(
-          BlockEngine.measure(
-            row.content,
-            proposal: Size(width: width, height: Float.greatestFiniteMagnitude), context: context))
+          LazyRowMeasurement {
+            BlockEngine.measure(
+              row.content,
+              proposal: Size(width: width, height: Float.greatestFiniteMagnitude), context: context)
+          })
       }
     }
     controller.lazyStackCache = LazyStackCache(
-      width: width, rowIDs: rows.map(\.id), rowSizes: sizes)
+      width: width, rowIDs: rows.map(\.id), measurements: sizes)
   }
 }

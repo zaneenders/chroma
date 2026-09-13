@@ -101,7 +101,9 @@ public struct TextField: PrimitiveBlock {
         at: Point(x: inner.minX + textOffset, y: inner.minY),
         color: style.foreground,
         scale: scale)
-      let selected = String(Array(text)[selection])
+      let characters = Array(text)
+      let safeSelection = selection.clamped(to: 0..<characters.count)
+      let selected = String(characters[safeSelection])
       drawList.pushClip(selectionRect)
       drawList.text(
         selected,
