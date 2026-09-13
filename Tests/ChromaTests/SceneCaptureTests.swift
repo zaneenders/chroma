@@ -74,3 +74,68 @@ import Testing
   #expect(decoded.drawList.commands == commands)
   #expect(decoded.rasterScale == nil)
 }
+
+@Test func captureStoresRepeatedImagesOnce() throws {
+  let image = try ImageResource(
+    id: ImageID("shared"), width: 1024, height: 1024,
+    rgba8: Data(repeating: 255, count: 1024 * 1024 * 4))
+  var list = DrawList()
+  for index in 0..<12 {
+    list.image(image, in: Rect(x: Float(index * 20), y: 0, width: 20, height: 20))
+  }
+  let frame = FrameObservation(drawList: list, viewport: Size(width: 400, height: 100))
+  let data = try SceneCapture.encode(frame)
+  #expect(data.count < 6 * 1024 * 1024)
+  let decoded = try SceneCapture.decode(data)
+  #expect(decoded.drawList.commands == list.commands)
+  let document = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+  #expect((document["images"] as? [Any])?.count == 1)
+}
+
+@Test func capturePreservesDistinctImagesWithSharedIdentity() throws {
+  var list = DrawList()
+  for (generation, width, pixels): (UInt64, Int, [UInt8]) in [
+    (0, 1, [0, 0, 0, 255]),
+    (1, 1, [0, 0, 0, 255]),
+    (0, 1, [255, 0, 0, 255]),
+    (0, 2, [0, 0, 0, 255, 0, 0, 0, 255]),
+  ] {
+    let image = try ImageResource(
+      id: ImageID("shared"), generation: generation, width: width, height: 1, rgba8: Data(pixels))
+    list.image(image, in: Rect(x: 0, y: 0, width: 20, height: 20))
+  }
+  let frame = FrameObservation(drawList: list, viewport: Size(width: 40, height: 30))
+  let decoded = try SceneCapture.decode(SceneCapture.encode(frame))
+  #expect(decoded.drawList.commands == list.commands)
+}
+
+@Test func captureRejectsInvalidImageReferences() throws {
+  let image = try ImageResource(id: ImageID("test"), width: 1, height: 1, rgba8: Data([0, 0, 0, 255]))
+  var list = DrawList()
+  list.image(image, in: Rect(x: 0, y: 0, width: 20, height: 20))
+  let frame = FrameObservation(drawList: list, viewport: Size(width: 40, height: 30))
+  let data = try SceneCapture.encode(frame)
+  for index in [-1, 1, Int.max] {
+    var document = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    var commands = try #require(document["commands"] as? [[String: Any]])
+    var reference = try #require(commands[0]["image"] as? [String: Any])
+    reference["resource"] = index
+    commands[0]["image"] = reference
+    document["commands"] = commands
+    let malformed = try JSONSerialization.data(withJSONObject: document)
+    #expect(throws: SceneCaptureError.invalidFrame) { try SceneCapture.decode(malformed) }
+  }
+}
+
+@Test func captureReadsVersionTwoJSON() throws {
+  let image = try ImageResource(id: ImageID("legacy"), width: 1, height: 1, rgba8: Data([1, 2, 3, 255]))
+  var list = DrawList()
+  list.image(image, in: Rect(x: 0, y: 0, width: 20, height: 20))
+  let frame = FrameObservation(
+    drawList: list, viewport: Size(width: 40, height: 30), rasterScale: Point(x: 2, y: 2))
+  let data = Data("{\"version\":2,\"frame\":".utf8) + (try JSONEncoder().encode(frame)) + Data("}".utf8)
+  let decoded = try SceneCapture.decode(data)
+  #expect(decoded.drawList.commands == list.commands)
+  #expect(decoded.viewport == frame.viewport)
+  #expect(decoded.rasterScale == frame.rasterScale)
+}

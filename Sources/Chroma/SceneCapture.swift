@@ -7,31 +7,115 @@ public enum SceneCaptureError: Error, Equatable, Sendable {
 }
 
 /// A self-contained local snapshot, independent of any rendering backend.
-/// Version 2 uses JSON and does not read the former remote-wire capture format.
+/// Version 3 stores shared images once. Version-2 JSON remains readable;
+/// the former remote-wire capture format is not supported.
 public enum SceneCapture {
-  public static let version = 2
+  public static let version = 3
   public static let maximumBytes = 64 * 1024 * 1024
+
+  private struct Header: Decodable {
+    let version: Int
+  }
+
+  private struct LegacyDocument: Decodable {
+    let frame: FrameObservation
+  }
+
+  private enum StoredCommand: Codable {
+    case drawing(DrawCommand)
+    case image(rect: Rect, resource: Int, scaling: ImageScaling, alignment: ImageAlignment)
+  }
 
   private struct Document: Codable {
     let version: Int
-    let frame: FrameObservation
+    let viewport: Size
+    let rasterScale: Point?
+    let images: [ImageResource]
+    let commands: [StoredCommand]
+  }
+
+  // Include pixels as well as identity so conflicting IDs never change a snapshot.
+  private struct ImageKey: Hashable {
+    let id: ImageID
+    let generation: UInt64
+    let width: Int
+    let height: Int
+    let pixels: Data
+
+    init(_ image: ImageResource) {
+      id = image.id
+      generation = image.generation
+      width = image.width
+      height = image.height
+      pixels = image.rgba8
+    }
   }
 
   public static func encode(_ frame: FrameObservation) throws -> Data {
     try validate(frame)
+    var images: [ImageResource] = []
+    var indices: [ImageKey: Int] = [:]
+    var commands: [StoredCommand] = []
+    var imageBytes = 0
+    for command in frame.drawList.commands {
+      if case .image(let rect, let image, let scaling, let alignment) = command {
+        let key = ImageKey(image)
+        let index: Int
+        if let existing = indices[key] {
+          index = existing
+        } else {
+          // Base64 cannot be smaller than the pixels. Reject oversized unique
+          // image storage before allocating its JSON representation.
+          guard image.rgba8.count <= maximumBytes - imageBytes else {
+            throw SceneCaptureError.tooLarge
+          }
+          imageBytes += image.rgba8.count
+          index = images.count
+          images.append(image)
+          indices[key] = index
+        }
+        commands.append(.image(rect: rect, resource: index, scaling: scaling, alignment: alignment))
+      } else {
+        commands.append(.drawing(command))
+      }
+    }
     let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
-    let data = try encoder.encode(Document(version: version, frame: frame))
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    let document = Document(
+      version: version, viewport: frame.viewport, rasterScale: frame.rasterScale,
+      images: images, commands: commands)
+    let data = try encoder.encode(document)
     guard data.count <= maximumBytes else { throw SceneCaptureError.tooLarge }
     return data
   }
 
   public static func decode(_ data: Data) throws -> FrameObservation {
     guard data.count <= maximumBytes else { throw SceneCaptureError.tooLarge }
-    let document = try JSONDecoder().decode(Document.self, from: data)
-    guard document.version == version else { throw SceneCaptureError.unsupportedVersion(document.version) }
-    try validate(document.frame)
-    return document.frame
+    let decoder = JSONDecoder()
+    let header = try decoder.decode(Header.self, from: data)
+    let frame: FrameObservation
+    switch header.version {
+    case 2:
+      frame = try decoder.decode(LegacyDocument.self, from: data).frame
+    case version:
+      let document = try decoder.decode(Document.self, from: data)
+      let commands = try document.commands.map { stored -> DrawCommand in
+        switch stored {
+        case .drawing(let command):
+          guard case .image = command else { return command }
+          throw SceneCaptureError.invalidFrame
+        case .image(let rect, let resource, let scaling, let alignment):
+          guard document.images.indices.contains(resource) else { throw SceneCaptureError.invalidFrame }
+          return .image(rect: rect, image: document.images[resource], scaling: scaling, alignment: alignment)
+        }
+      }
+      frame = FrameObservation(
+        drawList: DrawList(commands: commands), viewport: document.viewport, rasterScale: document.rasterScale)
+    default:
+      throw SceneCaptureError.unsupportedVersion(header.version)
+    }
+    try validate(frame)
+    return frame
   }
 
   private static func validate(_ frame: FrameObservation) throws {

@@ -21,8 +21,8 @@ including [OFL.txt](Sources/ChromaFont/Resources/OFL.txt).
 The demo runs in-process through `MetalApp` on macOS or `WaylandApp` on Linux.
 Save a scene with Ctrl+Shift+G (defaults to `Example/`), or pass
 `--capture-directory EXISTING_WRITABLE_DIRECTORY`.
-Scene captures now use self-contained version-2 JSON; older wire-format captures
-must be regenerated.
+Scene captures use self-contained version-3 JSON with shared image resources.
+Version-2 JSON remains readable; older wire-format captures must be regenerated.
 
 Local benchmarks use `--stage cull` (CPU, either platform) or `--stage metal`
 (culling plus Metal/GPU timings, macOS). For example:
