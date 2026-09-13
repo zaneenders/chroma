@@ -2,15 +2,25 @@ import Dispatch
 import Observation
 import Synchronization
 
-private final class FrameTrackingSubscription: Sendable {
+final class FrameTrackingSubscription: Observable, Sendable {
+  private let registrar = ObservationRegistrar()
   private let callback: Mutex<(@MainActor @Sendable () -> Void)?>
 
   init(_ onChange: @escaping @MainActor @Sendable () -> Void) {
     callback = Mutex(onChange)
   }
 
+  private var isCancelled: Bool {
+    callback.withLock { $0 == nil }
+  }
+
+  func trackCancellation() {
+    registrar.access(self, keyPath: \.isCancelled)
+  }
+
   func cancel() {
     callback.withLock { $0 = nil }
+    registrar.withMutation(of: self, keyPath: \.isCancelled) {}
   }
 
   func takeCallback() -> (@MainActor @Sendable () -> Void)? {
@@ -50,6 +60,7 @@ package final class FrameProducer {
     let subscription = FrameTrackingSubscription(onChange)
     self.subscription = subscription
     let drawList = withObservationTracking(options: .didSet) {
+      subscription.trackCancellation()
       var drawList = DrawList()
       if let content {
         BlockEngine.draw(

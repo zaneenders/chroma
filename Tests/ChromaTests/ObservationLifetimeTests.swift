@@ -110,4 +110,26 @@ struct ObservationLifetimeTests {
     #expect(counter.redraws.withLock { $0 } == 0)
     #expect(counter.live.withLock { $0 } == 0)
   }
+
+  @Test func cancellationReleasesObservationRegistrationWithoutModelMutation() {
+    let model = Model()
+    let counter = SubscriptionLifetimeCounter()
+    for _ in 0..<1_000 {
+      let subscription = FrameTrackingSubscription {}
+      let probe = SubscriptionLifetimeProbe(counter)
+      withObservationTracking(options: .didSet) {
+        subscription.trackCancellation()
+        _ = model.color
+      } onChange: { [probe] event in
+        event.cancel()
+        probe.recordRedraw()
+      }
+      #expect(counter.live.withLock { $0 } == 1)
+      subscription.cancel()
+    }
+    #expect(counter.live.withLock { $0 } == 0)
+    #expect(counter.redraws.withLock { $0 } == 1_000)
+    model.color = .yellow
+    #expect(counter.redraws.withLock { $0 } == 1_000)
+  }
 }
