@@ -250,3 +250,55 @@ private func captureTestDirectory() throws -> URL {
       return false
     })
 }
+
+extension DemoContentTests {
+  @Test func animationRequestsFramesWithoutInputAndStopsWhenInactive() async throws {
+    let state = PerformanceDemoState(itemCount: 100)
+    let renderer = HeadlessRenderer()
+    renderer.content = DeferredBlock { PerformanceDemo(state: state) }
+    var redraws = 0
+    renderer.onRedrawRequested = { redraws += 1 }
+    defer { renderer.close() }
+
+    let first = renderer.render()
+    #expect(renderer.needsAnimationFrame)
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(renderer.render() != first)
+
+    state.togglePaused()
+    renderer.render()
+    redraws = 0
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(redraws == 0)
+    #expect(!renderer.needsAnimationFrame)
+
+    state.togglePaused()
+    renderer.render()
+    redraws = 0
+    #expect(renderer.needsAnimationFrame)
+    try await Task.sleep(for: .milliseconds(20))
+
+    state.page = .font
+    renderer.render()
+    redraws = 0
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(redraws == 0)
+    #expect(!renderer.needsAnimationFrame)
+
+    state.page = .scene
+    renderer.render()
+    redraws = 0
+    #expect(renderer.needsAnimationFrame)
+    try await Task.sleep(for: .milliseconds(20))
+  }
+
+  @Test func animationStateIsReleasedWithoutATask() async throws {
+    weak var released: PerformanceDemoState?
+    do {
+      let state = PerformanceDemoState(itemCount: 100)
+      released = state
+      try await Task.sleep(for: .milliseconds(30))
+    }
+    #expect(released == nil)
+  }
+}

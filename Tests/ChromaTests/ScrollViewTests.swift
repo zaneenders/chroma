@@ -210,6 +210,7 @@ struct ScrollViewTests {
       interaction.endFrame()
     }
 
+    frame()
     frame(
       InputState(
         pointerPosition: Point(x: 10, y: 10),

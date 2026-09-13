@@ -19,6 +19,10 @@ public final class HeadlessRenderer: Renderer {
   }
   private let frameProducer = FrameProducer()
 
+  /// The host should produce another frame at its chosen cadence while true.
+  /// Headless rendering deliberately does not own a display timer.
+  public var needsAnimationFrame: Bool { frameProducer.needsAnimationFrame }
+
   public var onRedrawRequested: (@MainActor () -> Void)?
   public var frameObserver: FrameObserver?
   public var onClose: (() -> Void)?

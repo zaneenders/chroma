@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Chroma
 
 @MainActor
@@ -11,8 +12,10 @@ struct TextEventInterceptionTests {
     var text = ""
     func frame(_ events: [TextEditEvent]) -> TextInputState {
       interaction.beginFrame(input: InputState(textEvents: events))
-      let state = context.textInputState(id: id, in: rect, text: text, onChange: { text = $0 },
-        onEndEditing: { .handled }, onTextEvent: { event, buffer in
+      let state = interaction.testTextInput(
+        id: id, rect: rect, text: text, onChange: { text = $0 },
+        onEndEditing: { .handled },
+        onTextEvent: { event, buffer in
           event == .moveCaretUp && buffer.isEmpty ? "history" : nil
         })
       interaction.endFrame()

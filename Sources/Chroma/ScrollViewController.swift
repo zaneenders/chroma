@@ -1,3 +1,5 @@
+import Observation
+
 enum ScrollRequest: Equatable, Sendable {
   case top
   case bottom
@@ -5,9 +7,11 @@ enum ScrollRequest: Equatable, Sendable {
   case visible(Rect)
 }
 
+@Observable
+@MainActor
 public final class ScrollViewController {
   var request: ScrollRequest?
-  var lazyStackCache = LazyStackCache()
+  @ObservationIgnored var lazyStackCache = LazyStackCache()
 
   public init() {}
   public func scrollToTop() { request = .top }

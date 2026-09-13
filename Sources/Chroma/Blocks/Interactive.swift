@@ -34,8 +34,7 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
-    let state = context.buttonState(id: id, in: rect)
-    if state.clicked { action() }
+    let state = context.buttonState(id: id, in: rect, action: action)
     BlockEngine.draw(content(state.phase), into: &drawList, in: rect, context: context)
   }
 }

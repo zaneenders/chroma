@@ -18,7 +18,7 @@ struct TextInputTests {
     var result = TextInputState(hovered: false, held: false, editing: false, caretOffset: nil)
     ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
     if includeField {
-      result = ctx.textInputBehavior(
+      result = ctx.testTextInput(
         id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
         text: text, onChange: { text = $0 }, pointerOffset: pointerOffset,
         verticalOffset: verticalOffset)
@@ -33,6 +33,24 @@ struct TextInputTests {
   private func enterInsertMode(_ ctx: Interaction, text: inout String) {
     frame(ctx, text: &text)
     frame(ctx, input: InputState(commands: [.action(.activate)]), text: &text)
+  }
+
+  @Test func unchangedLargeDraftSkipsCharacterMaterializationAndClampsReplacement() {
+    let ctx = Interaction()
+    var text = String(repeating: "log 👨‍👩‍👧‍👦\n", count: 800)
+    enterInsertMode(ctx, text: &text)
+    let count = text.count
+    for _ in 0..<10 {
+      let state = frame(ctx, text: &text)
+      #expect(state.caretOffset == count)
+      #expect(ctx.inputLength == count)
+    }
+    ctx.textSelectionRange = 2..<count
+    text = "é"
+    let state = frame(ctx, text: &text)
+    #expect(state.caretOffset == 1)
+    #expect(state.selectionRange == nil)
+    #expect(ctx.inputLength == 1)
   }
 
   @Test func activateEntersInsertMode() {
@@ -138,7 +156,7 @@ struct TextInputTests {
 
     ctx.beginFrame(input: InputState(textEvents: [.moveCaretUp]))
     ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
-    var state = ctx.textInputBehavior(
+    var state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
       text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
     _ = ctx.interactiveBehavior(
@@ -149,7 +167,7 @@ struct TextInputTests {
 
     ctx.beginFrame(input: InputState(textEvents: [.selectCaretUp]))
     ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
-    state = ctx.textInputBehavior(
+    state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
       text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
     _ = ctx.interactiveBehavior(
@@ -400,7 +418,7 @@ struct TextInputTests {
 
     ctx.beginFrame(input: InputState(textEvents: [.endEditing]))
     ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
-    let state = ctx.textInputBehavior(
+    let state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
       text: text, onChange: { text = $0 }, onEndEditing: { .handled })
     ctx.endGroup()
@@ -430,5 +448,24 @@ struct TextInputTests {
     #expect(ctx.isTextEditing)
     frame(ctx, text: &text, includeField: false)
     #expect(!ctx.isTextEditing)
+  }
+}
+
+@MainActor
+extension Interaction {
+  func testTextInput(
+    id: WidgetID, rect: Rect, text: String, onChange: (String) -> Void,
+    onSubmit: ((String) -> Void)? = nil,
+    onEndEditing: (() -> CommandResult)? = nil,
+    onTextEvent: ((TextEditEvent, String) -> String?)? = nil,
+    pointerOffset: ((Point, Int?) -> Int)? = nil,
+    verticalOffset: ((Int, Int) -> Int)? = nil
+  ) -> TextInputState {
+    builderStack.last?.children.append(FocusNode(kind: .leaf(id), rect: rect))
+    if activatedLeaf == id { activatePending = true }
+    return updateTextInput(
+      id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
+      onEndEditing: onEndEditing, onTextEvent: onTextEvent,
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset)
   }
 }

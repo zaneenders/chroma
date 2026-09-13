@@ -102,8 +102,8 @@ final class PerformanceDemoState {
         .grouping(.never).precision(.fractionLength(1))) + "×"
   }
 
-  func elapsedTime() -> Float {
-    let now = pauseStartedAt ?? clock()
+  func elapsedTime(at timestamp: TimeInterval? = nil) -> Float {
+    let now = pauseStartedAt ?? timestamp ?? clock()
     return Float(now - startedAt - timeOffset) * speed
   }
 }
@@ -278,7 +278,8 @@ private struct ShapeCanvas: PrimitiveBlock {
     let rows = max(1, (count + columns - 1) / columns)
     let cellWidth = area.size.width / Float(columns)
     let cellHeight = area.size.height / Float(rows)
-    let elapsed = state.elapsedTime()
+    let frame = context.animationFrame(active: !state.isPaused)
+    let elapsed = state.elapsedTime(at: frame.timestamp)
     let burstPhase = Float(state.burst) * 1.731
 
     for index in 0..<count {

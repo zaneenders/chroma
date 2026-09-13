@@ -272,13 +272,13 @@ public final class MetalDisplayListRenderer {
       pool: &shapePool, slot: slot,
       byteCount: MemoryLayout<ShapeInstance>.stride * shapeInstances.count)
     if let shapeBuffer, !shapeInstances.isEmpty {
-      MetalUpload.copy(shapeInstances, to: shapeBuffer)
+      MetalUpload.copy(shapeInstances.span, to: shapeBuffer)
     }
     let textBuffer = try pooledBuffer(
       pool: &textPool, slot: slot,
       byteCount: MemoryLayout<TextInstance>.stride * textInstances.count)
     if let textBuffer, !textInstances.isEmpty {
-      MetalUpload.copy(textInstances, to: textBuffer)
+      MetalUpload.copy(textInstances.span, to: textBuffer)
     }
 
     var scissorStack: [Rect] = []

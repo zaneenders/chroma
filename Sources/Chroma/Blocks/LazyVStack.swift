@@ -66,6 +66,7 @@ public struct LazyVStack: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let interaction = context.interaction
     interaction.registerScrollViewport(rect)
+    interaction.registerScrollInput(id: id, rect: rect)
     let contentHeight: Float
     if let uniformRows {
       contentHeight =
@@ -81,19 +82,6 @@ public struct LazyVStack: PrimitiveBlock {
     let previousLimit = interaction.scrollLimit(for: id)
     var offset = min(interaction.scrollOffset(for: id), maximumOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
-
-    if rect.contains(interaction.input.pointerPosition) {
-      offset -= interaction.input.scrollDelta.y
-    }
-    for command in interaction.input.commands {
-      switch command {
-      case .navigation(.pageUp): offset -= rect.size.height
-      case .navigation(.pageDown): offset += rect.size.height
-      case .navigation(.home): offset = 0
-      case .navigation(.end): offset = maximumOffset
-      default: break
-      }
-    }
 
     if let request = controller.request {
       switch request {

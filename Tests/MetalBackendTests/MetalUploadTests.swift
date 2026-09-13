@@ -1,20 +1,21 @@
 import Metal
 import Testing
+
 @testable import MetalBackend
 
 @Suite @MainActor
 struct MetalUploadTests {
   @Test func copiesInstancesWithoutOverwritingBufferTail() throws {
     let device = try #require(MTLCreateSystemDefaultDevice())
-    let values: [UInt32] = [0x01020304, 0xAABBCCDD]
+    let values: [UInt32] = [0x0102_0304, 0xAABB_CCDD]
     let buffer = try #require(device.makeBuffer(length: 16, options: .storageModeShared))
     unsafe buffer.contents().initializeMemory(as: UInt8.self, repeating: 0xEE, count: 16)
-    MetalUpload.copy(values, to: buffer)
+    MetalUpload.copy(values.span, to: buffer)
     let bytes = unsafe UnsafeRawBufferPointer(start: buffer.contents(), count: buffer.length)
     #expect(unsafe bytes.loadUnaligned(fromByteOffset: 0, as: UInt32.self) == values[0])
     #expect(unsafe bytes.loadUnaligned(fromByteOffset: 4, as: UInt32.self) == values[1])
     #expect(unsafe Array(bytes[8..<16]) == Array(repeating: UInt8(0xEE), count: 8))
-    MetalUpload.copy([UInt32](), to: buffer)
+    MetalUpload.copy([UInt32]().span, to: buffer)
     #expect(unsafe bytes.loadUnaligned(fromByteOffset: 0, as: UInt32.self) == values[0])
   }
 

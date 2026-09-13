@@ -2,7 +2,7 @@ import Metal
 
 @MainActor
 enum MetalUpload {
-  static func copy<Element: BitwiseCopyable>(_ values: [Element], to buffer: MTLBuffer) {
+  static func copy<Element: BitwiseCopyable>(_ values: Span<Element>, to buffer: MTLBuffer) {
     guard !values.isEmpty else { return }
     values.withUnsafeBytes { bytes in
       precondition(bytes.count <= buffer.length)

@@ -1,17 +1,26 @@
+import Observation
+
 public enum InteractionMode: Equatable, Sendable {
   case movement
   case editing
 }
 
+@Observable
 @MainActor
 package final class Interaction {
+  let caretClock = CaretClock()
+  @ObservationIgnored var inputLengthText: String?
+  @ObservationIgnored var inputLength = 0
+  @ObservationIgnored var animationFrame = AnimationFrame(timestamp: 0)
+  @ObservationIgnored var animationRequested = false
+
   package let textSelection = TextSelectionManager()
 
   package var fontMetrics = FontMetrics()
 
-  package private(set) var input = InputState()
+  @ObservationIgnored package private(set) var input = InputState()
 
-  package var frameRate: Double = 0
+  @ObservationIgnored package var frameRate: Double = 0
 
   package internal(set) var selection: [Int]?
 
@@ -19,7 +28,7 @@ package final class Interaction {
 
   package var groupCursorColor = Color(r: 0.35, g: 0.6, b: 1, a: 0.4)
 
-  var tree: FocusNode?
+  @ObservationIgnored var tree: FocusNode?
 
   var pressedLeaf: WidgetID?
 
@@ -28,27 +37,27 @@ package final class Interaction {
 
   package internal(set) var caretOffset: Int = 0
   package internal(set) var textSelectionRange: Range<Int>?
-  var textDragAnchor: Int?
+  @ObservationIgnored var textDragAnchor: Int?
   package internal(set) var editingText: String?
 
   public package(set) var mode: InteractionMode = .movement
   package var isTextEditing: Bool { mode == .editing }
 
-  var activatePending = false
-  private var redrawRequested = false
-  package var onRedrawRequested: (() -> Void)?
-  var pendingCommands: [Command] = []
-  var handledCommandIndices: Set<Int> = []
+  @ObservationIgnored var activatePending = false
+  @ObservationIgnored private var redrawRequested = false
+  @ObservationIgnored package var onRedrawRequested: (() -> Void)?
+  @ObservationIgnored var pendingCommands: [Command] = []
+  @ObservationIgnored var handledCommandIndices: Set<Int> = []
   struct ScopedCommandHandler {
     var path: [Int]
     var command: Command
     var action: @MainActor () -> CommandResult
   }
-  var commandHandlers: [ScopedCommandHandler] = []
-  var buildingCommandHandlers: [ScopedCommandHandler] = []
-  var actionRoles: [ActionRole: @MainActor () -> Void] = [:]
+  @ObservationIgnored var commandHandlers: [ScopedCommandHandler] = []
+  @ObservationIgnored var buildingCommandHandlers: [ScopedCommandHandler] = []
+  @ObservationIgnored var actionRoles: [ActionRole: @MainActor () -> Void] = [:]
 
-  var lastPointerPosition = Point(x: -1, y: -1)
+  @ObservationIgnored var lastPointerPosition = Point(x: -1, y: -1)
 
   package private(set) var dragOrigin: Point? = nil
   package private(set) var dragCurrent: Point = Point(x: -1, y: -1)
@@ -63,8 +72,8 @@ package final class Interaction {
       height: abs(dragCurrent.y - origin.y))
   }
 
-  package var onCopy: (() -> String?)?
-  package var onSelectAll: (() -> Bool)?
+  @ObservationIgnored package var onCopy: (() -> String?)?
+  @ObservationIgnored package var onSelectAll: (() -> Bool)?
 
   package func editableSelectionText() -> String? {
     guard isTextEditing, let range = textSelectionRange, let editingText else { return nil }
@@ -86,20 +95,40 @@ package final class Interaction {
 
   var scrollOffsets: [WidgetID: Float] = [:]
   var horizontalScrollOffsets: [WidgetID: Float] = [:]
-  var scrollLimits: [WidgetID: Float] = [:]
-  var horizontalScrollLimits: [WidgetID: Float] = [:]
-  var scrollViewports: [Rect] = []
-  var buildingScrollViewports: [Rect] = []
+  @ObservationIgnored var scrollLimits: [WidgetID: Float] = [:]
+  @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
+  @ObservationIgnored var scrollViewports: [Rect] = []
+  @ObservationIgnored var buildingScrollViewports: [Rect] = []
 
-  var clipStack: [Rect] = []
+  @ObservationIgnored var clipStack: [Rect] = []
 
   var selectedLeafID: WidgetID?
 
-  var builderRoot: FocusNode?
-  var builderStack: [FocusNode] = []
-  var builderPath: [Int] = []
+  @ObservationIgnored var builderRoot: FocusNode?
+  @ObservationIgnored var builderStack: [FocusNode] = []
+  @ObservationIgnored var builderPath: [Int] = []
+
+  // Registrations belong to the last completed frame, not observable UI state.
+  @ObservationIgnored var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
+  @ObservationIgnored var buildingInputHandlers: [WidgetID: @MainActor () -> Void] = [:]
+  @ObservationIgnored var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
+  @ObservationIgnored var buildingButtonActions: [WidgetID: @MainActor () -> Void] = [:]
+  @ObservationIgnored var activatedLeaf: WidgetID?
 
   package init() {}
+
+  func resetRegistrations() {
+    animationRequested = false
+    tree = nil
+    inputHandlers = [:]
+    buildingInputHandlers = [:]
+    buttonActions = [:]
+    buildingButtonActions = [:]
+    commandHandlers = []
+    buildingCommandHandlers = []
+    actionRoles = [:]
+    caretClock.setActive(false)
+  }
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
     editingSessionGeneration &+= 1
@@ -113,6 +142,8 @@ package final class Interaction {
     if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
     editingText = nil
+    inputLengthText = nil
+    inputLength = 0
     textSelectionRange = nil
     mode = .movement
   }
@@ -136,7 +167,9 @@ package final class Interaction {
     routePendingCommands()
     pendingCommands = []
     buildingCommandHandlers = []
-    actionRoles = [:]
+    buildingInputHandlers = [:]
+    buildingButtonActions = [:]
+    activatedLeaf = nil
 
     let root = FocusNode(kind: .group(.vertical), rect: .zero)
     builderRoot = root
@@ -164,6 +197,13 @@ package final class Interaction {
         endEditing()
       }
       lastPointerPosition = input.pointerPosition
+      for handler in inputHandlers.values { handler() }
+      if activatePending, let id = selectedLeafID {
+        activatePending = false
+        activatedLeaf = id
+        buttonActions[id]?()
+      }
+      actionRoles = [:]
     }
 
     guard let tree else { return }
@@ -219,8 +259,11 @@ package final class Interaction {
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
       endEditing()
     }
+    caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     tree = newTree
     commandHandlers = buildingCommandHandlers
+    inputHandlers = buildingInputHandlers
+    buttonActions = buildingButtonActions
     scrollViewports = buildingScrollViewports
     builderRoot = nil
     builderStack = []
@@ -436,13 +479,8 @@ extension Interaction {
 
     let selected = selectedLeafID == id
     let held = pressedLeaf == id && input.pointerDown
-    var clicked = false
-    if selected && activatePending {
-      clicked = true
-      activatePending = false
-      requestRedraw()
-    }
-    return ButtonState(hovered: selected, held: held, clicked: clicked)
+    if let action { buildingButtonActions[id] = action }
+    return ButtonState(hovered: selected, held: held, clicked: activatedLeaf == id)
   }
 
   func clippedRect(_ rect: Rect) -> Rect {

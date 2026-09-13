@@ -1,8 +1,8 @@
 import CEGL
-import Chroma
 import CWaylandClient
 import CWaylandEGL
 import CWaylandProtocols
+import Chroma
 import CoreFoundation
 import Dispatch
 import Foundation
@@ -925,6 +925,8 @@ public final class WaylandRenderer: Renderer {
     _ = interaction.consumeRedrawRequest()
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
+    // The compositor callback releases framePending and services this demand.
+    if frameProducer.needsAnimationFrame { dirty = true }
   }
 
   private func updateFrameRate() {

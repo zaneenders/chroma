@@ -120,7 +120,7 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
 
   private func startFrameRequests() {
     frameRequestTimer?.invalidate()
-    let timer = Timer(timeInterval: 1 / requestedFramesPerSecond, repeats: true) { [weak self] _ in
+    let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated { self?.requestFrameIfNeeded() }
     }
     RunLoop.main.add(timer, forMode: .common)
@@ -139,7 +139,7 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     }
     frameRequestOutstanding = true
     requestStartedAt = ProcessInfo.processInfo.systemUptime
-    send(.requestFrame)
+    send(.waitForFrame)
   }
 
   public func run() {
@@ -318,6 +318,12 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
         statistics.replies += 1
       }
     default: break
+    }
+    defer {
+      switch message {
+      case .frame, .frameUnchanged: requestFrameIfNeeded()
+      default: break
+      }
     }
     let isFirstFrame = latestFrame == nil
     let acceptedFrame = frameState.receive(message)

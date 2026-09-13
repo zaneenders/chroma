@@ -19,6 +19,7 @@ public enum RemoteMessage: Equatable, Sendable {
   case viewport(Size)
   case input(sequence: UInt64, state: InputState)
   case requestFrame
+  case waitForFrame
   case frameRate(Float)
   case frameUnchanged
   case frame(id: UInt64, inputSequence: UInt64, viewport: Size, commands: [DrawCommand])
@@ -26,7 +27,7 @@ public enum RemoteMessage: Equatable, Sendable {
 
 public enum RemoteWire {
   public static let magic: UInt32 = 0x4348_524D
-  public static let version: UInt16 = 4
+  public static let version: UInt16 = 5
   public static let maximumClipboardBytes = 1024 * 1024
   public static let maximumPayloadBytes = 64 * 1024 * 1024
   public static let maximumCommandsPerFrame = 1_000_000
@@ -39,6 +40,7 @@ public enum RemoteWire {
     case viewport = 1
     case input = 2
     case frame = 3
+    case waitForFrame = 9
     case requestFrame = 4
   }
 
@@ -83,6 +85,8 @@ public enum RemoteWire {
       payload.writeFloat(fps)
     case .frameUnchanged:
       type = .frameUnchanged
+    case .waitForFrame:
+      type = .waitForFrame
     case .requestFrame:
       type = .requestFrame
     case .frame(let id, let inputSequence, let viewport, let commands):
@@ -155,6 +159,8 @@ public enum RemoteWire {
       message = .frameRate(fps)
     case .frameUnchanged:
       message = .frameUnchanged
+    case .waitForFrame:
+      message = .waitForFrame
     case .requestFrame:
       message = .requestFrame
     case .frame:

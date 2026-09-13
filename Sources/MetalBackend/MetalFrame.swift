@@ -15,11 +15,11 @@ public struct MetalFrameCompletion: Sendable {
 }
 
 final class MetalFrameSlots: Sendable {
-  private let available = Mutex([true, true, true])
+  private let available = Mutex<InlineArray<3, Bool>>([true, true, true])
 
   func acquire() -> MetalFrameReservation? {
     let index = available.withLock { slots -> Int? in
-      guard let index = slots.firstIndex(of: true) else { return nil }
+      guard let index = (0..<slots.count).first(where: { slots[$0] }) else { return nil }
       slots[index] = false
       return index
     }

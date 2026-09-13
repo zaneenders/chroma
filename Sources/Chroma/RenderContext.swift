@@ -67,25 +67,18 @@ public struct RenderContext {
   public func textInputState(
     id: WidgetID,
     in rect: Rect,
-    text: String,
-    onChange: (String) -> Void,
-    onSubmit: ((String) -> Void)? = nil,
-    onEndEditing: (() -> CommandResult)? = nil,
-    onTextEvent: ((TextEditEvent, String) -> String?)? = nil,
-    pointerOffset: ((Point, Int?) -> Int)? = nil,
-    verticalOffset: ((Int, Int) -> Int)? = nil
+    text: @escaping @MainActor () -> String,
+    onChange: @escaping @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
   ) -> TextInputState {
-    interaction.textInputBehavior(
-      id: id,
-      rect: rect,
-      text: text,
-      onChange: onChange,
-      onSubmit: onSubmit,
-      onEndEditing: onEndEditing,
-      onTextEvent: onTextEvent,
-      pointerOffset: pointerOffset,
-      verticalOffset: verticalOffset
-    )
+    interaction.registerTextInput(
+      id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
+      onEndEditing: onEndEditing, onTextEvent: onTextEvent,
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset)
   }
 
   public func withFocusGroup<Result>(
@@ -126,4 +119,8 @@ public struct RenderContext {
 
 extension Renderer {
   package var context: RenderContext { RenderContext(interaction: interaction) }
+}
+
+extension RenderContext {
+  public var caretVisible: Bool { interaction.caretClock.visible }
 }

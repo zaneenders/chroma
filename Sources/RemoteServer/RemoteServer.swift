@@ -42,6 +42,10 @@ public final class RemoteServer {
   private var framesPerSecond: Double = 30
   private var lastProducedAt: TimeInterval = 0
   private var requestPending = false
+  private var waitsForChange = false
+  private var frameDirty = true
+  private var latestSnapshot: FrameSnapshot?
+  private var heartbeat: Task<Void, Never>?
   private var lastSentCommands: [DrawCommand]?
   private var lastSentViewport: Size?
   private var connectionEpoch: UInt64 = 0
@@ -72,7 +76,7 @@ public final class RemoteServer {
     self.viewport = size
     self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
     self.connectionFactory = RemoteServerConnectionFactory()
-    interaction.onRedrawRequested = { [weak self] in self?.scheduleRedraw() }
+    interaction.onRedrawRequested = { [weak self] in self?.invalidateFrame() }
   }
 
   public var boundPort: Int? { serverChannel?.localAddress?.port }
@@ -176,7 +180,20 @@ public final class RemoteServer {
     case .frameRate(let fps):
       framesPerSecond = Double(fps)
     case .requestFrame:
+      frameDirty = true
+      waitsForChange = false
       requestPending = true
+      scheduleRedraw()
+    case .waitForFrame:
+      waitsForChange = true
+      requestPending = true
+      heartbeat?.cancel()
+      heartbeat = Task { [weak self] in
+        do { try await Task.sleep(for: .seconds(5)) } catch { return }
+        guard let self, self.requestPending else { return }
+        self.waitsForChange = false
+        self.scheduleRedraw()
+      }
       scheduleRedraw()
     case .frame, .frameUnchanged:
       break
@@ -248,13 +265,30 @@ public final class RemoteServer {
     connectionEpoch &+= 1
     redrawScheduled = false
     requestPending = false
+    heartbeat?.cancel()
+    heartbeat = nil
+    latestSnapshot = nil
+    frameDirty = true
+    waitsForChange = false
     lastSentCommands = nil
     lastSentViewport = nil
     lastProducedAt = 0
     framesPerSecond = 30
   }
 
+  private func invalidateFrame() {
+    frameDirty = true
+    scheduleRedraw()
+  }
+
   private func scheduleRedraw() {
+    guard requestPending else { return }
+    if waitsForChange, !frameDirty, !frameProducer.needsAnimationFrame, let latestSnapshot,
+      case .frame(_, _, let viewport, let commands) = latestSnapshot.message,
+      lastSentViewport == viewport, lastSentCommands == commands
+    {
+      return
+    }
     guard clientChannel != nil, !redrawScheduled else { return }
     redrawScheduled = true
     let epoch = connectionEpoch
@@ -263,12 +297,22 @@ public final class RemoteServer {
       guard let self, self.connectionEpoch == epoch else { return }
       self.redrawScheduled = false
       guard self.requestPending, !self.frameInFlight else { return }
+      if self.waitsForChange, !self.frameDirty, !self.frameProducer.needsAnimationFrame,
+        let snapshot = self.latestSnapshot,
+        case .frame(_, _, let viewport, let commands) = snapshot.message,
+        self.lastSentViewport == viewport, self.lastSentCommands == commands
+      {
+        return
+      }
       self.lastProducedAt = ProcessInfo.processInfo.systemUptime
-      if let snapshot = self.render() { self.publishFrame(snapshot) }
+      let snapshot = (self.frameDirty || self.frameProducer.needsAnimationFrame) ? self.render() : self.latestSnapshot
+      if let snapshot { self.publishFrame(snapshot) }
     }
   }
 
   private func publishFrame(_ snapshot: FrameSnapshot) {
+    heartbeat?.cancel()
+    heartbeat = nil
     requestPending = false
     if case .frame(_, _, let viewport, let commands) = snapshot.message {
       if lastSentViewport == viewport, lastSentCommands == commands {
@@ -287,6 +331,7 @@ public final class RemoteServer {
   @discardableResult
   private func render(input: InputState? = nil) -> FrameSnapshot? {
     guard let channel = clientChannel else { return nil }
+    frameDirty = false
     let drawStarted = ProcessInfo.processInfo.systemUptime
     var input = input ?? pointerState
     input.pointerPosition = pointerState.pointerPosition
@@ -295,7 +340,7 @@ public final class RemoteServer {
     var drawList = frameProducer.render(
       content: content, viewport: viewport, input: input,
       context: RenderContext(interaction: interaction),
-      onChange: { [weak self] in self?.scheduleRedraw() })
+      onChange: { [weak self] in self?.invalidateFrame() })
     frameObserver?(FrameObservation(drawList: drawList, viewport: viewport))
     _ = interaction.consumeRedrawRequest()
     drawList = drawList.culled(to: viewport)
@@ -304,6 +349,8 @@ public final class RemoteServer {
     let snapshot = FrameSnapshot(
       message: .frame(id: frameID, inputSequence: inputSequence, viewport: viewport, commands: drawList.commands),
       channel: channel, drawDuration: drawDuration, commandCount: drawList.commands.count)
+    latestSnapshot = snapshot
+    scheduleRedraw()
     return snapshot
   }
 
