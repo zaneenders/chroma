@@ -22,7 +22,7 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   private let queue: MTLCommandQueue
   private let displayRenderer: MetalDisplayListRenderer
   private let view: ChromaInputView
-  private let banner = NotificationBanner(frame: .zero)
+  private let banner = NotificationBanner()
   private let window: NSWindow
   private var frameState = RemoteFrameState()
   private var latestFrame: (viewport: Size, commands: [DrawCommand])? { frameState.latest }
@@ -62,22 +62,8 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
       backing: .buffered, defer: false)
     super.init()
     window.title = title
-    let container = NSView(frame: frame)
-    view.frame = container.bounds
-    view.autoresizingMask = [.width, .height]
-    container.addSubview(view)
-    banner.translatesAutoresizingMaskIntoConstraints = false
-    container.addSubview(banner)
-    let preferredBannerWidth = banner.widthAnchor.constraint(equalToConstant: 560)
-    preferredBannerWidth.priority = .defaultHigh
-    NSLayoutConstraint.activate([
-      banner.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
-      banner.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-      banner.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 16),
-      banner.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
-      preferredBannerWidth,
-    ])
-    window.contentView = container
+    window.contentView = view
+    banner.onChange = { [weak self] in self?.view.needsDisplay = true }
     window.delegate = self
     window.center()
     view.delegate = self
@@ -216,18 +202,21 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
 
   public func draw(in view: MTKView) {
     guard
-      let frame = latestFrame,
       let drawable = view.currentDrawable,
       let descriptor = view.currentRenderPassDescriptor
     else { return }
+    let viewport = currentViewport
+    let overlay = banner.render(viewport: viewport)
+    let commands = (latestFrame?.commands ?? []) + overlay.commands
     let renderStarted = ProcessInfo.processInfo.systemUptime
     do {
-      guard let prepared = try displayRenderer.prepareFrame(
-        DrawList(commands: frame.commands), viewport: frame.viewport,
-        rasterScale: Point(
-          x: Float(drawable.texture.width) / max(1, frame.viewport.width),
-          y: Float(drawable.texture.height) / max(1, frame.viewport.height)),
-        queue: queue, renderPass: descriptor)
+      guard
+        let prepared = try displayRenderer.prepareFrame(
+          DrawList(commands: commands), viewport: viewport,
+          rasterScale: Point(
+            x: Float(drawable.texture.width) / max(1, viewport.width),
+            y: Float(drawable.texture.height) / max(1, viewport.height)),
+          queue: queue, renderPass: descriptor)
       else {
         view.needsDisplay = true
         return
@@ -257,7 +246,9 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   private func sendPendingInput() {
     guard !isShuttingDown else { return }
     inputSequence &+= 1
-    send(.input(sequence: inputSequence, state: view.frameInput()))
+    let input = view.frameInput()
+    if banner.handleInput(input, viewport: currentViewport) { return }
+    send(.input(sequence: inputSequence, state: input))
   }
 
   private func send(_ message: RemoteMessage) {
