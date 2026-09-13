@@ -4,7 +4,6 @@ import PackageDescription
 var runnerDependencies: [Target.Dependency] = [
   "RenderFixtures",
   .product(name: "Chroma", package: "chroma"),
-  .product(name: "RemoteProtocol", package: "chroma"),
   .product(name: "ProfileRecorderServer", package: "swift-profile-recorder"),
   .product(name: "Logging", package: "swift-log"),
 ]
@@ -30,7 +29,7 @@ let package = Package(
     .testTarget(
       name: "RenderFixturesTests",
       dependencies: [
-        "RenderFixtures", .product(name: "RemoteProtocol", package: "chroma"),
+        "RenderFixtures", .product(name: "Chroma", package: "chroma"),
       ]),
   ]
 )

@@ -1,7 +1,6 @@
 import Chroma
 import Foundation
 import HeadlessBackend
-import RemoteProtocol
 import Testing
 
 @testable import DemoContent
@@ -37,24 +36,20 @@ struct DemoContentTests {
     #expect(state.elapsedTime() == 5)
   }
 
-  @Test func sharedSceneSurvivesWireRoundTrip() throws {
+  @Test func sharedSceneSurvivesCaptureRoundTrip() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
     let renderer = HeadlessRenderer(size: demo.windowSize)
     renderer.content = demo.body
     let frame = renderer.render()
     #expect(!frame.commands.isEmpty)
-    var bytes = try RemoteWire.encode(
-      .frame(id: 1, inputSequence: 0, viewport: frame.viewport, commands: frame.commands))
-    guard case .frame(_, _, let viewport, let commands) = try RemoteWire.decode(from: &bytes) else {
-      Issue.record("Expected a complete demo frame")
-      return
-    }
-    #expect(viewport == frame.viewport)
-    #expect(commands == frame.commands)
-    #expect(bytes.readableBytes == 0)
+    let decoded = try SceneCapture.decode(
+      SceneCapture.encode(
+        FrameObservation(drawList: DrawList(commands: frame.commands), viewport: frame.viewport)))
+    #expect(decoded.viewport == frame.viewport)
+    #expect(decoded.drawList.commands == frame.commands)
   }
 
-  @Test func shortcutsUseDisplayPlatformRatherThanDaemonPlatform() {
+  @Test func shortcutsUseConfiguredPlatform() {
     let apple = DemoApplication(shortcutModifier: .command)
     let linux = DemoApplication(shortcutModifier: .superKey)
     #expect(apple.keyBindings.command(for: KeyChord("c", modifiers: .command))! == .editing(.copy))
@@ -151,10 +146,10 @@ private func captureTestDirectory() throws -> URL {
   }
   let directory = try captureTestDirectory()
   defer { try? FileManager.default.removeItem(at: directory) }
-  var arguments = ["localhost", "--capture-directory", directory.path, "9328"]
+  var arguments = ["--other-option", "--capture-directory", directory.path, "value"]
   let configuration = try DemoCaptureConfiguration.parse(arguments: &arguments)
   #expect(configuration?.directory == directory.standardizedFileURL.resolvingSymlinksInPath())
-  #expect(arguments == ["localhost", "9328"])
+  #expect(arguments == ["--other-option", "value"])
   #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
   let file = directory.appendingPathComponent("not-directory")
   try Data().write(to: file)
@@ -179,7 +174,7 @@ private func captureTestDirectory() throws -> URL {
 }
 
 @MainActor
-@Test func fontTabOpensAndSurvivesWireRoundTrip() throws {
+@Test func fontTabOpensAndSurvivesCaptureRoundTrip() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
   let renderer = HeadlessRenderer(size: demo.windowSize)
   renderer.content = demo.body
@@ -207,13 +202,10 @@ private func captureTestDirectory() throws -> URL {
       if case .text(_, "café Ångström naïve façade Český", _, _) = command { return true }
       return false
     })
-  var bytes = try RemoteWire.encode(
-    .frame(id: 2, inputSequence: 0, viewport: frame.viewport, commands: frame.commands))
-  guard case .frame(_, _, _, let commands) = try RemoteWire.decode(from: &bytes) else {
-    Issue.record("Expected a font demo frame")
-    return
-  }
-  #expect(commands == frame.commands)
+  let decoded = try SceneCapture.decode(
+    SceneCapture.encode(
+      FrameObservation(drawList: DrawList(commands: frame.commands), viewport: frame.viewport)))
+  #expect(decoded.drawList.commands == frame.commands)
 }
 
 @MainActor

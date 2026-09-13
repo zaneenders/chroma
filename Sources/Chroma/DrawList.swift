@@ -1,4 +1,4 @@
-public struct DrawList: Sendable {
+public struct DrawList: Sendable, Codable {
   public private(set) var commands: [DrawCommand] = []
 
   public init() {}

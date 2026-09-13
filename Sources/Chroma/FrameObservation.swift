@@ -1,4 +1,4 @@
-public struct FrameObservation: Sendable {
+public struct FrameObservation: Sendable, Codable {
   public let drawList: DrawList
   public let viewport: Size
   public let rasterScale: Point?

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ImageID: Hashable, Sendable {
+public struct ImageID: Hashable, Sendable, Codable {
   public var rawValue: String
 
   public init(_ rawValue: String) {
@@ -15,7 +15,7 @@ public enum ImageResourceError: Error, Equatable, Sendable {
   case generationOverflow
 }
 
-public struct ImageResource: Equatable, Sendable {
+public struct ImageResource: Equatable, Sendable, Codable {
   public let id: ImageID
   public let generation: UInt64
   public let width: Int
@@ -69,7 +69,7 @@ public struct ImageResource: Equatable, Sendable {
   }
 }
 
-public enum ImageScaling: Equatable, Sendable {
+public enum ImageScaling: Equatable, Sendable, Codable {
   case stretch
   case contain
   case cover
@@ -101,7 +101,7 @@ public enum ImageScaling: Equatable, Sendable {
   }
 }
 
-public struct ImageAlignment: Equatable, Sendable {
+public struct ImageAlignment: Equatable, Sendable, Codable {
   public let x: Float
   public let y: Float
 
@@ -119,4 +119,18 @@ public struct ImageAlignment: Equatable, Sendable {
   public static let bottomLeading = ImageAlignment(x: 0, y: 1)
   public static let bottom = ImageAlignment(x: 0.5, y: 1)
   public static let bottomTrailing = ImageAlignment(x: 1, y: 1)
+}
+
+extension ImageResource {
+  private enum CodingKeys: String, CodingKey { case id, generation, width, height, rgba8 }
+
+  public init(from decoder: any Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    try self.init(
+      id: values.decode(ImageID.self, forKey: .id),
+      generation: values.decode(UInt64.self, forKey: .generation),
+      width: values.decode(Int.self, forKey: .width),
+      height: values.decode(Int.self, forKey: .height),
+      rgba8: values.decode(Data.self, forKey: .rgba8))
+  }
 }

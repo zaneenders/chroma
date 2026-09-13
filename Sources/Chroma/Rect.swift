@@ -1,4 +1,4 @@
-public struct Rect: Equatable, Sendable {
+public struct Rect: Equatable, Sendable, Codable {
   public var origin: Point
   public var size: Size
 

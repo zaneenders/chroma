@@ -1,4 +1,4 @@
-public struct CornerRadii: Equatable, Sendable {
+public struct CornerRadii: Equatable, Sendable, Codable {
   public var topLeft: Float
   public var topRight: Float
   public var bottomRight: Float

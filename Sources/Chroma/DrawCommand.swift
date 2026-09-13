@@ -1,4 +1,4 @@
-public enum DrawCommand: Equatable, Sendable {
+public enum DrawCommand: Equatable, Sendable, Codable {
   case fillRect(rect: Rect, color: Color)
   case strokeRect(rect: Rect, width: Float, color: Color)
   case fillRoundedRect(rect: Rect, radii: CornerRadii, color: Color)

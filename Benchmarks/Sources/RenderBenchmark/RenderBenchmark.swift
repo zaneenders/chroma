@@ -2,7 +2,6 @@ import Chroma
 import Foundation
 import Logging
 import ProfileRecorderServer
-import RemoteProtocol
 import RenderFixtures
 
 enum BenchmarkError: Error { case failed(String) }
@@ -26,7 +25,6 @@ struct Report: Codable {
   let sequenceFrames: Int
   let commandCountMin: Int
   let commandCountMax: Int
-  let protocolVersion: UInt16
   let os: String
   let processors: Int
   let scene: String
@@ -37,8 +35,6 @@ struct Report: Codable {
   let minimumSeconds: Double
   let warmup: Int
   let profilingEnabled: Bool
-  let coldWireBytes: Int
-  let steadyWireBytes: Int
   let coldMS: [String: Double]
   let timings: [String: Distribution]
 }
@@ -53,7 +49,7 @@ struct RenderBenchmark {
     var arguments = Array(CommandLine.arguments.dropFirst())
     if arguments == ["--help"] {
       print(
-        "RenderBenchmark [--scene \(RenderFixture.names.joined(separator: "|"))] [--capture PATH] [--stage wire|metal|pipeline] [--count 2000] [--frames 300] [--warmup 30] [--seconds 0]"
+        "RenderBenchmark [--scene \(RenderFixture.names.joined(separator: "|"))] [--capture PATH] [--stage cull|metal] [--count 2000] [--frames 300] [--warmup 30] [--seconds 0]"
       )
       return
     }
@@ -66,8 +62,8 @@ struct RenderBenchmark {
       options[key] = arguments.removeFirst()
     }
     var scene = options["--scene"] ?? "shapes"
-    let stage = options["--stage"] ?? "wire"
-    guard RenderFixture.names.contains(scene), ["wire", "metal", "pipeline"].contains(stage),
+    let stage = options["--stage"] ?? "cull"
+    guard RenderFixture.names.contains(scene), ["cull", "metal"].contains(stage),
       let count = Int(options["--count"] ?? "2000"), (1...100_000).contains(count),
       let frames = Int(options["--frames"] ?? "300"), (1...1_000_000).contains(frames),
       let warmup = Int(options["--warmup"] ?? "30"), (0...100_000).contains(warmup),
@@ -111,16 +107,12 @@ struct RenderBenchmark {
       rasterScale = Point(x: 1, y: 1)
     }
     #if os(macOS)
-    let metal = stage == "wire" ? nil : try MetalReplay(viewport: viewport, rasterScale: rasterScale)
+    let metal = stage == "cull" ? nil : try MetalReplay(viewport: viewport, rasterScale: rasterScale)
     #else
-    guard stage == "wire" else { throw BenchmarkError.failed("Metal stages require macOS") }
+    guard stage == "cull" else { throw BenchmarkError.failed("Metal stages require macOS") }
     #endif
-    var sender = RemoteImageCache()
-    var receiver = RemoteImageCache()
     var samples: [String: [Double]] = [:]
     var cold: [String: Double] = [:]
-    var coldBytes = 0
-    var steadyBytes = 0
     var iteration = 0
     var measured = 0
     var measurementStart = now()
@@ -128,26 +120,12 @@ struct RenderBenchmark {
       var durations: [String: Double] = [:]
       let sequenceIndex = iteration > warmup ? measured : iteration
       let source = sequence[sequenceIndex % sequence.count]
-      var replay = source
-      var bytes = 0
-      if stage != "metal" {
-        let message = RemoteMessage.frame(
-          id: UInt64(iteration), inputSequence: 0,
-          viewport: viewport, commands: source.commands)
-        let encodeStart = now()
-        var wire = try RemoteWire.encode(message, images: &sender)
-        durations["wireEncode"] = now() - encodeStart
-        bytes = wire.readableBytes
-        let decodeStart = now()
-        let decoded = try RemoteWire.decode(from: &wire, images: &receiver)
-        durations["wireDecode"] = now() - decodeStart
-        guard case .frame(_, _, let decodedViewport, let commands) = decoded,
-          decodedViewport == viewport, wire.readableBytes == 0
-        else {
-          throw BenchmarkError.failed("Invalid replay frame")
-        }
-        if iteration == 0, decoded != message { throw BenchmarkError.failed("Round-trip mismatch") }
-        replay = DrawList(commands: commands)
+      let cullStart = now()
+      let replay = source.culled(to: viewport)
+      durations["cull"] = now() - cullStart
+      // Keep the culling result observable even in the CPU-only benchmark.
+      guard replay.commands.count <= source.commands.count else {
+        throw BenchmarkError.failed("Culling increased command count")
       }
       #if os(macOS)
       if let metal {
@@ -158,26 +136,24 @@ struct RenderBenchmark {
       #endif
       if iteration == 0 {
         cold = durations.mapValues { $0 * 1000 }
-        coldBytes = bytes
       } else if iteration > warmup {
         for (name, value) in durations { samples[name, default: []].append(value) }
         measured += 1
-        steadyBytes = bytes
       }
       iteration += 1
       if iteration == warmup + 1 { measurementStart = now() }
       await Task.yield()
     } while measured < frames || now() - measurementStart < seconds
     let report = Report(
-      schemaVersion: 3, fixtureVersion: RenderFixture.version,
+      schemaVersion: 4, fixtureVersion: RenderFixture.version,
       sequenceFrames: sequence.count,
       commandCountMin: sequence.map { $0.commands.count }.min()!,
       commandCountMax: sequence.map { $0.commands.count }.max()!,
-      protocolVersion: RemoteWire.version, os: ProcessInfo.processInfo.operatingSystemVersionString,
+      os: ProcessInfo.processInfo.operatingSystemVersionString,
       processors: ProcessInfo.processInfo.activeProcessorCount, scene: scene, stage: stage,
       count: count, frames: measured, minimumFrames: frames, minimumSeconds: seconds, warmup: warmup,
       profilingEnabled: profiling,
-      coldWireBytes: coldBytes, steadyWireBytes: steadyBytes, coldMS: cold,
+      coldMS: cold,
       timings: samples.mapValues(Distribution.init))
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

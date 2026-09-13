@@ -11,15 +11,27 @@ swiftly run swift test --package-path Example
 swiftly run swift test --package-path Benchmarks -c release
 ```
 
-Remote demo (separate terminals; rebuild both together):
+Applications run locally in-process; no networking dependencies are required.
 
-```sh
-swift run --package-path Example -c release RemoteDemoDaemon
-swift run --package-path Example -c release RemoteDemoClient
-```
-
-Remote connections are unauthenticated: use a trusted connection or protected tunnel.
 Benchmarks: `Benchmarks/Scripts/run.sh Benchmarks/results/baseline`.
 
 Bundled font: Noto Sans Mono (SIL OFL 1.1). Distribute the ChromaFont resource bundle,
 including [OFL.txt](Sources/ChromaFont/Resources/OFL.txt).
+
+The demo runs in-process through `MetalApp` on macOS or `WaylandApp` on Linux.
+Save a scene with Ctrl+Shift+G (defaults to `Example/`), or pass
+`--capture-directory EXISTING_WRITABLE_DIRECTORY`.
+Scene captures use self-contained version-3 JSON with shared image resources.
+Version-2 JSON remains readable; older wire-format captures must be regenerated.
+
+Local benchmarks use `--stage cull` (CPU, either platform) or `--stage metal`
+(culling plus Metal/GPU timings, macOS). For example:
+
+```sh
+swift run --package-path Benchmarks -c release RenderBenchmark --scene text --stage cull
+```
+
+Benchmark reports use schema version 4; regenerate baselines rather than comparing
+against former wire/pipeline results. The separate benchmark package retains its
+optional profiling dependencies; the framework and demo have no external Swift
+package dependencies.
