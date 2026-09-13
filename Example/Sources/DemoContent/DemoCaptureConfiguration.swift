@@ -1,6 +1,5 @@
 import Foundation
 
-/// Validates capture destinations and provides the native demo's default directory.
 public struct DemoCaptureConfiguration: Sendable {
   public let directory: URL
 
@@ -11,7 +10,6 @@ public struct DemoCaptureConfiguration: Sendable {
     guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
       isDirectory.boolValue
     else { throw ConfigurationError.invalidDirectory }
-    // Probe actual write access during setup; permissions can still change later.
     let probe = directory.appendingPathComponent(".chroma-write-probe-\(UUID().uuidString)")
     guard
       FileManager.default.createFile(
@@ -22,17 +20,14 @@ public struct DemoCaptureConfiguration: Sendable {
     self.directory = directory
   }
 
-  /// Uses the demo package directory, independent of the launching working directory.
-  /// The source location is embedded at build time; moved binaries can use the CLI override.
   public static func nativeDefault() throws -> Self {
     let directory = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()  // DemoContent
-      .deletingLastPathComponent()  // Sources
-      .deletingLastPathComponent()  // Example
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
     return try Self(directory: directory)
   }
 
-  /// Removes the demo-owned option, leaving positional/other options for the caller.
   public static func parse(arguments: inout [String]) throws -> Self? {
     var path: String?
     var remaining: [String] = []

@@ -26,13 +26,11 @@ struct RemoteDemoDaemon {
     let host = arguments.first ?? "127.0.0.1"
     let port = arguments.dropFirst().first.flatMap(Int.init) ?? 9328
     let itemCount = arguments.dropFirst(2).first.flatMap(Int.init) ?? 2_000
-    // The remote display currently targets macOS, regardless of the daemon host.
     let demo = DemoApplication(itemCount: itemCount, shortcutModifier: .command, captureConfiguration: capture)
 
     if benchmark {
       let renderer = HeadlessRenderer(size: demo.windowSize)
       renderer.content = demo.body
-      // Report cold layout separately from steady-state frames with cached row sizes.
       var total: TimeInterval = 0
       var commandCount = 0
       var encodeTotal: TimeInterval = 0

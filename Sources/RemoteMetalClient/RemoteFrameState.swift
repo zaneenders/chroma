@@ -1,8 +1,6 @@
 import Chroma
 import RemoteProtocol
 
-/// Keeps the last good presentation while allowing another request after a bad
-/// frame. Wire decoding must happen first, including image-cache updates.
 struct RemoteFrameState {
   private(set) var latest: (viewport: Size, commands: [DrawCommand])?
   var requestOutstanding = false

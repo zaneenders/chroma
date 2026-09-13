@@ -2,8 +2,6 @@
 
 import ChromaFont
 
-/// Holds the shared single-channel coverage atlas and its prefiltered mip chain
-/// for the GLES texture path.
 struct FontAtlas {
   let shared: HighResolutionFontAtlas
   let mipLevels: [FontAtlasMipLevel]

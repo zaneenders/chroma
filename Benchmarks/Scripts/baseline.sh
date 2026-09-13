@@ -1,5 +1,4 @@
 #!/bin/sh
-# Repeat the same suite in fresh processes; never overwrite a baseline.
 set -eu
 cd "$(dirname "$0")/../.."
 out=${1:?usage: baseline.sh OUTPUT_DIRECTORY [TRIALS]}

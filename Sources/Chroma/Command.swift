@@ -35,7 +35,6 @@ public enum Command: Hashable, Sendable {
 }
 
 extension Command {
-  /// Short name used by interaction diagnostics (e.g. `lastMacroDescription`).
   package var label: String {
     switch self {
     case .navigation(.up): "up"

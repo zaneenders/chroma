@@ -11,7 +11,6 @@ public struct VStack: PrimitiveBlock {
     self.children = BlockBuilder.flattenedChildren(content().children)
   }
 
-  /// Lays out children from bottom to top instead of top to bottom.
   public func reverseLayout() -> VStack {
     var copy = self
     copy.isLayoutReversed.toggle()

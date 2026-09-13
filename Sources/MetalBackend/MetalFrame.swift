@@ -3,7 +3,6 @@
 import Metal
 import Synchronization
 
-/// Immutable completion information; no mutable Metal resources escape.
 public struct MetalFrameCompletion: Sendable {
   public let succeeded: Bool
   public let gpuDuration: Double?
@@ -17,8 +16,6 @@ public struct MetalFrameCompletion: Sendable {
   }
 }
 
-// Completion runs on a Metal thread, not necessarily MainActor. Slot ownership
-// must therefore be returned synchronously under a lock, not queued to MainActor.
 final class MetalFrameSlots: Sendable {
   private let available = Mutex([true, true, true])
 
@@ -39,9 +36,6 @@ final class MetalFrameSlots: Sendable {
   }
 }
 
-// The reference is private to the ownership implementation: a copyable Metal
-// callback can retain it, while the public writable/submittable capability cannot
-// be copied. Destruction handles both cancellation and completed GPU work.
 final class MetalFrameReservation: Sendable {
   private let pool: MetalFrameSlots
   let index: Int
@@ -63,8 +57,6 @@ final class MetalFrameReservation: Sendable {
   deinit { release() }
 }
 
-/// An encoded frame with exclusive ownership of a pool slot. Dropping it cancels
-/// submission and releases the slot. Only consuming submit can commit its work.
 @MainActor
 public struct MetalPreparedFrame: ~Copyable {
   private let command: MTLCommandBuffer
@@ -82,7 +74,6 @@ public struct MetalPreparedFrame: ~Copyable {
     if let drawable { command.present(drawable) }
     let reservation = reservation
     command.addCompletedHandler { command in
-      // Hold the slot until Metal has finished every use of its buffers.
       reservation.release()
       onCompletion(MetalFrameCompletion(command))
     }
@@ -91,8 +82,6 @@ public struct MetalPreparedFrame: ~Copyable {
   }
 }
 
-/// A submitted frame has no upload or resubmission API. Waiting is optional;
-/// dropping this handle does not release the in-flight pool reservation.
 @MainActor
 public struct MetalSubmittedFrame: ~Copyable {
   private let command: MTLCommandBuffer

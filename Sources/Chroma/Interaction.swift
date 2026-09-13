@@ -74,8 +74,6 @@ package final class Interaction {
   }
 
   package func copyText() -> String? {
-    // An active editor owns its selection. App-level providers are a fallback for
-    // custom selectable content and must not shadow a text field selection.
     if let text = editableSelectionText() { return text }
     if let text = onCopy?(), !text.isEmpty { return text }
     return textSelection.selectedText()
@@ -153,9 +151,6 @@ package final class Interaction {
       textDragAnchor = nil
       textSelection.clear()
     } else if input.pointerReleased {
-      // Keep the press origin through this frame so a control activated on release
-      // can place its caret at the original click position, and include the final
-      // pointer position in any drag selection.
       dragCurrent = input.pointerPosition
     } else if isDragging {
       dragCurrent = input.pointerPosition
@@ -180,8 +175,6 @@ package final class Interaction {
     } else if dragOrigin == nil, input.pointerPosition != lastPointerPosition, let hovered,
       hovered != selection
     {
-      // Preserve the control that owns an active drag. In particular, dragging a
-      // text selection across another focusable leaf must not end editing.
       moveCursor(to: hovered)
     }
     if input.pointerReleased {
@@ -248,9 +241,6 @@ extension Interaction {
     builderStack.append(node)
   }
 
-  /// Finishes the current group and reports whether it was retained in the focus tree.
-  /// Empty groups are pruned, so callers must not render a focus cursor for them: a
-  /// later sibling can reuse the same path during this frame.
   @discardableResult
   func endGroup() -> Bool {
     guard builderStack.count > 1, let node = builderStack.popLast() else {
@@ -384,9 +374,6 @@ extension Interaction {
     perpendicularMove(command)
   }
 
-  /// Crosses the nearest perpendicular group after ordinary axis-aware bubbling
-  /// has failed. This makes adjacent panes navigable while preserving row/column
-  /// movement semantics.
   func perpendicularMove(_ command: NavigationCommand) {
     guard let tree, let selection else { return }
     var level = selection.count - 1

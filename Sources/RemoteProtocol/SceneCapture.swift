@@ -2,8 +2,6 @@ import Chroma
 import Foundation
 import NIOCore
 
-/// Single-frame archive. Wire image definitions are self-contained, with a fresh cache.
-/// Exact captures may contain private text, paths and image pixels. No redaction is applied.
 public enum SceneCapture {
   public static let version = 1
   private static let magic: [UInt8] = Array("CHRCAP01".utf8)

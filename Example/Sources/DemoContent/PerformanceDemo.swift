@@ -104,8 +104,6 @@ final class PerformanceDemoState {
 
   func elapsedTime() -> Float {
     let now = pauseStartedAt ?? clock()
-    // Subtract in Double before narrowing: absolute timestamps lose frame-sized
-    // increments when converted to Float (tens of seconds for dates since 2001).
     return Float(now - startedAt - timeOffset) * speed
   }
 }
@@ -231,8 +229,6 @@ private struct UUIDList: Block {
             state.uuidScrollController.scrollToBottom()
           }
         }
-        // LazyVStack owns its scroll viewport; wrapping it in ScrollView would
-        // give it the full content height and defeat visible-row culling.
         LazyVStack(
           id: WidgetID("remote.uuid.scroll"),
           data: state.identifiers.indices, rowHeight: 48, spacing: 5,

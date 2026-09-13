@@ -28,7 +28,7 @@ struct TextEventInterceptionTests {
     #expect(frame([.endEditing]).editing)
     text = ""
     _ = frame([.insert("draft"), .moveCaretUp])
-    #expect(text == "draft") // hook sees preceding edits; does not recall
+    #expect(text == "draft")
     context.endEditing()
     #expect(context.activeTextInput == nil)
   }

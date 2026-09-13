@@ -53,8 +53,6 @@ struct ObservationLifetimeTests {
     let counter = SubscriptionLifetimeCounter()
     for _ in 0..<1_000 {
       render(producer, model: model, counter: counter)
-      // Check before yielding: cancellation must release captures immediately,
-      // not enqueue a stale callback for every independently scheduled frame.
       #expect(counter.live.withLock { $0 } == 1)
     }
     await drainChanges()

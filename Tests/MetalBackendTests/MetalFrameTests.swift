@@ -24,7 +24,6 @@ struct MetalFrameTests {
         DrawList(), viewport: Size(width: 8, height: 8), rasterScale: Point(x: 1, y: 1),
         queue: queue, renderPass: pass)
     }
-    // Noncopyable values cannot be passed through #require's Copyable API.
     guard let first = try prepare(), let second = try prepare(), let third = try prepare() else {
       Issue.record("Expected three available slots")
       return
@@ -61,7 +60,6 @@ struct MetalFrameTests {
     command.encodeWaitForEvent(event, value: 1)
     defer { event.signaledValue = 1 }
     let prepared = MetalPreparedFrame(command: command, reservation: first)
-    // Drop the submitted handle immediately: only GPU completion can free it.
     _ = prepared.submit()
     #expect(slots.acquire() == nil)
     event.signaledValue = 1
@@ -69,7 +67,6 @@ struct MetalFrameTests {
     #expect(command.status == .completed)
     let recycled = try #require(slots.acquire())
     #expect(recycled.index == first.index)
-    // Old reservation destruction/release must not free a newly acquired slot.
     first.release()
     #expect(slots.acquire() == nil)
     withExtendedLifetime((second, third, recycled)) {}

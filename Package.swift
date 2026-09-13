@@ -53,10 +53,6 @@ var targets: [Target] = [
 var backendTraits: Set<Trait> = []
 var defaultBackendTraits: Set<String> = []
 
-// Native backends and their build tooling are host-specific. SwiftPM traits can
-// condition dependency edges and settings, but cannot condition products or
-// target declarations; declaring both backends would make `swift build` probe
-// Wayland system libraries on macOS and Metal build tooling on Linux.
 #if os(macOS)
 backendTraits.insert(
   .trait(
@@ -74,8 +70,6 @@ targets.append(contentsOf: [
     name: "MetalBackend",
     dependencies: ["Chroma", "ChromaFont"],
     exclude: ["Shaders"],
-    // The product is only declared on macOS. Its API remains available whether
-    // or not the demo-selection trait is enabled.
     swiftSettings: [.define("METAL_BACKEND"), .strictMemorySafety()],
     plugins: [.plugin(name: "MetalSourcePlugin")]
   ),
@@ -121,8 +115,6 @@ targets.append(contentsOf: [
       "CXKBKeyboard",
     ],
     exclude: ["Shaders"],
-    // The product is only declared on Linux. Its API remains available whether
-    // or not the demo-selection trait is enabled.
     swiftSettings: [.define("WAYLAND_BACKEND"), .strictMemorySafety()],
     plugins: [.plugin(name: "WaylandSourcePlugin")]
   ),

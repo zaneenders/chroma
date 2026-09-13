@@ -284,7 +284,6 @@ extension RemoteServerTests {
     server.receive(.key(sequence: 1, event: RemoteKeyEvent(chord: KeyChord(.enter))), from: channel)
     server.receive(.key(sequence: 2, event: RemoteKeyEvent(chord: nil, text: "edited")), from: channel)
     #expect(recorder.text == "edited")
-    // Without an onSubmit callback, submitting ends editing.
     server.receive(.key(sequence: 3, event: RemoteKeyEvent(chord: KeyChord(.enter))), from: channel)
     server.receive(.key(sequence: 4, event: RemoteKeyEvent(chord: nil, text: "ignored")), from: channel)
     #expect(recorder.text == "edited")

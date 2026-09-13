@@ -31,16 +31,12 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   private var inputSequence: UInt64 = 0
   private var isShuttingDown = false
   private var requestStartedAt: TimeInterval = 0
-  // Protect the renderer's three shared instance-buffer slots from GPU reuse.
   private var frameRequestTimer: Timer?
   private var frameRequestOutstanding: Bool {
     get { frameState.requestOutstanding }
     set { frameState.requestOutstanding = newValue }
   }
   private var requestedFramesPerSecond: Double = 30
-  // AppKit window/delegate relationships are not owning. Keep the coordinator
-  // alive for the duration of NSApplication.run(), even when its caller's local
-  // variable is no longer considered live by the optimizer.
   private var lifetimeRetain: RemoteMetalClient?
 
   public init(size: Size = Size(width: 800, height: 600), title: String = "Chroma Remote") throws {
@@ -118,8 +114,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     frameRequestOutstanding = false
     clipboardGenerations.removeAll()
     _ = view.frameInput()
-    // Write directly here. Scheduling through eventLoop.execute allowed the
-    // application run loop to start before the initial viewport was enqueued.
     channel.write(try RemoteWire.encode(.frameRate(Float(requestedFramesPerSecond))), promise: nil)
     let write = channel.writeAndFlush(try RemoteWire.encode(.viewport(currentViewport)))
     write.whenFailure { error in print("Initial viewport write failed: \(error)") }
@@ -140,7 +134,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     guard !isShuttingDown, let channel, channel.isActive else { return }
     if frameRequestOutstanding {
       if FrameResponseDeadline.hasExpired(since: requestStartedAt) {
-        // Invalidate callbacks and reuse the normal reconnect path immediately.
         channel.close(promise: nil)
         connectionClosed()
       }
@@ -179,8 +172,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     reconnectTimer = nil
     banner.dismiss()
 
-    // Stop AppKit callbacks before closing NIO. Window teardown can otherwise
-    // produce resize/input callbacks that try to schedule work on the stopped group.
     frameRequestTimer?.invalidate()
     frameRequestTimer = nil
     view.onInputAvailable = nil
@@ -255,9 +246,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     guard !isShuttingDown, let channel, channel.isActive else { return }
     do {
       let bytes = try RemoteWire.encode(message)
-      // Channel.writeAndFlush is thread-safe and schedules on the channel's
-      // event loop itself. Avoid an extra eventLoop.execute task that can be
-      // left pending during shutdown.
       channel.writeAndFlush(bytes, promise: nil)
     } catch {
       print("Remote message encoding failed: \(error)")
@@ -266,7 +254,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
 
   private func connectionClosed() {
     guard !isShuttingDown else { return }
-    // Invalidate already queued callbacks from the old channel or failed attempt.
     connectionGeneration = UUID()
     frameRequestTimer?.invalidate()
     frameRequestTimer = nil
@@ -377,9 +364,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
       return
     }
     guard case .frame(let id, _, _, let commands) = message else { return }
-    // The wire decoder has already consumed image definitions. Drop only the
-    // presentation, retaining cache synchronization and the previous good frame.
-    // Frame state releases the request credit even for a rejected presentation.
     guard acceptedFrame else { return }
     if isFirstFrame {
       print("Received remote frame \(id) with \(commands.count) draw commands")

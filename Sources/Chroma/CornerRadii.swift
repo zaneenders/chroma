@@ -24,7 +24,6 @@ public struct CornerRadii: Equatable, Sendable {
       bottomLeft: radius)
   }
 
-  /// Returns non-negative radii scaled so neighboring corners never overlap.
   public func normalized(for size: Size) -> CornerRadii {
     let tl = max(0, topLeft)
     let tr = max(0, topRight)

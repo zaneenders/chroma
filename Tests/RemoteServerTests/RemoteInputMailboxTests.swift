@@ -37,7 +37,6 @@ struct RemoteInputMailboxTests {
   @Test func countOverflowCancelsQueuedDelivery() async throws {
     var delivered = 0
     let mailbox = RemoteInputMailbox { _ in delivered += 1 }
-    // No actor suspension: drain cannot run until after overflow.
     for _ in 0..<RemoteInputMailbox.maximumMessages {
       #expect(mailbox.enqueue(.requestFrame, byteCount: 16))
     }

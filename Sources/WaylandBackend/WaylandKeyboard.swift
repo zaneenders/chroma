@@ -115,8 +115,6 @@ final class WaylandKeyboard {
     if editing {
       if case .some(.some(let command)) = resolution, case .editing(let event) = command {
         if event == .selectAll {
-          // An active editor owns Select All. The app-level handler is only a
-          // fallback for custom selectable content while not editing.
           pendingTextEvents.append(.event(event, session: editingSession))
         } else {
           applyEditingEvent(event, session: editingSession)
@@ -196,8 +194,6 @@ final class WaylandKeyboard {
       pendingTextEvents.append(.paste(id, session: session))
       onPaste?(id)
     case .selectAll:
-      // An active editor owns Select All. The app-level handler is only a
-      // fallback for custom selectable content while not editing.
       pendingTextEvents.append(.event(event, session: session))
     default:
       pendingTextEvents.append(.event(event, session: session))
@@ -209,7 +205,6 @@ final class WaylandKeyboard {
       return nil
     }
     var buffer = [CChar](repeating: 0, count: 64)
-    // xkb may return the required length when the supplied buffer is too short.
     let count = unsafe buffer.withUnsafeMutableBufferPointer { bytes in
       unsafe chroma_xkb_keyboard_utf8(keyboard, key, bytes.baseAddress, Int32(bytes.count))
     }

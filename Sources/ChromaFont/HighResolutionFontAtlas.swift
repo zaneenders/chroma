@@ -12,7 +12,6 @@ public struct FontAtlasMipLevel: Sendable {
   }
 }
 
-/// Prebuilt coverage and mipmaps shared by both GPU backends.
 public struct HighResolutionFontAtlas: Sendable {
   public static let scale = 3
   public static let columns = 32
@@ -50,7 +49,6 @@ public struct HighResolutionFontAtlas: Sendable {
   enum AssetError: Error { case invalidAtlas }
 
   init(data: Data) throws(AssetError) {
-    // Foundation ties the borrowed bytes to data; only owned mip arrays escape.
     self = try Self(bytes: data.bytes)
   }
 
@@ -61,7 +59,6 @@ public struct HighResolutionFontAtlas: Sendable {
   }
 
   private init(bytes: RawSpan) throws(AssetError) {
-    // CATL, version, width, height, glyph count; all integers UInt32 LE.
     var cursor = 0
     guard try Self.word(bytes, cursor: &cursor) == 0x4C54_4143,
       try Self.word(bytes, cursor: &cursor) == 1
@@ -82,7 +79,6 @@ public struct HighResolutionFontAtlas: Sendable {
     while true {
       let size = w * h
       guard bytes.byteCount - cursor >= size else { throw AssetError.invalidAtlas }
-      // Mips outlive the borrowed input and therefore require owned storage.
       let input = Span<UInt8>(viewing: bytes.extracting(cursor..<(cursor + size)))
       let pixels = Array<UInt8>(capacity: size) { output in
         for index in input.indices { output.append(input[index]) }

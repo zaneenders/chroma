@@ -3,11 +3,6 @@
 import Chroma
 import Metal
 
-/// Translates backend-independent Chroma draw commands into Metal commands.
-///
-/// This object owns GPU pipelines, batching buffers, the bundled font atlas,
-/// and the image texture cache. It deliberately does not own a window, input
-/// state, or a Chroma block graph, so local and remote windows can share it.
 @MainActor
 public final class MetalDisplayListRenderer {
   private let device: MTLDevice
@@ -97,7 +92,6 @@ public final class MetalDisplayListRenderer {
       let (u0, v0, u1, v1) = fontAtlas.glyphUV(character)
       return SIMD4<Float>(u0, v0, u1, v1)
     }
-    // Bound both entry overhead and glyph storage. Oversized runs are transient.
     if run.count <= 65_536, text.utf8.count <= 65_536 {
       while !glyphRunOrder.isEmpty && (glyphRunOrder.count >= 1024 || cachedGlyphCount + run.count > 65_536) {
         let oldest = glyphRunOrder.removeFirst()
@@ -132,8 +126,6 @@ public final class MetalDisplayListRenderer {
     case popClip
   }
 
-  /// Returns nil when all three slots are reserved or in flight. No waiting or
-  /// unbounded allocation occurs. The returned frame must be consumed to submit.
   public func prepareFrame(
     _ drawList: DrawList, viewport: Size, rasterScale: Point,
     queue: MTLCommandQueue, renderPass: MTLRenderPassDescriptor
@@ -197,8 +189,6 @@ public final class MetalDisplayListRenderer {
     func appendShape(_ rect: Rect, radii requestedRadii: CornerRadii, borderWidth: Float, color: Color) {
       guard rect.size.width > 0, rect.size.height > 0 else { return }
       let radii = requestedRadii.normalized(for: rect.size)
-      // Give antialiasing room outside the logical bounds instead of clipping
-      // coverage at the quad's edge.
       let edgePadding: Float = 1
       shapeInstances.append(
         ShapeInstance(

@@ -1,6 +1,3 @@
-/// A focused keybinding scope. The current renderer resolves app bindings before drawing;
-/// this wrapper records the intended local map API while scoped physical-key resolution is
-/// completed by backends that can associate key events with the current focus path.
 public struct KeyBindingBlock: PrimitiveBlock {
   public var content: any Block
   public var bindings: KeyBindings

@@ -1,7 +1,5 @@
 import Chroma
 
-/// Synthetic renderer inputs inspired by Scribe's markdown runs, transcript clipping,
-/// sidebar, selection backgrounds and growing composer. No Scribe data or parser code.
 public enum TranscriptReplay {
   public static let names = ["transcript", "streaming", "scrolling", "selection", "composer"]
   public static let frameCount = 60
@@ -41,7 +39,6 @@ public enum TranscriptReplay {
           if selected {
             list.fillRect(Rect(x: 256, y: y, width: 720, height: 20), color: accent)
           }
-          // Small colored runs model markdown/code styling and selection run splitting.
           let runs = ["\(line) ", "let ", "result", " = ", "render", "(viewport)", " // cached frame"]
           var x: Float = 256
           for (index, run) in runs.enumerated() {

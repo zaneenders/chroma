@@ -46,7 +46,6 @@ public final class RemoteServer {
   private var lastSentViewport: Size?
   private var connectionEpoch: UInt64 = 0
   private let wireEncoder = ConnectionFrameEncoder()
-  // Remains occupied across disconnects until old encoding/writing completes.
   private(set) var frameInFlight = false
   private let encodingQueue: DispatchQueue
   private struct FrameSnapshot: Sendable {
@@ -60,7 +59,6 @@ public final class RemoteServer {
     self.init(content: content, size: size, encodingQueue: DispatchQueue(label: "chroma.remote.frame-encoding"))
   }
 
-  /// Builds root content afresh during each observed frame evaluation.
   public convenience init<Content: Block>(
     size: Size = Size(width: 800, height: 600),
     @BlockBuilder content: @escaping @MainActor () -> Content
@@ -68,7 +66,6 @@ public final class RemoteServer {
     self.init(content: DeferredBlock(content: content), size: size)
   }
 
-  // Injectable serial queue lets lifecycle tests hold encoding across a disconnect.
   init(content: any Block, size: Size = Size(width: 800, height: 600), encodingQueue: DispatchQueue) {
     self.encodingQueue = encodingQueue
     self.content = content
@@ -78,15 +75,9 @@ public final class RemoteServer {
     interaction.onRedrawRequested = { [weak self] in self?.scheduleRedraw() }
   }
 
-  /// The actual listening port, including when started with port zero.
   public var boundPort: Int? { serverChannel?.localAddress?.port }
 
   public func start(host: String = "127.0.0.1", port: Int = 9328) throws {
-    // A ChannelHandler is stateful and may only belong to one channel. Construct
-    // a new handler for every accepted connection so reconnecting after a probe
-    // (`nc`) or a closed client does not cause NIO to reset the new connection.
-    // Keep NIO's initializer in a nonisolated object. A closure literal created
-    // here inherits @MainActor, while NIO invokes it on its event-loop thread.
     connectionFactory.server = self
     serverChannel = try ServerBootstrap(group: group)
       .serverChannelOption(ChannelOptions.backlog, value: 8)
@@ -96,15 +87,10 @@ public final class RemoteServer {
     logger.info("Chroma remote daemon listening", metadata: ["host": "\(host)", "port": "\(boundPort ?? port)"])
   }
 
-  /// Runs the executor used to evaluate the `@MainActor` block graph.
-  /// Do not block on the NIO channel's close future: incoming messages are
-  /// deliberately handed from NIO to the main actor.
   public func run() {
     #if os(macOS)
     RunLoop.main.run()
     #else
-    // Foundation's main RunLoop is not a reliable process lifetime mechanism
-    // on all Linux deployments. Dispatch keeps the daemon and main queue alive.
     dispatchMain()
     #endif
   }
@@ -124,8 +110,6 @@ public final class RemoteServer {
     if clientChannel == nil {
       logger.info("Remote client connected")
     }
-    // The prototype has one interaction graph: reject competing clients rather
-    // than allowing one connection to mutate another's pending clipboard edit.
     if let active = clientChannel, active !== channel {
       channel.close(promise: nil)
       return
@@ -212,8 +196,6 @@ public final class RemoteServer {
         text = nil
       } else {
         text = event == .cut ? interaction.editableSelectionText() : interaction.copyText()
-        // RemoteWire.encode below enforces the actual JSON payload size,
-        // including escaping and metadata, rather than a worst-case text limit.
         guard let text, !text.isEmpty else { return }
       }
       let id = inputSequence
@@ -280,8 +262,6 @@ public final class RemoteServer {
     DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
       guard let self, self.connectionEpoch == epoch else { return }
       self.redrawScheduled = false
-      // A request is a single presentation credit. Input can update the graph
-      // immediately, but neither input nor animation can bypass this credit.
       guard self.requestPending, !self.frameInFlight else { return }
       self.lastProducedAt = ProcessInfo.processInfo.systemUptime
       if let snapshot = self.render() { self.publishFrame(snapshot) }
@@ -309,7 +289,6 @@ public final class RemoteServer {
     guard let channel = clientChannel else { return nil }
     let drawStarted = ProcessInfo.processInfo.systemUptime
     var input = input ?? pointerState
-    // Keyboard/clipboard edits carry transient events but no new pointer sample.
     input.pointerPosition = pointerState.pointerPosition
     input.pointerPressPosition = pointerState.pointerPressPosition
     input.pointerDown = pointerState.pointerDown
@@ -318,9 +297,6 @@ public final class RemoteServer {
       context: RenderContext(interaction: interaction),
       onChange: { [weak self] in self?.scheduleRedraw() })
     frameObserver?(FrameObservation(drawList: drawList, viewport: viewport))
-    // Clear the coalescing flag after every frame. If drawing requested another
-    // frame it has already scheduled a render through onRedrawRequested; leaving
-    // the flag set would suppress every later invalidation.
     _ = interaction.consumeRedrawRequest()
     drawList = drawList.culled(to: viewport)
     let drawDuration = ProcessInfo.processInfo.systemUptime - drawStarted
@@ -332,8 +308,6 @@ public final class RemoteServer {
   }
 
   private func encodeFrame(_ snapshot: FrameSnapshot) {
-    // The graph and interaction remain main-actor isolated. Only its immutable,
-    // Sendable display list crosses to this worker; input never waits on encoding.
     let wireEncoder = self.wireEncoder
     encodingQueue.async { [weak self] in
       let started = ProcessInfo.processInfo.systemUptime
@@ -348,7 +322,6 @@ public final class RemoteServer {
   private func encodedFrame(
     _ snapshot: FrameSnapshot, result: Result<EncodedFrame, Error>, duration: TimeInterval
   ) {
-    // Never deliver work from an old connection to a newly connected client.
     guard clientChannel === snapshot.channel, snapshot.channel.isActive else {
       completeFrame()
       return
@@ -360,8 +333,6 @@ public final class RemoteServer {
       statistics.record(
         byteCount: bytes.readableBytes, commandCount: snapshot.commandCount,
         drawDuration: snapshot.drawDuration, encodeDuration: duration)
-      // Keep the slot occupied until NIO drains this write. Otherwise a slow
-      // connection would accumulate encoded frames even with bounded encoding.
       snapshot.channel.writeAndFlush(bytes).whenComplete { [weak self] result in
         DispatchQueue.main.async {
           if case .failure(let error) = result {
@@ -443,8 +414,6 @@ private final class RemoteServerHandler: ChannelInboundHandler, Sendable {
   }
 }
 
-// Protect the connection and image cache together, including across reconnects.
-// Encoding still runs off the main actor on the encoding queue.
 private final class ConnectionFrameEncoder: Sendable {
   private struct State: Sendable {
     var channel: Channel?

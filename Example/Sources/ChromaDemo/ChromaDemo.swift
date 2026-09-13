@@ -47,7 +47,6 @@ struct ChromaDemo {
   }
 }
 
-// The native App runners construct Self(); configure the demo before entering them.
 private struct ConfiguredDemo: DemoApp {
   @MainActor static var configuration: DemoApplication?
   private let demo: DemoApplication

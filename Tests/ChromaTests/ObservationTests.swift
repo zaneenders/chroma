@@ -15,7 +15,6 @@ struct ObservationTests {
     var unused = 0
   }
 
-  // Observation callbacks enqueue onto the main queue before this barrier.
   private func drainChanges() async {
     await withCheckedContinuation { continuation in
       DispatchQueue.main.async { continuation.resume() }

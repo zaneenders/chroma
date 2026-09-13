@@ -1,6 +1,4 @@
 extension DrawList {
-  /// Conservative CPU culling; retains clip commands and painter's order.
-  /// Shape bounds include the renderer's one-point antialiasing fringe.
   public func culled(to viewport: Size) -> DrawList {
     let root = Rect(origin: .zero, size: viewport)
     var clips: [Rect] = []
@@ -26,7 +24,6 @@ extension DrawList {
           width: rect.size.width + 2, height: rect.size.height + 2)
       case .image(let rect, _, _, _): bounds = rect
       case .text(let position, let text, _, let scale):
-        // Keep unusual scales conservatively rather than incorrectly culling them.
         guard scale > 0, scale.isFinite else {
           result.append(command)
           continue

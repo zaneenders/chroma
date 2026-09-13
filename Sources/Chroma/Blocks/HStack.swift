@@ -11,7 +11,6 @@ public struct HStack: PrimitiveBlock {
     self.children = BlockBuilder.flattenedChildren(content().children)
   }
 
-  /// Lays out children from trailing to leading instead of leading to trailing.
   public func reverseLayout() -> HStack {
     var copy = self
     copy.isLayoutReversed.toggle()

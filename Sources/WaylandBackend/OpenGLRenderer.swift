@@ -3,8 +3,6 @@
 import CGLES3
 import Chroma
 
-/// Owns OpenGL ES rendering resources. The caller must keep its EGL context
-/// current during setup, frame rendering, and cleanup.
 @MainActor
 final class OpenGLRenderer {
   private var program: GLuint = 0
@@ -32,7 +30,6 @@ final class OpenGLRenderer {
 
   private func compileShader(_ type: GLenum, source: String, stage: String) throws -> GLuint {
     let shader = glCreateShader(type)
-    // glShaderSource copies the string during this call; no pointer escapes.
     unsafe source.withCString { sourcePointer in
       var pointer: UnsafePointer<GLchar>? = sourcePointer
       let length = GLint(exactly: source.utf8.count)
@@ -115,7 +112,6 @@ final class OpenGLRenderer {
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
     unsafe glBufferData(GLenum(GL_ARRAY_BUFFER), MemoryLayout<GLQuad>.stride, nil, GLenum(GL_DYNAMIC_DRAW))
     let stride = GLsizei(MemoryLayout<GLQuad>.stride)
-    // Derive offsets from the actual Swift layout, not a handwritten byte table.
     let offsets = [
       MemoryLayout<GLQuad>.offset(of: \.dst0)!, MemoryLayout<GLQuad>.offset(of: \.dst1)!,
       MemoryLayout<GLQuad>.offset(of: \.uv0)!, MemoryLayout<GLQuad>.offset(of: \.uv1)!,
@@ -126,7 +122,6 @@ final class OpenGLRenderer {
     for index in offsets.indices {
       let attribute = GLuint(index + 1)
       glEnableVertexAttribArray(attribute)
-      // With the VBO bound, GL interprets this pointer value as a byte offset.
       precondition(offsets[index] + Int(sizes[index]) * MemoryLayout<Float>.size <= Int(stride))
       unsafe glVertexAttribPointer(
         attribute, sizes[index], GLenum(GL_FLOAT), GLboolean(GL_FALSE), stride,
@@ -143,9 +138,6 @@ final class OpenGLRenderer {
     glBlendFunc(GLenum(GL_SRC_ALPHA), GLenum(GL_ONE_MINUS_SRC_ALPHA))
   }
 
-  /// The texture is bound by the caller. GL copies the borrowed bytes during
-  /// glTexImage2D. Explicit unpack state prevents row padding or a pixel-buffer
-  /// binding from changing how GL interprets this CPU pointer.
   private func uploadTexture(
     _ bytes: RawSpan, width: Int, height: Int, format: GLenum, level: GLint
   ) {
@@ -187,8 +179,6 @@ final class OpenGLRenderer {
   }
 
   private func uploadQuad(_ quad: inout GLQuad) {
-    // The bound instance VBO was allocated with GLQuad.stride bytes. GL copies
-    // only the accessible value bytes and retains no pointer into the stack.
     withUnsafeBytes(of: &quad) { bytes in
       precondition(bytes.count <= MemoryLayout<GLQuad>.stride)
       unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, bytes.count, bytes.baseAddress)
@@ -219,7 +209,6 @@ final class OpenGLRenderer {
     var texture: GLuint = 0
     unsafe glGenTextures(1, &texture)
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
-    // Single-byte mip rows are tightly packed, even when their widths are not multiples of four.
     var unpackAlignment: GLint = 0
     unsafe glGetIntegerv(GLenum(GL_UNPACK_ALIGNMENT), &unpackAlignment)
     glPixelStorei(GLenum(GL_UNPACK_ALIGNMENT), 1)
@@ -243,8 +232,6 @@ final class OpenGLRenderer {
     glClearColor(0.1, 0.1, 0.2, 1)
     glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
     glUseProgram(program)
-    // Geometry stays in logical surface coordinates; the larger viewport gives
-    // each logical unit bufferScale pixels without changing app layout.
     glUniform2f(resolutionUniform, Float(width), Float(height))
     glBindVertexArray(vao)
   }
@@ -375,8 +362,6 @@ final class OpenGLRenderer {
   ) {
     guard rect.size.width > 0, rect.size.height > 0 else { return }
     let radii = requestedRadii.normalized(for: rect.size)
-    // Extend the quad so derivative-based antialiasing is not clipped at the
-    // shape's logical bounds.
     let edgePadding: Float = 1
     let padded = Rect(
       x: rect.minX - edgePadding,

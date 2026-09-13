@@ -2,12 +2,6 @@
 
 import Chroma
 
-/// Accumulates Wayland pointer events between frames, mirroring the Metal
-/// backend's ``ChromaInputView/frameInput()`` semantics.
-///
-/// Edge-triggered state (press, release) and scroll deltas pile up between
-/// frames; ``frameInput()`` drains them into the frame's immutable
-/// ``InputState`` snapshot.
 @MainActor
 final class InputAccumulator {
   private var pointerPosition = Point(x: -1, y: -1)
@@ -19,8 +13,6 @@ final class InputAccumulator {
   private var commands: [Command] = []
   private var textEvents: [TextEditEvent] = []
 
-  /// Drains accumulated events into a frame snapshot. Edge-triggered fields
-  /// and scroll deltas reset for the next frame.
   func frameInput() -> InputState {
     let input = InputState(
       pointerPosition: pointerPosition,

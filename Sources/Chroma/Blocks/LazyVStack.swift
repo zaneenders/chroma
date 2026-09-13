@@ -39,18 +39,6 @@ public struct LazyVStack: PrimitiveBlock {
     self.rows = rows
   }
 
-  /// A virtualized stack with an explicit, uniform row height in logical points.
-  ///
-  /// Unlike the measured `rows:` initializer, this initializer neither constructs
-  /// nor measures offscreen content. Data must support random access; only rows
-  /// intersecting the viewport are built, including on the first frame and after
-  /// jumping to the bottom. The builder is evaluated afresh so data and theme
-  /// changes do not require an application-owned content cache.
-  ///
-  /// The height is a layout contract, not an estimate. Include padding in it.
-  /// Use stable widget IDs in interactive row content to preserve interaction
-  /// identity when items move. This stack owns its scroll viewport and should
-  /// not be wrapped in a ScrollView.
   @MainActor public init<Data: RandomAccessCollection, Content: Block>(
     id: WidgetID,
     data: Data,
@@ -135,7 +123,6 @@ public struct LazyVStack: PrimitiveBlock {
     let visibleBottom = offset + rect.size.height
     if let uniformRows {
       let stride = uniformRows.height + spacing
-      // Clamp in floating point before converting to Int, including empty data.
       let first = Int(
         min(
           Float(uniformRows.count),
@@ -191,8 +178,6 @@ public struct LazyVStack: PrimitiveBlock {
 
   @MainActor private func updateCache(width: Float, context: RenderContext) {
     let cache = controller.lazyStackCache
-    // Stable rows already have measured sizes. Avoid rebuilding a dictionary
-    // and two arrays on every animation or input frame.
     if cache.width == width && cache.rowIDs.count == rows.count
       && zip(cache.rowIDs, rows).allSatisfy({ $0.0 == $0.1.id })
     {

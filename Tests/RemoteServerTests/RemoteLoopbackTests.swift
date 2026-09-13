@@ -148,8 +148,6 @@ struct RemoteLoopbackTests {
       return
     }
     #expect(!transfer.isReply)
-    // A frame reply acts as a barrier: preceding key has reached the server,
-    // but must remain deferred until clipboard acknowledgement or disconnect.
     try await first.send(.key(sequence: 3, event: RemoteKeyEvent(chord: nil, text: "stale")))
     try await first.send(.requestFrame)
     _ = try await first.reply()

@@ -3,8 +3,6 @@ public struct DrawList: Sendable {
 
   public init() {}
 
-  /// Creates a display list from an already-produced command stream.
-  /// Useful for replaying recorded or remotely received frames.
   public init(commands: [DrawCommand]) {
     self.commands = commands
   }

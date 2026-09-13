@@ -4,18 +4,7 @@ import Foundation
 struct MetalSourceGenerator {
   static func main() throws {
     guard CommandLine.arguments.count == 3 else {
-      print(
-        """
-        MetalSourceGenerator is an internal Chroma build tool and is not a demo.
-
-        Run the local demo:
-          swift run --package-path Example -c release ChromaDemo
-
-        Or run the same demo remotely in two terminals:
-          swift run --package-path Example -c release RemoteDemoDaemon
-          swift run --package-path Example -c release RemoteDemoClient
-        """
-      )
+      print(GeneratorError.usage.description)
       return
     }
 
@@ -29,7 +18,6 @@ struct MetalSourceGenerator {
     }
 
     let generated = """
-      // Generated from \(inputURL.lastPathComponent) by MetalSourcePlugin. Do not edit.
       let metalSource = \(hashes)\"\"\"
       \(source)\(source.hasSuffix("\n") ? "" : "\n")\"\"\"\(hashes)
 

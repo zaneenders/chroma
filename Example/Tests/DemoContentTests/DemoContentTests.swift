@@ -99,7 +99,6 @@ struct DemoContentTests {
   renderer.frameObserver = demo.frameObserver
   renderer.render()
   let captured = renderer.render(input: InputState(commands: [.application("demo.capture")]))
-  // Poll only in the test; the production demo uses its existing refresh cadence.
   for _ in 0..<200 {
     try await Task.sleep(for: .milliseconds(25))
     let frame = renderer.render()

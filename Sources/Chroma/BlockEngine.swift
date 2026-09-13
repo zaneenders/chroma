@@ -1,8 +1,5 @@
 @MainActor
 public enum BlockEngine {
-  // Resolve a composite once per stack operation. Reusing the primitive for
-  // measurement, expansion and drawing avoids rebuilding application bodies.
-  // This is deliberately not retained across frames or input events.
   static func resolve(_ block: any Block) -> any PrimitiveBlock {
     if let primitive = block as? any PrimitiveBlock { return primitive }
     return resolve(block.body)

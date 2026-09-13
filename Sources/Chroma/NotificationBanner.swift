@@ -1,4 +1,3 @@
-/// A client-owned notification rendered with Chroma, independently of remote frames.
 @MainActor
 package final class NotificationBanner {
   package private(set) var message: String?
@@ -43,7 +42,6 @@ package final class NotificationBanner {
     return Rect(x: (viewport.width - width) / 2, y: 16, width: width, height: height)
   }
 
-  /// Consume the complete pointer gesture so dismissing never clicks through.
   package func handleInput(_ input: InputState, viewport: Size) -> Bool {
     let inside = message != nil && bounds(in: viewport).contains(input.pointerPosition)
     if input.pointerPressed {
@@ -92,7 +90,6 @@ private struct BannerPanel: PrimitiveBlock {
   }
 }
 
-/// Text is single-line today; wrap by grapheme without splitting Unicode characters.
 private struct BannerText: PrimitiveBlock {
   let message: String
   init(_ message: String) { self.message = message }

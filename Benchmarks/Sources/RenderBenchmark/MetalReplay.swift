@@ -34,9 +34,6 @@ final class MetalReplay {
     self.texture = texture
   }
 
-  /// Serial completion keeps replay measurements deterministic; frame leases
-  /// independently prevent in-flight buffer reuse. CPU preparation includes
-  /// command creation and encoding, but excludes submission/wait.
   func render(_ list: DrawList, viewport: Size) throws -> (cpu: Double, gpu: Double) {
     let pass = MTLRenderPassDescriptor()
     pass.colorAttachments[0].texture = texture

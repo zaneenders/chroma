@@ -337,7 +337,6 @@ struct ScrollViewTests {
       #expect(built.count <= 4)
     }
 
-    // Nonzero collection startIndex must work too.
     let data = Array(0..<10_001).dropFirst()
     frame(data)
     #expect(built == [1, 2, 3])
@@ -348,7 +347,6 @@ struct ScrollViewTests {
     frame(data, width: 200)
     #expect(built == [1, 2, 3])
 
-    // Fresh content for same positions, without manual invalidation.
     frame(Array(20_001..<30_001)[...])
     #expect(built == [20_001, 20_002, 20_003])
     controller.scroll(to: 12)

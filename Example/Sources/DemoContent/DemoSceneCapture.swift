@@ -3,7 +3,6 @@ import Foundation
 import Observation
 import RemoteProtocol
 
-/// Demo-owned activation and persistence policy; Chroma never reads an environment flag.
 @MainActor
 @Observable
 final class DemoSceneCapture {
@@ -33,13 +32,11 @@ final class DemoSceneCapture {
     Task { [self] in
       let result = await Task.detached(priority: .utility) { () -> Result<URL, Error> in
         Result {
-          // Serialize and write away from the main actor; at most one snapshot is retained.
           let data = try SceneCapture.encode(frame)
           guard data.count <= 64 * 1024 * 1024 else {
             throw RemoteProtocolError.messageTooLarge(data.count)
           }
           let url = directory.appendingPathComponent("scene-\(UUID().uuidString).chromacapture")
-          // Unique file with restrictive permissions; publish the path only after completion.
           guard
             FileManager.default.createFile(
               atPath: url.path, contents: data,

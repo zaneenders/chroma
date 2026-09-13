@@ -55,7 +55,6 @@ struct ShapeInstance {
   float2 dst_p0;
   float2 dst_p1;
   float2 size;
-  // top-left, top-right, bottom-right, bottom-left
   float4 radii;
   float4 color;
   float borderWidth;
@@ -91,9 +90,6 @@ float roundedRectDistance(float2 localPosition, float2 size, float4 radii) {
     float2 q = abs(centered) - size * 0.5;
     float distance = min(max(q.x, q.y), 0.0) + length(max(q, 0.0));
 
-    // A corner can extend past the rectangle's midpoint when the neighboring
-    // corner is smaller. Test each corner's actual arc region instead of
-    // choosing a radius from the fragment's quadrant.
     float radius = radii.x;
     if (localPosition.x < radius && localPosition.y < radius) {
         distance = max(

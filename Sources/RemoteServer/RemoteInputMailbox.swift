@@ -2,9 +2,6 @@ import Dispatch
 import RemoteProtocol
 import Synchronization
 
-/// Bounds the NIO -> MainActor handoff, not just the clipboard's deferred input.
-/// Never coalesce key/button edges. Overload disconnects the peer instead of
-/// silently changing input semantics. At most one drain is scheduled at a time.
 final class RemoteInputMailbox: Sendable {
   static let maximumMessages = 256
   static let maximumBytes = 8 * 1024 * 1024
@@ -23,8 +20,6 @@ final class RemoteInputMailbox: Sendable {
     self.deliver = deliver
   }
 
-  /// False means the caller must close the connection. Wire byte counts bound
-  /// queued payloads; the count limit also bounds small-message object overhead.
   func enqueue(_ message: RemoteMessage, byteCount: Int) -> Bool {
     let result = state.withLock { state -> (accepted: Bool, schedule: Bool) in
       guard !state.closed, state.pending.count < Self.maximumMessages,
@@ -58,7 +53,6 @@ final class RemoteInputMailbox: Sendable {
   }
 
   @MainActor private func drain() {
-    // Pop individually so disconnect/overflow cancels the rest of this batch.
     for _ in 0..<Self.batchSize {
       let message = state.withLock { state -> RemoteMessage? in
         guard !state.closed, !state.pending.isEmpty else {
@@ -72,7 +66,6 @@ final class RemoteInputMailbox: Sendable {
       guard let message else { return }
       deliver(message)
     }
-    // Yield to UI/lifecycle work even if the producer continuously fills us.
     scheduleDrain()
   }
 }

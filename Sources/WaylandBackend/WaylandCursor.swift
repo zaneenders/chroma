@@ -4,8 +4,6 @@ import CWaylandClient
 import CWaylandCursor
 import Foundation
 
-/// Loads an arrow cursor from the system Xcursor theme and applies it via
-/// `wl_pointer.set_cursor` when the pointer enters the window.
 @MainActor
 final class WaylandCursor {
   private var theme: OpaquePointer?
@@ -28,7 +26,6 @@ final class WaylandCursor {
   }
 
   func apply(pointer: OpaquePointer, serial: UInt32) {
-    // Cursor/image storage is owned by theme and is used only until cleanup.
     guard theme != nil, let surface, let cursor else { return }
     let value = unsafe cursor.pointee
     guard value.image_count > 0, let images = unsafe value.images,

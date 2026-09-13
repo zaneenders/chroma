@@ -27,7 +27,6 @@ struct ManagedDemo {
     }
     let demo = DemoApplication(shortcutModifier: .command, captureConfiguration: capture)
     if backend {
-      // Reserve stdout exclusively for readiness; normal logs stay in the terminal.
       let ready = FileHandle(fileDescriptor: dup(STDOUT_FILENO), closeOnDealloc: true)
       dup2(STDERR_FILENO, STDOUT_FILENO)
       let server = DemoBackend.makeServer(for: demo)
@@ -35,7 +34,6 @@ struct ManagedDemo {
       guard let port = server.boundPort else { throw LaunchError.message("No listening port") }
       try ready.write(contentsOf: Data("\(port)\n".utf8))
       try ready.close()
-      // EOF also handles an abruptly killed parent, not just normal window closure.
       DispatchQueue.global().async {
         while !FileHandle.standardInput.availableData.isEmpty {}
         DispatchQueue.main.async {
@@ -52,11 +50,9 @@ struct ManagedDemo {
     let port = try owner.start(capture: capture)
     let client = try RemoteMetalClient(size: demo.windowSize, title: demo.title)
     try client.connect(host: "127.0.0.1", port: port, framesPerSecond: 60)
-    // AppKit terminate() does not unwind main(), so defer alone is insufficient.
     let observer = NotificationCenter.default.addObserver(
       forName: NSApplication.willTerminateNotification, object: nil, queue: .main
     ) { _ in
-      // The main-queue observer must stop the backend before AppKit terminates.
       MainActor.assumeIsolated { owner.stop() }
     }
     defer { NotificationCenter.default.removeObserver(observer) }
@@ -69,7 +65,6 @@ struct ManagedDemo {
         NSApplication.shared.terminate(nil)
       }
     }
-    // Detect an exit between the readiness handshake and installing the handler.
     guard owner.process.isRunning else { throw LaunchError.message("Backend exited during startup") }
     client.run()
   }
@@ -84,7 +79,6 @@ private enum LaunchError: Error, CustomStringConvertible {
   }
 }
 
-/// Only this launcher owns this process. External RemoteDemoClient sessions do not.
 @MainActor
 private final class OwnedBackend {
   let process = Process()

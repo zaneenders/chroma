@@ -49,8 +49,6 @@ extension Interaction {
       }
 
       if isProcessingDrag, let origin = dragOrigin, rect.contains(origin) {
-        // Keep the origin's hit-test stable if moving the caret scrolls the viewport
-        // on a later drag frame.
         let viewportCaret = caretOffset
         let offset: (Point) -> Int = { point in
           if let pointerOffset { return pointerOffset(point, viewportCaret) }
@@ -78,8 +76,6 @@ extension Interaction {
         }
         switch event {
         case .copy, .cut, .paste:
-          // TODO: is continue the best way to handle this?
-          // Backends own the pasteboard and intercept these before delivery.
           continue
         case .insert(let inserted):
           if let range = textSelectionRange {

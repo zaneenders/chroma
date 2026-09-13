@@ -6,8 +6,8 @@ import Testing
 struct ClipboardGenerationsTests {
   @Test func queuedPasteFollowsCopyWrite() {
     var generations = ClipboardGenerations()
-    generations.record(sequence: 1, generation: 10)  // Copy
-    generations.record(sequence: 2, generation: 10)  // Paste, before Copy completes
+    generations.record(sequence: 1, generation: 10)
+    generations.record(sequence: 2, generation: 10)
 
     #expect(generations.consume(sequence: 1) == 10)
     generations.didWrite(sequence: 1, from: 10, to: 12)
@@ -31,9 +31,9 @@ struct ClipboardGenerationsTests {
     var generations = ClipboardGenerations()
     generations.record(sequence: 1, generation: 10)
     generations.record(sequence: 2, generation: 10)
-    generations.record(sequence: 3, generation: 11)  // External change
-    #expect(generations.consume(sequence: 1) != 11)  // Copy must be rejected
-    #expect(generations.consume(sequence: 2) != 11)  // Stale Paste must be rejected
+    generations.record(sequence: 3, generation: 11)
+    #expect(generations.consume(sequence: 1) != 11)
+    #expect(generations.consume(sequence: 2) != 11)
     #expect(generations.consume(sequence: 3) == 11)
   }
 

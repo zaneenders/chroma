@@ -2,9 +2,6 @@ import Dispatch
 import Observation
 import Synchronization
 
-// The synchronous tracking API delivers a cancellation event on mutation, not
-// an externally owned token. Release callback captures immediately on reset;
-// any remaining registration cancels itself when its dependency next changes.
 private final class FrameTrackingSubscription: Sendable {
   private let callback: Mutex<(@MainActor @Sendable () -> Void)?>
 
@@ -24,7 +21,6 @@ private final class FrameTrackingSubscription: Sendable {
   }
 }
 
-/// Shared graph evaluation. Backends retain ownership of scheduling and presentation.
 @MainActor
 package final class FrameProducer {
   private var generation: UInt64 = 0
@@ -32,7 +28,6 @@ package final class FrameProducer {
 
   package init() {}
 
-  /// Releases callbacks and discards invalidations from the previous frame or session.
   package func reset() {
     generation &+= 1
     subscription?.cancel()
@@ -51,11 +46,9 @@ package final class FrameProducer {
     reset()
     let generation = generation
     let interaction = context.interaction
-    // Command routing may mutate models. Do it before collecting drawing dependencies.
     interaction.beginFrame(input: input)
     let subscription = FrameTrackingSubscription(onChange)
     self.subscription = subscription
-    // Refresh dependencies for every frame, including input/viewport-only frames.
     let drawList = withObservationTracking(options: .didSet) {
       var drawList = DrawList()
       if let content {
@@ -66,7 +59,6 @@ package final class FrameProducer {
     } onChange: { [weak self, weak subscription] event in
       event.cancel()
       guard let onChange = subscription?.takeCallback() else { return }
-      // Keep rendering backend-driven and coalesce changes until the next frame.
       DispatchQueue.main.async { [weak self] in
         guard let self, self.generation == generation else { return }
         onChange()

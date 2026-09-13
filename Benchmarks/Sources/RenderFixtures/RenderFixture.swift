@@ -1,7 +1,6 @@
 import Chroma
 import Foundation
 
-/// Versioned, deterministic display lists: no application state, clock, or randomness.
 public struct RenderFixture: Sendable {
   public static let version = 2
   public static let names = ["shapes", "text", "clipped", "images"] + TranscriptReplay.names

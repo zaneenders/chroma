@@ -26,9 +26,6 @@ static const char *compose_locale(void) {
 }
 
 chroma_xkb_keyboard *chroma_xkb_keyboard_create(int32_t fd, uint32_t size) {
-  // Read into owned storage: a compositor shrinking an mmap-backed file could
-  // otherwise SIGBUS the parser even after a successful fstat. Bound allocation
-  // and require a terminator before passing bytes to the C string parser.
   const uint32_t maximum_keymap_bytes = 16 * 1024 * 1024;
   struct stat info;
   if (size == 0 || size > maximum_keymap_bytes ||

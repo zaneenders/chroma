@@ -10,10 +10,6 @@ import Dispatch
 import Foundation
 import Glibc
 
-/// A Wayland window backed by EGL and OpenGL ES 3.
-///
-/// This type owns the platform surface and consumes only
-/// backend-neutral `DrawList` commands produced by `BlockEngine`.
 @MainActor
 public final class WaylandRenderer: Renderer {
   public let name = "Wayland"
@@ -26,9 +22,6 @@ public final class WaylandRenderer: Renderer {
 
   package let interaction = Interaction()
 
-  // xdg-shell configures surfaces in logical coordinates. The EGL window and
-  // GL viewport use buffer pixels so HiDPI outputs are rendered at native
-  // resolution instead of being upscaled by the compositor.
   private var width: Int32
   private var height: Int32
   private var bufferScale: Int32 = 1
@@ -128,8 +121,6 @@ public final class WaylandRenderer: Renderer {
     startEventSources()
     requestFrame()
 
-    // Foundation/libdispatch owns the outer event loop. Wayland, timers, and
-    // MainActor jobs are all sources on this loop, so none can starve another.
     while running {
       _ = RunLoop.main.run(mode: .default, before: .distantFuture)
     }
@@ -165,8 +156,6 @@ public final class WaylandRenderer: Renderer {
       failEventLoop(WaylandError("Wayland display dispatch failed"))
       return
     }
-    // Listener callbacks invalidate only when they change visible state. Frame
-    // callbacks therefore do not accidentally create a perpetual render loop.
     updateKeyboardRepeatTimer()
     flushWayland()
   }
@@ -254,9 +243,6 @@ public final class WaylandRenderer: Renderer {
     flushWayland()
   }
 
-  // libwayland invokes listeners synchronously on our main-actor dispatch path.
-  // Listener tables have static storage; user data borrows this renderer. cleanup
-  // destroys proxies before run() returns and before the renderer can be released.
   private static var frameListener = unsafe wl_callback_listener(
     done: { data, callback, _ in
       guard let data else { return }
@@ -278,8 +264,6 @@ public final class WaylandRenderer: Renderer {
     running = false
     CFRunLoopStop(CFRunLoopGetMain())
   }
-
-  // MARK: Wayland
 
   private func setUpWayland(title: String) throws {
     display = unsafe wl_display_connect(nil)
@@ -393,7 +377,6 @@ public final class WaylandRenderer: Renderer {
     guard var transfer = clipboardReads[fd] else { return }
     var buffer = [UInt8](repeating: 0, count: 16 * 1024)
     while true {
-      // read receives exactly the capacity of this initialized, borrowed buffer.
       let count = unsafe buffer.withUnsafeMutableBytes { bytes in
         unsafe read(fd, bytes.baseAddress, bytes.count)
       }
@@ -703,9 +686,6 @@ public final class WaylandRenderer: Renderer {
       data, _, _, axis, value in
       guard let data else { return }
       let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      // Wayland axis values describe content movement, while Chroma's scroll
-      // delta follows AppKit's gesture direction. Flip the sign at the backend
-      // boundary so wheel and touchpad scrolling move the viewport naturally.
       let delta = -fixedToFloat(value)
       switch axis {
       case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
@@ -787,8 +767,6 @@ public final class WaylandRenderer: Renderer {
     wm_capabilities: { _, _, _ in }
   )
 
-  // MARK: EGL / GLES
-
   private func setUpEGL() throws {
     guard let display, let surface else { throw WaylandError("Wayland surface is unavailable") }
     eglDisplay = unsafe eglGetDisplay(EGLNativeDisplayType(display))
@@ -831,14 +809,10 @@ public final class WaylandRenderer: Renderer {
     _ = unsafe eglSwapInterval(eglDisplay, 1)
   }
 
-  // MARK: DrawList consumption
-
   private func drawFrame() {
     guard eglDisplay != nil, eglSurface != nil else { return }
     openGL.beginFrame(width: width, height: height, bufferScale: bufferScale)
 
-    // Pointer input is accumulated from the wl_pointer listener and drained
-    // once per frame, matching the Metal backend's event coalescing.
     updateFrameRate()
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
     let viewport = Size(width: Float(width), height: Float(height))

@@ -37,7 +37,6 @@ struct ClientStatistics {
       "\(decimal(Double(drawCalls) / Double(max(1, draws)), places: 0)) draws/frame",
       "\(decimal(Double(instances) / Double(max(1, draws)), places: 0)) instances/frame",
     ].joined(separator: " | ")
-    // FileHandle avoids C FILE* access and writes without a stdio flush boundary.
     FileHandle.standardOutput.write(Data((message + "\n").utf8))
     self = Self()
     startedAt = now

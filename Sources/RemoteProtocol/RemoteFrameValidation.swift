@@ -1,8 +1,5 @@
 import Chroma
 
-/// Presentation validation, separate from wire decoding so rejected frames can
-/// still update the connection's image cache. Zero-area primitives are legal;
-/// viewports must be at least one logical point per axis. Offscreen coordinates are legal.
 public enum RemoteFrameValidation {
   public static func isValidViewport(_ size: Size) -> Bool {
     size.width.isFinite && size.height.isFinite && size.width >= 1 && size.height >= 1

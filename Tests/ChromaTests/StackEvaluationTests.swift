@@ -32,7 +32,6 @@ struct StackEvaluationTests {
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
 
-    // No cross-frame body cache: drawing the same stack observes new content.
     counter.text = "after"
     var second = DrawList()
     context.interaction.beginFrame(input: InputState())

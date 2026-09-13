@@ -6,25 +6,16 @@ public struct RenderContext {
 
   public var selection: TextSelectionManager { interaction.textSelection }
 
-  /// Installs a provider for text copied outside Chroma's built-in selectable
-  /// text and editable controls. Platform clipboard backends consult it when an
-  /// editable control does not own an active text selection.
   public func setCopyTextProvider(_ provider: (@MainActor () -> String?)?) {
     interaction.onCopy = provider
   }
 
-  /// Installs a handler for Select All outside editable controls. Return `true`
-  /// when the app selected its custom content, or `false` to fall back to
-  /// Chroma's built-in selectable text.
   public func setSelectAllHandler(_ handler: (@MainActor () -> Bool)?) {
     interaction.onSelectAll = handler
   }
 
-  /// The current input mode. Activating an editable control enters editing mode;
-  /// ending editing or moving focus returns to movement mode.
   public var interactionMode: InteractionMode { interaction.mode }
 
-  /// The editor currently receiving keyboard input, or nil outside editing mode.
   public var activeTextInput: WidgetID? {
     interaction.isTextEditing ? interaction.editingLeaf : nil
   }
@@ -34,19 +25,12 @@ public struct RenderContext {
     nonmutating set { interaction.fontMetrics = newValue }
   }
 
-  /// The translated input for the current frame.
-  ///
-  /// Custom primitives should inspect this snapshot instead of mutating engine state.
   public var input: InputState { interaction.input }
 
-  /// The persisted origin of the active pointer drag. Unlike
-  /// `input.pointerPressPosition`, this remains available after the press frame.
   public var pointerDragOrigin: Point? { interaction.dragOrigin }
 
-  /// The latest pointer position captured for the active drag.
   public var pointerDragPosition: Point { interaction.dragCurrent }
 
-  /// Whether a pointer drag is currently active.
   public var isPointerDragging: Bool { interaction.isDragging }
 
   public init(theme: ChromaTheme = .dark, textScale: Float = 1) {
@@ -73,7 +57,6 @@ public struct RenderContext {
     return copy
   }
 
-  /// Registers an interactive leaf and returns its state for the current frame.
   public func buttonState(
     id: WidgetID, in rect: Rect, role: ActionRole = .normal,
     action: (@MainActor () -> Void)? = nil
@@ -81,13 +64,6 @@ public struct RenderContext {
     interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
   }
 
-  /// Registers an editable leaf and applies text input translated by the backend.
-  /// `onTextEvent` may consume an event by returning replacement text; nil uses
-  /// normal editing. It receives the current buffer, including earlier events.
-  ///
-  /// `onEndEditing` can intercept an end-editing request. Return `.handled` to
-  /// keep editing active, or `.ignored` to use the default behavior and leave
-  /// editing mode.
   public func textInputState(
     id: WidgetID,
     in rect: Rect,
@@ -112,7 +88,6 @@ public struct RenderContext {
     )
   }
 
-  /// Builds a scoped focus group for interactive children drawn by a custom primitive.
   public func withFocusGroup<Result>(
     _ axis: FocusAxis,
     in rect: Rect,
@@ -123,8 +98,6 @@ public struct RenderContext {
     return try body()
   }
 
-  /// Restricts hit testing for interactive children to `rect` for the duration of `body`.
-  /// Pair this with `DrawList.pushClip(_:)` when visual output must also be clipped.
   public func withInteractionClip<Result>(
     _ rect: Rect,
     _ body: () throws -> Result
@@ -134,23 +107,18 @@ public struct RenderContext {
     return try body()
   }
 
-  /// Invalidates the current view and asks the active renderer for another frame.
-  /// Call this after asynchronous state changes that affect visible output.
   public func requestRedraw() {
     interaction.requestRedraw()
   }
 
-  /// Ends editing without requiring focus to move to a different leaf.
   public func endEditing() {
     interaction.endEditing()
   }
 
-  /// Moves keyboard focus to a registered interactive leaf.
   public func focus(_ id: WidgetID, editing: Bool = false) {
     interaction.focus(id, editing: editing)
   }
 
-  /// Whether the focus group currently being drawn is selected as a group.
   public var isCurrentFocusGroupSelected: Bool {
     interaction.isCurrentGroupSelected
   }

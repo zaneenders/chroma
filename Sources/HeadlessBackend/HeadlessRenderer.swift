@@ -19,7 +19,6 @@ public final class HeadlessRenderer: Renderer {
   }
   private let frameProducer = FrameProducer()
 
-  /// Called after an observed model changes. Rendering remains explicitly driven by the caller.
   public var onRedrawRequested: (@MainActor () -> Void)?
   public var frameObserver: FrameObserver?
   public var onClose: (() -> Void)?
@@ -34,17 +33,11 @@ public final class HeadlessRenderer: Renderer {
     self.viewport = size
   }
 
-  /// Runs a single frame. Unlike a windowed backend, this method does not start
-  /// an event loop.
   public func run(title: String) {
     self.title = title
     _ = render()
   }
 
-  /// Evaluates `content` for one frame using the supplied input snapshot.
-  ///
-  /// Calling this repeatedly drives pointer, keyboard, scrolling, and text-input
-  /// behavior while retaining focus and interaction state between calls.
   @discardableResult
   public func render(input: InputState = InputState()) -> HeadlessFrame {
     let drawList = frameProducer.render(
@@ -58,7 +51,6 @@ public final class HeadlessRenderer: Renderer {
     return frame
   }
 
-  /// Invokes the same close callback used by windowed renderers.
   public func close() {
     frameProducer.reset()
     onClose?()
