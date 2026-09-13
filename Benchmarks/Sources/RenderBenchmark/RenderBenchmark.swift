@@ -102,7 +102,6 @@ struct RenderBenchmark {
       sequence = [frame.drawList]
       viewport = frame.viewport
       rasterScale = frame.rasterScale ?? Point(x: 1, y: 1)
-      // Stable content fingerprint for benchmark compatibility (not a security hash).
       let fingerprint = data.reduce(UInt64(14_695_981_039_346_656_037)) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 }
       scene = "capture-" + String(fingerprint, radix: 16)
     } else {
@@ -127,7 +126,6 @@ struct RenderBenchmark {
     var measurementStart = now()
     repeat {
       var durations: [String: Double] = [:]
-      // Restart at frame zero after warmup so all trials cover identical sequences.
       let sequenceIndex = iteration > warmup ? measured : iteration
       let source = sequence[sequenceIndex % sequence.count]
       var replay = source
@@ -148,7 +146,6 @@ struct RenderBenchmark {
         else {
           throw BenchmarkError.failed("Invalid replay frame")
         }
-        // Full correctness check once, outside timed regions; tests cover cached sequences.
         if iteration == 0, decoded != message { throw BenchmarkError.failed("Round-trip mismatch") }
         replay = DrawList(commands: commands)
       }
@@ -169,7 +166,6 @@ struct RenderBenchmark {
       }
       iteration += 1
       if iteration == warmup + 1 { measurementStart = now() }
-      // Allow the recorder task to start even while replaying a tight main-actor loop.
       await Task.yield()
     } while measured < frames || now() - measurementStart < seconds
     let report = Report(

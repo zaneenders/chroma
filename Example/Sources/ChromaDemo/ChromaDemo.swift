@@ -2,11 +2,11 @@
 import Chroma
 import DemoContent
 
-#if WAYLAND_BACKEND
+#if os(Linux)
 import WaylandBackend
 #endif
 
-#if WAYLAND_BACKEND
+#if os(Linux)
 private protocol DemoApp: WaylandApp {}
 #else
 private protocol DemoApp: App {}
@@ -47,7 +47,6 @@ struct ChromaDemo {
   }
 }
 
-// The native App runners construct Self(); configure the demo before entering them.
 private struct ConfiguredDemo: DemoApp {
   @MainActor static var configuration: DemoApplication?
   private let demo: DemoApplication

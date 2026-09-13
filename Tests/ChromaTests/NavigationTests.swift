@@ -2,7 +2,6 @@ import Testing
 
 @testable import Chroma
 
-/// Shorthand for building navigation command lists in interaction tests.
 func nav(_ commands: NavigationCommand...) -> [Command] {
   commands.map { .navigation($0) }
 }

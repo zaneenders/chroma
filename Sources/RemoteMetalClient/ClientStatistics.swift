@@ -20,20 +20,24 @@ struct ClientStatistics {
     let elapsed = now - startedAt
     guard elapsed >= 1 else { return }
     let frameCount = max(1, frames)
-    print(
-      String(
-        format:
-          "client %.1f received fps | %.1f rendered fps | %.2f Mbit/s | %.0f commands/frame | decode %.2f ms | CPU encode %.2f ms | GPU %.2f ms | request %.2f ms | %.0f draws/frame | %.0f instances/frame",
-        Double(frames) / elapsed, Double(draws) / elapsed,
-        Double(bytes) * 8 / elapsed / 1_000_000,
-        Double(commands) / Double(frameCount),
-        decodeTime * 1_000 / Double(frameCount),
-        renderTime * 1_000 / Double(max(1, draws)),
-        gpuTime * 1_000 / Double(max(1, gpuFrames)),
-        requestTime * 1_000 / Double(max(1, replies)),
-        Double(drawCalls) / Double(max(1, draws)),
-        Double(instances) / Double(max(1, draws))))
-    fflush(stdout)
+    func decimal(_ value: Double, places: Int = 2) -> String {
+      value.formatted(
+        .number.locale(Locale(identifier: "en_US_POSIX"))
+          .grouping(.never).precision(.fractionLength(places)))
+    }
+    let message = [
+      "client \(decimal(Double(frames) / elapsed, places: 1)) received fps",
+      "\(decimal(Double(draws) / elapsed, places: 1)) rendered fps",
+      "\(decimal(Double(bytes) * 8 / elapsed / 1_000_000)) Mbit/s",
+      "\(decimal(Double(commands) / Double(frameCount), places: 0)) commands/frame",
+      "decode \(decimal(decodeTime * 1_000 / Double(frameCount))) ms",
+      "CPU encode \(decimal(renderTime * 1_000 / Double(max(1, draws)))) ms",
+      "GPU \(decimal(gpuTime * 1_000 / Double(max(1, gpuFrames)))) ms",
+      "request \(decimal(requestTime * 1_000 / Double(max(1, replies)))) ms",
+      "\(decimal(Double(drawCalls) / Double(max(1, draws)), places: 0)) draws/frame",
+      "\(decimal(Double(instances) / Double(max(1, draws)), places: 0)) instances/frame",
+    ].joined(separator: " | ")
+    FileHandle.standardOutput.write(Data((message + "\n").utf8))
     self = Self()
     startedAt = now
   }

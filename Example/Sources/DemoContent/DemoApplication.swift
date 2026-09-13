@@ -24,7 +24,6 @@ public struct DemoApplication: App {
 
   public var title: String { "Chroma Demo" }
   public var windowSize: Size { Size(width: 1100, height: 720) }
-  public var minimumRefreshRate: Double { 30 }
 
   public var frameObserver: FrameObserver? {
     guard let capture else { return nil }

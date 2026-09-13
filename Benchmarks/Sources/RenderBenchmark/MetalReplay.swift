@@ -34,29 +34,21 @@ final class MetalReplay {
     self.texture = texture
   }
 
-  /// Serial completion deliberately prevents overwriting any in-flight pooled buffer.
-  /// CPU encoding excludes submission/wait; GPU timestamps exclude CPU preparation.
   func render(_ list: DrawList, viewport: Size) throws -> (cpu: Double, gpu: Double) {
     let pass = MTLRenderPassDescriptor()
     pass.colorAttachments[0].texture = texture
     pass.colorAttachments[0].loadAction = .clear
     pass.colorAttachments[0].storeAction = .store
-    guard let command = queue.makeCommandBuffer(),
-      let encoder = command.makeRenderCommandEncoder(descriptor: pass)
-    else {
-      throw BenchmarkError.failed("Metal command creation failed")
-    }
     let start = now()
-    renderer.encode(list, viewport: viewport, rasterScale: rasterScale, into: encoder)
-    encoder.endEncoding()
+    guard let prepared = try renderer.prepareFrame(
+      list, viewport: viewport, rasterScale: rasterScale, queue: queue, renderPass: pass)
+    else { throw BenchmarkError.failed("No Metal frame slot available") }
     let cpu = now() - start
-    command.commit()
-    command.waitUntilCompleted()
-    guard command.status == .completed else {
-      throw BenchmarkError.failed("Metal execution failed: \(String(describing: command.error))")
+    let completion = prepared.submit().waitUntilCompleted()
+    guard completion.succeeded else {
+      throw BenchmarkError.failed("Metal execution failed: \(completion.errorDescription ?? "unknown error")")
     }
-    renderer.finishFrame()
-    return (cpu, max(0, command.gpuEndTime - command.gpuStartTime))
+    return (cpu, completion.gpuDuration ?? 0)
   }
 }
 #endif

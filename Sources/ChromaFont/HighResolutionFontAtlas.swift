@@ -12,7 +12,6 @@ public struct FontAtlasMipLevel: Sendable {
   }
 }
 
-/// Prebuilt coverage and mipmaps shared by both GPU backends.
 public struct HighResolutionFontAtlas: Sendable {
   public static let scale = 3
   public static let columns = 32
@@ -49,39 +48,48 @@ public struct HighResolutionFontAtlas: Sendable {
 
   enum AssetError: Error { case invalidAtlas }
 
-  init(data: Data) throws {
-    // CATL, version, width, height, glyph count; all integers UInt32 LE.
-    let bytes = [UInt8](data)
+  init(data: Data) throws(AssetError) {
+    self = try Self(bytes: data.bytes)
+  }
+
+  private static func word(_ bytes: RawSpan, cursor: inout Int) throws(AssetError) -> UInt32 {
+    guard bytes.byteCount - cursor >= 4 else { throw AssetError.invalidAtlas }
+    defer { cursor += 4 }
+    return bytes.load(fromByteOffset: cursor, as: UInt32.self, .littleEndian)
+  }
+
+  private init(bytes: RawSpan) throws(AssetError) {
     var cursor = 0
-    func word() throws -> UInt32 {
-      guard bytes.count - cursor >= 4 else { throw AssetError.invalidAtlas }
-      defer { cursor += 4 }
-      return (0..<4).reduce(UInt32(0)) { $0 | UInt32(bytes[cursor + $1]) << ($1 * 8) }
-    }
-    guard try word() == 0x4C54_4143, try word() == 1 else { throw AssetError.invalidAtlas }
-    let width = Int(try word())
-    let height = Int(try word())
-    let count = Int(try word())
+    guard try Self.word(bytes, cursor: &cursor) == 0x4C54_4143,
+      try Self.word(bytes, cursor: &cursor) == 1
+    else { throw AssetError.invalidAtlas }
+    let width = Int(try Self.word(bytes, cursor: &cursor))
+    let height = Int(try Self.word(bytes, cursor: &cursor))
+    let count = Int(try Self.word(bytes, cursor: &cursor))
     let cellHeight = Self.sourceGlyphHeight * Self.scale + 2 * Self.padding
     guard width == Self.columns * (Self.sourceGlyphWidth * Self.scale + 2 * Self.padding),
       height > 0, height <= 4096, height % cellHeight == 0,
       count > 0, count <= (height / cellHeight) * Self.columns
     else { throw AssetError.invalidAtlas }
     var scalars: [UInt32] = []
-    for _ in 0..<count { scalars.append(try word()) }
+    for _ in 0..<count { scalars.append(try Self.word(bytes, cursor: &cursor)) }
     var levels: [FontAtlasMipLevel] = []
     var w = width
     var h = height
     while true {
       let size = w * h
-      guard bytes.count - cursor >= size else { throw AssetError.invalidAtlas }
-      levels.append(FontAtlasMipLevel(width: w, height: h, pixels: Array(bytes[cursor..<(cursor + size)])))
+      guard bytes.byteCount - cursor >= size else { throw AssetError.invalidAtlas }
+      let input = Span<UInt8>(viewing: bytes.extracting(cursor..<(cursor + size)))
+      let pixels = Array<UInt8>(capacity: size) { output in
+        for index in input.indices { output.append(input[index]) }
+      }
+      levels.append(FontAtlasMipLevel(width: w, height: h, pixels: pixels))
       cursor += size
       if w == 1 && h == 1 { break }
       w = max(1, w / 2)
       h = max(1, h / 2)
     }
-    guard cursor == bytes.count else { throw AssetError.invalidAtlas }
+    guard cursor == bytes.byteCount else { throw AssetError.invalidAtlas }
     var indices: [Character: Int] = [:]
     var scalarIndices: [UInt32: Int] = [:]
     for (index, value) in scalars.enumerated() {

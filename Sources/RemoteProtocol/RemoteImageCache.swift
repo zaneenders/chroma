@@ -1,9 +1,5 @@
 import Chroma
 
-/// Connection-scoped, serially accessed wire resources. Both peers use identical
-/// FIFO eviction (128 IDs / 64 MiB); an evicted resource is redefined inline on
-/// its next use. No independent client eviction or dropped encoded frames is safe.
-/// Failed encodes/decodes leave the caller's cache unchanged.
 public struct RemoteImageCache: Sendable {
   private var resources: [ImageID: ImageResource] = [:]
   private var order: [ImageID] = []

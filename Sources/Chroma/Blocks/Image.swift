@@ -1,9 +1,3 @@
-/// Displays an RGBA8 image at its intrinsic pixel size by default.
-///
-/// `scaling` controls how pixels are drawn when a parent or a `sizing` modifier
-/// assigns a rectangle with a different aspect ratio. `.contain` letterboxes,
-/// `.cover` crops to fill, and `.stretch` distorts to fill. Images do not claim
-/// extra stack space unless expansion is explicitly requested with `.sizing`.
 public struct Image: PrimitiveBlock {
   public var resource: ImageResource
   public var scaling: ImageScaling

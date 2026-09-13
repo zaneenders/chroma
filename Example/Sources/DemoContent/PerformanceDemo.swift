@@ -1,8 +1,10 @@
 import Chroma
 import DemoImages
 import Foundation
+import Observation
 
 @MainActor
+@Observable
 final class PerformanceDemoState {
   enum Palette: String, CaseIterable {
     case neon = "NEON"
@@ -29,6 +31,8 @@ final class PerformanceDemoState {
   var palette: Palette = .neon
   var shape: Shape = .mixed
   var isPaused = false
+  private let clock: @MainActor () -> TimeInterval
+  private let startedAt: TimeInterval
   var timeOffset: TimeInterval = 0
   var pauseStartedAt: TimeInterval?
   var burst = 0
@@ -36,7 +40,12 @@ final class PerformanceDemoState {
   var identifiers = (1...10_000).map { _ in UUID().uuidString }
   var lastAction = "Ready — choose a control"
 
-  init(itemCount: Int) {
+  init(
+    itemCount: Int,
+    clock: @escaping @MainActor () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+  ) {
+    self.clock = clock
+    startedAt = clock()
     image = DemoImages.mandelbrot
     self.itemCount = min(20_000, max(100, itemCount))
   }
@@ -69,7 +78,7 @@ final class PerformanceDemoState {
   }
 
   func togglePaused() {
-    let now = Date().timeIntervalSinceReferenceDate
+    let now = clock()
     if let pauseStartedAt {
       timeOffset += now - pauseStartedAt
       self.pauseStartedAt = nil
@@ -87,11 +96,15 @@ final class PerformanceDemoState {
     lastAction = "Burst #\(burst) randomized every phase"
   }
 
-  var speedLabel: String { String(format: "%.1f×", speed) }
+  var speedLabel: String {
+    speed.formatted(
+      .number.locale(Locale(identifier: "en_US_POSIX"))
+        .grouping(.never).precision(.fractionLength(1))) + "×"
+  }
 
-  func elapsedTime() -> Float {
-    let now = pauseStartedAt ?? Date().timeIntervalSinceReferenceDate
-    return Float(now - timeOffset) * speed
+  func elapsedTime(at timestamp: TimeInterval? = nil) -> Float {
+    let now = pauseStartedAt ?? timestamp ?? clock()
+    return Float(now - startedAt - timeOffset) * speed
   }
 }
 
@@ -216,8 +229,6 @@ private struct UUIDList: Block {
             state.uuidScrollController.scrollToBottom()
           }
         }
-        // LazyVStack owns its scroll viewport; wrapping it in ScrollView would
-        // give it the full content height and defeat visible-row culling.
         LazyVStack(
           id: WidgetID("remote.uuid.scroll"),
           data: state.identifiers.indices, rowHeight: 48, spacing: 5,
@@ -267,7 +278,8 @@ private struct ShapeCanvas: PrimitiveBlock {
     let rows = max(1, (count + columns - 1) / columns)
     let cellWidth = area.size.width / Float(columns)
     let cellHeight = area.size.height / Float(rows)
-    let elapsed = state.elapsedTime()
+    let frame = context.animationFrame(active: !state.isPaused)
+    let elapsed = state.elapsedTime(at: frame.timestamp)
     let burstPhase = Float(state.burst) * 1.731
 
     for index in 0..<count {

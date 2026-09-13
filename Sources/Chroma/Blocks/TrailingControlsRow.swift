@@ -1,5 +1,3 @@
-/// A bottom-aligned row that measures trailing controls first, then gives the
-/// leading content the remaining width. Fixed controls may overflow a narrow proposal.
 public struct TrailingControlsRow<Input: Block, Controls: Block>: PrimitiveBlock {
   let spacing: Float
   let input: Input

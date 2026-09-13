@@ -35,7 +35,6 @@ public struct Button: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let style = style ?? context.theme.button
     let state = context.buttonState(id: id, in: rect, role: role) { action() }
-    if state.clicked { action() }
 
     let background: Color
     switch state.phase {

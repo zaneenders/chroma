@@ -1,10 +1,10 @@
-#if WAYLAND_BACKEND
-
 import CGLES3
 import Chroma
 
-/// Owns OpenGL ES rendering resources. The caller must keep its EGL context
-/// current during setup, frame rendering, and cleanup.
+@diagnose(
+  StrictMemorySafety, as: ignored,
+  reason:
+    "OpenGL copies scoped upload buffers synchronously; buffer sizes and vertex offsets are checked before C calls.")
 @MainActor
 final class OpenGLRenderer {
   private var program: GLuint = 0
@@ -33,9 +33,11 @@ final class OpenGLRenderer {
   private func compileShader(_ type: GLenum, source: String, stage: String) throws -> GLuint {
     let shader = glCreateShader(type)
     source.withCString { sourcePointer in
-      var pointer: UnsafePointer<GLchar>? = unsafe UnsafePointer(sourcePointer)
-      var length = GLint(source.utf8.count)
-      unsafe glShaderSource(shader, 1, &pointer, &length)
+      var pointer: UnsafePointer<GLchar>? = sourcePointer
+      let length = GLint(exactly: source.utf8.count)
+      precondition(length != nil)
+      var byteCount = length!
+      unsafe glShaderSource(shader, 1, &pointer, &byteCount)
     }
     glCompileShader(shader)
     var succeeded: GLint = 0
@@ -102,7 +104,7 @@ final class OpenGLRenderer {
     glBindVertexArray(vao)
     unsafe glGenBuffers(1, &quadVBO)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), quadVBO)
-    corners.withUnsafeBytes {
+    corners.span.bytes.withUnsafeBytes {
       unsafe glBufferData(GLenum(GL_ARRAY_BUFFER), $0.count, $0.baseAddress, GLenum(GL_STATIC_DRAW))
     }
     glEnableVertexAttribArray(0)
@@ -112,11 +114,17 @@ final class OpenGLRenderer {
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
     glBufferData(GLenum(GL_ARRAY_BUFFER), MemoryLayout<GLQuad>.stride, nil, GLenum(GL_DYNAMIC_DRAW))
     let stride = GLsizei(MemoryLayout<GLQuad>.stride)
-    let offsets = [0, 8, 16, 24, 32, 48, 56, 72]
+    let offsets = [
+      MemoryLayout<GLQuad>.offset(of: \.dst0)!, MemoryLayout<GLQuad>.offset(of: \.dst1)!,
+      MemoryLayout<GLQuad>.offset(of: \.uv0)!, MemoryLayout<GLQuad>.offset(of: \.uv1)!,
+      MemoryLayout<GLQuad>.offset(of: \.color)!, MemoryLayout<GLQuad>.offset(of: \.size)!,
+      MemoryLayout<GLQuad>.offset(of: \.radii)!, MemoryLayout<GLQuad>.offset(of: \.shape)!,
+    ]
     let sizes: [GLint] = [2, 2, 2, 2, 4, 2, 4, 4]
     for index in offsets.indices {
       let attribute = GLuint(index + 1)
       glEnableVertexAttribArray(attribute)
+      precondition(offsets[index] + Int(sizes[index]) * MemoryLayout<Float>.size <= Int(stride))
       unsafe glVertexAttribPointer(
         attribute, sizes[index], GLenum(GL_FLOAT), GLboolean(GL_FALSE), stride,
         UnsafeRawPointer(bitPattern: offsets[index]))
@@ -132,6 +140,53 @@ final class OpenGLRenderer {
     glBlendFunc(GLenum(GL_SRC_ALPHA), GLenum(GL_ONE_MINUS_SRC_ALPHA))
   }
 
+  private func uploadTexture(
+    _ bytes: RawSpan, width: Int, height: Int, format: GLenum, level: GLint
+  ) {
+    precondition(format == GLenum(GL_RED) || format == GLenum(GL_RGBA))
+    precondition(width > 0 && height > 0 && level >= 0)
+    guard let glWidth = GLsizei(exactly: width), let glHeight = GLsizei(exactly: height) else {
+      preconditionFailure("Texture dimensions exceed GLsizei")
+    }
+    let (rowBytes, rowOverflow) = width.multipliedReportingOverflow(by: format == GLenum(GL_RED) ? 1 : 4)
+    let (byteCount, sizeOverflow) = rowBytes.multipliedReportingOverflow(by: height)
+    precondition(!rowOverflow && !sizeOverflow && byteCount == bytes.byteCount)
+    var alignment: GLint = 0
+    var rowLength: GLint = 0
+    var skipRows: GLint = 0
+    var skipPixels: GLint = 0
+    var pixelBuffer: GLint = 0
+    unsafe glGetIntegerv(GLenum(GL_UNPACK_ALIGNMENT), &alignment)
+    unsafe glGetIntegerv(GLenum(GL_UNPACK_ROW_LENGTH), &rowLength)
+    unsafe glGetIntegerv(GLenum(GL_UNPACK_SKIP_ROWS), &skipRows)
+    unsafe glGetIntegerv(GLenum(GL_UNPACK_SKIP_PIXELS), &skipPixels)
+    unsafe glGetIntegerv(GLenum(GL_PIXEL_UNPACK_BUFFER_BINDING), &pixelBuffer)
+    glBindBuffer(GLenum(GL_PIXEL_UNPACK_BUFFER), 0)
+    glPixelStorei(GLenum(GL_UNPACK_ALIGNMENT), 1)
+    glPixelStorei(GLenum(GL_UNPACK_ROW_LENGTH), 0)
+    glPixelStorei(GLenum(GL_UNPACK_SKIP_ROWS), 0)
+    glPixelStorei(GLenum(GL_UNPACK_SKIP_PIXELS), 0)
+    defer {
+      glBindBuffer(GLenum(GL_PIXEL_UNPACK_BUFFER), GLuint(bitPattern: pixelBuffer))
+      glPixelStorei(GLenum(GL_UNPACK_ALIGNMENT), alignment)
+      glPixelStorei(GLenum(GL_UNPACK_ROW_LENGTH), rowLength)
+      glPixelStorei(GLenum(GL_UNPACK_SKIP_ROWS), skipRows)
+      glPixelStorei(GLenum(GL_UNPACK_SKIP_PIXELS), skipPixels)
+    }
+    bytes.withUnsafeBytes { buffer in
+      unsafe glTexImage2D(
+        GLenum(GL_TEXTURE_2D), level, GLint(format), glWidth, glHeight, 0,
+        format, GLenum(GL_UNSIGNED_BYTE), buffer.baseAddress)
+    }
+  }
+
+  private func uploadQuad(_ quad: inout GLQuad) {
+    withUnsafeBytes(of: &quad) { bytes in
+      precondition(bytes.count <= MemoryLayout<GLQuad>.stride)
+      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, bytes.count, bytes.baseAddress)
+    }
+  }
+
   private func makeTexture(
     width: Int,
     height: Int,
@@ -141,11 +196,7 @@ final class OpenGLRenderer {
     var texture: GLuint = 0
     unsafe glGenTextures(1, &texture)
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
-    pixels.withUnsafeBytes {
-      unsafe glTexImage2D(
-        GLenum(GL_TEXTURE_2D), 0, GLint(GL_RGBA), GLsizei(width), GLsizei(height), 0,
-        GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), $0.baseAddress)
-    }
+    uploadTexture(pixels.span.bytes, width: width, height: height, format: GLenum(GL_RGBA), level: 0)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), filter)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), filter)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_S), GL_CLAMP_TO_EDGE)
@@ -160,18 +211,15 @@ final class OpenGLRenderer {
     var texture: GLuint = 0
     unsafe glGenTextures(1, &texture)
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
-    // Single-byte mip rows are tightly packed, even when their widths are not multiples of four.
     var unpackAlignment: GLint = 0
     unsafe glGetIntegerv(GLenum(GL_UNPACK_ALIGNMENT), &unpackAlignment)
     glPixelStorei(GLenum(GL_UNPACK_ALIGNMENT), 1)
     defer { glPixelStorei(GLenum(GL_UNPACK_ALIGNMENT), unpackAlignment) }
 
     for (level, mip) in atlas.mipLevels.enumerated() {
-      mip.pixels.withUnsafeBytes {
-        unsafe glTexImage2D(
-          GLenum(GL_TEXTURE_2D), GLint(level), GLint(GL_RED), GLsizei(mip.width),
-          GLsizei(mip.height), 0, GLenum(GL_RED), GLenum(GL_UNSIGNED_BYTE), $0.baseAddress)
-      }
+      uploadTexture(
+        mip.pixels.span.bytes, width: mip.width, height: mip.height,
+        format: GLenum(GL_RED), level: GLint(level))
     }
     glTexParameteri(
       GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_LINEAR_MIPMAP_LINEAR)
@@ -186,8 +234,6 @@ final class OpenGLRenderer {
     glClearColor(0.1, 0.1, 0.2, 1)
     glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
     glUseProgram(program)
-    // Geometry stays in logical surface coordinates; the larger viewport gives
-    // each logical unit bufferScale pixels without changing app layout.
     glUniform2f(resolutionUniform, Float(width), Float(height))
     glBindVertexArray(vao)
   }
@@ -246,9 +292,7 @@ final class OpenGLRenderer {
       shape: (0, 0, 0, 1))
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    withUnsafeBytes(of: &quad) {
-      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, $0.count, $0.baseAddress)
-    }
+    uploadQuad(&quad)
     glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
   }
 
@@ -270,11 +314,9 @@ final class OpenGLRenderer {
     var texture: GLuint = 0
     unsafe glGenTextures(1, &texture)
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
-    image.rgba8.withUnsafeBytes {
-      unsafe glTexImage2D(
-        GLenum(GL_TEXTURE_2D), 0, GLint(GL_RGBA), GLsizei(image.width), GLsizei(image.height), 0,
-        GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), $0.baseAddress)
-    }
+    uploadTexture(
+      image.rgba8.bytes, width: image.width, height: image.height,
+      format: GLenum(GL_RGBA), level: 0)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_LINEAR)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), GL_LINEAR)
     glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_S), GL_CLAMP_TO_EDGE)
@@ -310,9 +352,7 @@ final class OpenGLRenderer {
       color: (color.r, color.g, color.b, color.a))
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    withUnsafeBytes(of: &quad) {
-      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, $0.count, $0.baseAddress)
-    }
+    uploadQuad(&quad)
     glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
   }
 
@@ -324,8 +364,6 @@ final class OpenGLRenderer {
   ) {
     guard rect.size.width > 0, rect.size.height > 0 else { return }
     let radii = requestedRadii.normalized(for: rect.size)
-    // Extend the quad so derivative-based antialiasing is not clipped at the
-    // shape's logical bounds.
     let edgePadding: Float = 1
     let padded = Rect(
       x: rect.minX - edgePadding,
@@ -343,9 +381,7 @@ final class OpenGLRenderer {
       shape: (max(0, borderWidth), edgePadding, 1, 0))
     glBindTexture(GLenum(GL_TEXTURE_2D), whiteTexture)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    withUnsafeBytes(of: &quad) {
-      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, $0.count, $0.baseAddress)
-    }
+    uploadQuad(&quad)
     glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
   }
 
@@ -433,5 +469,3 @@ final class OpenGLRenderer {
     resolutionUniform = -1
   }
 }
-
-#endif

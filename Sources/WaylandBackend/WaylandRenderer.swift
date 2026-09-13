@@ -1,31 +1,30 @@
-#if WAYLAND_BACKEND
-
 import CEGL
-import Chroma
 import CWaylandClient
 import CWaylandEGL
 import CWaylandProtocols
+import Chroma
 import CoreFoundation
 import Dispatch
 import Foundation
 import Glibc
 
-/// A Wayland window backed by EGL and OpenGL ES 3.
-///
-/// This type owns the platform surface and consumes only
-/// backend-neutral `DrawList` commands produced by `BlockEngine`.
+@diagnose(
+  StrictMemorySafety, as: ignored,
+  reason:
+    "Wayland/EGL handles and listener storage are managed by setup/cleanup on the main actor; C interop annotations are being migrated."
+)
 @MainActor
 public final class WaylandRenderer: Renderer {
   public let name = "Wayland"
-  public var content: (any Block)?
+  private let frameProducer = FrameProducer()
+  public var content: (any Block)? {
+    didSet { frameProducer.reset() }
+  }
   public var frameObserver: FrameObserver?
   public var onClose: (() -> Void)?
 
   package let interaction = Interaction()
 
-  // xdg-shell configures surfaces in logical coordinates. The EGL window and
-  // GL viewport use buffer pixels so HiDPI outputs are rendered at native
-  // resolution instead of being upscaled by the compositor.
   private var width: Int32
   private var height: Int32
   private var bufferScale: Int32 = 1
@@ -125,8 +124,6 @@ public final class WaylandRenderer: Renderer {
     startEventSources()
     requestFrame()
 
-    // Foundation/libdispatch owns the outer event loop. Wayland, timers, and
-    // MainActor jobs are all sources on this loop, so none can starve another.
     while running {
       _ = RunLoop.main.run(mode: .default, before: .distantFuture)
     }
@@ -162,8 +159,6 @@ public final class WaylandRenderer: Renderer {
       failEventLoop(WaylandError("Wayland display dispatch failed"))
       return
     }
-    // Listener callbacks invalidate only when they change visible state. Frame
-    // callbacks therefore do not accidentally create a perpetual render loop.
     updateKeyboardRepeatTimer()
     flushWayland()
   }
@@ -253,12 +248,16 @@ public final class WaylandRenderer: Renderer {
 
   private static var frameListener = unsafe wl_callback_listener(
     done: { data, callback, _ in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      if let callback { unsafe wl_callback_destroy(callback) }
-      if renderer.frameCallback == callback { renderer.frameCallback = nil }
-      renderer.framePending = false
-      renderer.renderIfPossible()
+      nonisolated(unsafe) let callback = callback
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        if let callback { unsafe wl_callback_destroy(callback) }
+        if renderer.frameCallback == callback { renderer.frameCallback = nil }
+        renderer.framePending = false
+        renderer.renderIfPossible()
+      }
     }
   )
 
@@ -272,8 +271,6 @@ public final class WaylandRenderer: Renderer {
     running = false
     CFRunLoopStop(CFRunLoopGetMain())
   }
-
-  // MARK: Wayland
 
   private func setUpWayland(title: String) throws {
     display = unsafe wl_display_connect(nil)
@@ -351,7 +348,7 @@ public final class WaylandRenderer: Renderer {
     }
     let editingSessionGeneration = interaction.editingSessionGeneration
     var descriptors = [Int32](repeating: -1, count: 2)
-    guard pipe(&descriptors) == 0 else {
+    guard unsafe pipe(&descriptors) == 0 else {
       keyboard.completePaste(id: id, text: nil)
       return
     }
@@ -387,7 +384,9 @@ public final class WaylandRenderer: Renderer {
     guard var transfer = clipboardReads[fd] else { return }
     var buffer = [UInt8](repeating: 0, count: 16 * 1024)
     while true {
-      let count = read(fd, &buffer, buffer.count)
+      let count = buffer.withUnsafeMutableBytes { bytes in
+        unsafe read(fd, bytes.baseAddress, bytes.count)
+      }
       if count > 0 {
         guard transfer.data.count <= Self.maximumClipboardBytes - count else {
           finishClipboardRead(fd: fd, transfer: transfer, text: nil)
@@ -426,10 +425,15 @@ public final class WaylandRenderer: Renderer {
 
   private static var dataOfferListener = unsafe wl_data_offer_listener(
     offer: { data, offer, mimeType in
-      guard let data, let offer, let mimeType else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.offeredMIMETypes[offer, default: []].insert(
-        unsafe String(cString: mimeType))
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let mimeType = mimeType
+      nonisolated(unsafe) let offer = offer
+      MainActor.assumeIsolated {
+        guard let data, let offer, let mimeType else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.offeredMIMETypes[offer, default: []].insert(
+          unsafe String(cString: mimeType))
+      }
     },
     source_actions: { _, _, _ in },
     action: { _, _, _ in }
@@ -437,81 +441,107 @@ public final class WaylandRenderer: Renderer {
 
   private static var dataDeviceListener = unsafe wl_data_device_listener(
     data_offer: { data, _, offer in
-      guard let data, let offer else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.offeredMIMETypes[offer] = []
-      unsafe wl_data_offer_add_listener(
-        offer, &dataOfferListener, Unmanaged.passUnretained(renderer).toOpaque())
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let offer = offer
+      MainActor.assumeIsolated {
+        guard let data, let offer else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.offeredMIMETypes[offer] = []
+        unsafe wl_data_offer_add_listener(
+          offer, &dataOfferListener, Unmanaged.passUnretained(renderer).toOpaque())
+      }
     },
     enter: { data, _, _, _, _, _, offer in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      if let previous = renderer.dragOffer, previous != offer,
-        previous != renderer.selectionOffer
-      {
-        renderer.offeredMIMETypes.removeValue(forKey: previous)
-        unsafe wl_data_offer_destroy(previous)
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let offer = offer
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        if let previous = renderer.dragOffer, previous != offer,
+          previous != renderer.selectionOffer
+        {
+          renderer.offeredMIMETypes.removeValue(forKey: previous)
+          unsafe wl_data_offer_destroy(previous)
+        }
+        renderer.dragOffer = offer
       }
-      renderer.dragOffer = offer
     },
     leave: { data, _ in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
-        renderer.offeredMIMETypes.removeValue(forKey: offer)
-        unsafe wl_data_offer_destroy(offer)
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
+          renderer.offeredMIMETypes.removeValue(forKey: offer)
+          unsafe wl_data_offer_destroy(offer)
+        }
+        renderer.dragOffer = nil
       }
-      renderer.dragOffer = nil
     },
     motion: { _, _, _, _, _ in },
     drop: { data, _ in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
-        renderer.offeredMIMETypes.removeValue(forKey: offer)
-        unsafe wl_data_offer_destroy(offer)
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        if let offer = renderer.dragOffer, offer != renderer.selectionOffer {
+          renderer.offeredMIMETypes.removeValue(forKey: offer)
+          unsafe wl_data_offer_destroy(offer)
+        }
+        renderer.dragOffer = nil
       }
-      renderer.dragOffer = nil
     },
     selection: { data, _, offer in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      if let previous = renderer.selectionOffer, previous != offer {
-        if renderer.dragOffer == previous { renderer.dragOffer = nil }
-        renderer.offeredMIMETypes.removeValue(forKey: previous)
-        unsafe wl_data_offer_destroy(previous)
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let offer = offer
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        if let previous = renderer.selectionOffer, previous != offer {
+          if renderer.dragOffer == previous { renderer.dragOffer = nil }
+          renderer.offeredMIMETypes.removeValue(forKey: previous)
+          unsafe wl_data_offer_destroy(previous)
+        }
+        renderer.selectionOffer = offer
       }
-      renderer.selectionOffer = offer
     }
   )
 
   private static var dataSourceListener = unsafe wl_data_source_listener(
     target: { _, _, _ in },
     send: { data, source, _, fd in
-      guard let data, let source else {
-        close(fd)
-        return
-      }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      let bytes = renderer.clipboardSources[source] ?? Data()
-      DispatchQueue.global().async {
-        bytes.withUnsafeBytes { rawBuffer in
-          guard let base = rawBuffer.baseAddress else { return }
-          var offset = 0
-          while offset < rawBuffer.count {
-            let count = chroma_write_no_sigpipe(
-              fd, base.advanced(by: offset), rawBuffer.count - offset)
-            if count > 0 { offset += count } else if errno != EINTR { break }
-          }
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let source = source
+      MainActor.assumeIsolated {
+        guard let data, let source else {
+          close(fd)
+          return
         }
-        close(fd)
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let bytes = renderer.clipboardSources[source] ?? Data()
+        DispatchQueue.global().async {
+          bytes.bytes.withUnsafeBytes { rawBuffer in
+            guard let base = rawBuffer.baseAddress else { return }
+            var offset = 0
+            while offset < rawBuffer.count {
+              let count = unsafe chroma_write_no_sigpipe(
+                fd, base.advanced(by: offset), rawBuffer.count - offset)
+              if count > 0 { offset += count } else if errno != EINTR { break }
+            }
+          }
+          close(fd)
+        }
       }
     },
     cancelled: { data, source in
-      guard let data, let source else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.clipboardSources.removeValue(forKey: source)
-      unsafe wl_data_source_destroy(source)
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let source = source
+      MainActor.assumeIsolated {
+        guard let data, let source else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.clipboardSources.removeValue(forKey: source)
+        unsafe wl_data_source_destroy(source)
+      }
     },
     dnd_drop_performed: { _, _ in },
     dnd_finished: { _, _ in },
@@ -520,39 +550,44 @@ public final class WaylandRenderer: Renderer {
 
   private static var registryListener = unsafe wl_registry_listener(
     global: { data, registry, name, interface, version in
-      guard let data, let registry, let interface else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      switch unsafe String(cString: interface) {
-      case "wl_compositor":
-        renderer.compositor = unsafe OpaquePointer(
-          wl_registry_bind(registry, name, &compositorInterface, min(version, 6)))
-        renderer.setUpCursorIfReady()
-      case "xdg_wm_base":
-        renderer.wmBase = unsafe OpaquePointer(
-          wl_registry_bind(registry, name, &wmBaseInterface, min(version, 2)))
-        if let wmBase = renderer.wmBase {
-          unsafe xdg_wm_base_add_listener(
-            wmBase, &wmBaseListener, Unmanaged.passUnretained(renderer).toOpaque())
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let interface = interface
+      nonisolated(unsafe) let registry = registry
+      MainActor.assumeIsolated {
+        guard let data, let registry, let interface else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        switch unsafe String(cString: interface) {
+        case "wl_compositor":
+          renderer.compositor = unsafe OpaquePointer(
+            wl_registry_bind(registry, name, &compositorInterface, min(version, 6)))
+          renderer.setUpCursorIfReady()
+        case "xdg_wm_base":
+          renderer.wmBase = unsafe OpaquePointer(
+            wl_registry_bind(registry, name, &wmBaseInterface, min(version, 2)))
+          if let wmBase = renderer.wmBase {
+            unsafe xdg_wm_base_add_listener(
+              wmBase, &wmBaseListener, Unmanaged.passUnretained(renderer).toOpaque())
+          }
+        case "wl_seat":
+          renderer.seat = unsafe OpaquePointer(
+            wl_registry_bind(registry, name, &seatInterface, min(version, 5)))
+          if let seat = renderer.seat {
+            unsafe wl_seat_add_listener(
+              seat, &seatListener, Unmanaged.passUnretained(renderer).toOpaque())
+          }
+          renderer.setUpDataDeviceIfReady()
+        case "wl_data_device_manager":
+          renderer.dataDeviceVersion = min(version, 3)
+          renderer.dataDeviceManager = unsafe OpaquePointer(
+            wl_registry_bind(
+              registry, name, &dataDeviceManagerInterface, renderer.dataDeviceVersion))
+          renderer.setUpDataDeviceIfReady()
+        case "wl_shm":
+          renderer.shm = unsafe OpaquePointer(
+            wl_registry_bind(registry, name, &shmInterface, min(version, 1)))
+          renderer.setUpCursorIfReady()
+        default: break
         }
-      case "wl_seat":
-        renderer.seat = unsafe OpaquePointer(
-          wl_registry_bind(registry, name, &seatInterface, min(version, 5)))
-        if let seat = renderer.seat {
-          unsafe wl_seat_add_listener(
-            seat, &seatListener, Unmanaged.passUnretained(renderer).toOpaque())
-        }
-        renderer.setUpDataDeviceIfReady()
-      case "wl_data_device_manager":
-        renderer.dataDeviceVersion = min(version, 3)
-        renderer.dataDeviceManager = unsafe OpaquePointer(
-          wl_registry_bind(
-            registry, name, &dataDeviceManagerInterface, renderer.dataDeviceVersion))
-        renderer.setUpDataDeviceIfReady()
-      case "wl_shm":
-        renderer.shm = unsafe OpaquePointer(
-          wl_registry_bind(registry, name, &shmInterface, min(version, 1)))
-        renderer.setUpCursorIfReady()
-      default: break
       }
     },
     global_remove: { _, _, _ in }
@@ -564,30 +599,34 @@ public final class WaylandRenderer: Renderer {
 
   private static var seatListener = unsafe wl_seat_listener(
     capabilities: { data, seat, capabilities in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      let hasPointer = (capabilities & WL_SEAT_CAPABILITY_POINTER.rawValue) != 0
-      if hasPointer, renderer.pointer == nil, let seat {
-        renderer.pointer = unsafe wl_seat_get_pointer(seat)
-        if let pointer = renderer.pointer {
-          unsafe wl_pointer_add_listener(
-            pointer, &pointerListener, Unmanaged.passUnretained(renderer).toOpaque())
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let seat = seat
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let hasPointer = (capabilities & WL_SEAT_CAPABILITY_POINTER.rawValue) != 0
+        if hasPointer, renderer.pointer == nil, let seat {
+          renderer.pointer = unsafe wl_seat_get_pointer(seat)
+          if let pointer = renderer.pointer {
+            unsafe wl_pointer_add_listener(
+              pointer, &pointerListener, Unmanaged.passUnretained(renderer).toOpaque())
+          }
+        } else if !hasPointer, let pointer = renderer.pointer {
+          unsafe wl_pointer_destroy(pointer)
+          renderer.pointer = nil
         }
-      } else if !hasPointer, let pointer = renderer.pointer {
-        unsafe wl_pointer_destroy(pointer)
-        renderer.pointer = nil
-      }
-      let hasKeyboard = (capabilities & WL_SEAT_CAPABILITY_KEYBOARD.rawValue) != 0
-      if hasKeyboard, renderer.wlKeyboard == nil, let seat {
-        renderer.wlKeyboard = unsafe wl_seat_get_keyboard(seat)
-        if let keyboard = renderer.wlKeyboard {
-          unsafe wl_keyboard_add_listener(
-            keyboard, &keyboardListener, Unmanaged.passUnretained(renderer).toOpaque())
+        let hasKeyboard = (capabilities & WL_SEAT_CAPABILITY_KEYBOARD.rawValue) != 0
+        if hasKeyboard, renderer.wlKeyboard == nil, let seat {
+          renderer.wlKeyboard = unsafe wl_seat_get_keyboard(seat)
+          if let keyboard = renderer.wlKeyboard {
+            unsafe wl_keyboard_add_listener(
+              keyboard, &keyboardListener, Unmanaged.passUnretained(renderer).toOpaque())
+          }
+        } else if !hasKeyboard, let keyboard = renderer.wlKeyboard {
+          renderer.keyboard.focusLost()
+          unsafe wl_keyboard_destroy(keyboard)
+          renderer.wlKeyboard = nil
         }
-      } else if !hasKeyboard, let keyboard = renderer.wlKeyboard {
-        renderer.keyboard.focusLost()
-        unsafe wl_keyboard_destroy(keyboard)
-        renderer.wlKeyboard = nil
       }
     },
     name: { _, _, _ in }
@@ -595,117 +634,150 @@ public final class WaylandRenderer: Renderer {
 
   private static var keyboardListener = unsafe wl_keyboard_listener(
     keymap: { data, _, format, fd, size in
-      guard let data, format == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1.rawValue else {
-        if fd >= 0 { close(fd) }
-        return
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data, format == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1.rawValue else {
+          if fd >= 0 { close(fd) }
+          return
+        }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.keyboard.installKeymap(fd: fd, size: size)
       }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.keyboard.installKeymap(fd: fd, size: size)
     },
     enter: { data, _, serial, _, _ in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.latestInputSerial = serial
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.latestInputSerial = serial
+      }
     },
     leave: { data, _, _, _ in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.keyboard.focusLost()
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.keyboard.focusLost()
+      }
     },
     key: { data, _, serial, _, key, state in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.latestInputSerial = serial
-      if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
-        renderer.keyboard.keyPressed(
-          key,
-          editing: renderer.interaction.mode == .editing,
-          editingSession: renderer.interaction.editingSessionGeneration,
-          now: ProcessInfo.processInfo.systemUptime
-        )
-        renderer.requestFrame()
-      } else {
-        renderer.keyboard.keyReleased(key)
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.latestInputSerial = serial
+        if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
+          renderer.keyboard.keyPressed(
+            key,
+            editing: renderer.interaction.mode == .editing,
+            editingSession: renderer.interaction.editingSessionGeneration,
+            now: ProcessInfo.processInfo.systemUptime
+          )
+          renderer.requestFrame()
+        } else {
+          renderer.keyboard.keyReleased(key)
+        }
       }
     },
     modifiers: { data, _, _, depressed, latched, locked, group in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.keyboard.updateModifiers(
-        depressed: depressed, latched: latched, locked: locked, group: group)
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.keyboard.updateModifiers(
+          depressed: depressed, latched: latched, locked: locked, group: group)
+      }
     },
     repeat_info: { data, _, rate, delay in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.keyboard.updateRepeatInfo(rate: rate, delay: delay)
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.keyboard.updateRepeatInfo(rate: rate, delay: delay)
+      }
     }
   )
 
   private static let pointerEnter:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, OpaquePointer?, Int32, Int32) -> Void = {
       data, pointer, serial, eventSurface, surfaceX, surfaceY in
-      guard let data, let eventSurface else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      guard eventSurface == renderer.surface else { return }
-      if let pointer { renderer.cursor.apply(pointer: pointer, serial: serial) }
-      renderer.input.pointerEntered(
-        x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
-      renderer.requestFrame()
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let eventSurface = eventSurface
+      nonisolated(unsafe) let pointer = pointer
+      MainActor.assumeIsolated {
+        guard let data, let eventSurface else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        guard eventSurface == renderer.surface else { return }
+        if let pointer { renderer.cursor.apply(pointer: pointer, serial: serial) }
+        renderer.input.pointerEntered(
+          x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+        renderer.requestFrame()
+      }
     }
 
   private static let pointerLeave:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, OpaquePointer?) -> Void = {
       data, _, _, eventSurface in
-      guard let data, let eventSurface else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      guard eventSurface == renderer.surface else { return }
-      renderer.input.pointerLeft()
-      renderer.requestFrame()
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let eventSurface = eventSurface
+      MainActor.assumeIsolated {
+        guard let data, let eventSurface else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        guard eventSurface == renderer.surface else { return }
+        renderer.input.pointerLeft()
+        renderer.requestFrame()
+      }
     }
 
   private static let pointerMotion:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, Int32, Int32) -> Void = {
       data, _, _, surfaceX, surfaceY in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.input.pointerMoved(
-        x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
-      renderer.requestFrame()
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.input.pointerMoved(
+          x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+        renderer.requestFrame()
+      }
     }
 
   private static let pointerButton:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, UInt32, UInt32, UInt32) -> Void = {
       data, _, serial, _, button, state in
-      guard let data, button == btnLeft else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.latestInputSerial = serial
-      switch state {
-      case WL_POINTER_BUTTON_STATE_PRESSED.rawValue:
-        renderer.input.pointerPressed()
-      case WL_POINTER_BUTTON_STATE_RELEASED.rawValue:
-        renderer.input.pointerReleased()
-      default: break
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data, button == btnLeft else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.latestInputSerial = serial
+        switch state {
+        case WL_POINTER_BUTTON_STATE_PRESSED.rawValue:
+          renderer.input.pointerPressed()
+        case WL_POINTER_BUTTON_STATE_RELEASED.rawValue:
+          renderer.input.pointerReleased()
+        default: break
+        }
+        renderer.requestFrame()
       }
-      renderer.requestFrame()
     }
 
   private static let pointerAxis:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, UInt32, Int32) -> Void = {
-      data, _, _, axis, value in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      // Wayland axis values describe content movement, while Chroma's scroll
-      // delta follows AppKit's gesture direction. Flip the sign at the backend
-      // boundary so wheel and touchpad scrolling move the viewport naturally.
-      let delta = -fixedToFloat(value)
-      switch axis {
-      case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
-        renderer.input.scrollBy(x: delta, y: 0)
-      case WL_POINTER_AXIS_VERTICAL_SCROLL.rawValue:
-        renderer.input.scrollBy(x: 0, y: delta)
-      default: break
+      data, _, time, axis, value in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let delta = -fixedToFloat(value)
+        switch axis {
+        case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
+          renderer.input.scrollBy(x: delta, y: 0, time: time)
+        case WL_POINTER_AXIS_VERTICAL_SCROLL.rawValue:
+          renderer.input.scrollBy(x: 0, y: delta, time: time)
+        default: break
+        }
+        renderer.requestFrame()
       }
-      renderer.requestFrame()
     }
 
   private static var pointerListener = unsafe wl_pointer_listener(
@@ -715,8 +787,24 @@ public final class WaylandRenderer: Renderer {
     button: pointerButton,
     axis: pointerAxis,
     frame: { _, _ in },
-    axis_source: { _, _, _ in },
-    axis_stop: { _, _, _, _ in },
+    axis_source: { data, _, source in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.input.scrollSource(isFinger: source == WL_POINTER_AXIS_SOURCE_FINGER.rawValue)
+      }
+    },
+    axis_stop: { data, _, time, axis in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.input.stopScroll(
+          horizontal: axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue, time: time)
+        renderer.requestFrame()
+      }
+    },
     axis_discrete: { _, _, _, _ in },
     axis_value120: { _, _, _, _ in },
     axis_relative_direction: { _, _, _, _ in },
@@ -727,36 +815,47 @@ public final class WaylandRenderer: Renderer {
     enter: { _, _, _ in },
     leave: { _, _, _ in },
     preferred_buffer_scale: { data, surface, factor in
-      guard let data, let surface, factor > 0 else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      guard factor != renderer.bufferScale else { return }
-      renderer.bufferScale = factor
-      unsafe wl_surface_set_buffer_scale(surface, factor)
-      renderer.resizeEGLWindow()
-      renderer.requestFrame()
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let surface = surface
+      MainActor.assumeIsolated {
+        guard let data, let surface, factor > 0 else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        guard factor != renderer.bufferScale else { return }
+        renderer.bufferScale = factor
+        unsafe wl_surface_set_buffer_scale(surface, factor)
+        renderer.resizeEGLWindow()
+        renderer.requestFrame()
+      }
     },
     preferred_buffer_transform: { _, _, _ in }
   )
 
   private static var xdgSurfaceListener = unsafe xdg_surface_listener(
     configure: { data, xdgSurface, serial in
-      unsafe xdg_surface_ack_configure(xdgSurface, serial)
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.configured = true
-      renderer.requestFrame()
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let xdgSurface = xdgSurface
+      MainActor.assumeIsolated {
+        unsafe xdg_surface_ack_configure(xdgSurface, serial)
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.configured = true
+        renderer.requestFrame()
+      }
     }
   )
 
   private static let configureCallback:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, Int32, Int32, UnsafeMutablePointer<wl_array>?) -> Void = {
       data, _, width, height, _ in
-      guard let data, width > 0, height > 0 else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      renderer.width = width
-      renderer.height = height
-      renderer.resizeEGLWindow()
-      renderer.requestFrame()
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data, width > 0, height > 0 else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.width = width
+        renderer.height = height
+        renderer.resizeEGLWindow()
+        renderer.requestFrame()
+      }
     }
 
   private func resizeEGLWindow() {
@@ -768,17 +867,18 @@ public final class WaylandRenderer: Renderer {
   private static var toplevelListener = unsafe xdg_toplevel_listener(
     configure: configureCallback,
     close: { data, _ in
-      guard let data else { return }
-      let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
-      guard renderer.running else { return }
-      renderer.onClose?()
-      renderer.stopEventLoop()
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        guard renderer.running else { return }
+        renderer.onClose?()
+        renderer.stopEventLoop()
+      }
     },
     configure_bounds: { _, _, _, _ in },
     wm_capabilities: { _, _, _ in }
   )
-
-  // MARK: EGL / GLES
 
   private func setUpEGL() throws {
     guard let display, let surface else { throw WaylandError("Wayland surface is unavailable") }
@@ -792,19 +892,19 @@ public final class WaylandRenderer: Renderer {
 
     var config: EGLConfig?
     var count: EGLint = 0
-    var attributes: [EGLint] = [
+    let attributes: [EGLint] = [
       EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
       EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
       EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT_KHR,
       EGL_NONE,
     ]
-    attributes.withUnsafeMutableBufferPointer {
+    attributes.withUnsafeBufferPointer {
       _ = unsafe eglChooseConfig(eglDisplay, $0.baseAddress, &config, 1, &count)
     }
     guard count > 0, config != nil else { throw WaylandError("no EGL ES3 window config") }
 
-    var contextAttributes: [EGLint] = [EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE]
-    eglContext = contextAttributes.withUnsafeMutableBufferPointer {
+    let contextAttributes: [EGLint] = [EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE]
+    eglContext = contextAttributes.withUnsafeBufferPointer {
       unsafe eglCreateContext(eglDisplay, config, nil, $0.baseAddress)
     }
     guard eglContext != nil else { throw WaylandError("eglCreateContext failed") }
@@ -822,35 +922,23 @@ public final class WaylandRenderer: Renderer {
     _ = unsafe eglSwapInterval(eglDisplay, 1)
   }
 
-  // MARK: DrawList consumption
-
   private func drawFrame() {
     guard eglDisplay != nil, eglSurface != nil else { return }
     openGL.beginFrame(width: width, height: height, bufferScale: bufferScale)
 
-    // Pointer input is accumulated from the wl_pointer listener and drained
-    // once per frame, matching the Metal backend's event coalescing.
     updateFrameRate()
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
-    interaction.beginFrame(input: input.frameInput())
-
     let viewport = Size(width: Float(width), height: Float(height))
-    var drawList = DrawList()
-    if let content {
-      BlockEngine.draw(
-        content,
-        into: &drawList,
-        in: Rect(origin: .zero, size: viewport),
-        context: context
-      )
-    }
-    interaction.endFrame()
+    let drawList = frameProducer.render(
+      content: content, viewport: viewport, input: input.frameInput(), context: context,
+      onChange: { [weak self] in self?.requestFrame() })
     frameObserver?(
       FrameObservation(
         drawList: drawList, viewport: viewport, rasterScale: Point(x: Float(bufferScale), y: Float(bufferScale))))
     _ = interaction.consumeRedrawRequest()
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
+    if frameProducer.needsAnimationFrame || input.hasScrollMomentum { dirty = true }
   }
 
   private func updateFrameRate() {
@@ -870,6 +958,7 @@ public final class WaylandRenderer: Renderer {
   }
 
   private func cleanup() {
+    frameProducer.reset()
     interaction.onRedrawRequested = nil
     refreshTimer?.cancel()
     keyboardRepeatTimer?.cancel()
@@ -961,5 +1050,3 @@ private func fixedToFloat(_ value: Int32) -> Float {
 }
 
 private let btnLeft: UInt32 = 0x110
-
-#endif

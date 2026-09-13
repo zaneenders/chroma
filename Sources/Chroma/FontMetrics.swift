@@ -1,7 +1,6 @@
 public struct FontMetrics: Equatable, Sendable {
   public var glyphWidth: Float = 20
   public var glyphHeight: Float = 28
-  // Noto Sans Mono: 36 pixels of advance at 3x atlas resolution.
   public var cellAdvance: Float = 12
   public var lineAdvance: Float = 32
 

@@ -13,8 +13,8 @@ struct AppTests {
 
     #expect(renderer.title == "App \(app.identifier) — Test")
     #expect(renderer.minimumRefreshRate == 12)
-    let content = renderer.content as? TupleBlock
-    #expect((content?.children.first as? AppContent)?.identifier == app.identifier)
+    let root = renderer.content as? DeferredBlock<TupleBlock>
+    #expect((root?.body.children.first as? AppContent)?.identifier == app.identifier)
   }
 
   @Test func runPropagatesBackendErrors() {

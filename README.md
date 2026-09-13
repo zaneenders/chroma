@@ -1,73 +1,25 @@
 # Chroma
 
-UI library written in Swift.
-
-⚠️ Unstable: Heavy AI • Active API [dogfooding](https://github.com/zaneenders/scribe)
-
-## Run
+Swift UI library for macOS 27+ (Metal) and Linux (Wayland/EGL/OpenGL ES).
+Requires Swift 6.4+; toolchain pinned in `.swift-version`.
 
 ```sh
-swift run --package-path Example ChromaDemo
+swiftly install
+swiftly run swift run --package-path Example ChromaDemo
+swiftly run swift test
+swiftly run swift test --package-path Example
+swiftly run swift test --package-path Benchmarks -c release
 ```
 
-Requires Swift 6.3. On macOS, the demo launches a local backend subprocess and
-Metal client. Linux uses Wayland/EGL/OpenGL ES.
-
-For separate remote sessions:
+Remote demo (separate terminals; rebuild both together):
 
 ```sh
 swift run --package-path Example -c release RemoteDemoDaemon
 swift run --package-path Example -c release RemoteDemoClient
 ```
 
-Remote rendering is an unauthenticated prototype: use a trusted connection or
-protected tunnel. See [Examples](Example/README.md) for options and scene capture.
+Remote connections are unauthenticated: use a trusted connection or protected tunnel.
+Benchmarks: `Benchmarks/Scripts/run.sh Benchmarks/results/baseline`.
 
-## Test
-
-```sh
-swift test
-swift test --package-path Example
-```
-
-[Rendering benchmarks and capture replay](Benchmarks/README.md).
-
-## macOS rendering architecture
-
-macOS applications use `RemoteServer` for the block graph and interaction state,
-and `RemoteMetalClient` for the window, input transport, and GPU presentation.
-Local apps use the same protocol over loopback; see the owned subprocess launcher
-in `Example/Sources/ChromaDemo/ManagedDemo.swift`.
-
-The former in-process `MetalApp` and `MetalRenderer` APIs have been removed.
-`MetalBackend` now supplies display-list rendering and input capture to the remote
-client, not a second application runner. Headless rendering and the Linux Wayland
-runner remain available.
-
-### Single-font API and wire format
-
-Text uses one bundled font. `FontFace`, `.fontFace(...)`, and `face:` arguments
-have been removed; use `FontMetrics.cellAdvance` for character spacing.
-Remote wire version 4 removes the font-face byte from text commands. Rebuild
-clients and servers together; captures from older wire versions must be recorded
-again.
-
-### Remote input limits
-
-Each server connection has a bounded NIO-to-main-actor mailbox: at most 256
-queued messages or 8 MiB of queued wire payloads. Delivery preserves input order
-and yields after 32 messages so input bursts do not monopolize the main actor.
-An overloaded connection is closed, rather than silently dropping key/button
-events; queued input is discarded on disconnect. These are handoff limits, not
-a replacement for the protocol's per-message validation or authentication.
-
-`swift test --filter RemoteLoopbackTests` exercises real loopback TCP reconnects,
-disconnects during frame encoding and clipboard operations, and server shutdown.
-It does not require a Metal window.
-
-## Bundled font license
-
-Chroma's single text font is derived from Noto Sans Mono under SIL OFL 1.1.
-Distributions must include the ChromaFont resource bundle containing the prebuilt
-font atlas and `OFL.txt`. The atlas is loaded from that bundle at runtime.
-See [font provenance and regeneration](Sources/ChromaFont/README.md).
+Bundled font: Noto Sans Mono (SIL OFL 1.1). Distribute the ChromaFont resource bundle,
+including [OFL.txt](Sources/ChromaFont/Resources/OFL.txt).

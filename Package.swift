@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 import PackageDescription
 
 var products: [Product] = [
@@ -29,13 +29,15 @@ var targets: [Target] = [
       .product(name: "NIOCore", package: "swift-nio"),
     ]
   ),
-  .target(name: "Chroma"),
+  .target(name: "Chroma", swiftSettings: [.strictMemorySafety()]),
   .target(
-    name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")]),
+    name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")],
+    swiftSettings: [.strictMemorySafety()]),
   .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
   .target(
     name: "RemoteProtocol",
-    dependencies: ["Chroma", .product(name: "NIOCore", package: "swift-nio")]
+    dependencies: ["Chroma", .product(name: "NIOCore", package: "swift-nio")],
+    swiftSettings: [.strictMemorySafety()]
   ),
   .target(
     name: "RemoteServer",
@@ -44,36 +46,22 @@ var targets: [Target] = [
       .product(name: "Logging", package: "swift-log"),
       .product(name: "NIOCore", package: "swift-nio"),
       .product(name: "NIOPosix", package: "swift-nio"),
-    ]
+    ],
+    swiftSettings: [.strictMemorySafety()]
   ),
 ]
-var backendTraits: Set<Trait> = []
-var defaultBackendTraits: Set<String> = []
-
-// Native backends and their build tooling are host-specific. SwiftPM traits can
-// condition dependency edges and settings, but cannot condition products or
-// target declarations; declaring both backends would make `swift build` probe
-// Wayland system libraries on macOS and Metal build tooling on Linux.
 #if os(macOS)
-backendTraits.insert(
-  .trait(
-    name: "MetalBackend",
-    description: "Build the native Metal backend on macOS."
-  )
-)
-defaultBackendTraits.insert("MetalBackend")
 products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))
 products.append(.library(name: "RemoteMetalClient", targets: ["RemoteMetalClient"]))
 targets.append(contentsOf: [
+  .testTarget(name: "MetalBackendTests", dependencies: ["MetalBackend"]),
   .testTarget(name: "RemoteMetalClientTests", dependencies: ["RemoteMetalClient", "Chroma", "RemoteProtocol"]),
   .target(
     name: "MetalBackend",
     dependencies: ["Chroma", "ChromaFont"],
     exclude: ["Shaders"],
-    // The product is only declared on macOS. Its API remains available whether
-    // or not the demo-selection trait is enabled.
-    swiftSettings: [.define("METAL_BACKEND")],
-    plugins: [.plugin(name: "MetalSourcePlugin")]
+    swiftSettings: [.strictMemorySafety()],
+    plugins: [.plugin(name: "ShaderSourcePlugin")]
   ),
   .target(
     name: "RemoteMetalClient",
@@ -82,27 +70,19 @@ targets.append(contentsOf: [
       .product(name: "NIOCore", package: "swift-nio"),
       .product(name: "NIOPosix", package: "swift-nio"),
     ],
-    swiftSettings: [.define("METAL_BACKEND")]
-  ),
-  .executableTarget(name: "MetalSourceGenerator"),
-  .plugin(
-    name: "MetalSourcePlugin",
-    capability: .buildTool(),
-    dependencies: ["MetalSourceGenerator"]
+    swiftSettings: [.strictMemorySafety()]
   ),
 ])
 #endif
 
 #if os(Linux)
-backendTraits.insert(
-  .trait(
-    name: "WaylandBackend",
-    description: "Build the native Wayland/EGL/OpenGL ES backend on Linux."
-  )
-)
-defaultBackendTraits.insert("WaylandBackend")
 products.append(.library(name: "WaylandBackend", targets: ["WaylandBackend"]))
 targets.append(contentsOf: [
+  .testTarget(
+    name: "WaylandBackendTests",
+    dependencies: ["WaylandBackend"],
+    swiftSettings: [.strictMemorySafety()]
+  ),
   .target(
     name: "WaylandBackend",
     dependencies: [
@@ -117,16 +97,8 @@ targets.append(contentsOf: [
       "CXKBKeyboard",
     ],
     exclude: ["Shaders"],
-    // The product is only declared on Linux. Its API remains available whether
-    // or not the demo-selection trait is enabled.
-    swiftSettings: [.define("WAYLAND_BACKEND")],
-    plugins: [.plugin(name: "WaylandSourcePlugin")]
-  ),
-  .executableTarget(name: "WaylandSourceGenerator"),
-  .plugin(
-    name: "WaylandSourcePlugin",
-    capability: .buildTool(),
-    dependencies: ["WaylandSourceGenerator"]
+    swiftSettings: [.strictMemorySafety()],
+    plugins: [.plugin(name: "ShaderSourcePlugin")]
   ),
   .systemLibrary(
     name: "CWaylandClient",
@@ -168,13 +140,29 @@ targets.append(contentsOf: [
 ])
 #endif
 
+#if os(macOS) || os(Linux)
+targets.append(contentsOf: [
+  .executableTarget(name: "ShaderSourceGenerator"),
+  .plugin(
+    name: "ShaderSourcePlugin",
+    capability: .buildTool(),
+    dependencies: ["ShaderSourceGenerator"]
+  ),
+])
+#endif
+
+for target in targets where target.type != .plugin && target.type != .system {
+  if ["CWaylandProtocols", "CXKBKeyboard"].contains(target.name) {
+    target.cSettings = (target.cSettings ?? []) + [.treatAllWarnings(as: .error)]
+  } else {
+    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+  }
+}
+
 let package = Package(
   name: "chroma",
-  platforms: [.macOS(.v26)],
+  platforms: [.macOS(.v27)],
   products: products,
-  traits: backendTraits.union([
-    .default(enabledTraits: defaultBackendTraits)
-  ]),
   dependencies: [
     .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.101.0"),

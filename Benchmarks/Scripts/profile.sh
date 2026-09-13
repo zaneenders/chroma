@@ -28,7 +28,6 @@ while [ ! -S "$socket" ]; do
   attempt=$((attempt + 1))
   sleep 0.1
 done
-# Skip startup/cold frame work before sampling sustained replay.
 sleep 2
 curl --fail --silent --show-error --max-time 15 --unix-socket "$socket" \
   -d '{"numberOfSamples":500,"timeInterval":"10ms"}' \

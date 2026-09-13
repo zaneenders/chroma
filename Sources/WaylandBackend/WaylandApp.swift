@@ -1,5 +1,3 @@
-#if WAYLAND_BACKEND
-
 import Chroma
 
 public protocol WaylandApp: App {}
@@ -12,5 +10,3 @@ extension WaylandApp {
 
   }
 }
-
-#endif

@@ -1,6 +1,6 @@
 @MainActor
 extension Interaction {
-  func textInputBehavior(
+  func updateTextInput(
     id: WidgetID,
     rect: Rect,
     text: String,
@@ -11,11 +11,6 @@ extension Interaction {
     pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
-    guard let parent = builderStack.last else {
-      preconditionFailure("textInputBehavior outside of a frame; call beginFrame first")
-    }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
-
     let selected = selectedLeafID == id
     let held = pressedLeaf == id && input.pointerDown
 
@@ -40,6 +35,21 @@ extension Interaction {
     var editing = editingLeaf == id
     if editing {
       editingText = text
+      if input.textEvents.isEmpty && !isProcessingDrag {
+        if inputLengthText != text {
+          inputLengthText = text
+          inputLength = text.count
+        }
+        caretOffset = max(0, min(caretOffset, inputLength))
+        if let selection = textSelectionRange {
+          let lower = max(0, min(selection.lowerBound, inputLength))
+          let upper = max(lower, min(selection.upperBound, inputLength))
+          textSelectionRange = lower == upper ? nil : lower..<upper
+        }
+        return TextInputState(
+          hovered: selected, held: held, editing: true,
+          caretOffset: caretOffset, selectionRange: textSelectionRange)
+      }
       var characters = Array(text)
       caretOffset = max(0, min(caretOffset, characters.count))
       if let selection = textSelectionRange {
@@ -49,8 +59,6 @@ extension Interaction {
       }
 
       if isProcessingDrag, let origin = dragOrigin, rect.contains(origin) {
-        // Keep the origin's hit-test stable if moving the caret scrolls the viewport
-        // on a later drag frame.
         let viewportCaret = caretOffset
         let offset: (Point) -> Int = { point in
           if let pointerOffset { return pointerOffset(point, viewportCaret) }
@@ -78,8 +86,6 @@ extension Interaction {
         }
         switch event {
         case .copy, .cut, .paste:
-          // TODO: is continue the best way to handle this?
-          // Backends own the pasteboard and intercept these before delivery.
           continue
         case .insert(let inserted):
           if let range = textSelectionRange {
@@ -183,4 +189,48 @@ extension Interaction {
       selectionRange: editing ? textSelectionRange : nil)
   }
 
+}
+
+@MainActor
+extension Interaction {
+  func registerTextInput(
+    id: WidgetID, rect: Rect, text: @escaping @MainActor () -> String,
+    onChange: @escaping @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
+  ) -> TextInputState {
+    guard let parent = builderStack.last else {
+      preconditionFailure("registerTextInput outside of a frame")
+    }
+    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
+    buildingInputHandlers[id] = { [weak self] in
+      guard let self else { return }
+      _ = self.updateTextInput(
+        id: id, rect: rect, text: text(), onChange: onChange, onSubmit: onSubmit,
+        onEndEditing: onEndEditing, onTextEvent: onTextEvent,
+        pointerOffset: pointerOffset, verticalOffset: verticalOffset)
+    }
+    let editing = editingLeaf == id
+    if editing {
+      let currentText = text()
+      if inputLengthText != currentText {
+        inputLengthText = currentText
+        inputLength = currentText.count
+      }
+      editingText = currentText
+      caretOffset = max(0, min(caretOffset, inputLength))
+      if let selection = textSelectionRange {
+        let lower = max(0, min(selection.lowerBound, inputLength))
+        let upper = max(lower, min(selection.upperBound, inputLength))
+        textSelectionRange = lower == upper ? nil : lower..<upper
+      }
+    }
+    return TextInputState(
+      hovered: selectedLeafID == id, held: pressedLeaf == id && input.pointerDown,
+      editing: editing, caretOffset: editing ? caretOffset : nil,
+      selectionRange: editing ? textSelectionRange : nil)
+  }
 }

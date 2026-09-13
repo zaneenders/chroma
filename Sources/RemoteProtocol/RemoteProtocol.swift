@@ -18,17 +18,16 @@ public enum RemoteMessage: Equatable, Sendable {
   case clipboard(ClipboardTransfer)
   case viewport(Size)
   case input(sequence: UInt64, state: InputState)
-  /// Requests one fresh server-side display-list snapshot. The client uses this
-  /// to pace production to its own display loop and avoids queuing stale frames.
   case requestFrame
+  case waitForFrame
   case frameRate(Float)
   case frameUnchanged
   case frame(id: UInt64, inputSequence: UInt64, viewport: Size, commands: [DrawCommand])
 }
 
 public enum RemoteWire {
-  public static let magic: UInt32 = 0x4348_524D  // CHRM
-  public static let version: UInt16 = 4
+  public static let magic: UInt32 = 0x4348_524D
+  public static let version: UInt16 = 5
   public static let maximumClipboardBytes = 1024 * 1024
   public static let maximumPayloadBytes = 64 * 1024 * 1024
   public static let maximumCommandsPerFrame = 1_000_000
@@ -41,10 +40,10 @@ public enum RemoteWire {
     case viewport = 1
     case input = 2
     case frame = 3
+    case waitForFrame = 9
     case requestFrame = 4
   }
 
-  /// Encodes a self-contained message without retaining resources between calls.
   public static func encode(
     _ message: RemoteMessage, allocator: ByteBufferAllocator = .init()
   ) throws -> ByteBuffer {
@@ -86,6 +85,8 @@ public enum RemoteWire {
       payload.writeFloat(fps)
     case .frameUnchanged:
       type = .frameUnchanged
+    case .waitForFrame:
+      type = .waitForFrame
     case .requestFrame:
       type = .requestFrame
     case .frame(let id, let inputSequence, let viewport, let commands):
@@ -112,7 +113,6 @@ public enum RemoteWire {
     return result
   }
 
-  /// Decodes one complete message, returning nil until the buffer contains it all.
   public static func decode(from buffer: inout ByteBuffer, images: inout RemoteImageCache) throws -> RemoteMessage? {
     guard buffer.readableBytes >= 12 else { return nil }
     guard
@@ -159,6 +159,8 @@ public enum RemoteWire {
       message = .frameRate(fps)
     case .frameUnchanged:
       message = .frameUnchanged
+    case .waitForFrame:
+      message = .waitForFrame
     case .requestFrame:
       message = .requestFrame
     case .frame:
@@ -166,9 +168,6 @@ public enum RemoteWire {
       let sequence = try payload.read(UInt64.self)
       let viewport = try payload.readSize()
       let count = Int(try payload.read(UInt32.self))
-      // Every command occupies at least its one-byte tag. Reject impossible
-      // counts before reserving so an untrusted peer cannot force a huge
-      // allocation with a tiny payload.
       guard count <= maximumCommandsPerFrame, count <= payload.readableBytes else {
         throw RemoteProtocolError.malformedMessage
       }
@@ -412,7 +411,6 @@ extension ImageScaling {
   }
 }
 
-/// Text is a platform-produced insertion candidate, separate from key identity.
 public struct RemoteKeyEvent: Codable, Equatable, Sendable {
   public var chord: KeyChord?
   public var text: String?
@@ -422,8 +420,6 @@ public struct RemoteKeyEvent: Codable, Equatable, Sendable {
   }
 }
 
-/// A nil text in a request means read; a non-nil text means write.
-/// Replies acknowledge writes or supply text for reads. IDs refer to input sequences.
 public struct ClipboardTransfer: Codable, Equatable, Sendable {
   public var id: UInt64
   public var isReply: Bool

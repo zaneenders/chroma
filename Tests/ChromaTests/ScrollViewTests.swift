@@ -210,6 +210,7 @@ struct ScrollViewTests {
       interaction.endFrame()
     }
 
+    frame()
     frame(
       InputState(
         pointerPosition: Point(x: 10, y: 10),
@@ -337,7 +338,6 @@ struct ScrollViewTests {
       #expect(built.count <= 4)
     }
 
-    // Nonzero collection startIndex must work too.
     let data = Array(0..<10_001).dropFirst()
     frame(data)
     #expect(built == [1, 2, 3])
@@ -348,7 +348,6 @@ struct ScrollViewTests {
     frame(data, width: 200)
     #expect(built == [1, 2, 3])
 
-    // Fresh content for same positions, without manual invalidation.
     frame(Array(20_001..<30_001)[...])
     #expect(built == [20_001, 20_002, 20_003])
     controller.scroll(to: 12)
@@ -367,14 +366,16 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
     let counter = DrawCounter()
 
+    let retainedRows = (0..<5).map { index in
+      LazyVStack.Row(
+        id: WidgetID("row-\(index)"),
+        content: CountedRow(index: index, height: 10, counter: counter))
+    }
+
     func frame(_ indices: [Int], width: Float = 100) {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
-      let rows = indices.map { index in
-        LazyVStack.Row(
-          id: WidgetID("row-\(index)"),
-          content: CountedRow(index: index, height: 10, counter: counter))
-      }
+      let rows = indices.map { retainedRows[$0] }
       BlockEngine.draw(
         LazyVStack(id: scrollID, controller: controller, rows: rows),
         into: &list, in: Rect(x: 0, y: 0, width: width, height: 100),

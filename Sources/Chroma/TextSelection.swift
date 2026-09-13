@@ -1,3 +1,5 @@
+import Observation
+
 struct PlainTextLayout: Equatable {
   var text: String
   var rect: Rect
@@ -45,6 +47,7 @@ struct PlainTextLayoutRegistry {
   }
 }
 
+@Observable
 @MainActor
 public final class TextSelectionManager {
   private var originLayoutRect: Rect? = nil
@@ -53,7 +56,7 @@ public final class TextSelectionManager {
   private(set) var selectionEnd: Int?
   public private(set) var isSelecting: Bool = false
 
-  var layoutRegistry = PlainTextLayoutRegistry()
+  @ObservationIgnored var layoutRegistry = PlainTextLayoutRegistry()
 
   public init() {}
 

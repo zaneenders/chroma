@@ -35,7 +35,7 @@ struct ClipboardProtocolTests {
     let transfer = try clipboardTransfer(encodedBytes: RemoteWire.maximumClipboardBytes, isReply: isReply)
     #expect(try JSONEncoder().encode(transfer).count == 1024 * 1024)
     var wire = try RemoteWire.encode(.clipboard(transfer))
-    #expect(wire.readableBytes == 1024 * 1024 + 12)  // Wire header is outside the payload limit.
+    #expect(wire.readableBytes == 1024 * 1024 + 12)
     #expect(try RemoteWire.decode(from: &wire) == .clipboard(transfer))
     #expect(wire.readableBytes == 0)
   }
@@ -50,11 +50,10 @@ struct ClipboardProtocolTests {
       _ = try RemoteWire.encode(.clipboard(transfer))
     }
 
-    // Bypass the encoder to verify that an oversized incoming message is also rejected.
     var wire = ByteBuffer()
     wire.writeInteger(RemoteWire.magic, endianness: .little)
     wire.writeInteger(RemoteWire.version, endianness: .little)
-    wire.writeInteger(UInt16(6), endianness: .little)  // Clipboard message type
+    wire.writeInteger(UInt16(6), endianness: .little)
     wire.writeInteger(UInt32(payload.count), endianness: .little)
     wire.writeBytes(payload)
     #expect(throws: RemoteProtocolError.messageTooLarge(size)) {
@@ -87,7 +86,6 @@ struct ClipboardProtocolTests {
   }
 
   @Test func clipboardLimitIncludesJSONEscaping() {
-    // The raw text fits within 1 MiB, but each NUL requires six JSON bytes.
     let text = String(repeating: "\u{0000}", count: 200 * 1024)
     #expect(text.utf8.count < RemoteWire.maximumClipboardBytes)
     #expect(throws: RemoteProtocolError.self) {

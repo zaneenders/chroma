@@ -1,5 +1,10 @@
 @MainActor
 public enum BlockEngine {
+  static func resolve(_ block: any Block) -> any PrimitiveBlock {
+    if let primitive = block as? any PrimitiveBlock { return primitive }
+    return resolve(block.body)
+  }
+
   public static func measure(
     _ block: any Block,
     proposal: Size,

@@ -1,8 +1,6 @@
 import NIOCore
 import RemoteProtocol
 
-/// Always produces a correlated failure reply for an oversized paste, instead
-/// of leaving the server's input queue blocked until its clipboard timeout.
 enum ClipboardReplyEncoder {
   static func encode(_ reply: ClipboardTransfer) throws -> (bytes: ByteBuffer, notification: String?) {
     do {

@@ -1,13 +1,6 @@
-#if WAYLAND_BACKEND
-
 import Chroma
+import Foundation
 
-/// Accumulates Wayland pointer events between frames, mirroring the Metal
-/// backend's ``ChromaInputView/frameInput()`` semantics.
-///
-/// Edge-triggered state (press, release) and scroll deltas pile up between
-/// frames; ``frameInput()`` drains them into the frame's immutable
-/// ``InputState`` snapshot.
 @MainActor
 final class InputAccumulator {
   private var pointerPosition = Point(x: -1, y: -1)
@@ -19,9 +12,36 @@ final class InputAccumulator {
   private var commands: [Command] = []
   private var textEvents: [TextEditEvent] = []
 
-  /// Drains accumulated events into a frame snapshot. Edge-triggered fields
-  /// and scroll deltas reset for the next frame.
+  private var fingerScrolling = false
+  private var horizontalMomentum = ScrollMomentum()
+  private var verticalMomentum = ScrollMomentum()
+
+  var hasScrollMomentum: Bool { horizontalMomentum.isActive || verticalMomentum.isActive }
+
+  func scrollSource(isFinger: Bool) {
+    if !isFinger { cancelMomentum() }
+    fingerScrolling = isFinger
+  }
+
+  private func cancelMomentum() {
+    horizontalMomentum.cancel()
+    verticalMomentum.cancel()
+  }
+
+  func stopScroll(horizontal: Bool, time: UInt32) {
+    guard fingerScrolling else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    if horizontal {
+      horizontalMomentum.stop(time: time, now: now)
+    } else {
+      verticalMomentum.stop(time: time, now: now)
+    }
+  }
+
   func frameInput() -> InputState {
+    let now = ProcessInfo.processInfo.systemUptime
+    scroll.x += horizontalMomentum.advance(now: now)
+    scroll.y += verticalMomentum.advance(now: now)
     let input = InputState(
       pointerPosition: pointerPosition,
       pointerPressPosition: pointerPressPosition,
@@ -57,10 +77,13 @@ final class InputAccumulator {
   }
 
   func pointerLeft() {
+    cancelMomentum()
+    fingerScrolling = false
     pointerPosition = Point(x: -1, y: -1)
   }
 
   func pointerPressed() {
+    cancelMomentum()
     pointerPressPosition = pointerPosition
     pointerDown = true
     pressedEdge = true
@@ -71,10 +94,14 @@ final class InputAccumulator {
     releasedEdge = true
   }
 
-  func scrollBy(x: Float, y: Float) {
+  func scrollBy(x: Float, y: Float, time: UInt32) {
+    if fingerScrolling {
+      if x != 0 { horizontalMomentum.record(delta: x, time: time) }
+      if y != 0 { verticalMomentum.record(delta: y, time: time) }
+    } else {
+      cancelMomentum()
+    }
     scroll.x += x
     scroll.y += y
   }
 }
-
-#endif

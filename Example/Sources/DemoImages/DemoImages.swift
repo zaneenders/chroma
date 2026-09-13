@@ -1,7 +1,6 @@
 import Chroma
 import Foundation
 
-/// Shared, lazily generated bitmaps for the native and remote demos.
 public enum DemoImages {
   public static let mandelbrot: ImageResource = {
     let width = 640

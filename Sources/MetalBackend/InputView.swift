@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import AppKit
 import Chroma
 import MetalKit
@@ -59,7 +57,7 @@ public final class ChromaInputView: MTKView {
   }
 
   public override func mouseDown(with event: NSEvent) {
-    window?.makeFirstResponder(self)
+    unsafe window?.makeFirstResponder(self)
     updatePointer(with: event)
     pointerPressPosition = pointerPosition
     pointerDown = true
@@ -146,5 +144,3 @@ public final class ChromaInputView: MTKView {
     )
   }
 }
-
-#endif

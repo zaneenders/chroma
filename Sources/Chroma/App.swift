@@ -10,9 +10,6 @@ public protocol App {
 
   var windowSize: Size { get }
 
-  /// The baseline number of frames rendered each second, even when there is no input.
-  /// Input and explicit redraw requests may render additional frames. Set to `0` to
-  /// render only when a redraw is requested.
   var minimumRefreshRate: Double { get }
 
   var keyBindings: KeyBindings { get }
@@ -32,7 +29,7 @@ extension App {
     renderer.setMinimumRefreshRate(minimumRefreshRate)
     renderer.setKeyBindings(keyBindings)
     renderer.frameObserver = frameObserver
-    renderer.content = body
+    renderer.content = DeferredBlock { self.body }
     try renderer.run(title: "\(title) — \(renderer.name)")
   }
 }

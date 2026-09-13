@@ -1,5 +1,3 @@
-import Foundation
-
 public struct TextField: PrimitiveBlock {
   public var id: WidgetID
   public var placeholder: String
@@ -61,7 +59,7 @@ public struct TextField: PrimitiveBlock {
       return min(0, offset)
     }
     let state = context.textInputState(
-      id: id, in: rect, text: getText(), onChange: onChange, onSubmit: onSubmit,
+      id: id, in: rect, text: getText, onChange: onChange, onSubmit: onSubmit,
       pointerOffset: { point, viewportCaret in
         guard cellWidth > 0, cellWidth.isFinite else { return 0 }
         return Int(
@@ -103,7 +101,9 @@ public struct TextField: PrimitiveBlock {
         at: Point(x: inner.minX + textOffset, y: inner.minY),
         color: style.foreground,
         scale: scale)
-      let selected = String(Array(text)[selection])
+      let characters = Array(text)
+      let safeSelection = selection.clamped(to: 0..<characters.count)
+      let selected = String(characters[safeSelection])
       drawList.pushClip(selectionRect)
       drawList.text(
         selected,
@@ -121,7 +121,7 @@ public struct TextField: PrimitiveBlock {
         scale: scale)
     }
     if let caret = state.caretOffset, state.selectionRange == nil,
-      Self.caretVisible
+      context.caretVisible
     {
       drawList.fillRect(
         Rect(
@@ -134,7 +134,4 @@ public struct TextField: PrimitiveBlock {
     drawList.popClip()
   }
 
-  private static var caretVisible: Bool {
-    Date().timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) < 0.72
-  }
 }

@@ -14,7 +14,14 @@ public struct HeadlessFrame: Equatable, Sendable {
 public final class HeadlessRenderer: Renderer {
   public let name = "Headless"
 
-  public var content: (any Block)?
+  public var content: (any Block)? {
+    didSet { frameProducer.reset() }
+  }
+  private let frameProducer = FrameProducer()
+
+  public var needsAnimationFrame: Bool { frameProducer.needsAnimationFrame }
+
+  public var onRedrawRequested: (@MainActor () -> Void)?
   public var frameObserver: FrameObserver?
   public var onClose: (() -> Void)?
   public var viewport: Size
@@ -28,30 +35,17 @@ public final class HeadlessRenderer: Renderer {
     self.viewport = size
   }
 
-  /// Runs a single frame. Unlike a windowed backend, this method does not start
-  /// an event loop.
   public func run(title: String) {
     self.title = title
     _ = render()
   }
 
-  /// Evaluates `content` for one frame using the supplied input snapshot.
-  ///
-  /// Calling this repeatedly drives pointer, keyboard, scrolling, and text-input
-  /// behavior while retaining focus and interaction state between calls.
   @discardableResult
   public func render(input: InputState = InputState()) -> HeadlessFrame {
-    interaction.beginFrame(input: input)
-    var drawList = DrawList()
-    if let content {
-      BlockEngine.draw(
-        content,
-        into: &drawList,
-        in: Rect(origin: .zero, size: viewport),
-        context: context
-      )
-    }
-    interaction.endFrame()
+    let drawList = frameProducer.render(
+      content: content, viewport: viewport, input: input, context: context,
+      onChange: { [weak self] in self?.onRedrawRequested?() })
+    _ = interaction.consumeRedrawRequest()
     frameObserver?(FrameObservation(drawList: drawList, viewport: viewport))
 
     let frame = HeadlessFrame(viewport: viewport, commands: drawList.commands)
@@ -59,8 +53,8 @@ public final class HeadlessRenderer: Renderer {
     return frame
   }
 
-  /// Invokes the same close callback used by windowed renderers.
   public func close() {
+    frameProducer.reset()
     onClose?()
   }
 }

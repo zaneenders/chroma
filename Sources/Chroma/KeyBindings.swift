@@ -13,9 +13,7 @@ public struct KeyModifiers: OptionSet, Hashable, Sendable, Codable {
   public static let shift = Self(rawValue: 1 << 0)
   public static let control = Self(rawValue: 1 << 1)
   public static let option = Self(rawValue: 1 << 2)
-  /// The physical Command modifier on Apple keyboards.
   public static let command = Self(rawValue: 1 << 3)
-  /// The physical Logo/Super modifier used by Linux desktop environments.
   public static let superKey = Self(rawValue: 1 << 4)
 }
 
@@ -80,8 +78,6 @@ public struct KeyBindings: Sendable {
 
   public func command(for chord: KeyChord) -> Command?? { entries[chord] }
 
-  /// Printable input belongs to the focused editor, not navigation shortcuts.
-  /// Modified shortcuts (copy, paste, etc.) still resolve through the keymap.
   public func prefersTextInsertion(
     chord: KeyChord?, text: String?, isTextEditing: Bool
   ) -> Bool {
@@ -93,8 +89,6 @@ public struct KeyBindings: Sendable {
     return chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true
   }
 
-
-  /// Returns a keymap where bindings in `content` shadow this map.
   public func overlay(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> KeyBindings {
     var result = self
     for binding in content() { result.entries[binding.chord] = .some(binding.command) }
@@ -108,7 +102,6 @@ public struct KeyBindings: Sendable {
   }
 }
 
-// A portable key identity; never serialize platform event objects.
 extension Key: Codable {
   private static var special: [Key] {
     [

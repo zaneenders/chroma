@@ -26,13 +26,11 @@ struct RemoteDemoDaemon {
     let host = arguments.first ?? "127.0.0.1"
     let port = arguments.dropFirst().first.flatMap(Int.init) ?? 9328
     let itemCount = arguments.dropFirst(2).first.flatMap(Int.init) ?? 2_000
-    // The remote display currently targets macOS, regardless of the daemon host.
     let demo = DemoApplication(itemCount: itemCount, shortcutModifier: .command, captureConfiguration: capture)
 
     if benchmark {
       let renderer = HeadlessRenderer(size: demo.windowSize)
       renderer.content = demo.body
-      // Report cold layout separately from steady-state frames with cached row sizes.
       var total: TimeInterval = 0
       var commandCount = 0
       var encodeTotal: TimeInterval = 0
@@ -57,18 +55,16 @@ struct RemoteDemoDaemon {
         precondition(decoded != nil && wire.readableBytes == 0)
         let decodeElapsed = ProcessInfo.processInfo.systemUptime - decodeStarted
         if frame == 0 {
-          print(String(format: "cold draw %.2f ms | %d commands", elapsed * 1000, commandCount))
+          print("cold draw \(milliseconds(elapsed)) ms | \(commandCount) commands")
         } else {
           total += elapsed
           encodeTotal += encodeElapsed
           decodeTotal += decodeElapsed
         }
       }
-      print(String(format: "mean draw %.2f ms | %d commands | 60 frames", total * 1000 / 60, commandCount))
+      print("mean draw \(milliseconds(total / 60)) ms | \(commandCount) commands | 60 frames")
       print(
-        String(
-          format: "mean wire encode %.2f ms | decode %.2f ms | %d bytes/frame",
-          encodeTotal * 1000 / 60, decodeTotal * 1000 / 60, wireBytes))
+        "mean wire encode \(milliseconds(encodeTotal / 60)) ms | decode \(milliseconds(decodeTotal / 60)) ms | \(wireBytes) bytes/frame")
       return
     }
 
@@ -78,4 +74,10 @@ struct RemoteDemoDaemon {
     print("Click the controls in the remote window or use j/f/d/k and Enter")
     server.run()
   }
+}
+
+private func milliseconds(_ seconds: Double) -> String {
+  (seconds * 1000).formatted(
+    .number.locale(Locale(identifier: "en_US_POSIX"))
+      .grouping(.never).precision(.fractionLength(2)))
 }

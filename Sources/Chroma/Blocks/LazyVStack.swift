@@ -1,7 +1,11 @@
 public struct LazyVStack: PrimitiveBlock {
   public struct Row {
     public var id: WidgetID
-    public var content: any Block
+    public var content: any Block {
+      didSet { measurementIdentity = LazyRowIdentity() }
+    }
+    // Copies retain measurements; replacing content or constructing a row invalidates them.
+    var measurementIdentity = LazyRowIdentity()
 
     public init(id: WidgetID, content: any Block) {
       self.id = id
@@ -39,18 +43,6 @@ public struct LazyVStack: PrimitiveBlock {
     self.rows = rows
   }
 
-  /// A virtualized stack with an explicit, uniform row height in logical points.
-  ///
-  /// Unlike the measured `rows:` initializer, this initializer neither constructs
-  /// nor measures offscreen content. Data must support random access; only rows
-  /// intersecting the viewport are built, including on the first frame and after
-  /// jumping to the bottom. The builder is evaluated afresh so data and theme
-  /// changes do not require an application-owned content cache.
-  ///
-  /// The height is a layout contract, not an estimate. Include padding in it.
-  /// Use stable widget IDs in interactive row content to preserve interaction
-  /// identity when items move. This stack owns its scroll viewport and should
-  /// not be wrapped in a ScrollView.
   @MainActor public init<Data: RandomAccessCollection, Content: Block>(
     id: WidgetID,
     data: Data,
@@ -78,6 +70,7 @@ public struct LazyVStack: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let interaction = context.interaction
     interaction.registerScrollViewport(rect)
+    interaction.registerScrollInput(id: id, rect: rect)
     let contentHeight: Float
     if let uniformRows {
       contentHeight =
@@ -93,19 +86,6 @@ public struct LazyVStack: PrimitiveBlock {
     let previousLimit = interaction.scrollLimit(for: id)
     var offset = min(interaction.scrollOffset(for: id), maximumOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
-
-    if rect.contains(interaction.input.pointerPosition) {
-      offset -= interaction.input.scrollDelta.y
-    }
-    for command in interaction.input.commands {
-      switch command {
-      case .navigation(.pageUp): offset -= rect.size.height
-      case .navigation(.pageDown): offset += rect.size.height
-      case .navigation(.home): offset = 0
-      case .navigation(.end): offset = maximumOffset
-      default: break
-      }
-    }
 
     if let request = controller.request {
       switch request {
@@ -135,7 +115,6 @@ public struct LazyVStack: PrimitiveBlock {
     let visibleBottom = offset + rect.size.height
     if let uniformRows {
       let stride = uniformRows.height + spacing
-      // Clamp in floating point before converting to Int, including empty data.
       let first = Int(
         min(
           Float(uniformRows.count),
@@ -160,7 +139,7 @@ public struct LazyVStack: PrimitiveBlock {
     } else {
       var y: Float = 0
       for index in rows.indices {
-        let height = controller.lazyStackCache.rowSizes[index].height
+        let height = controller.lazyStackCache.measurements[index].size.height
         let bottom = y + height
         if bottom >= visibleTop && y <= visibleBottom {
           BlockEngine.draw(
@@ -191,33 +170,40 @@ public struct LazyVStack: PrimitiveBlock {
 
   @MainActor private func updateCache(width: Float, context: RenderContext) {
     let cache = controller.lazyStackCache
-    // Stable rows already have measured sizes. Avoid rebuilding a dictionary
-    // and two arrays on every animation or input frame.
-    if cache.width == width && cache.rowIDs.count == rows.count
+    let environment = LazyMeasurementEnvironment(
+      textScale: context.textScale, fontMetrics: context.fontMetrics, theme: context.theme)
+    let sameEnvironment = cache.width == width && cache.environment == environment
+    if sameEnvironment && cache.rowIDs.count == rows.count
       && zip(cache.rowIDs, rows).allSatisfy({ $0.0 == $0.1.id })
+      && zip(cache.identities, rows).allSatisfy({ $0.0 === $0.1.measurementIdentity })
+      && cache.measurements.allSatisfy(\.valid)
     {
       return
     }
-    var oldSizes: [WidgetID: Size] = [:]
-    if cache.width == width {
-      for (id, size) in zip(cache.rowIDs, cache.rowSizes) {
-        oldSizes[id] = size
+    var oldSizes: [WidgetID: (LazyRowIdentity, LazyRowMeasurement)] = [:]
+    if sameEnvironment {
+      for index in cache.rowIDs.indices {
+        let size = cache.measurements[index]
+        if size.valid { oldSizes[cache.rowIDs[index]] = (cache.identities[index], size) }
       }
     }
 
-    var sizes: [Size] = []
+    var sizes: [LazyRowMeasurement] = []
     sizes.reserveCapacity(rows.count)
     for row in rows {
-      if let size = oldSizes[row.id] {
+      if let (identity, size) = oldSizes[row.id], identity === row.measurementIdentity {
         sizes.append(size)
       } else {
         sizes.append(
-          BlockEngine.measure(
-            row.content,
-            proposal: Size(width: width, height: Float.greatestFiniteMagnitude), context: context))
+          LazyRowMeasurement {
+            BlockEngine.measure(
+              row.content,
+              proposal: Size(width: width, height: Float.greatestFiniteMagnitude), context: context)
+          })
       }
     }
     controller.lazyStackCache = LazyStackCache(
-      width: width, rowIDs: rows.map(\.id), rowSizes: sizes)
+      width: width, environment: environment, rowIDs: rows.map(\.id),
+      identities: rows.map(\.measurementIdentity), measurements: sizes)
   }
 }

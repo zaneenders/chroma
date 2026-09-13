@@ -2,11 +2,10 @@ import Chroma
 import DemoContent
 import RemoteServer
 
-/// Shared configuration for manually launched and launcher-owned demo servers.
 public enum DemoBackend {
   @MainActor
   public static func makeServer(for demo: DemoApplication) -> RemoteServer {
-    let server = RemoteServer(content: demo.body, size: demo.windowSize)
+    let server = RemoteServer(size: demo.windowSize) { demo.body }
     server.frameObserver = demo.frameObserver
     server.keyBindings = demo.keyBindings
     return server

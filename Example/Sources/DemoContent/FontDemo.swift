@@ -116,10 +116,9 @@ struct GlyphExplorer: PrimitiveBlock {
         x: rect.minX + Float(index % columns) * cell,
         y: rect.minY + Float(index / columns) * cell, width: cell, height: cell)
       let text = String(glyph)
-      let interaction = context.buttonState(id: WidgetID("font.glyph.\(index)"), in: box, role: .normal) {
+      _ = context.buttonState(id: WidgetID("font.glyph.\(index)"), in: box, role: .normal) {
         state.inspectedGlyph = text
       }
-      if interaction.clicked { state.inspectedGlyph = text }
       if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
       drawList.strokeRect(box, width: 0.5, color: context.theme.border)
       drawList.text(

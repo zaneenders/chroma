@@ -1,8 +1,9 @@
-#if WAYLAND_BACKEND
-
 import Chroma
 import CXKBKeyboard
 
+@diagnose(
+  StrictMemorySafety, as: ignored,
+  reason: "XKB handle ownership is managed by installKeymap/cleanup; C buffer access is scoped to the call.")
 @MainActor
 final class WaylandKeyboard {
   private var keyboard: OpaquePointer?
@@ -115,8 +116,6 @@ final class WaylandKeyboard {
     if editing {
       if case .some(.some(let command)) = resolution, case .editing(let event) = command {
         if event == .selectAll {
-          // An active editor owns Select All. The app-level handler is only a
-          // fallback for custom selectable content while not editing.
           pendingTextEvents.append(.event(event, session: editingSession))
         } else {
           applyEditingEvent(event, session: editingSession)
@@ -196,8 +195,6 @@ final class WaylandKeyboard {
       pendingTextEvents.append(.paste(id, session: session))
       onPaste?(id)
     case .selectAll:
-      // An active editor owns Select All. The app-level handler is only a
-      // fallback for custom selectable content while not editing.
       pendingTextEvents.append(.event(event, session: session))
     default:
       pendingTextEvents.append(.event(event, session: session))
@@ -209,8 +206,10 @@ final class WaylandKeyboard {
       return nil
     }
     var buffer = [CChar](repeating: 0, count: 64)
-    let count = chroma_xkb_keyboard_utf8(keyboard, key, &buffer, Int32(buffer.count))
-    guard count > 0 else { return nil }
+    let count = buffer.withUnsafeMutableBufferPointer { bytes in
+      unsafe chroma_xkb_keyboard_utf8(keyboard, key, bytes.baseAddress, Int32(bytes.count))
+    }
+    guard count > 0, count < buffer.count else { return nil }
     return String(decoding: buffer.prefix(Int(count)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
   }
 
@@ -246,8 +245,6 @@ final class WaylandKeyboard {
   }
 
   private func modifier(_ name: String, keyboard: OpaquePointer) -> Bool {
-    name.withCString { chroma_xkb_keyboard_modifier_active(keyboard, $0) != 0 }
+    name.withCString { unsafe chroma_xkb_keyboard_modifier_active(keyboard, $0) != 0 }
   }
 }
-
-#endif

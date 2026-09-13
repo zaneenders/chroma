@@ -18,7 +18,6 @@ if [ "$(uname -s)" = Darwin ]; then
 else
   { uname -m; lscpu | grep -E 'Architecture:|Model name:|CPU\(s\):'; } > "$out/hardware.txt"
 fi
-# Timing runs must not include sampler overhead.
 unset PROFILE_RECORDER_SERVER_URL_PATTERN PROFILE_RECORDER_SERVER_URL
 for scene in ${SCENES:-shapes text clipped images transcript streaming scrolling selection composer}; do
   "$bin" --scene "$scene" --stage wire > "$out/$scene-wire.json"

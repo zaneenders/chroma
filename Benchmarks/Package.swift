@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 import PackageDescription
 
 var runnerDependencies: [Target.Dependency] = [
@@ -14,7 +14,7 @@ runnerDependencies.append(.product(name: "MetalBackend", package: "chroma"))
 
 let package = Package(
   name: "ChromaBenchmarks",
-  platforms: [.macOS(.v26)],
+  platforms: [.macOS(.v27)],
   dependencies: [
     .package(path: ".."),
     .package(url: "https://github.com/apple/swift-profile-recorder.git", .upToNextMinor(from: "0.3.13")),

@@ -1,5 +1,31 @@
 @MainActor
 extension Interaction {
+  func registerScrollInput(id: WidgetID, rect: Rect, horizontal: Bool = false) {
+    buildingInputHandlers[id] = { [weak self] in
+      guard let self else { return }
+      var offset = self.scrollOffset(for: id)
+      var x = self.horizontalScrollOffset(for: id)
+      if rect.contains(self.input.pointerPosition) {
+        offset -= self.input.scrollDelta.y
+        if horizontal { x -= self.input.scrollDelta.x }
+      }
+      for (index, command) in self.input.commands.enumerated()
+      where !self.handledCommandIndices.contains(index) {
+        switch command {
+        case .navigation(.pageUp): offset -= rect.size.height
+        case .navigation(.pageDown): offset += rect.size.height
+        case .navigation(.home): offset = 0
+        case .navigation(.end): offset = self.scrollLimit(for: id)
+        default: break
+        }
+      }
+      self.setScrollOffset(min(offset, self.scrollLimit(for: id)), for: id)
+      if horizontal {
+        self.setHorizontalScrollOffset(min(x, self.horizontalScrollLimit(for: id)), for: id)
+      }
+    }
+  }
+
   func registerScrollViewport(_ rect: Rect) {
     buildingScrollViewports.append(rect)
   }

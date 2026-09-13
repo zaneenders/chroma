@@ -186,8 +186,8 @@ private struct EditingBlock: PrimitiveBlock {
   @MainActor func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
   @MainActor func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
     context.interaction.beginGroup(.vertical, rect: rect)
-    _ = context.interaction.textInputBehavior(
-      id: WidgetID("editor"), rect: rect, text: recorder.text,
+    _ = context.interaction.registerTextInput(
+      id: WidgetID("editor"), rect: rect, text: { recorder.text },
       onChange: { recorder.text = $0 })
     context.interaction.endGroup()
   }
@@ -246,7 +246,8 @@ extension RemoteServerTests {
       _ = try? channel.finish()
       try? server.shutdown()
     }
-    server.receive(.key(sequence: 1, event: RemoteKeyEvent(chord: KeyChord(.enter, modifiers: .command))), from: channel)
+    server.receive(
+      .key(sequence: 1, event: RemoteKeyEvent(chord: KeyChord(.enter, modifiers: .command))), from: channel)
     #expect(recorder.inputs.last?.commands == [submit])
     #expect(recorder.inputs.last?.textEvents.isEmpty == true)
   }
@@ -284,7 +285,6 @@ extension RemoteServerTests {
     server.receive(.key(sequence: 1, event: RemoteKeyEvent(chord: KeyChord(.enter))), from: channel)
     server.receive(.key(sequence: 2, event: RemoteKeyEvent(chord: nil, text: "edited")), from: channel)
     #expect(recorder.text == "edited")
-    // Without an onSubmit callback, submitting ends editing.
     server.receive(.key(sequence: 3, event: RemoteKeyEvent(chord: KeyChord(.enter))), from: channel)
     server.receive(.key(sequence: 4, event: RemoteKeyEvent(chord: nil, text: "ignored")), from: channel)
     #expect(recorder.text == "edited")

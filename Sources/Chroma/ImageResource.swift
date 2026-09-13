@@ -1,10 +1,5 @@
 import Foundation
 
-/// Identifies a logical image and its backend texture-cache slot.
-///
-/// Reuse an ID when replacing the pixels of the same logical image. Use a
-/// different ID for an unrelated image. Backends may reuse an uploaded texture
-/// when the ID, generation, and dimensions are unchanged.
 public struct ImageID: Hashable, Sendable {
   public var rawValue: String
 
@@ -20,16 +15,6 @@ public enum ImageResourceError: Error, Equatable, Sendable {
   case generationOverflow
 }
 
-/// A backend-independent, tightly packed RGBA8 image.
-///
-/// Pixels are stored top-to-bottom as straight-alpha red, green, blue, and
-/// alpha bytes. Image decoding and color-profile conversion are intentionally
-/// left to the application.
-///
-/// `id` is the stable identity of the logical image/cache slot. `generation`
-/// identifies its pixel revision: whenever the pixels or dimensions change,
-/// create a replacement with ``replacingPixels(width:height:rgba8:)``. Backends
-/// may reuse a texture while ID, generation, and dimensions are unchanged.
 public struct ImageResource: Equatable, Sendable {
   public let id: ImageID
   public let generation: UInt64
@@ -43,7 +28,7 @@ public struct ImageResource: Equatable, Sendable {
     width: Int,
     height: Int,
     rgba8: Data
-  ) throws {
+  ) throws(ImageResourceError) {
     guard width > 0, height > 0 else {
       throw ImageResourceError.invalidDimensions(width: width, height: height)
     }
@@ -62,17 +47,11 @@ public struct ImageResource: Equatable, Sendable {
     self.rgba8 = rgba8
   }
 
-  /// Returns this logical image with validated replacement pixels and the next
-  /// generation, preserving its stable ID.
-  ///
-  /// This method does not mutate the receiver. It throws `generationOverflow`
-  /// instead of wrapping, because wrapping could make a backend mistake new
-  /// pixels for an already cached generation.
   public func replacingPixels(
     width: Int,
     height: Int,
     rgba8: Data
-  ) throws -> ImageResource {
+  ) throws(ImageResourceError) -> ImageResource {
     guard generation < .max else {
       throw ImageResourceError.generationOverflow
     }
@@ -90,17 +69,11 @@ public struct ImageResource: Equatable, Sendable {
   }
 }
 
-/// How image pixels are scaled within the rectangle assigned by layout.
 public enum ImageScaling: Equatable, Sendable {
-  /// Distort the image to exactly match the destination rectangle.
   case stretch
-  /// Preserve aspect ratio while keeping the entire image visible.
   case contain
-  /// Preserve aspect ratio while covering the destination, cropping overflow.
   case cover
 
-  /// Resolves the textured quad inside `destination`. Cover can return a quad
-  /// larger than the destination and must therefore be clipped to it.
   public func drawRect(
     sourceSize: Size,
     in destination: Rect,
@@ -128,11 +101,6 @@ public enum ImageScaling: Equatable, Sendable {
   }
 }
 
-/// Positions a scaled image within its destination rectangle.
-///
-/// Components use normalized coordinates and are clamped to `0...1`. For
-/// example, `(0, 0)` preserves the top-leading region when an image is cropped,
-/// while `(1, 1)` preserves the bottom-trailing region.
 public struct ImageAlignment: Equatable, Sendable {
   public let x: Float
   public let y: Float

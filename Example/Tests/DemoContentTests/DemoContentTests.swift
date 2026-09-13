@@ -8,6 +8,35 @@ import Testing
 
 @MainActor
 struct DemoContentTests {
+  @Test func animationPreservesFrameSizedTimeIncrements() {
+    var now: TimeInterval = 800_000_000
+    let state = PerformanceDemoState(itemCount: 100, clock: { now })
+    #expect(state.elapsedTime() == 0)
+    now += 1.0 / 60
+    let first = state.elapsedTime()
+    now += 1.0 / 60
+    let second = state.elapsedTime()
+    #expect(abs(first - 1.0 / 60) < 0.00001)
+    #expect(abs(second - 2.0 / 60) < 0.00001)
+    #expect(second > first)
+  }
+
+  @Test func animationPauseExcludesPausedTimeAndRetainsSpeed() {
+    var now: TimeInterval = 800_000_000
+    let state = PerformanceDemoState(itemCount: 100, clock: { now })
+    now += 2
+    state.togglePaused()
+    #expect(state.elapsedTime() == 2)
+    now += 100
+    #expect(state.elapsedTime() == 2)
+    state.togglePaused()
+    #expect(state.elapsedTime() == 2)
+    now += 0.5
+    #expect(state.elapsedTime() == 2.5)
+    state.speed = 2
+    #expect(state.elapsedTime() == 5)
+  }
+
   @Test func sharedSceneSurvivesWireRoundTrip() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
     let renderer = HeadlessRenderer(size: demo.windowSize)
@@ -70,7 +99,6 @@ struct DemoContentTests {
   renderer.frameObserver = demo.frameObserver
   renderer.render()
   let captured = renderer.render(input: InputState(commands: [.application("demo.capture")]))
-  // Poll only in the test; the production demo uses its existing refresh cadence.
   for _ in 0..<200 {
     try await Task.sleep(for: .milliseconds(25))
     let frame = renderer.render()
@@ -90,7 +118,8 @@ struct DemoContentTests {
 }
 
 private func captureTestDirectory() throws -> URL {
-  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+    UUID().uuidString, isDirectory: true)
   try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
   return directory
 }
@@ -221,4 +250,56 @@ private func captureTestDirectory() throws -> URL {
       if case .text(_, "A", _, _) = command { return true }
       return false
     })
+}
+
+extension DemoContentTests {
+  @Test func animationRequestsFramesWithoutInputAndStopsWhenInactive() async throws {
+    let state = PerformanceDemoState(itemCount: 100)
+    let renderer = HeadlessRenderer()
+    renderer.content = DeferredBlock { PerformanceDemo(state: state) }
+    var redraws = 0
+    renderer.onRedrawRequested = { redraws += 1 }
+    defer { renderer.close() }
+
+    let first = renderer.render()
+    #expect(renderer.needsAnimationFrame)
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(renderer.render() != first)
+
+    state.togglePaused()
+    renderer.render()
+    redraws = 0
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(redraws == 0)
+    #expect(!renderer.needsAnimationFrame)
+
+    state.togglePaused()
+    renderer.render()
+    redraws = 0
+    #expect(renderer.needsAnimationFrame)
+    try await Task.sleep(for: .milliseconds(20))
+
+    state.page = .font
+    renderer.render()
+    redraws = 0
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(redraws == 0)
+    #expect(!renderer.needsAnimationFrame)
+
+    state.page = .scene
+    renderer.render()
+    redraws = 0
+    #expect(renderer.needsAnimationFrame)
+    try await Task.sleep(for: .milliseconds(20))
+  }
+
+  @Test func animationStateIsReleasedWithoutATask() async throws {
+    weak var released: PerformanceDemoState?
+    do {
+      let state = PerformanceDemoState(itemCount: 100)
+      released = state
+      try await Task.sleep(for: .milliseconds(30))
+    }
+    #expect(released == nil)
+  }
 }

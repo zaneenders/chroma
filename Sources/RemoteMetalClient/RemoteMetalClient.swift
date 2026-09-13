@@ -1,5 +1,3 @@
-#if METAL_BACKEND
-
 import AppKit
 import Chroma
 import Metal
@@ -22,7 +20,7 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   private let queue: MTLCommandQueue
   private let displayRenderer: MetalDisplayListRenderer
   private let view: ChromaInputView
-  private let banner = NotificationBanner(frame: .zero)
+  private let banner = NotificationBanner()
   private let window: NSWindow
   private var frameState = RemoteFrameState()
   private var latestFrame: (viewport: Size, commands: [DrawCommand])? { frameState.latest }
@@ -31,17 +29,12 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   private var inputSequence: UInt64 = 0
   private var isShuttingDown = false
   private var requestStartedAt: TimeInterval = 0
-  // Protect the renderer's three shared instance-buffer slots from GPU reuse.
-  private let inFlight = DispatchSemaphore(value: 3)
   private var frameRequestTimer: Timer?
   private var frameRequestOutstanding: Bool {
     get { frameState.requestOutstanding }
     set { frameState.requestOutstanding = newValue }
   }
   private var requestedFramesPerSecond: Double = 30
-  // AppKit window/delegate relationships are not owning. Keep the coordinator
-  // alive for the duration of NSApplication.run(), even when its caller's local
-  // variable is no longer considered live by the optimizer.
   private var lifetimeRetain: RemoteMetalClient?
 
   public init(size: Size = Size(width: 800, height: 600), title: String = "Chroma Remote") throws {
@@ -63,22 +56,8 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
       backing: .buffered, defer: false)
     super.init()
     window.title = title
-    let container = NSView(frame: frame)
-    view.frame = container.bounds
-    view.autoresizingMask = [.width, .height]
-    container.addSubview(view)
-    banner.translatesAutoresizingMaskIntoConstraints = false
-    container.addSubview(banner)
-    let preferredBannerWidth = banner.widthAnchor.constraint(equalToConstant: 560)
-    preferredBannerWidth.priority = .defaultHigh
-    NSLayoutConstraint.activate([
-      banner.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
-      banner.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-      banner.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 16),
-      banner.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
-      preferredBannerWidth,
-    ])
-    window.contentView = container
+    window.contentView = view
+    banner.onChange = { [weak self] in self?.view.needsDisplay = true }
     window.delegate = self
     window.center()
     view.delegate = self
@@ -133,8 +112,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     frameRequestOutstanding = false
     clipboardGenerations.removeAll()
     _ = view.frameInput()
-    // Write directly here. Scheduling through eventLoop.execute allowed the
-    // application run loop to start before the initial viewport was enqueued.
     channel.write(try RemoteWire.encode(.frameRate(Float(requestedFramesPerSecond))), promise: nil)
     let write = channel.writeAndFlush(try RemoteWire.encode(.viewport(currentViewport)))
     write.whenFailure { error in print("Initial viewport write failed: \(error)") }
@@ -143,7 +120,7 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
 
   private func startFrameRequests() {
     frameRequestTimer?.invalidate()
-    let timer = Timer(timeInterval: 1 / requestedFramesPerSecond, repeats: true) { [weak self] _ in
+    let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated { self?.requestFrameIfNeeded() }
     }
     RunLoop.main.add(timer, forMode: .common)
@@ -155,7 +132,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     guard !isShuttingDown, let channel, channel.isActive else { return }
     if frameRequestOutstanding {
       if FrameResponseDeadline.hasExpired(since: requestStartedAt) {
-        // Invalidate callbacks and reuse the normal reconnect path immediately.
         channel.close(promise: nil)
         connectionClosed()
       }
@@ -163,7 +139,7 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     }
     frameRequestOutstanding = true
     requestStartedAt = ProcessInfo.processInfo.systemUptime
-    send(.requestFrame)
+    send(.waitForFrame)
   }
 
   public func run() {
@@ -194,8 +170,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
     reconnectTimer = nil
     banner.dismiss()
 
-    // Stop AppKit callbacks before closing NIO. Window teardown can otherwise
-    // produce resize/input callbacks that try to schedule work on the stopped group.
     frameRequestTimer?.invalidate()
     frameRequestTimer = nil
     view.onInputAvailable = nil
@@ -216,45 +190,41 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
   public func draw(in view: MTKView) {
-    guard inFlight.wait(timeout: .now()) == .success else {
+    guard
+      let drawable = view.currentDrawable,
+      let descriptor = view.currentRenderPassDescriptor
+    else { return }
+    let viewport = currentViewport
+    let overlay = banner.render(viewport: viewport)
+    let commands = (latestFrame?.commands ?? []) + overlay.commands
+    let renderStarted = ProcessInfo.processInfo.systemUptime
+    do {
+      guard
+        let prepared = try displayRenderer.prepareFrame(
+          DrawList(commands: commands), viewport: viewport,
+          rasterScale: Point(
+            x: Float(drawable.texture.width) / max(1, viewport.width),
+            y: Float(drawable.texture.height) / max(1, viewport.height)),
+          queue: queue, renderPass: descriptor)
+      else {
+        view.needsDisplay = true
+        return
+      }
+      _ = prepared.submit(presenting: drawable) { [weak self] completion in
+        guard let duration = completion.gpuDuration else { return }
+        DispatchQueue.main.async {
+          guard let self else { return }
+          self.statistics.gpuTime += duration
+          self.statistics.gpuFrames += 1
+        }
+      }
+    } catch {
       view.needsDisplay = true
       return
     }
-    var submitted = false
-    defer { if !submitted { inFlight.signal() } }
-    guard
-      let frame = latestFrame,
-      let drawable = view.currentDrawable,
-      let descriptor = view.currentRenderPassDescriptor,
-      let command = queue.makeCommandBuffer(),
-      let encoder = command.makeRenderCommandEncoder(descriptor: descriptor)
-    else { return }
-    let renderStarted = ProcessInfo.processInfo.systemUptime
-    displayRenderer.encode(
-      DrawList(commands: frame.commands), viewport: frame.viewport,
-      rasterScale: Point(
-        x: Float(drawable.texture.width) / max(1, frame.viewport.width),
-        y: Float(drawable.texture.height) / max(1, frame.viewport.height)),
-      into: encoder)
-    encoder.endEncoding()
-    command.present(drawable)
-    let semaphore = inFlight
-    command.addCompletedHandler { [weak self] command in
-      semaphore.signal()
-      let duration = command.gpuEndTime - command.gpuStartTime
-      let valid = command.status == .completed && command.gpuStartTime > 0 && duration >= 0
-      DispatchQueue.main.async {
-        guard let self, valid else { return }
-        self.statistics.gpuTime += duration
-        self.statistics.gpuFrames += 1
-      }
-    }
-    submitted = true
-    command.commit()
     statistics.draws += 1
     statistics.drawCalls += displayRenderer.lastDrawCallCount
     statistics.instances += displayRenderer.lastInstanceCount
-    displayRenderer.finishFrame()
     statistics.renderTime += ProcessInfo.processInfo.systemUptime - renderStarted
   }
 
@@ -265,16 +235,15 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
   private func sendPendingInput() {
     guard !isShuttingDown else { return }
     inputSequence &+= 1
-    send(.input(sequence: inputSequence, state: view.frameInput()))
+    let input = view.frameInput()
+    if banner.handleInput(input, viewport: currentViewport) { return }
+    send(.input(sequence: inputSequence, state: input))
   }
 
   private func send(_ message: RemoteMessage) {
     guard !isShuttingDown, let channel, channel.isActive else { return }
     do {
       let bytes = try RemoteWire.encode(message)
-      // Channel.writeAndFlush is thread-safe and schedules on the channel's
-      // event loop itself. Avoid an extra eventLoop.execute task that can be
-      // left pending during shutdown.
       channel.writeAndFlush(bytes, promise: nil)
     } catch {
       print("Remote message encoding failed: \(error)")
@@ -283,7 +252,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
 
   private func connectionClosed() {
     guard !isShuttingDown else { return }
-    // Invalidate already queued callbacks from the old channel or failed attempt.
     connectionGeneration = UUID()
     frameRequestTimer?.invalidate()
     frameRequestTimer = nil
@@ -351,6 +319,12 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
       }
     default: break
     }
+    defer {
+      switch message {
+      case .frame, .frameUnchanged: requestFrameIfNeeded()
+      default: break
+      }
+    }
     let isFirstFrame = latestFrame == nil
     let acceptedFrame = frameState.receive(message)
     if case .frameUnchanged = message {
@@ -394,9 +368,6 @@ public final class RemoteMetalClient: NSObject, MTKViewDelegate, NSWindowDelegat
       return
     }
     guard case .frame(let id, _, _, let commands) = message else { return }
-    // The wire decoder has already consumed image definitions. Drop only the
-    // presentation, retaining cache synchronization and the previous good frame.
-    // Frame state releases the request credit even for a rejected presentation.
     guard acceptedFrame else { return }
     if isFirstFrame {
       print("Received remote frame \(id) with \(commands.count) draw commands")
@@ -444,5 +415,3 @@ private final class RemoteClientHandler: ChannelInboundHandler, Sendable {
     context.close(promise: nil)
   }
 }
-
-#endif

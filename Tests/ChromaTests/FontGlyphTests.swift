@@ -37,16 +37,74 @@ struct FontGlyphTests {
     }
   }
 
+  private func fixture(scalars: [UInt32] = [0xFFFD]) -> (Data, [[UInt8]]) {
+    var data = Data()
+    for value: UInt32 in [0x4C54_4143, 1, 2112, 90, UInt32(scalars.count)] + scalars {
+      for shift in stride(from: 0, to: 32, by: 8) {
+        data.append(UInt8(truncatingIfNeeded: value >> shift))
+      }
+    }
+    var levels: [[UInt8]] = []
+    var width = 2112
+    var height = 90
+    while true {
+      let pixels = (0..<(width * height)).map { UInt8(truncatingIfNeeded: $0 + levels.count) }
+      levels.append(pixels)
+      data.append(contentsOf: pixels)
+      if width == 1 && height == 1 { break }
+      width = max(1, width / 2)
+      height = max(1, height / 2)
+    }
+    return (data, levels)
+  }
+
+  @Test func borrowedAtlasSupportsSlicesAndOwnsItsMipPixels() throws {
+    let (data, pixels) = fixture()
+    var padded = Data([0xAA])
+    padded.append(data)
+    var slice = padded.dropFirst()
+    #expect(slice.startIndex == 1)
+    let atlas = try HighResolutionFontAtlas(data: slice)
+    slice.resetBytes(in: slice.startIndex..<slice.endIndex)
+    #expect(atlas.width == 2112)
+    #expect(atlas.height == 90)
+    #expect(atlas.characterIndices == [0xFFFD: 0])
+    #expect(atlas.mipLevels().map(\.pixels) == pixels)
+  }
+
+  @Test func borrowedAtlasRejectsTruncatedWordsAndMipLevels() {
+    let (data, levels) = fixture()
+    var cuts = Array(0..<24)
+    var cursor = 24
+    for pixels in levels {
+      cuts.append(cursor)
+      cursor += pixels.count
+      cuts.append(cursor - 1)
+    }
+    for cut in cuts {
+      #expect(throws: HighResolutionFontAtlas.AssetError.self) {
+        _ = try HighResolutionFontAtlas(data: Data(data.prefix(cut)))
+      }
+    }
+  }
+
+  @Test func borrowedAtlasRejectsDuplicateScalars() {
+    let (data, _) = fixture(scalars: [0xFFFD, 0xFFFD])
+    #expect(throws: HighResolutionFontAtlas.AssetError.self) {
+      _ = try HighResolutionFontAtlas(data: data)
+    }
+  }
+
   @Test func coversTerminalStructureAndPromptSymbols() {
     let required: [UInt32] = [
-      0x2500,  // ─ box drawing
-      0x256D,  // ╭ rounded corner
-      0x2588,  // █ block
-      0x2801,  // ⠁ braille
-      0x279C,  // ➜ prompt
-      0x2717,  // ✗ dirty marker
-      0xE0B0,  // Powerline separator
-      0xFFFD,  // visible unsupported-glyph fallback
+      0x2500,
+      0x256D,
+      0x2588,
+      0x2801,
+      0x279C,
+      0x2717,
+      0xE0B0,
+      0xFFFD,
     ]
     for codepoint in required {
       #expect(HighResolutionFontAtlas().characterIndices[codepoint] != nil)
@@ -55,17 +113,17 @@ struct FontGlyphTests {
 
   @Test func coversKeyboardAndInterfaceSymbols() {
     let required: [UInt32] = [
-      0x2318,  // ⌘ Command
-      0x2325,  // ⌥ Option
-      0x2303,  // ⌃ Control
-      0x21E7,  // ⇧ Shift
-      0x21B5,  // ↵ Return
-      0x2302,  // ⌂ Home/folder
-      0x25A0,  // ■ Stop
-      0x25C7,  // ◇ Outline diamond
-      0x270E,  // ✎ Rename/edit pencil
-      0x23F5,  // ⏵ Play
-      0x23F9,  // ⏹ Stop control
+      0x2318,
+      0x2325,
+      0x2303,
+      0x21E7,
+      0x21B5,
+      0x2302,
+      0x25A0,
+      0x25C7,
+      0x270E,
+      0x23F5,
+      0x23F9,
     ]
     for codepoint in required {
       #expect(HighResolutionFontAtlas().characterIndices[codepoint] != nil)
@@ -87,7 +145,6 @@ struct FontGlyphTests {
           #expect(atlas.pixels[start..<(start + advance)].allSatisfy { $0 == 255 })
         }
         if scalar == 0x2500 {
-          // Horizontal strokes must meet at both sides of consecutive cells.
           #expect(atlas.pixels[start] == atlas.pixels[start + advance - 1])
           #expect(atlas.pixels[start] == ((39..<45).contains(row) ? 255 : 0))
         }
@@ -105,7 +162,6 @@ struct FontGlyphTests {
   @Test func bundledPixelsRemainUnchanged() {
     let atlas = HighResolutionFontAtlas()
     #expect(atlas.characterIndices.count == 762)
-    // Pin every mip pixel and mapping without retaining a second font pipeline.
     var hash: UInt64 = 14_695_981_039_346_656_037
     for scalar in atlas.characterIndices.sorted(by: { $0.value < $1.value }).map(\.key) {
       for shift in stride(from: 0, to: 32, by: 8) {
@@ -146,8 +202,6 @@ struct FontGlyphTests {
 
   @Test func atlasFitsGuaranteedGLES3TextureDimensions() {
     let atlas = HighResolutionFontAtlas()
-    // OpenGL ES 3 guarantees GL_MAX_TEXTURE_SIZE is at least 4096.
-    // All glyphs and compositions must fit in the single shared texture.
     let guaranteedMaximumTextureSize = 4096
     #expect(atlas.width > 0 && atlas.width <= guaranteedMaximumTextureSize)
     #expect(atlas.height > 0 && atlas.height <= guaranteedMaximumTextureSize)
@@ -215,8 +269,6 @@ struct FontGlyphTests {
       #expect(child.pixels.count == child.width * child.height)
     }
 
-    // Filtering binary glyph coverage must produce intermediate edge samples;
-    // otherwise minified GPU text would still have hard, unstable stair steps.
     #expect(
       levels.dropFirst().contains { level in
         level.pixels.contains { $0 > 0 && $0 < 255 }

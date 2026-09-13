@@ -2,6 +2,7 @@ import Dispatch
 import Foundation
 import NIOCore
 import NIOPosix
+import Observation
 import RemoteProtocol
 import Synchronization
 import Testing
@@ -46,7 +47,10 @@ private final class Peer {
     channel = try await ClientBootstrap(group: group)
       .connectTimeout(.seconds(2))
       .channelInitializer { channel in
-        channel.pipeline.addHandlers(ByteToMessageHandler(RemoteMessageDecoder()), replies)
+        channel.eventLoop.makeCompletedFuture {
+          try channel.pipeline.syncOperations.addHandlers(
+            ByteToMessageHandler(RemoteMessageDecoder()), replies)
+        }
       }
       .connect(host: "127.0.0.1", port: port).get()
   }
@@ -148,8 +152,6 @@ struct RemoteLoopbackTests {
       return
     }
     #expect(!transfer.isReply)
-    // A frame reply acts as a barrier: preceding key has reached the server,
-    // but must remain deferred until clipboard acknowledgement or disconnect.
     try await first.send(.key(sequence: 3, event: RemoteKeyEvent(chord: nil, text: "stale")))
     try await first.send(.requestFrame)
     _ = try await first.reply()
@@ -188,12 +190,91 @@ private struct LoopbackEditingBlock: PrimitiveBlock {
   @MainActor func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
   @MainActor func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
     context.interaction.beginGroup(.vertical, rect: rect)
-    _ = context.interaction.textInputBehavior(
-      id: WidgetID("editor"), rect: rect, text: editor.text, onChange: { editor.text = $0 })
+    _ = context.interaction.registerTextInput(
+      id: WidgetID("editor"), rect: rect, text: { editor.text }, onChange: { editor.text = $0 })
     context.interaction.endGroup()
   }
 }
 
 private func stopGroup(_ group: MultiThreadedEventLoopGroup) {
   try? group.syncShutdownGracefully()
+}
+
+extension RemoteLoopbackTests {
+  @Test func longPollSleepsUntilObservedStateChanges() async throws {
+    let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+    let model = LongPollModel()
+    let server = RemoteServer { model.color }
+    defer {
+      try? server.shutdown()
+      stopGroup(group)
+    }
+    try server.start(port: 0)
+    let peer = try await Peer(group: group, port: #require(server.boundPort))
+    try await peer.send(.waitForFrame)
+    guard case .frame = try await peer.reply() else {
+      Issue.record("Expected initial frame")
+      return
+    }
+    try await peer.send(.waitForFrame)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(peer.replies.pop() == nil)
+    model.color = .yellow
+    guard case .frame(_, _, _, let commands) = try await peer.reply() else {
+      Issue.record("Expected observed update")
+      return
+    }
+    #expect(!commands.isEmpty)
+    try await peer.close()
+  }
+}
+
+@MainActor
+@Observable
+private final class LongPollModel {
+  var color = Color.white
+}
+
+private struct TimelineProbe: PrimitiveBlock {
+  let samples: TimelineSamples
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let frame = context.animationFrame()
+    samples.times.append(frame.timestamp)
+    drawList.text(String(frame.timestamp), at: .zero, color: .white)
+  }
+}
+
+@MainActor private final class TimelineSamples {
+  var times: [Double] = []
+}
+
+extension RemoteLoopbackTests {
+  @Test func animationUsesRemoteCadenceAndWaitsForFrameDemand() async throws {
+    let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+    let samples = TimelineSamples()
+    let server = RemoteServer(content: TimelineProbe(samples: samples))
+    defer {
+      try? server.shutdown()
+      stopGroup(group)
+    }
+    try server.start(port: 0)
+    let peer = try await Peer(group: group, port: #require(server.boundPort))
+    try await peer.send(.frameRate(10))
+    try await peer.send(.waitForFrame)
+    _ = try await peer.reply()
+    let first = try #require(samples.times.last)
+    let count = samples.times.count
+    try await Task.sleep(for: .milliseconds(150))
+    #expect(samples.times.count == count)
+    try await peer.send(.waitForFrame)
+    _ = try await peer.reply()
+    let second = try #require(samples.times.last)
+    #expect(second - first >= 0.1)
+    try await peer.send(.waitForFrame)
+    _ = try await peer.reply()
+    let third = try #require(samples.times.last)
+    #expect(third - second >= 0.09)
+    try await peer.close()
+  }
 }

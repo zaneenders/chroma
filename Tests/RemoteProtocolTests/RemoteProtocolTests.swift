@@ -9,7 +9,7 @@ struct RemoteProtocolTests {
   @Test func rejectsPreviousFontFaceWireFormat() throws {
     var bytes = try RemoteWire.encode(.requestFrame)
     bytes.setInteger(UInt16(3), at: 4, endianness: .little)
-    #expect(RemoteWire.version == 4)
+    #expect(RemoteWire.version == 5)
     #expect(throws: RemoteProtocolError.unsupportedVersion(3)) {
       _ = try RemoteWire.decode(from: &bytes)
     }
@@ -246,4 +246,10 @@ struct RemoteProtocolTests {
     buffer.writeInteger(length, endianness: .little)
     return buffer
   }
+}
+
+@Test func waitForFrameRoundTrips() throws {
+  var bytes = try RemoteWire.encode(.waitForFrame)
+  #expect(try RemoteWire.decode(from: &bytes) == .waitForFrame)
+  #expect(bytes.readableBytes == 0)
 }
