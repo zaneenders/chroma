@@ -9,7 +9,8 @@ extension Interaction {
         offset -= self.input.scrollDelta.y
         if horizontal { x -= self.input.scrollDelta.x }
       }
-      for command in self.input.commands {
+      for (index, command) in self.input.commands.enumerated()
+      where !self.handledCommandIndices.contains(index) {
         switch command {
         case .navigation(.pageUp): offset -= rect.size.height
         case .navigation(.pageDown): offset += rect.size.height

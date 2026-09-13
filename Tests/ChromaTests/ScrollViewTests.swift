@@ -366,14 +366,16 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
     let counter = DrawCounter()
 
+    let retainedRows = (0..<5).map { index in
+      LazyVStack.Row(
+        id: WidgetID("row-\(index)"),
+        content: CountedRow(index: index, height: 10, counter: counter))
+    }
+
     func frame(_ indices: [Int], width: Float = 100) {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
-      let rows = indices.map { index in
-        LazyVStack.Row(
-          id: WidgetID("row-\(index)"),
-          content: CountedRow(index: index, height: 10, counter: counter))
-      }
+      let rows = indices.map { retainedRows[$0] }
       BlockEngine.draw(
         LazyVStack(id: scrollID, controller: controller, rows: rows),
         into: &list, in: Rect(x: 0, y: 0, width: width, height: 100),

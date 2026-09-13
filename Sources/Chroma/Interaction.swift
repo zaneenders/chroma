@@ -349,7 +349,10 @@ extension Interaction {
         commandHandlers
         .filter { $0.command == command && isPrefix($0.path, of: selection ?? []) }
         .sorted { $0.path.count > $1.path.count }
-      if handlers.contains(where: { $0.action() == .handled }) { continue }
+      if handlers.contains(where: { $0.action() == .handled }) {
+        handledCommandIndices.insert(index)
+        continue
+      }
       switch command {
       case .action(.submit):
         actionRoles[.defaultAction]?()

@@ -1,7 +1,11 @@
 public struct LazyVStack: PrimitiveBlock {
   public struct Row {
     public var id: WidgetID
-    public var content: any Block
+    public var content: any Block {
+      didSet { measurementIdentity = LazyRowIdentity() }
+    }
+    // Copies retain measurements; replacing content or constructing a row invalidates them.
+    var measurementIdentity = LazyRowIdentity()
 
     public init(id: WidgetID, content: any Block) {
       self.id = id
@@ -166,23 +170,28 @@ public struct LazyVStack: PrimitiveBlock {
 
   @MainActor private func updateCache(width: Float, context: RenderContext) {
     let cache = controller.lazyStackCache
-    if cache.width == width && cache.rowIDs.count == rows.count
+    let environment = LazyMeasurementEnvironment(
+      textScale: context.textScale, fontMetrics: context.fontMetrics, theme: context.theme)
+    let sameEnvironment = cache.width == width && cache.environment == environment
+    if sameEnvironment && cache.rowIDs.count == rows.count
       && zip(cache.rowIDs, rows).allSatisfy({ $0.0 == $0.1.id })
+      && zip(cache.identities, rows).allSatisfy({ $0.0 === $0.1.measurementIdentity })
       && cache.measurements.allSatisfy(\.valid)
     {
       return
     }
-    var oldSizes: [WidgetID: LazyRowMeasurement] = [:]
-    if cache.width == width {
-      for (id, size) in zip(cache.rowIDs, cache.measurements) {
-        if size.valid { oldSizes[id] = size }
+    var oldSizes: [WidgetID: (LazyRowIdentity, LazyRowMeasurement)] = [:]
+    if sameEnvironment {
+      for index in cache.rowIDs.indices {
+        let size = cache.measurements[index]
+        if size.valid { oldSizes[cache.rowIDs[index]] = (cache.identities[index], size) }
       }
     }
 
     var sizes: [LazyRowMeasurement] = []
     sizes.reserveCapacity(rows.count)
     for row in rows {
-      if let size = oldSizes[row.id] {
+      if let (identity, size) = oldSizes[row.id], identity === row.measurementIdentity {
         sizes.append(size)
       } else {
         sizes.append(
@@ -194,6 +203,7 @@ public struct LazyVStack: PrimitiveBlock {
       }
     }
     controller.lazyStackCache = LazyStackCache(
-      width: width, rowIDs: rows.map(\.id), measurements: sizes)
+      width: width, environment: environment, rowIDs: rows.map(\.id),
+      identities: rows.map(\.measurementIdentity), measurements: sizes)
   }
 }

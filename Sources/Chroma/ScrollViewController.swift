@@ -21,9 +21,19 @@ public final class ScrollViewController {
   public func scrollToVisible(_ rect: Rect) { request = .visible(rect) }
 }
 
+final class LazyRowIdentity {}
+
+struct LazyMeasurementEnvironment: Equatable {
+  var textScale: Float
+  var fontMetrics: FontMetrics
+  var theme: ChromaTheme
+}
+
 struct LazyStackCache {
   var width: Float?
+  var environment: LazyMeasurementEnvironment?
   var rowIDs: [WidgetID] = []
+  var identities: [LazyRowIdentity] = []
   var measurements: [LazyRowMeasurement] = []
   @MainActor var rowSizes: [Size] { measurements.map(\.size) }
 }
