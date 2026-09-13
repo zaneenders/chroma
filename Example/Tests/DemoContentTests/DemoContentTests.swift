@@ -118,7 +118,8 @@ struct DemoContentTests {
 }
 
 private func captureTestDirectory() throws -> URL {
-  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+    UUID().uuidString, isDirectory: true)
   try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
   return directory
 }

@@ -1,3 +1,4 @@
+import Dispatch
 import HeadlessBackend
 import Observation
 import Testing
@@ -116,4 +117,103 @@ struct ReviewRegressionTests {
     #expect(capture.measurements == 3)
     renderer.close()
   }
+
+  final class InputCapture {
+    var clicks = 0
+    var inputs: [InputState] = []
+  }
+
+  struct InputProbe: PrimitiveBlock {
+    let capture: InputCapture
+
+    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+
+    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+      capture.inputs.append(context.input)
+      if context.buttonState(id: WidgetID("probe"), in: rect).clicked {
+        capture.clicks += 1
+      }
+    }
+  }
+
+  @Test func registrationRefreshDoesNotReplayClickOrInput() {
+    let capture = InputCapture()
+    let renderer = HeadlessRenderer()
+    defer { renderer.close() }
+    renderer.content = InputProbe(capture: capture)
+    renderer.render()
+    renderer.render(input: InputState(commands: [.action(.activate)]))
+    #expect(capture.clicks == 1)
+    capture.inputs = []
+    let textInput = InputState(textEvents: [.insert("x")])
+    renderer.render(input: textInput)
+    #expect(capture.clicks == 1)
+    #expect(capture.inputs == [InputState(), textInput])
+
+    // The refresh must still allow a new activation in the actual input pass.
+    renderer.render(
+      input: InputState(
+        commands: [.action(.activate)], textEvents: [.insert("y")]))
+    #expect(capture.clicks == 2)
+  }
+
+  @Test func registrationRefreshDoesNotReplayPointerOrScrollEdges() {
+    let capture = InputCapture()
+    let renderer = HeadlessRenderer()
+    defer { renderer.close() }
+    renderer.content = InputProbe(capture: capture)
+    renderer.render()
+    renderer.render(
+      input: InputState(
+        pointerPosition: Point(x: 10, y: 10), pointerPressPosition: Point(x: 10, y: 10),
+        pointerDown: true, pointerPressed: true, scrollDelta: Point(x: 0, y: -10)))
+    capture.inputs = []
+    let input = InputState(pointerDown: true, textEvents: [.insert("x")])
+    renderer.render(input: input)
+    #expect(capture.inputs == [InputState(), input])
+  }
+
+  @Test func lazyMeasurementsInvalidateBeforeImmediateRender() async {
+    let model = Model()
+    let capture = Capture()
+    let controller = ScrollViewController()
+    let renderer = HeadlessRenderer()
+    defer { renderer.close() }
+    renderer.content = LazyVStack(
+      id: WidgetID("stack"), controller: controller,
+      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
+    renderer.render()
+    for height: Float in [50, 80, 30] {
+      model.height = height
+      renderer.render()
+      #expect(capture.drawnHeight == height)
+    }
+    #expect(capture.measurements == 4)
+    // Queued callbacks for replaced measurements must not invalidate the new cache.
+    await withCheckedContinuation { continuation in
+      DispatchQueue.main.async { continuation.resume() }
+    }
+    renderer.render()
+    #expect(capture.measurements == 4)
+  }
+
+  @Test func lazyMeasurementsReflectChangesFromInputHandlersInSameFrame() {
+    let model = Model()
+    let capture = Capture()
+    let controller = ScrollViewController()
+    let renderer = HeadlessRenderer()
+    defer { renderer.close() }
+    renderer.content = LazyVStack(
+      id: WidgetID("stack"), controller: controller,
+      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+    ).onCommand(.navigation(.pageDown)) {
+      model.height = 80
+      return .handled
+    }
+    renderer.render()
+    renderer.render(input: InputState(commands: [.navigation(.pageDown)]))
+    #expect(capture.drawnHeight == 80)
+    #expect(capture.measurements == 2)
+  }
+
 }

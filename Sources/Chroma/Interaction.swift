@@ -162,6 +162,11 @@ package final class Interaction {
 
   package func beginFrame(input: InputState) {
     if refreshingRegistrations {
+      // Registration draws must not replay the previous frame's input or activation.
+      self.input = input
+      activatedLeaf = nil
+      activatePending = false
+      actionRoles = [:]
       let root = FocusNode(kind: .group(.vertical), rect: .zero)
       builderRoot = root
       builderStack = [root]
