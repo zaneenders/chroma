@@ -66,6 +66,7 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
     view.isPaused = rate == 0
   }
 
+  @diagnose(UnnecessaryUnsafe, as: warning, reason: "Temporarily retain the explicit unsafe marker for SDK compatibility")
   public func run(title: String) throws {
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
