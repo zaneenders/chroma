@@ -1,4 +1,4 @@
-public struct Size: Equatable, Sendable {
+public struct Size: Equatable, Sendable, Codable {
   public var width: Float
   public var height: Float
 

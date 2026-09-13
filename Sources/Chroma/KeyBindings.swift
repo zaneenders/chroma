@@ -6,7 +6,7 @@ public enum Key: Hashable, Sendable {
   case delete, backspace
 }
 
-public struct KeyModifiers: OptionSet, Hashable, Sendable, Codable {
+public struct KeyModifiers: OptionSet, Hashable, Sendable {
   public let rawValue: UInt8
   public init(rawValue: UInt8) { self.rawValue = rawValue }
 
@@ -17,7 +17,7 @@ public struct KeyModifiers: OptionSet, Hashable, Sendable, Codable {
   public static let superKey = Self(rawValue: 1 << 4)
 }
 
-public struct KeyChord: Hashable, Sendable, Codable {
+public struct KeyChord: Hashable, Sendable {
   public var key: Key
   public var modifiers: KeyModifiers
 
@@ -99,39 +99,5 @@ public struct KeyBindings: Sendable {
     var result = self
     for (chord, command) in other.entries { result.entries[chord] = .some(command) }
     return result
-  }
-}
-
-extension Key: Codable {
-  private static var special: [Key] {
-    [
-      .upArrow, .downArrow, .leftArrow, .rightArrow, .tab, .enter, .escape,
-      .space, .home, .end, .pageUp, .pageDown, .delete, .backspace,
-    ]
-  }
-  public func encode(to encoder: any Encoder) throws {
-    var values = encoder.unkeyedContainer()
-    if case .character(let character) = self {
-      try values.encode(-1)
-      try values.encode(String(character))
-    } else {
-      try values.encode(Self.special.firstIndex(of: self)!)
-    }
-  }
-  public init(from decoder: any Decoder) throws {
-    var values = try decoder.unkeyedContainer()
-    let tag = try values.decode(Int.self)
-    if tag == -1 {
-      let text = try values.decode(String.self)
-      guard text.count == 1, let character = text.first else {
-        throw DecodingError.dataCorruptedError(in: values, debugDescription: "Invalid character key")
-      }
-      self = .character(character)
-    } else {
-      guard Self.special.indices.contains(tag) else {
-        throw DecodingError.dataCorruptedError(in: values, debugDescription: "Unknown key")
-      }
-      self = Self.special[tag]
-    }
   }
 }

@@ -1,13 +1,55 @@
-import Chroma
+import Foundation
 
-public enum RemoteFrameValidation {
-  public static func isValidViewport(_ size: Size) -> Bool {
-    size.width.isFinite && size.height.isFinite && size.width >= 1 && size.height >= 1
-      && (2 / size.width).isFinite && (2 / size.height).isFinite
+public enum SceneCaptureError: Error, Equatable, Sendable {
+  case tooLarge
+  case invalidFrame
+  case unsupportedVersion(Int)
+}
+
+/// A self-contained local snapshot, independent of any rendering backend.
+/// Version 2 uses JSON and does not read the former remote-wire capture format.
+public enum SceneCapture {
+  public static let version = 2
+  public static let maximumBytes = 64 * 1024 * 1024
+
+  private struct Document: Codable {
+    let version: Int
+    let frame: FrameObservation
   }
 
-  public static func isValid(viewport: Size, commands: [DrawCommand]) -> Bool {
-    guard isValidViewport(viewport) else { return false }
+  public static func encode(_ frame: FrameObservation) throws -> Data {
+    try validate(frame)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let data = try encoder.encode(Document(version: version, frame: frame))
+    guard data.count <= maximumBytes else { throw SceneCaptureError.tooLarge }
+    return data
+  }
+
+  public static func decode(_ data: Data) throws -> FrameObservation {
+    guard data.count <= maximumBytes else { throw SceneCaptureError.tooLarge }
+    let document = try JSONDecoder().decode(Document.self, from: data)
+    guard document.version == version else { throw SceneCaptureError.unsupportedVersion(document.version) }
+    try validate(document.frame)
+    return document.frame
+  }
+
+  private static func validate(_ frame: FrameObservation) throws {
+    guard frame.viewport.width.isFinite, frame.viewport.height.isFinite,
+      frame.viewport.width > 0, frame.viewport.height > 0
+    else { throw SceneCaptureError.invalidFrame }
+    if let scale = frame.rasterScale {
+      guard scale.x.isFinite, scale.y.isFinite, scale.x > 0, scale.y > 0 else {
+        throw SceneCaptureError.invalidFrame
+      }
+    }
+    guard validCommands(viewport: frame.viewport, commands: frame.drawList.commands) else {
+      throw SceneCaptureError.invalidFrame
+    }
+  }
+
+  private static func validCommands(viewport: Size, commands: [DrawCommand]) -> Bool {
+    guard (2 / viewport.width).isFinite, (2 / viewport.height).isFinite else { return false }
     var depth = 0
     func point(_ p: Point) -> Bool {
       p.x.isFinite && p.y.isFinite

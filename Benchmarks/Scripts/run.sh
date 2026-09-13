@@ -20,9 +20,8 @@ else
 fi
 unset PROFILE_RECORDER_SERVER_URL_PATTERN PROFILE_RECORDER_SERVER_URL
 for scene in ${SCENES:-shapes text clipped images transcript streaming scrolling selection composer}; do
-  "$bin" --scene "$scene" --stage wire > "$out/$scene-wire.json"
+  "$bin" --scene "$scene" --stage cull > "$out/$scene-cull.json"
   if [ "$(uname -s)" = Darwin ] && [ "${METAL:-0}" = 1 ]; then
     "$bin" --scene "$scene" --stage metal > "$out/$scene-metal.json"
-    "$bin" --scene "$scene" --stage pipeline > "$out/$scene-pipeline.json"
   fi
 done

@@ -22,8 +22,8 @@ struct ComparisonTests {
         report["frames"] = frames + trial
         report["minimumSeconds"] = seconds
         report["profilingEnabled"] = false
-        report["timings"] = ["encode": ["p50MS": 1.0, "p95MS": p95]]
-        try JSONSerialization.data(withJSONObject: report).write(to: path.appendingPathComponent("text-wire.json"))
+        report["timings"] = ["cull": ["p50MS": 1.0, "p95MS": p95]]
+        try JSONSerialization.data(withJSONObject: report).write(to: path.appendingPathComponent("text-cull.json"))
       }
       return try BenchmarkRuns(directory: directory)
     }

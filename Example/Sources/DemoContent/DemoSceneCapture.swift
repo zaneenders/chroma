@@ -1,7 +1,6 @@
 import Chroma
 import Foundation
 import Observation
-import RemoteProtocol
 
 @MainActor
 @Observable
@@ -33,9 +32,6 @@ final class DemoSceneCapture {
       let result = await Task.detached(priority: .utility) { () -> Result<URL, Error> in
         Result {
           let data = try SceneCapture.encode(frame)
-          guard data.count <= 64 * 1024 * 1024 else {
-            throw RemoteProtocolError.messageTooLarge(data.count)
-          }
           let url = directory.appendingPathComponent("scene-\(UUID().uuidString).chromacapture")
           guard
             FileManager.default.createFile(

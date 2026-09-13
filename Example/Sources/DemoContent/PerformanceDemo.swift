@@ -108,8 +108,8 @@ final class PerformanceDemoState {
   }
 }
 
-private let remoteSmallText: Float = 0.52
-private let remoteTitleText: Float = 0.82
+private let demoSmallText: Float = 0.52
+private let demoTitleText: Float = 0.82
 
 private struct PerformanceScene: Block {
   let state: PerformanceDemoState
@@ -119,16 +119,16 @@ private struct PerformanceScene: Block {
       VStack(spacing: 0) {
         HStack(spacing: 12) {
           VStack(spacing: 3) {
-            Text("CHROMA / REMOTE LAB")
-              .fontScale(remoteTitleText)
+            Text("CHROMA / RENDER LAB")
+              .fontScale(demoTitleText)
               .foregroundColor(theme.accent)
-            Text("The controls and state live on the daemon; only drawing commands cross the wire.")
-              .fontScale(remoteSmallText)
+            Text("Local state, layout, and GPU rendering in one process.")
+              .fontScale(demoSmallText)
               .foregroundColor(theme.secondaryForeground)
           }
           Spacer()
           Text(state.isPaused ? "● PAUSED" : "● LIVE")
-            .fontScale(remoteSmallText)
+            .fontScale(demoSmallText)
             .foregroundColor(state.isPaused ? .yellow : Color(r: 0.25, g: 0.95, b: 0.55, a: 1))
         }
         .padding(16)
@@ -136,25 +136,25 @@ private struct PerformanceScene: Block {
         .border(theme.border)
 
         HStack(spacing: 8) {
-          Button(state.isPaused ? "Resume" : "Pause", id: WidgetID("remote.pause"), fontScale: remoteSmallText) {
+          Button(state.isPaused ? "Resume" : "Pause", id: WidgetID("demo.pause"), fontScale: demoSmallText) {
             state.togglePaused()
           }
-          Button("− 500", id: WidgetID("remote.fewer"), fontScale: remoteSmallText) {
+          Button("− 500", id: WidgetID("demo.fewer"), fontScale: demoSmallText) {
             state.adjustItems(by: -500)
           }
-          Button("+ 500", id: WidgetID("remote.more"), fontScale: remoteSmallText) {
+          Button("+ 500", id: WidgetID("demo.more"), fontScale: demoSmallText) {
             state.adjustItems(by: 500)
           }
-          Button("Speed \(state.speedLabel)", id: WidgetID("remote.speed"), fontScale: remoteSmallText) {
+          Button("Speed \(state.speedLabel)", id: WidgetID("demo.speed"), fontScale: demoSmallText) {
             state.cycleSpeed()
           }
-          Button(state.palette.rawValue, id: WidgetID("remote.palette"), fontScale: remoteSmallText) {
+          Button(state.palette.rawValue, id: WidgetID("demo.palette"), fontScale: demoSmallText) {
             state.cyclePalette()
           }
-          Button(state.shape.rawValue, id: WidgetID("remote.shape"), fontScale: remoteSmallText) {
+          Button(state.shape.rawValue, id: WidgetID("demo.shape"), fontScale: demoSmallText) {
             state.cycleShape()
           }
-          Button("Burst!", id: WidgetID("remote.burst"), fontScale: remoteSmallText) {
+          Button("Burst!", id: WidgetID("demo.burst"), fontScale: demoSmallText) {
             state.triggerBurst()
           }
           Spacer()
@@ -167,7 +167,7 @@ private struct PerformanceScene: Block {
           VStack(spacing: 10) {
             VStack(spacing: 6) {
               Text("MANDELBROT / 640 × 400 RGBA")
-                .fontScale(remoteSmallText)
+                .fontScale(demoSmallText)
                 .foregroundColor(theme.accent)
               Image(state.image, scaling: .contain)
                 .sizing(x: .grow, y: .fixed(160))
@@ -190,11 +190,11 @@ private struct PerformanceScene: Block {
 
         HStack(spacing: 12) {
           Text(state.lastAction)
-            .fontScale(remoteSmallText)
+            .fontScale(demoSmallText)
             .foregroundColor(theme.foreground)
           Spacer()
           Text("\(state.itemCount) shapes  •  \(state.palette.rawValue)  •  \(state.shape.rawValue)")
-            .fontScale(remoteSmallText)
+            .fontScale(demoSmallText)
             .foregroundColor(theme.accent)
         }
         .padding(10)
@@ -213,33 +213,33 @@ private struct UUIDList: Block {
     ThemeReader { theme in
       VStack(spacing: 8) {
         Text("\(state.identifiers.count) UUIDs / SCROLL TEST")
-          .fontScale(remoteSmallText)
+          .fontScale(demoSmallText)
           .foregroundColor(theme.accent)
         Text("Scroll here with the wheel or trackpad.")
-          .fontScale(remoteSmallText)
+          .fontScale(demoSmallText)
           .foregroundColor(theme.secondaryForeground)
         HStack(spacing: 6) {
-          Button("Generate", id: WidgetID("remote.uuid.generate"), fontScale: remoteSmallText) {
+          Button("Generate", id: WidgetID("demo.uuid.generate"), fontScale: demoSmallText) {
             state.regenerateIdentifiers()
           }
-          Button("Top", id: WidgetID("remote.uuid.top"), fontScale: remoteSmallText) {
+          Button("Top", id: WidgetID("demo.uuid.top"), fontScale: demoSmallText) {
             state.uuidScrollController.scrollToTop()
           }
-          Button("Bottom", id: WidgetID("remote.uuid.bottom"), fontScale: remoteSmallText) {
+          Button("Bottom", id: WidgetID("demo.uuid.bottom"), fontScale: demoSmallText) {
             state.uuidScrollController.scrollToBottom()
           }
         }
         LazyVStack(
-          id: WidgetID("remote.uuid.scroll"),
+          id: WidgetID("demo.uuid.scroll"),
           data: state.identifiers.indices, rowHeight: 48, spacing: 5,
           controller: state.uuidScrollController
         ) { index in
           VStack(spacing: 3) {
             Text("UUID \(index + 1)")
-              .fontScale(remoteSmallText)
+              .fontScale(demoSmallText)
               .foregroundColor(theme.secondaryForeground)
             Text(state.identifiers[index])
-              .fontScale(remoteSmallText)
+              .fontScale(demoSmallText)
               .foregroundColor(theme.foreground)
           }
           .padding(8)

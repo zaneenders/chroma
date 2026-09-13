@@ -1,12 +1,15 @@
-#if !os(macOS)
 import Chroma
 import DemoContent
 
-#if os(Linux)
+#if os(macOS)
+import MetalBackend
+#elseif os(Linux)
 import WaylandBackend
 #endif
 
-#if os(Linux)
+#if os(macOS)
+private protocol DemoApp: MetalApp {}
+#elseif os(Linux)
 private protocol DemoApp: WaylandApp {}
 #else
 private protocol DemoApp: App {}
@@ -58,5 +61,3 @@ private struct ConfiguredDemo: DemoApp {
   var keyBindings: KeyBindings { demo.keyBindings }
   var body: some Block { demo.body }
 }
-
-#endif

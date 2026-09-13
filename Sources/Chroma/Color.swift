@@ -1,4 +1,4 @@
-public struct Color: Equatable, Sendable {
+public struct Color: Equatable, Sendable, Codable {
   public var r: Float
   public var g: Float
   public var b: Float

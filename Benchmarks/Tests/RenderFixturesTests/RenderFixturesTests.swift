@@ -1,5 +1,4 @@
 import Chroma
-import RemoteProtocol
 import RenderFixtures
 import Testing
 
@@ -7,20 +6,12 @@ import Testing
 func deterministicReplay(scene: String) throws {
   let fixture = try RenderFixture(name: scene, count: 256)
   #expect(fixture.list.commands == (try RenderFixture(name: scene, count: 256)).list.commands)
-  var sender = RemoteImageCache()
-  var receiver = RemoteImageCache()
-  var sizes: [Int] = []
-  for frame in 0..<(fixture.sequence.count * 2 + 1) {
-    let message = RemoteMessage.frame(
-      id: UInt64(frame), inputSequence: 0,
-      viewport: fixture.viewport, commands: fixture.sequence[frame % fixture.sequence.count].commands)
-    var wire = try RemoteWire.encode(message, images: &sender)
-    sizes.append(wire.readableBytes)
-    #expect(try RemoteWire.decode(from: &wire, images: &receiver) == message)
-    #expect(wire.readableBytes == 0)
+  for list in fixture.sequence {
+    let frame = FrameObservation(drawList: list, viewport: fixture.viewport)
+    let replay = try SceneCapture.decode(SceneCapture.encode(frame))
+    #expect(replay.drawList.commands == list.commands)
+    #expect(replay.viewport == fixture.viewport)
   }
-  if fixture.sequence.count == 1 { #expect(sizes[1] == sizes[2]) }
-  if scene == "images" { #expect(sizes[0] > sizes[1]) }
   let culled = fixture.list.culled(to: fixture.viewport)
   #expect(culled.commands == culled.culled(to: fixture.viewport).commands)
   if scene == "clipped" { #expect(culled.commands.count < fixture.list.commands.count) }

@@ -8,7 +8,7 @@ struct ComparisonError: Error, CustomStringConvertible {
 struct BenchmarkRuns {
   static let metadataNames = ["toolchain.txt", "hardware.txt", "dependencies.json"]
   static let configKeys = [
-    "schemaVersion", "fixtureVersion", "protocolVersion", "os", "processors",
+    "schemaVersion", "fixtureVersion", "os", "processors",
     "scene", "stage", "count", "warmup", "minimumFrames", "minimumSeconds", "sequenceFrames",
     "commandCountMin", "commandCountMax",
   ]

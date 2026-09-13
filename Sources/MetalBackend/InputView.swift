@@ -2,9 +2,9 @@ import AppKit
 import Chroma
 import MetalKit
 
-public final class ChromaInputView: MTKView {
-  public var onRemoteKey: ((KeyChord?, String?) -> Void)?
-  public var onInputAvailable: (() -> Void)?
+final class ChromaInputView: MTKView {
+  var onKey: ((KeyChord?, String?) -> Void)?
+  var onInputAvailable: (() -> Void)?
   private var pointerPosition = Point(x: -1, y: -1)
   private var pointerPressPosition = Point(x: -1, y: -1)
   private var pointerDown = false
@@ -12,7 +12,7 @@ public final class ChromaInputView: MTKView {
   private var releasedEdge = false
   private var scroll = Point.zero
 
-  public func frameInput() -> InputState {
+  func frameInput() -> InputState {
     let input = InputState(
       pointerPosition: pointerPosition,
       pointerPressPosition: pointerPressPosition,
@@ -33,7 +33,7 @@ public final class ChromaInputView: MTKView {
     onInputAvailable?()
   }
 
-  public override func updateTrackingAreas() {
+  override func updateTrackingAreas() {
     super.updateTrackingAreas()
     for area in trackingAreas { removeTrackingArea(area) }
     addTrackingArea(
@@ -46,17 +46,17 @@ public final class ChromaInputView: MTKView {
     )
   }
 
-  public override func mouseMoved(with event: NSEvent) {
+  override func mouseMoved(with event: NSEvent) {
     updatePointer(with: event)
     scheduleRedraw()
   }
 
-  public override func mouseDragged(with event: NSEvent) {
+  override func mouseDragged(with event: NSEvent) {
     updatePointer(with: event)
     scheduleRedraw()
   }
 
-  public override func mouseDown(with event: NSEvent) {
+  override func mouseDown(with event: NSEvent) {
     unsafe window?.makeFirstResponder(self)
     updatePointer(with: event)
     pointerPressPosition = pointerPosition
@@ -65,31 +65,31 @@ public final class ChromaInputView: MTKView {
     scheduleRedraw()
   }
 
-  public override func mouseUp(with event: NSEvent) {
+  override func mouseUp(with event: NSEvent) {
     updatePointer(with: event)
     pointerDown = false
     releasedEdge = true
     scheduleRedraw()
   }
 
-  public override func mouseExited(with event: NSEvent) {
+  override func mouseExited(with event: NSEvent) {
     pointerPosition = Point(x: -1, y: -1)
     scheduleRedraw()
   }
 
-  public override func scrollWheel(with event: NSEvent) {
+  override func scrollWheel(with event: NSEvent) {
     scroll.x += Float(event.scrollingDeltaX)
     scroll.y += Float(event.scrollingDeltaY)
     scheduleRedraw()
   }
 
-  public override var acceptsFirstResponder: Bool { true }
+  override var acceptsFirstResponder: Bool { true }
 
-  public override func keyDown(with event: NSEvent) {
-    if let onRemoteKey {
+  override func keyDown(with event: NSEvent) {
+    if let onKey {
       let text: String?
       if case .insert(let value) = Self.textInsertionEvent(for: event) { text = value } else { text = nil }
-      onRemoteKey(Self.keyChord(for: event), text)
+      onKey(Self.keyChord(for: event), text)
       return
     }
     super.keyDown(with: event)

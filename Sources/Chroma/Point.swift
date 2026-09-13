@@ -1,4 +1,4 @@
-public struct Point: Equatable, Sendable {
+public struct Point: Equatable, Sendable, Codable {
   public var x: Float
   public var y: Float
 
