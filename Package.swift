@@ -78,6 +78,11 @@ targets.append(contentsOf: [
 #if os(Linux)
 products.append(.library(name: "WaylandBackend", targets: ["WaylandBackend"]))
 targets.append(contentsOf: [
+  .testTarget(
+    name: "WaylandBackendTests",
+    dependencies: ["WaylandBackend"],
+    swiftSettings: [.strictMemorySafety()]
+  ),
   .target(
     name: "WaylandBackend",
     dependencies: [

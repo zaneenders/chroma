@@ -766,7 +766,7 @@ public final class WaylandRenderer: Renderer {
 
   private static let pointerAxis:
     @convention(c) (UnsafeMutableRawPointer?, OpaquePointer?, UInt32, UInt32, Int32) -> Void = {
-      data, _, _, axis, value in
+      data, _, time, axis, value in
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
@@ -774,9 +774,9 @@ public final class WaylandRenderer: Renderer {
         let delta = -fixedToFloat(value)
         switch axis {
         case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
-          renderer.input.scrollBy(x: delta, y: 0)
+          renderer.input.scrollBy(x: delta, y: 0, time: time)
         case WL_POINTER_AXIS_VERTICAL_SCROLL.rawValue:
-          renderer.input.scrollBy(x: 0, y: delta)
+          renderer.input.scrollBy(x: 0, y: delta, time: time)
         default: break
         }
         renderer.requestFrame()
@@ -790,8 +790,24 @@ public final class WaylandRenderer: Renderer {
     button: pointerButton,
     axis: pointerAxis,
     frame: { _, _ in },
-    axis_source: { _, _, _ in },
-    axis_stop: { _, _, _, _ in },
+    axis_source: { data, _, source in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.input.scrollSource(isFinger: source == WL_POINTER_AXIS_SOURCE_FINGER.rawValue)
+      }
+    },
+    axis_stop: { data, _, time, axis in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        renderer.input.stopScroll(
+          horizontal: axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue, time: time)
+        renderer.requestFrame()
+      }
+    },
     axis_discrete: { _, _, _, _ in },
     axis_value120: { _, _, _, _ in },
     axis_relative_direction: { _, _, _, _ in },
@@ -926,7 +942,7 @@ public final class WaylandRenderer: Renderer {
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
     // The compositor callback releases framePending and services this demand.
-    if frameProducer.needsAnimationFrame { dirty = true }
+    if frameProducer.needsAnimationFrame || input.hasScrollMomentum { dirty = true }
   }
 
   private func updateFrameRate() {
