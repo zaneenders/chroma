@@ -22,12 +22,10 @@ struct ScrollMomentumTests {
 
   @Test func flickCarriesFartherWithFasterRelease() {
     var momentum = fling()
-    // A 1000-point/s gesture now releases at 1250 points/s.
     let first = momentum.advance(now: 1.01)
     #expect(first < -12 && first > -12.5)
     var distance = first
     for frame in 2...150 { distance += momentum.advance(now: 1 + Double(frame) / 100) }
-    // Previously this gesture travelled about 124 points after release.
     #expect(distance < -207 && distance > -209)
     #expect(!momentum.isActive)
   }

@@ -246,9 +246,6 @@ public final class WaylandRenderer: Renderer {
     flushWayland()
   }
 
-  // libwayland invokes these callbacks synchronously during main-actor dispatch/roundtrip.
-  // Pointer aliases are valid only for the synchronous callback; no pointer is sent to another executor.
-  // Keep the runtime isolation check inside each callback before accessing renderer state.
   private static var frameListener = unsafe wl_callback_listener(
     done: { data, callback, _ in
       nonisolated(unsafe) let callback = callback
@@ -941,7 +938,6 @@ public final class WaylandRenderer: Renderer {
     _ = interaction.consumeRedrawRequest()
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
-    // The compositor callback releases framePending and services this demand.
     if frameProducer.needsAnimationFrame || input.hasScrollMomentum { dirty = true }
   }
 

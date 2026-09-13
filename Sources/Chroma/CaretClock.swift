@@ -1,6 +1,5 @@
 import Observation
 
-/// Runs only while a rendered text input needs a blinking caret.
 @Observable
 @MainActor
 final class CaretClock {

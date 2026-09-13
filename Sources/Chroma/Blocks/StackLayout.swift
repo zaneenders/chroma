@@ -1,4 +1,3 @@
-// Shared mechanics only; the public stacks retain their axis-specific expansion behavior.
 @MainActor
 struct StackLayout {
   enum Axis {

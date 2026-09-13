@@ -1,7 +1,5 @@
 @MainActor
 extension Interaction {
-  /// Input uses geometry from the last completed frame. Layout only normalizes
-  /// the resulting offset against the current content extent.
   func registerScrollInput(id: WidgetID, rect: Rect, horizontal: Bool = false) {
     buildingInputHandlers[id] = { [weak self] in
       guard let self else { return }

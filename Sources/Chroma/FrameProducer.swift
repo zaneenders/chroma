@@ -73,7 +73,6 @@ package final class FrameProducer {
     let interaction = context.interaction
     interaction.animationFrame = AnimationFrame(timestamp: clock())
     if interaction.tree == nil {
-      // Bootstrap hit geometry without delivering input or executing actions.
       let editingLeaf = interaction.editingLeaf
       let caret = interaction.caretOffset
       let selection = interaction.textSelectionRange

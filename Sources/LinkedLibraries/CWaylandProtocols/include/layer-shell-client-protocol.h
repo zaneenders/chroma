@@ -9,16 +9,7 @@
 extern "C" {
 #endif
 
-/**
- * @page page_wlr_layer_shell_unstable_v1 The wlr_layer_shell_unstable_v1
- * protocol
- * @section page_ifaces_wlr_layer_shell_unstable_v1 Interfaces
- * - @subpage page_iface_zwlr_layer_shell_v1 - create surfaces that are layers
- * of the desktop
- * - @subpage page_iface_zwlr_layer_surface_v1 - layer metadata interface
- * @section page_copyright_wlr_layer_shell_unstable_v1 Copyright
- * <pre>
- *
+/*
  * Copyright © 2017 Drew DeVault
  *
  * Permission to use, copy, modify, distribute, and sell this
@@ -41,7 +32,6 @@ extern "C" {
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
  * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
  * THIS SOFTWARE.
- * </pre>
  */
 struct wl_output;
 struct wl_surface;

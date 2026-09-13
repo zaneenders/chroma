@@ -35,8 +35,6 @@ extension Interaction {
     var editing = editingLeaf == id
     if editing {
       editingText = text
-      // Frames without editing events must not materialize the entire draft.
-      // Keep clamping correct when the model replaces text outside the editor.
       if input.textEvents.isEmpty && !isProcessingDrag {
         if inputLengthText != text {
           inputLengthText = text

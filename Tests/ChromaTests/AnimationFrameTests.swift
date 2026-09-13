@@ -42,7 +42,7 @@ struct AnimationFrameTests {
     #expect(producer.needsAnimationFrame)
 
     samples.timestamps = []
-    clock.now = 102.5  // A dropped/delayed frame uses actual time, not a fixed tick.
+    clock.now = 102.5
     render(
       HStack {
         Animated(samples: samples)

@@ -9,18 +9,7 @@
 extern "C" {
 #endif
 
-/**
- * @page page_xdg_shell The xdg_shell protocol
- * @section page_ifaces_xdg_shell Interfaces
- * - @subpage page_iface_xdg_wm_base - create desktop-style surfaces
- * - @subpage page_iface_xdg_positioner - child surface positioner
- * - @subpage page_iface_xdg_surface - desktop user interface surface base
- * interface
- * - @subpage page_iface_xdg_toplevel - toplevel surface
- * - @subpage page_iface_xdg_popup - short-lived, popup surfaces for menus
- * @section page_copyright_xdg_shell Copyright
- * <pre>
- *
+/*
  * Copyright © 2008-2013 Kristian Høgsberg
  * Copyright © 2013      Rafael Antognolli
  * Copyright © 2013      Jasper St. Pierre
@@ -46,7 +35,6 @@ extern "C" {
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- * </pre>
  */
 struct wl_output;
 struct wl_seat;

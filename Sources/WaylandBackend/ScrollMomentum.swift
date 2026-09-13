@@ -1,9 +1,6 @@
 import Foundation
 
-/// One Wayland scroll axis. Event timestamps estimate release velocity; a
-/// monotonic clock drives decay independently of the display's refresh rate.
 struct ScrollMomentum {
-  // A modest release boost and slower decay make short flicks carry farther.
   private static let releaseSpeedMultiplier: Float = 1.25
   private static let decayRate: Double = 6
 
@@ -48,7 +45,6 @@ struct ScrollMomentum {
   mutating func advance(now: TimeInterval) -> Float {
     guard let previous = lastFrameTime else { return 0 }
     let elapsed = now - previous
-    // Do not jump after a suspended or hidden window resumes.
     guard elapsed >= 0 && elapsed <= 0.25 else {
       cancel()
       return 0

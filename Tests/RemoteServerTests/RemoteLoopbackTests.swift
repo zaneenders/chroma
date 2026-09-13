@@ -266,7 +266,7 @@ extension RemoteLoopbackTests {
     let first = try #require(samples.times.last)
     let count = samples.times.count
     try await Task.sleep(for: .milliseconds(150))
-    #expect(samples.times.count == count)  // No autonomous animation timer.
+    #expect(samples.times.count == count)
     try await peer.send(.waitForFrame)
     _ = try await peer.reply()
     let second = try #require(samples.times.last)

@@ -108,7 +108,6 @@ package final class Interaction {
   @ObservationIgnored var builderStack: [FocusNode] = []
   @ObservationIgnored var builderPath: [Int] = []
 
-  // Registrations belong to the last completed frame, not observable UI state.
   @ObservationIgnored var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
   @ObservationIgnored var buildingInputHandlers: [WidgetID: @MainActor () -> Void] = [:]
   @ObservationIgnored var buttonActions: [WidgetID: @MainActor () -> Void] = [:]

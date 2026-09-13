@@ -18,7 +18,6 @@ struct ShaderSourceGenerator {
       else { throw GeneratorError.invalidName(name) }
       let source = try String(contentsOfFile: arguments[index + 1], encoding: .utf8)
       var hashes = "#"
-      // Exclude every raw escape, not just interpolation.
       while source.contains("\"\"\"\(hashes)") || source.contains("\\\(hashes)") {
         hashes += "#"
       }
