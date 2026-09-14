@@ -62,7 +62,7 @@ final class PerformanceDemoState {
 
   func cycleSpeed() {
     speed = speed >= 2 ? 0.5 : speed + 0.5
-    lastAction = "Animation speed is now \(speedLabel)"
+    lastAction = "Speed: \(speedLabel)"
   }
 
   func cyclePalette() {
@@ -74,7 +74,7 @@ final class PerformanceDemoState {
   func cycleShape() {
     let values = Shape.allCases
     shape = values[(values.firstIndex(of: shape)! + 1) % values.count]
-    lastAction = "Shape style is now \(shape.rawValue.lowercased())"
+    lastAction = "Shape: \(shape.rawValue.lowercased())"
   }
 
   func togglePaused() {
@@ -87,7 +87,7 @@ final class PerformanceDemoState {
     } else {
       pauseStartedAt = now
       isPaused = true
-      lastAction = "Animation paused — controls still work"
+      lastAction = "Animation paused"
     }
   }
 
@@ -118,14 +118,9 @@ private struct PerformanceScene: Block {
     ThemeReader { theme in
       VStack(spacing: 0) {
         HStack(spacing: 12) {
-          VStack(spacing: 3) {
-            Text("CHROMA / RENDER LAB")
-              .fontScale(demoTitleText)
-              .foregroundColor(theme.accent)
-            Text("Local state, layout, and GPU rendering in one process.")
-              .fontScale(demoSmallText)
-              .foregroundColor(theme.secondaryForeground)
-          }
+          Text("CHROMA / RENDER LAB")
+            .fontScale(demoTitleText)
+            .foregroundColor(theme.accent)
           Spacer()
           Text(state.isPaused ? "● PAUSED" : "● LIVE")
             .fontScale(demoSmallText)
@@ -362,7 +357,6 @@ struct PerformanceDemo: Block {
           TextField(
             "Copy source", id: WidgetID("clipboard.source"), fontScale: 0.7,
             text: { state.sourceText }, onChange: { state.sourceText = $0 })
-          Text("Paste target — click, then paste from your local clipboard.").fontScale(0.65)
           TextField(
             "Paste here…", id: WidgetID("clipboard.target"), fontScale: 0.7,
             text: { state.pastedText }, onChange: { state.pastedText = $0 })

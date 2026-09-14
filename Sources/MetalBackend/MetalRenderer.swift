@@ -47,7 +47,7 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
     displayRenderer = try MetalDisplayListRenderer(device: device, pixelFormat: view.colorPixelFormat)
     super.init()
     view.delegate = self
-    // Process each input event locally before the next one (including clipboard operations).
+    // Process each input event before the next one (including clipboard operations).
     view.onInputAvailable = { [weak self] in self?.view.draw() }
     view.onKey = { [weak self] chord, text in self?.handleKey(chord, text: text) }
     interaction.onRedrawRequested = { [weak self] in self?.view.needsDisplay = true }
