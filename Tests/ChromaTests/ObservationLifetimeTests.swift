@@ -1,4 +1,3 @@
-import Dispatch
 import Observation
 import Synchronization
 import Testing
@@ -25,6 +24,7 @@ private final class SubscriptionLifetimeProbe: Sendable {
   }
 }
 
+@Suite(ControlledObservationDelivery())
 @MainActor
 struct ObservationLifetimeTests {
   @Observable final class Model {
@@ -32,9 +32,7 @@ struct ObservationLifetimeTests {
   }
 
   private func drainChanges() async {
-    await withCheckedContinuation { continuation in
-      DispatchQueue.main.async { continuation.resume() }
-    }
+    await drainObservationChanges()
   }
 
   private func render(

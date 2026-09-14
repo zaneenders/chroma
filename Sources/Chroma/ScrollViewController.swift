@@ -1,4 +1,3 @@
-import Dispatch
 import Observation
 import Synchronization
 
@@ -62,6 +61,7 @@ final class LazyRowMeasurement {
     let validity = validity
     let subscription = FrameTrackingSubscription { [weak self] in self?.invalidationDelivered = true }
     self.subscription = subscription
+    let enqueue = ObservationDelivery.enqueue
     size = withObservationTracking(options: .didSet) {
       subscription.trackCancellation()
       return measure()
@@ -71,7 +71,7 @@ final class LazyRowMeasurement {
       // can reuse the size; deliver observable redraw demand on the main actor.
       validity.valid.withLock { $0 = false }
       guard let invalidate = subscription.takeCallback() else { return }
-      DispatchQueue.main.async { invalidate() }
+      enqueue { invalidate() }
     }
   }
 

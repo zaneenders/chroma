@@ -1,4 +1,3 @@
-import Dispatch
 import Foundation
 import Observation
 import Synchronization
@@ -102,6 +101,7 @@ package final class FrameProducer {
     interaction.beginFrame(input: input)
     let subscription = FrameTrackingSubscription(onChange)
     self.subscription = subscription
+    let enqueue = ObservationDelivery.enqueue
     let drawList = withObservationTracking(options: .didSet) {
       subscription.trackCancellation()
       var drawList = DrawList()
@@ -113,7 +113,7 @@ package final class FrameProducer {
     } onChange: { [weak self, weak subscription] event in
       event.cancel()
       guard let onChange = subscription?.takeCallback() else { return }
-      DispatchQueue.main.async { [weak self] in
+      enqueue { [weak self] in
         guard let self, self.generation == generation else { return }
         onChange()
       }

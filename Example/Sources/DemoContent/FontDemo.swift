@@ -72,8 +72,6 @@ struct FontDemo: Block {
             Text("Gray: 20 x 28 glyph canvas").fontScale(0.5)
             Text("8x magnification").fontScale(0.5)
             Spacer()
-            Text("Bundled bitmap data only.").fontScale(0.5)
-            Text("No external font libraries.").fontScale(0.5)
           }
           .padding(12).sizing(x: .fixed(270), y: .grow).background(theme.surface)
         }.sizing(x: .grow, y: .grow)

@@ -1,10 +1,10 @@
-import Dispatch
 import HeadlessBackend
 import Observation
 import Testing
 
 @testable import Chroma
 
+@Suite(ControlledObservationDelivery())
 @MainActor
 struct ObservationTests {
   @Observable
@@ -16,9 +16,7 @@ struct ObservationTests {
   }
 
   private func drainChanges() async {
-    await withCheckedContinuation { continuation in
-      DispatchQueue.main.async { continuation.resume() }
-    }
+    await drainObservationChanges()
   }
 
   @Test func tracksOnlyReadPropertiesAndRearmsAfterRendering() async {

@@ -1,10 +1,10 @@
-import Dispatch
 import HeadlessBackend
 import Observation
 import Testing
 
 @testable import Chroma
 
+@Suite(ControlledObservationDelivery())
 @MainActor
 struct ReviewRegressionTests {
   @Observable final class Model {
@@ -104,10 +104,9 @@ struct ReviewRegressionTests {
     renderer.render()
     #expect(capture.measurements == 1)
     for height: Float in [50, 80] {
-      try? await Task.sleep(for: .milliseconds(20))
       redraws = 0
       model.height = height
-      try? await Task.sleep(for: .milliseconds(20))
+      await drainObservationChanges()
       #expect(redraws > 0)
       renderer.render()
       #expect(capture.drawnHeight == height)
@@ -190,9 +189,7 @@ struct ReviewRegressionTests {
     }
     #expect(capture.measurements == 4)
     // Queued callbacks for replaced measurements must not invalidate the new cache.
-    await withCheckedContinuation { continuation in
-      DispatchQueue.main.async { continuation.resume() }
-    }
+    await drainObservationChanges()
     renderer.render()
     #expect(capture.measurements == 4)
   }

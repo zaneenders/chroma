@@ -56,7 +56,8 @@ struct FrameUpdateTests {
     renderer.close()
   }
 
-  @Test func externalScrollRequestInvalidatesObservedFrame() async {
+  @Test(ControlledObservationDelivery())
+  func externalScrollRequestInvalidatesObservedFrame() async {
     let controller = ScrollViewController()
     let renderer = HeadlessRenderer()
     renderer.content = ScrollView(id: WidgetID("scroll"), controller: controller) {
@@ -66,19 +67,58 @@ struct FrameUpdateTests {
     renderer.onRedrawRequested = { requests += 1 }
     renderer.render()
     controller.scrollToBottom()
-    try? await Task.sleep(for: .milliseconds(20))
+    await drainObservationChanges()
     #expect(requests == 1)
     renderer.close()
   }
 
-  @Test func caretClockStopsWhenInactive() async {
-    let clock = CaretClock()
+  @Test(.timeLimit(.minutes(1)))
+  func caretClockStopsWhenInactive() async throws {
+    let (ticks, continuation) = AsyncStream<PendingTick>.makeStream()
+    defer { continuation.finish() }
+    let clock = CaretClock { duration in
+      await withCheckedContinuation { resume in
+        continuation.yield(PendingTick(duration: duration, resume: resume))
+      }
+    }
+    var iterator = ticks.makeAsyncIterator()
+    #expect(clock.visible)
     clock.setActive(true)
-    try? await Task.sleep(for: .milliseconds(800))
+    let first = try #require(await iterator.next())
+    #expect(first.duration == .milliseconds(720))
+    first.resume.resume()
+    let second = try #require(await iterator.next())
     #expect(!clock.visible)
+    #expect(second.duration == .milliseconds(480))
+
+    let oldTask = try #require(clock.task)
+    // Simulate sleep completing just before deactivation, with its task still queued.
+    second.resume.resume()
     clock.setActive(false)
     #expect(clock.visible)
-    try? await Task.sleep(for: .milliseconds(800))
+    await oldTask.value
     #expect(clock.visible)
+
+    // An old cancelled tick must not interfere with a newly started clock either.
+    clock.setActive(true)
+    let third = try #require(await iterator.next())
+    let restartedTask = try #require(clock.task)
+    third.resume.resume()
+    clock.setActive(false)
+    clock.setActive(true)
+    await restartedTask.value
+    #expect(clock.visible)
+    let fourth = try #require(await iterator.next())
+    #expect(fourth.duration == .milliseconds(720))
+    let finalTask = try #require(clock.task)
+    clock.setActive(false)
+    fourth.resume.resume()
+    await finalTask.value
+    #expect(clock.visible)
+  }
+
+  private struct PendingTick: Sendable {
+    let duration: Duration
+    let resume: CheckedContinuation<Void, Never>
   }
 }
