@@ -1,6 +1,7 @@
 public struct BorderBlock: PrimitiveBlock {
   public var content: any Block
   public var color: Color
+  public var radii: CornerRadii = .zero
   public var width: Float
 
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
@@ -12,6 +13,12 @@ public struct BorderBlock: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     BlockEngine.draw(content, into: &drawList, in: rect, context: context)
-    drawList.strokeRect(rect, width: width, color: color)
+    if radii == .zero {
+      drawList.strokeRect(rect, width: width, color: color)
+    } else {
+      drawList.strokeRoundedRect(rect, radii: radii, width: width, color: color)
+    }
   }
 }
+
+public typealias RoundedBorderBlock = BorderBlock
