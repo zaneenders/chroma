@@ -1,6 +1,7 @@
 import Chroma
 import Foundation
 import HeadlessBackend
+import Synchronization
 import Testing
 
 @testable import DemoContent
@@ -8,12 +9,12 @@ import Testing
 @MainActor
 struct DemoContentTests {
   @Test func animationPreservesFrameSizedTimeIncrements() {
-    var now: TimeInterval = 800_000_000
-    let state = PerformanceDemoState(itemCount: 100, clock: { now })
+    let now = Mutex<TimeInterval>(800_000_000)
+    let state = PerformanceDemoState(itemCount: 100, clock: { now.withLock { $0 } })
     #expect(state.elapsedTime() == 0)
-    now += 1.0 / 60
+    now.withLock { $0 += 1.0 / 60 }
     let first = state.elapsedTime()
-    now += 1.0 / 60
+    now.withLock { $0 += 1.0 / 60 }
     let second = state.elapsedTime()
     #expect(abs(first - 1.0 / 60) < 0.00001)
     #expect(abs(second - 2.0 / 60) < 0.00001)
@@ -21,16 +22,16 @@ struct DemoContentTests {
   }
 
   @Test func animationPauseExcludesPausedTimeAndRetainsSpeed() {
-    var now: TimeInterval = 800_000_000
-    let state = PerformanceDemoState(itemCount: 100, clock: { now })
-    now += 2
+    let now = Mutex<TimeInterval>(800_000_000)
+    let state = PerformanceDemoState(itemCount: 100, clock: { now.withLock { $0 } })
+    now.withLock { $0 += 2 }
     state.togglePaused()
     #expect(state.elapsedTime() == 2)
-    now += 100
+    now.withLock { $0 += 100 }
     #expect(state.elapsedTime() == 2)
     state.togglePaused()
     #expect(state.elapsedTime() == 2)
-    now += 0.5
+    now.withLock { $0 += 0.5 }
     #expect(state.elapsedTime() == 2.5)
     state.speed = 2
     #expect(state.elapsedTime() == 5)
