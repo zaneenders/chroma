@@ -41,7 +41,7 @@ struct ChromaDemo {
     #if os(macOS)
     let modifier: KeyModifiers = .command
     #else
-    let modifier: KeyModifiers = .superKey
+    let modifier: KeyModifiers = .control
     #endif
     ConfiguredDemo.configuration = try DemoApplication(
       shortcutModifier: modifier,

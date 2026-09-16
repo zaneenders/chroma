@@ -1,5 +1,5 @@
-import Chroma
 import CXKBKeyboard
+import Chroma
 
 @diagnose(
   StrictMemorySafety, as: ignored,
@@ -195,6 +195,7 @@ final class WaylandKeyboard {
       pendingTextEvents.append(.paste(id, session: session))
       onPaste?(id)
     case .selectAll:
+      if onSelectAll?() == true { return }
       pendingTextEvents.append(.event(event, session: session))
     default:
       pendingTextEvents.append(.event(event, session: session))

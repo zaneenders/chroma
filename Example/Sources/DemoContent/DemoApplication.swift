@@ -10,7 +10,7 @@ public struct DemoApplication: App {
     #if os(macOS)
     self.init(shortcutModifier: .command)
     #else
-    self.init(shortcutModifier: .superKey)
+    self.init(shortcutModifier: .control)
     #endif
   }
 
