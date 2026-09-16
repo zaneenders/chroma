@@ -241,6 +241,29 @@ struct RenderingCommandTests {
       ])
   }
 
+  @Test func zeroRadiusBorderUsesRectangularCommand() {
+    let rect = Rect(x: 2, y: 3, width: 40, height: 24)
+    let content = CommandProbe(name: "square")
+    let context = RenderContext()
+    let square = render(content.border(.yellow, width: 2), in: rect, context: context)
+    let rounded = render(
+      content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: context)
+    #expect(rounded.commands == square.commands)
+  }
+
+  @Test(arguments: [CornerRadii.zero, CornerRadii(4)])
+  func bordersPreserveContentLayout(radii: CornerRadii) {
+    let context = RenderContext()
+    let proposal = Size(width: 100, height: 40)
+    let content = CommandProbe(name: "layout").sizing(x: .grow)
+    let border = content.roundedBorder(.yellow, radii: radii, width: 3)
+    #expect(
+      BlockEngine.measure(border, proposal: proposal, context: context)
+        == BlockEngine.measure(content, proposal: proposal, context: context))
+    #expect(BlockEngine.expandsHorizontally(border))
+    #expect(!BlockEngine.expandsVertically(border))
+  }
+
   @Test func cornerRadiiNormalizeWithoutOverlapping() {
     let normalized = CornerRadii(
       topLeft: 30, topRight: 30, bottomRight: -4, bottomLeft: 10

@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Chroma
 
 @MainActor
@@ -14,6 +15,27 @@ struct StackEvaluationTests {
       counter.bodies += 1
       return Text(counter.text).sizing(x: .grow, y: .grow)
     }
+  }
+
+  @Test func engineResolvesCompositeOncePerOperation() {
+    let counter = Counter()
+    let block = Composite(counter: counter)
+    let context = RenderContext()
+    let rect = Rect(x: 0, y: 0, width: 100, height: 40)
+    #expect(BlockEngine.expandsHorizontally(block))
+    #expect(counter.bodies == 1)
+    #expect(BlockEngine.expandsVertically(block))
+    #expect(counter.bodies == 2)
+    #expect(BlockEngine.measure(block, proposal: rect.size, context: context) == rect.size)
+    #expect(counter.bodies == 3)
+    var list = DrawList()
+    BlockEngine.draw(block, into: &list, in: rect, context: context)
+    #expect(counter.bodies == 4)
+    #expect(
+      list.commands.contains {
+        if case .text(_, "before", _, _) = $0 { return true }
+        return false
+      })
   }
 
   @Test(arguments: [false, true])
@@ -38,10 +60,11 @@ struct StackEvaluationTests {
     BlockEngine.draw(stack, into: &second, in: rect, context: context)
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
-    #expect(second.commands.contains {
-      if case .text(_, let text, _, _) = $0 { return text == "after" }
-      return false
-    })
+    #expect(
+      second.commands.contains {
+        if case .text(_, let text, _, _) = $0 { return text == "after" }
+        return false
+      })
     #expect(first.commands != second.commands)
   }
 }
