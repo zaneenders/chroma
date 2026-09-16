@@ -31,7 +31,7 @@ public struct DemoApplication: App {
   }
 
   public var keyBindings: KeyBindings {
-    let bindings = KeyBindings {
+    var bindings = KeyBindings {
       bind("c", modifiers: shortcutModifier, to: .editing(.copy))
       bind("x", modifiers: shortcutModifier, to: .editing(.cut))
       bind("v", modifiers: shortcutModifier, to: .editing(.paste))
@@ -49,6 +49,17 @@ public struct DemoApplication: App {
       bind(.enter, to: .editing(.submit))
       bind(.escape, to: .editing(.endEditing))
     }
+    #if os(Linux)
+    if shortcutModifier == .control || shortcutModifier == .superKey {
+      let alternate: KeyModifiers = shortcutModifier == .control ? .superKey : .control
+      bindings = bindings.overlay {
+        bind("c", modifiers: alternate, to: .editing(.copy))
+        bind("x", modifiers: alternate, to: .editing(.cut))
+        bind("v", modifiers: alternate, to: .editing(.paste))
+        bind("a", modifiers: alternate, to: .editing(.selectAll))
+      }
+    }
+    #endif
     guard capture != nil else { return bindings }
     return bindings.overlay {
       bind("g", modifiers: [.control, .shift], to: .application("demo.capture"))

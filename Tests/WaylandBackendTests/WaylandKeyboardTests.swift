@@ -33,6 +33,21 @@ struct WaylandKeyboardTests {
     return keyboard
   }
 
+  @Test func superASelectsAllInsteadOfInsertingText() throws {
+    let keyboard = try keyboard()
+    defer { keyboard.cleanup() }
+    keyboard.setKeyBindings(
+      KeyBindings {
+        bind("a", modifiers: .superKey, to: .editing(.selectAll))
+      })
+    keyboard.updateModifiers(depressed: 64, latched: 0, locked: 0, group: 0)
+    keyboard.keyPressed(30, editing: true, editingSession: 1, now: 0)
+    var commands: [Command] = []
+    var events: [TextEditEvent] = []
+    keyboard.drain(editingSession: 1, commands: &commands, textEvents: &events)
+    #expect(events == [.selectAll])
+  }
+
   @Test func selectAllOutsideEditorCallsSelectionHandler() throws {
     let keyboard = try keyboard()
     defer { keyboard.cleanup() }
