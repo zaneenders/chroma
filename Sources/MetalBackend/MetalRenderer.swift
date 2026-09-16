@@ -81,7 +81,7 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
     window.collectionBehavior.insert(.fullScreenPrimary)
     window.center()
     window.makeKeyAndOrderFront(nil)
-    unsafe window.makeFirstResponder(view)
+    window.makeFirstResponder(view)
     view.needsDisplay = true
     app.activate()
     app.run()
