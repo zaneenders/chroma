@@ -1,5 +1,5 @@
-import Chroma
 import CXKBKeyboard
+import Chroma
 
 @diagnose(
   StrictMemorySafety, as: ignored,
@@ -195,6 +195,7 @@ final class WaylandKeyboard {
       pendingTextEvents.append(.paste(id, session: session))
       onPaste?(id)
     case .selectAll:
+      if onSelectAll?() == true { return }
       pendingTextEvents.append(.event(event, session: session))
     default:
       pendingTextEvents.append(.event(event, session: session))
@@ -202,7 +203,7 @@ final class WaylandKeyboard {
   }
 
   private func text(for key: UInt32, keyboard: OpaquePointer) -> String? {
-    guard !modifier("Control", keyboard: keyboard), !modifier("Logo", keyboard: keyboard) else {
+    guard !modifier("Control", keyboard: keyboard), !modifier("Mod4", keyboard: keyboard) else {
       return nil
     }
     var buffer = [CChar](repeating: 0, count: 64)
@@ -240,7 +241,7 @@ final class WaylandKeyboard {
     if modifier("Shift", keyboard: keyboard) { modifiers.insert(.shift) }
     if modifier("Control", keyboard: keyboard) { modifiers.insert(.control) }
     if modifier("Mod1", keyboard: keyboard) { modifiers.insert(.option) }
-    if modifier("Logo", keyboard: keyboard) { modifiers.insert(.superKey) }
+    if modifier("Mod4", keyboard: keyboard) { modifiers.insert(.superKey) }
     return KeyChord(key, modifiers: modifiers)
   }
 

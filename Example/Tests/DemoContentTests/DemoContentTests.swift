@@ -49,6 +49,34 @@ struct DemoContentTests {
     #expect(decoded.drawList.commands == frame.commands)
   }
 
+  @Test func defaultClipboardShortcutsUsePlatformModifier() {
+    let demo = DemoApplication()
+    #if os(macOS)
+    let modifier: KeyModifiers = .command
+    #else
+    let modifier: KeyModifiers = .control
+    #endif
+    for (key, event): (Character, TextEditEvent) in [
+      ("a", .selectAll), ("c", .copy), ("x", .cut), ("v", .paste),
+    ] {
+      #expect(demo.keyBindings.command(for: KeyChord(key, modifiers: modifier))! == .editing(event))
+    }
+  }
+
+  #if os(Linux)
+  @Test func linuxClipboardShortcutsSupportControlAndSuper() {
+    for demo in [DemoApplication(), DemoApplication(shortcutModifier: .superKey)] {
+      for modifier: KeyModifiers in [.control, .superKey] {
+        for (key, event): (Character, TextEditEvent) in [
+          ("a", .selectAll), ("c", .copy), ("x", .cut), ("v", .paste),
+        ] {
+          #expect(demo.keyBindings.command(for: KeyChord(key, modifiers: modifier))! == .editing(event))
+        }
+      }
+    }
+  }
+  #endif
+
   @Test func shortcutsUseConfiguredPlatform() {
     let apple = DemoApplication(shortcutModifier: .command)
     let linux = DemoApplication(shortcutModifier: .superKey)
