@@ -407,7 +407,7 @@ struct ScrollViewTests {
 
     func frame(_ input: InputState = InputState()) {
       interaction.beginFrame(input: input)
-      interaction.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 100))
+      interaction.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 100))
       _ = interaction.interactiveBehavior(
         id: WidgetID("visible"), rect: Rect(x: 0, y: 0, width: 100, height: 10))
       interaction.pushClip(Rect(x: 0, y: 10, width: 100, height: 10))

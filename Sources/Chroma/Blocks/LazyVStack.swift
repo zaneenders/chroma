@@ -69,7 +69,6 @@ public struct LazyVStack: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let interaction = context.interaction
-    interaction.registerScrollViewport(rect)
     interaction.registerScrollInput(id: id, rect: rect)
     let contentHeight: Float
     if let uniformRows {
@@ -110,7 +109,7 @@ public struct LazyVStack: PrimitiveBlock {
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
-    interaction.beginGroup(.vertical, rect: rect)
+    interaction.beginGroup(rect: rect)
     let visibleTop = offset
     let visibleBottom = offset + rect.size.height
     if let uniformRows {

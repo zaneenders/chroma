@@ -1,18 +1,3 @@
-public enum NavigationCommand: Hashable, Sendable {
-  case up
-  case down
-  case left
-  case right
-  case `in`
-  case out
-  case next
-  case previous
-  case pageUp
-  case pageDown
-  case home
-  case end
-}
-
 public enum ActionCommand: Hashable, Sendable {
   case activate
   case submit
@@ -28,7 +13,6 @@ public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
 }
 
 public enum Command: Hashable, Sendable {
-  case navigation(NavigationCommand)
   case action(ActionCommand)
   case editing(TextEditEvent)
   case application(CommandID)
@@ -37,18 +21,6 @@ public enum Command: Hashable, Sendable {
 extension Command {
   package var label: String {
     switch self {
-    case .navigation(.up): "up"
-    case .navigation(.down): "down"
-    case .navigation(.left): "left"
-    case .navigation(.right): "right"
-    case .navigation(.in): "in"
-    case .navigation(.out): "out"
-    case .navigation(.next): "next"
-    case .navigation(.previous): "prev"
-    case .navigation(.pageUp): "page-up"
-    case .navigation(.pageDown): "page-down"
-    case .navigation(.home): "home"
-    case .navigation(.end): "end"
     case .action(.activate): "activate"
     case .action(.submit): "submit"
     case .action(.cancel): "cancel"

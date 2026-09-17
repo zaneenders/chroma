@@ -25,8 +25,7 @@ public struct ZStack: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let interaction = context.interaction
-    interaction.beginGroup(.none, rect: rect)
-    let cursorOnGroup = interaction.isCurrentGroupSelected
+    interaction.beginGroup(rect: rect)
     for child in children {
       let size = BlockEngine.measure(child, proposal: rect.size, context: context)
       BlockEngine.draw(
@@ -35,9 +34,6 @@ public struct ZStack: PrimitiveBlock {
         in: Rect(x: rect.minX, y: rect.minY, width: size.width, height: size.height),
         context: context)
     }
-    let retainedFocusGroup = interaction.endGroup()
-    if cursorOnGroup && retainedFocusGroup {
-      drawList.strokeRect(rect, width: 1, color: interaction.groupCursorColor)
-    }
+    interaction.endGroup()
   }
 }

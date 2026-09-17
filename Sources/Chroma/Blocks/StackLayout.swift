@@ -5,7 +5,6 @@ struct StackLayout {
 
     var main: WritableKeyPath<Size, Float> { self == .horizontal ? \.width : \.height }
     var cross: WritableKeyPath<Size, Float> { self == .horizontal ? \.height : \.width }
-    var focus: FocusAxis { self == .horizontal ? .horizontal : .vertical }
 
     @MainActor func expands(_ child: any PrimitiveBlock) -> Bool {
       self == .horizontal ? child.expandsHorizontally : child.expandsVertically
@@ -59,8 +58,7 @@ struct StackLayout {
     let children = originals.map { BlockEngine.resolve($0) }
     let sizes = layout(children, originals: originals, proposal: rect.size, context: context)
     let interaction = context.interaction
-    interaction.beginGroup(axis.focus, rect: rect)
-    let cursorOnGroup = interaction.isCurrentGroupSelected
+    interaction.beginGroup(rect: rect)
     var cursor = axis == .horizontal ? rect.minX : rect.minY
     if reversed { cursor += rect.size[keyPath: axis.main] }
     for (child, size) in zip(children, sizes) {
@@ -70,9 +68,6 @@ struct StackLayout {
       child.draw(into: &drawList, in: Rect(origin: origin, size: size), context: context)
       cursor += reversed ? -spacing : extent + spacing
     }
-    let retainedFocusGroup = interaction.endGroup()
-    if cursorOnGroup && retainedFocusGroup {
-      drawList.strokeRect(rect, width: 1, color: interaction.groupCursorColor)
-    }
+    interaction.endGroup()
   }
 }

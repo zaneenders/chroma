@@ -24,10 +24,6 @@ package final class Interaction {
 
   package internal(set) var selection: [Int]?
 
-  package internal(set) var lastMacro: [Command] = []
-
-  package var groupCursorColor = Color(r: 0.35, g: 0.6, b: 1, a: 0.4)
-
   @ObservationIgnored var tree: FocusNode?
 
   var pressedLeaf: WidgetID?
@@ -97,8 +93,6 @@ package final class Interaction {
   var horizontalScrollOffsets: [WidgetID: Float] = [:]
   @ObservationIgnored var scrollLimits: [WidgetID: Float] = [:]
   @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
-  @ObservationIgnored var scrollViewports: [Rect] = []
-  @ObservationIgnored var buildingScrollViewports: [Rect] = []
 
   @ObservationIgnored var clipStack: [Rect] = []
 
@@ -167,7 +161,7 @@ package final class Interaction {
       activatedLeaf = nil
       activatePending = false
       actionRoles = [:]
-      let root = FocusNode(kind: .group(.vertical), rect: .zero)
+      let root = FocusNode(kind: .group, rect: .zero)
       builderRoot = root
       builderStack = [root]
       builderPath = []
@@ -175,7 +169,6 @@ package final class Interaction {
       buildingInputHandlers = [:]
       buildingButtonActions = [:]
       buildingCommandHandlers = []
-      buildingScrollViewports = []
       return
     }
     self.input = input
@@ -189,12 +182,11 @@ package final class Interaction {
     buildingButtonActions = [:]
     activatedLeaf = nil
 
-    let root = FocusNode(kind: .group(.vertical), rect: .zero)
+    let root = FocusNode(kind: .group, rect: .zero)
     builderRoot = root
     builderStack = [root]
     builderPath = []
     clipStack = []
-    buildingScrollViewports = []
 
     if input.pointerPressed {
       dragOrigin = input.pointerPressPosition
@@ -243,16 +235,6 @@ package final class Interaction {
       }
       self.pressedLeaf = nil
     }
-
-    let wheelIsOverScrollView = scrollViewports.contains { $0.contains(input.pointerPosition) }
-    if !wheelIsOverScrollView {
-      if input.scrollDelta.y > 0 {
-        apply(.navigation(.up))
-      } else if input.scrollDelta.y < 0 {
-        apply(.navigation(.down))
-      }
-    }
-
   }
 
   package func endFrame() {
@@ -290,21 +272,19 @@ package final class Interaction {
     commandHandlers = buildingCommandHandlers
     inputHandlers = buildingInputHandlers
     buttonActions = buildingButtonActions
-    scrollViewports = buildingScrollViewports
     builderRoot = nil
     builderStack = []
-    buildingScrollViewports = []
     activatePending = false
   }
 }
 
 @MainActor
 extension Interaction {
-  func beginGroup(_ axis: FocusAxis, rect: Rect) {
+  func beginGroup(rect: Rect) {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
-    let node = FocusNode(kind: .group(axis), rect: rect)
+    let node = FocusNode(kind: .group, rect: rect)
     parent.children.append(node)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
@@ -323,11 +303,6 @@ extension Interaction {
     return true
   }
 
-  var isCurrentGroupSelected: Bool {
-    guard let selection, selectedLeafID == nil else { return false }
-    return selection == builderPath
-  }
-
   func focus(_ id: WidgetID, editing: Bool = false) {
     guard let tree, let path = tree.findLeaf(id) else { return }
     moveCursor(to: path)
@@ -337,11 +312,8 @@ extension Interaction {
   }
 
   func moveCursor(to path: [Int]) {
-    guard let tree else { return }
-    if selection == nil { selection = [] }
-    let commands = tree.macro(from: selection ?? [], to: path)
-    for command in commands { apply(command) }
-    if !commands.isEmpty { lastMacro = commands }
+    guard tree?.node(at: path)?.isLeaf == true else { return }
+    selection = path
   }
 
   private func isPrefix(_ prefix: [Int], of path: [Int]) -> Bool {
@@ -370,7 +342,7 @@ extension Interaction {
   }
 
   func apply(_ command: Command) {
-    guard let tree, let selection else { return }
+    guard tree != nil, selection != nil else { return }
     switch command {
     case .application, .editing:
       return
@@ -378,106 +350,6 @@ extension Interaction {
       activatePending = true
     case .action(.submit), .action(.cancel), .action(.dismiss):
       return
-    case .navigation(let navigation):
-      apply(navigation, tree: tree, selection: selection)
-    }
-  }
-
-  private func apply(_ command: NavigationCommand, tree: FocusNode, selection: [Int]) {
-    switch command {
-    case .in:
-      if let node = tree.node(at: selection), !node.children.isEmpty {
-        self.selection = selection + [0]
-      } else {
-        activatePending = true
-      }
-    case .out:
-      if !selection.isEmpty {
-        self.selection = Array(selection.dropLast())
-      }
-    case .pageUp, .pageDown:
-      return
-    case .home:
-      self.selection = tree.firstLeafPath()
-    case .end:
-      self.selection = tree.lastLeafPath()
-    case .next, .previous:
-      cycleLeaf(forward: command == .next)
-    case .up, .down, .left, .right:
-      flattenedMove(command)
-    }
-  }
-
-  func directionDelta(_ command: NavigationCommand, axis: FocusAxis) -> Int? {
-    switch (axis, command) {
-    case (.vertical, .up), (.horizontal, .left), (.none, .up), (.none, .left):
-      return -1
-    case (.vertical, .down), (.horizontal, .right), (.none, .down), (.none, .right):
-      return 1
-    default:
-      return nil
-    }
-  }
-
-  func flattenedMove(_ command: NavigationCommand) {
-    guard let tree, let selection else { return }
-    let forward = command == .down || command == .right
-
-    var level = selection.count - 1
-    while level >= 0 {
-      let parentPath = Array(selection.prefix(level))
-      guard let parent = tree.node(at: parentPath), let axis = parent.axis else { break }
-      if let delta = directionDelta(command, axis: axis) {
-        let next = selection[level] + delta
-        if next >= 0, next < parent.children.count {
-          var newPath = parentPath + [next]
-          if level < selection.count - 1 {
-            while let node = tree.node(at: newPath), !node.isLeaf, !node.children.isEmpty {
-              newPath.append(forward ? 0 : node.children.count - 1)
-            }
-          }
-          self.selection = newPath
-          return
-        }
-      }
-      level -= 1
-    }
-
-    perpendicularMove(command)
-  }
-
-  func perpendicularMove(_ command: NavigationCommand) {
-    guard let tree, let selection else { return }
-    var level = selection.count - 1
-    while level >= 0 {
-      let parentPath = Array(selection.prefix(level))
-      guard let parent = tree.node(at: parentPath), let axis = parent.axis else { break }
-      guard directionDelta(command, axis: axis) == nil, parent.children.count > 1 else {
-        level -= 1
-        continue
-      }
-      let delta = command == .right || command == .down ? 1 : -1
-      let next = selection[level] + delta
-      if next >= 0, next < parent.children.count {
-        var newPath = parentPath + [next]
-        while let node = tree.node(at: newPath), !node.isLeaf, !node.children.isEmpty {
-          newPath.append(delta > 0 ? 0 : node.children.count - 1)
-        }
-        self.selection = newPath
-        return
-      }
-      level -= 1
-    }
-  }
-
-  func cycleLeaf(forward: Bool) {
-    guard let tree, let selection else { return }
-    let leaves = tree.leafPaths()
-    guard let first = leaves.first, let last = leaves.last else { return }
-    if forward {
-      self.selection = leaves.first(where: { selection.lexicographicallyPrecedes($0) }) ?? first
-    } else {
-      self.selection = leaves.last(where: { $0.lexicographicallyPrecedes(selection) }) ?? last
     }
   }
 }
@@ -516,7 +388,6 @@ extension Interaction {
     guard let clip = clipStack.last else { return rect }
     return rect.intersection(clip) ?? .zero
   }
-
 }
 
 @MainActor
@@ -527,9 +398,4 @@ extension Interaction {
     let kind = selectedLeafID != nil ? "leaf" : selection.isEmpty ? "root" : "group"
     return "\(path) (\(kind))"
   }
-
-  package var lastMacroDescription: String {
-    lastMacro.isEmpty ? "—" : lastMacro.map(\.label).joined(separator: " ")
-  }
-
 }

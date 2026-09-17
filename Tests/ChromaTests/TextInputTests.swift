@@ -16,7 +16,7 @@ struct TextInputTests {
   ) -> TextInputState {
     ctx.beginFrame(input: input)
     var result = TextInputState(hovered: false, held: false, editing: false, caretOffset: nil)
-    ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+    ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     if includeField {
       result = ctx.testTextInput(
         id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
@@ -68,7 +68,7 @@ struct TextInputTests {
     let ctx = Interaction()
     var text = "hi"
     frame(ctx, text: &text)
-    frame(ctx, input: InputState(commands: nav(.down)), text: &text)
+    frame(ctx, input: InputState(pointerPosition: Point(x: 10, y: 30)), text: &text)
     frame(
       ctx,
       input: InputState(
@@ -87,7 +87,7 @@ struct TextInputTests {
     let ctx = Interaction()
     var text = "hello"
     frame(ctx, text: &text)
-    frame(ctx, input: InputState(commands: nav(.down)), text: &text)
+    frame(ctx, input: InputState(pointerPosition: Point(x: 10, y: 30)), text: &text)
     let click = Point(x: 10, y: 10)
     frame(
       ctx,
@@ -155,7 +155,7 @@ struct TextInputTests {
     }
 
     ctx.beginFrame(input: InputState(textEvents: [.moveCaretUp]))
-    ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+    ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     var state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
       text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
@@ -166,7 +166,7 @@ struct TextInputTests {
     #expect(state.caretOffset == 6)
 
     ctx.beginFrame(input: InputState(textEvents: [.selectCaretUp]))
-    ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+    ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
       text: text, onChange: { text = $0 }, verticalOffset: verticalOffset)
@@ -417,7 +417,7 @@ struct TextInputTests {
     enterInsertMode(ctx, text: &text)
 
     ctx.beginFrame(input: InputState(textEvents: [.endEditing]))
-    ctx.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 40))
+    ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     let state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
       text: text, onChange: { text = $0 }, onEndEditing: { .handled })
@@ -434,7 +434,7 @@ struct TextInputTests {
     let ctx = Interaction()
     var text = "abc"
     enterInsertMode(ctx, text: &text)
-    let state = frame(ctx, input: InputState(commands: nav(.down)), text: &text)
+    let state = frame(ctx, input: InputState(pointerPosition: Point(x: 10, y: 30)), text: &text)
     #expect(ctx.selection == [0, 1], "the cursor moved to the sibling leaf")
     #expect(!state.editing)
     #expect(!ctx.isTextEditing)

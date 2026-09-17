@@ -35,7 +35,7 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: PrimitiveBlock
       width: sizes.controls.width,
       height: sizes.controls.height)
 
-    context.withFocusGroup(.horizontal, in: rect) {
+    context.withFocusGroup(in: rect) {
       BlockEngine.draw(input, into: &drawList, in: inputRect, context: context)
       BlockEngine.draw(controls, into: &drawList, in: controlsRect, context: context)
     }

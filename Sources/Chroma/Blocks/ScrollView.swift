@@ -26,7 +26,6 @@ public struct ScrollView: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let interaction = context.interaction
-    interaction.registerScrollViewport(rect)
     interaction.registerScrollInput(id: id, rect: rect, horizontal: true)
     let contentSize = BlockEngine.measure(
       content,

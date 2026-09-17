@@ -82,11 +82,10 @@ public struct RenderContext {
   }
 
   public func withFocusGroup<Result>(
-    _ axis: FocusAxis,
     in rect: Rect,
     _ body: () throws -> Result
   ) rethrows -> Result {
-    interaction.beginGroup(axis, rect: rect)
+    interaction.beginGroup(rect: rect)
     defer { interaction.endGroup() }
     return try body()
   }
@@ -110,10 +109,6 @@ public struct RenderContext {
 
   public func focus(_ id: WidgetID, editing: Bool = false) {
     interaction.focus(id, editing: editing)
-  }
-
-  public var isCurrentFocusGroupSelected: Bool {
-    interaction.isCurrentGroupSelected
   }
 }
 

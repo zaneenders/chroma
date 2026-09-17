@@ -203,12 +203,12 @@ struct ReviewRegressionTests {
     renderer.content = LazyVStack(
       id: WidgetID("stack"), controller: controller,
       rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-    ).onCommand(.navigation(.pageDown)) {
+    ).onCommand(.application("resize")) {
       model.height = 80
       return .handled
     }
     renderer.render()
-    renderer.render(input: InputState(commands: [.navigation(.pageDown)]))
+    renderer.render(input: InputState(commands: [.application("resize")]))
     #expect(capture.drawnHeight == 80)
     #expect(capture.measurements == 2)
   }
