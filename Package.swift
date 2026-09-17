@@ -2,12 +2,18 @@
 import PackageDescription
 
 var products: [Product] = [
+  .executable(name: "chroma-install", targets: ["ChromaInstaller"]),
   .library(name: "Chroma", targets: ["Chroma"]),
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
   .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
 ]
 
 var targets: [Target] = [
+  .executableTarget(
+    name: "ChromaInstaller",
+    dependencies: [.product(name: "Subprocess", package: "swift-subprocess")]
+  ),
+  .testTarget(name: "ChromaInstallerTests", dependencies: ["ChromaInstaller"]),
   .testTarget(
     name: "ChromaTests",
     dependencies: ["Chroma", "ChromaFont", "HeadlessBackend"]
@@ -120,5 +126,8 @@ let package = Package(
   name: "chroma",
   platforms: [.macOS(.v27)],
   products: products,
+  dependencies: [
+    .package(url: "https://github.com/swiftlang/swift-subprocess.git", revision: "049ddf9")
+  ],
   targets: targets
 )

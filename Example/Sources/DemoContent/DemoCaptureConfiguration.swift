@@ -25,6 +25,21 @@ public struct DemoCaptureConfiguration: Sendable {
       .deletingLastPathComponent()
       .deletingLastPathComponent()
       .deletingLastPathComponent()
+    #if os(macOS)
+    let installed = Bundle.main.bundleURL.pathExtension == "app"
+    #else
+    let executableDirectory = Bundle.main.bundleURL
+    let installed = FileManager.default.fileExists(
+      atPath: executableDirectory.appendingPathComponent(".chroma-install").path)
+    #endif
+    if installed || !FileManager.default.fileExists(atPath: directory.path) {
+      let dataDirectory = try FileManager.default.url(
+        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+      )
+      .appendingPathComponent("ChromaDemo/Captures", isDirectory: true)
+      try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+      return try Self(directory: dataDirectory)
+    }
     return try Self(directory: directory)
   }
 
