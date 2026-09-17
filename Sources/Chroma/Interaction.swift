@@ -271,7 +271,7 @@ package final class Interaction {
         self.selection = newTree.clamped(selection)
       }
     }
-    if selection == nil {
+    if selection.flatMap({ newTree.node(at: $0)?.leafID }) == nil {
       selection = newTree.firstLeafPath()
     }
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
