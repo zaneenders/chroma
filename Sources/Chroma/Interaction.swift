@@ -141,6 +141,7 @@ package final class Interaction {
   }
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
+    textSelection.clear()
     editingSessionGeneration &+= 1
     editingLeaf = id
     self.caretOffset = caretOffset
@@ -240,7 +241,11 @@ package final class Interaction {
     let hovered = tree.hitTest(input.pointerPosition)
     if input.pointerPressed {
       let pressed = tree.hitTest(input.pointerPressPosition)
-      if let pressed { moveCursor(to: pressed) }
+      if let pressed {
+        moveCursor(to: pressed)
+      } else {
+        endEditing()
+      }
       pressedLeaf = pressed.flatMap { tree.node(at: $0)?.leafID }
     } else if dragOrigin == nil, input.pointerPosition != lastPointerPosition, let hovered,
       hovered != selection

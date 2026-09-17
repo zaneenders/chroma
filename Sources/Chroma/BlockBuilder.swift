@@ -8,7 +8,9 @@ public enum BlockBuilder {
   }
 
   static func flattenedChildren(_ components: [any Block]) -> [any Block] {
-    components.flatMap { scopedChildren($0, prefix: []) }
+    components.enumerated().flatMap { index, component in
+      scopedChildren(component, prefix: component is ScopedBlock ? [] : [.slot(index)])
+    }
   }
 
   private static func scopedChildren(

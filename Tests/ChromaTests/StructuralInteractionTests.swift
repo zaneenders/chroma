@@ -25,6 +25,26 @@ struct StructuralInteractionTests {
     }
   }
 
+  @Test(arguments: ["horizontal", "vertical", "overlay"])
+  func rawTupleChildrenHaveIndependentActions(container: String) {
+    let harness = Harness()
+    var calls: [String] = []
+    let children: [any Block] = [
+      Button("A") { calls.append("A") },
+      Button("B") { calls.append("B") },
+    ]
+    let content: any Block
+    switch container {
+    case "horizontal": content = HStack(content: { return TupleBlock(children: children) })
+    case "vertical": content = VStack(content: { return TupleBlock(children: children) })
+    default: content = ZStack(content: { return TupleBlock(children: children) })
+    }
+    harness.render(content)
+    #expect(harness.context.interaction.buttonActions.count == 2)
+    harness.render(content, input: InputState(commands: [.action(.activate)]))
+    #expect(calls == ["A"])
+  }
+
   @Test func labelChangesPreserveFocusAndPress() {
     let harness = Harness()
     var activations = 0

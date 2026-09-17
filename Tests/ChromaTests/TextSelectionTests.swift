@@ -23,6 +23,42 @@ struct TextSelectionTests {
     ctx.endFrame()
   }
 
+  @Test func selectingPlainTextEndsEditableSelection() {
+    let context = RenderContext()
+    let producer = FrameProducer()
+    var value = "editable"
+    let content = VStack {
+      Text("selectable").selectable()
+      TextField(text: { value }, onChange: { value = $0 })
+    }
+    func render(_ input: InputState = InputState()) {
+      _ = producer.render(
+        content: content, viewport: Size(width: 300, height: 150),
+        input: input, context: context, onChange: {})
+    }
+    render()
+    render(InputState(pointerPosition: Point(x: 10, y: 40), pointerDown: true, pointerPressed: true))
+    render(InputState(pointerPosition: Point(x: 46, y: 40), pointerReleased: true))
+    #expect(context.interaction.editableSelectionText() == "edi")
+    render(InputState(pointerPosition: Point(x: 0, y: 10), pointerDown: true, pointerPressed: true))
+    render(InputState(pointerPosition: Point(x: 36, y: 10), pointerReleased: true))
+    #expect(!context.interaction.isTextEditing)
+    #expect(context.interaction.textSelectionRange == nil)
+    #expect(context.interaction.copyText() == "sel")
+    render(InputState(textEvents: [.insert("X")]))
+    #expect(value == "editable")
+  }
+
+  @Test func beginningEditingClearsPlainTextSelection() {
+    let ctx = Interaction()
+    let id = WidgetID("plain")
+    frame(ctx, id: id, input: InputState())
+    ctx.selectAll(at: Point(x: 21, y: 21))
+    #expect(ctx.copyText() == text)
+    ctx.beginEditing(WidgetID("field"), caretOffset: 0)
+    #expect(ctx.textSelection.selectedText() == nil)
+  }
+
   @Test func hitTestSnapsToNearestBoundary() {
     let l = layout
     #expect(l.hitTest(point: Point(x: l.rect.minX + 1, y: 21)) == 0)
