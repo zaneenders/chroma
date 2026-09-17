@@ -3,6 +3,7 @@ public struct RenderContext {
   var structuralPath = StructuralPath()
   var widgetID: WidgetID { WidgetID(path: structuralPath) }
   var backgroundDepth = 0
+  var focusTargets: [FocusTarget] = []
 
   /// Use distinct, stable slots for custom-container children in both measurement and drawing.
   /// Slots describe source structure, not visible-child indices or draw order.
@@ -92,7 +93,8 @@ public struct RenderContext {
     id: WidgetID, in rect: Rect, role: ActionRole = .normal,
     action: (@MainActor () -> Void)? = nil
   ) -> ButtonState {
-    interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
   }
 
   public func textInputState(
@@ -106,7 +108,8 @@ public struct RenderContext {
     pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
     verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
   ) -> TextInputState {
-    interaction.registerTextInput(
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing, onTextEvent: onTextEvent,
       pointerOffset: pointerOffset, verticalOffset: verticalOffset)

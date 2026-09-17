@@ -108,9 +108,18 @@ package final class Interaction {
   @ObservationIgnored var buildingButtonActions: [WidgetID: @MainActor () -> Void] = [:]
   @ObservationIgnored var activatedLeaf: WidgetID?
 
+  @ObservationIgnored var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
+  @ObservationIgnored var buildingFocusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
+
   package init() {}
 
   func resetRegistrations() {
+    for binding in focusTargets.values {
+      binding.target.interaction = nil
+      binding.target.pendingEditing = nil
+    }
+    focusTargets = [:]
+    buildingFocusTargets = [:]
     animationRequested = false
     tree = nil
     pressedLeaf = nil
@@ -156,6 +165,7 @@ package final class Interaction {
   @ObservationIgnored var refreshingRegistrations = false
 
   package func beginFrame(input: InputState) {
+    buildingFocusTargets = [:]
     if refreshingRegistrations {
       // Registration draws must not replay the previous frame's input or activation.
       self.input = input
@@ -264,8 +274,11 @@ package final class Interaction {
       self.pressedLeaf = nil
     }
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
-    caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     tree = newTree
+    resolveFocusTargets()
+    selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
+    if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
+    caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     commandHandlers = buildingCommandHandlers
     inputHandlers = buildingInputHandlers
     buttonActions = buildingButtonActions

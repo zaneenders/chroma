@@ -193,4 +193,67 @@ struct StructuralInteractionTests {
     #expect(selection.selection(for: replacement) == nil)
   }
 
+  @Test func focusRequestBeforeTraversalBindsWithoutChangingIdentity() {
+    let harness = Harness()
+    let target = FocusTarget()
+    let field = TextField(text: { "hello" }, onChange: { _ in })
+    let expected = BlockEngine.resolve(field, context: harness.context).context.widgetID
+    target.focus(editing: true)
+    harness.render(field.padding(4).focusTarget(target))
+    #expect(harness.context.interaction.editingLeaf == expected)
+    #expect(target.pendingEditing == nil)
+    let generation = harness.context.interaction.editingSessionGeneration
+    harness.render(field.focusTarget(target))
+    #expect(harness.context.interaction.editingSessionGeneration == generation)
+  }
+
+  @Test func focusRequestAfterTraversalRequestsRedrawAndResolves() {
+    let harness = Harness()
+    let target = FocusTarget()
+    func content() -> VStack {
+      VStack {
+        Button("First") {}
+        Button("Second") {}.focusTarget(target)
+      }
+    }
+    harness.render(content())
+    let first = harness.context.interaction.selectedLeafID
+    _ = harness.context.interaction.consumeRedrawRequest()
+    target.focus()
+    #expect(harness.context.interaction.consumeRedrawRequest())
+    harness.render(content())
+    #expect(harness.context.interaction.selectedLeafID != first)
+    #expect(harness.context.interaction.selection == [0, 1])
+  }
+
+  @Test func focusBindingInvalidatesOnRemovalAndRebindsAfterMove() {
+    let harness = Harness()
+    let target = FocusTarget()
+    let field = TextField(text: { "hello" }, onChange: { _ in }).focusTarget(target)
+    target.focus(editing: true)
+    harness.render(field)
+    let original = harness.context.interaction.editingLeaf
+    target.focus(editing: true)
+    harness.render(EmptyBlock())
+    #expect(target.interaction == nil)
+    #expect(target.pendingEditing == nil)
+    #expect(harness.context.interaction.editingLeaf == nil)
+    target.focus(editing: true)
+    harness.render(VStack { field })
+    #expect(harness.context.interaction.editingLeaf != nil)
+    #expect(harness.context.interaction.editingLeaf != original)
+  }
+
+  @Test func measurementDoesNotBindOrConsumeFocusRequest() {
+    let target = FocusTarget()
+    target.focus()
+    let context = RenderContext()
+    _ = BlockEngine.measure(
+      Button("Button") {}.focusTarget(target),
+      proposal: Size(width: 100, height: 100), context: context)
+    #expect(target.interaction == nil)
+    #expect(target.pendingEditing == false)
+    #expect(context.interaction.buildingFocusTargets.isEmpty)
+  }
+
 }
