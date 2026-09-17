@@ -1,21 +1,27 @@
 public struct ZStack: PrimitiveBlock {
-  public var children: [any Block]
+  var scopedChildren: [any Block]
+
+  public var children: [any Block] {
+    get { scopedChildren.map { ($0 as? ScopedBlock)?.content ?? $0 } }
+    set { scopedChildren = newValue }
+  }
 
   public init(@BlockBuilder content: () -> TupleBlock) {
-    self.children = BlockBuilder.flattenedChildren(content().children)
+    self.scopedChildren = BlockBuilder.flattenedChildren(content().scopedChildren)
   }
 
   @MainActor public var expandsHorizontally: Bool {
-    children.contains { BlockEngine.expandsHorizontally($0) }
+    scopedChildren.contains { BlockEngine.expandsHorizontally($0) }
   }
 
   @MainActor public var expandsVertically: Bool {
-    children.contains { BlockEngine.expandsVertically($0) }
+    scopedChildren.contains { BlockEngine.expandsVertically($0) }
   }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     var result = Size.zero
-    for child in children {
+    for (index, child) in scopedChildren.enumerated() {
+      let context = context.childContext(for: child, at: index)
       let size = BlockEngine.measure(child, proposal: proposal, context: context)
       result.width = max(result.width, size.width)
       result.height = max(result.height, size.height)
@@ -26,7 +32,8 @@ public struct ZStack: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let interaction = context.interaction
     interaction.beginGroup(rect: rect)
-    for child in children {
+    for (index, child) in scopedChildren.enumerated() {
+      let context = context.childContext(for: child, at: index)
       let size = BlockEngine.measure(child, proposal: rect.size, context: context)
       BlockEngine.draw(
         child,

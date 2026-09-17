@@ -1,5 +1,17 @@
 @MainActor
 public struct RenderContext {
+  var structuralPath = StructuralPath()
+
+  func scoped(_ segments: [StructuralPath.Segment]) -> RenderContext {
+    var copy = self
+    copy.structuralPath.segments += segments
+    return copy
+  }
+
+  func childContext(for child: any Block, at index: Int) -> RenderContext {
+    child is ScopedBlock ? self : scoped([.slot(index)])
+  }
+
   package var interaction: Interaction
   public var theme: ChromaTheme
   public var textScale: Float
