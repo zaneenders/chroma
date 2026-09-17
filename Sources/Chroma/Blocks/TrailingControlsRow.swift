@@ -36,20 +36,20 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: PrimitiveBlock
       height: sizes.controls.height)
 
     context.withFocusGroup(in: rect) {
-      BlockEngine.draw(input, into: &drawList, in: inputRect, context: context.scoped([.slot(0)]))
-      BlockEngine.draw(controls, into: &drawList, in: controlsRect, context: context.scoped([.slot(1)]))
+      BlockEngine.draw(input, into: &drawList, in: inputRect, context: context.childScope(0))
+      BlockEngine.draw(controls, into: &drawList, in: controlsRect, context: context.childScope(1))
     }
   }
 
   @MainActor private func measuredSizes(
     for proposal: Size, context: RenderContext
   ) -> (input: Size, controls: Size) {
-    let controlsSize = BlockEngine.measure(controls, proposal: proposal, context: context.scoped([.slot(1)]))
+    let controlsSize = BlockEngine.measure(controls, proposal: proposal, context: context.childScope(1))
     let inputWidth = max(0, proposal.width - controlsSize.width - spacing)
     let inputSize = BlockEngine.measure(
       input,
       proposal: Size(width: inputWidth, height: proposal.height),
-      context: context.scoped([.slot(0)]))
+      context: context.childScope(0))
     return (
       input: Size(width: inputWidth, height: inputSize.height),
       controls: controlsSize

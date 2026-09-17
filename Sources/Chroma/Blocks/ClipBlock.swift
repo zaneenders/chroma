@@ -1,4 +1,4 @@
-public struct ClipBlock: PrimitiveBlock {
+public struct ClipBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
 
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }

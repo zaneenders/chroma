@@ -1,4 +1,4 @@
-public struct CommandHandlerBlock: PrimitiveBlock {
+public struct CommandHandlerBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var command: Command
   public var action: @MainActor () -> CommandResult

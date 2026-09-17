@@ -1,4 +1,4 @@
-public struct KeyBindingBlock: PrimitiveBlock {
+public struct KeyBindingBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var bindings: KeyBindings
 

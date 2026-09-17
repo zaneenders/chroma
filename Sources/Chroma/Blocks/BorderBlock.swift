@@ -1,4 +1,4 @@
-public struct BorderBlock: PrimitiveBlock {
+public struct BorderBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var color: Color
   public var radii: CornerRadii = .zero

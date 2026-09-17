@@ -1,10 +1,28 @@
 @MainActor
 public struct RenderContext {
   var structuralPath = StructuralPath()
+  var backgroundDepth = 0
+
+  /// Use distinct, stable slots for custom-container children in both measurement and drawing.
+  /// Slots describe source structure, not visible-child indices or draw order.
+  public func childScope(_ slot: Int) -> RenderContext {
+    scoped([.slot(slot)])
+  }
+
+  var backgroundContentContext: RenderContext {
+    var copy = self
+    copy.backgroundDepth += 1
+    return copy
+  }
+
+  var backgroundContext: RenderContext {
+    scoped([.background(backgroundDepth)])
+  }
 
   func scoped(_ segments: [StructuralPath.Segment]) -> RenderContext {
     var copy = self
     copy.structuralPath.segments += segments
+    copy.backgroundDepth = 0
     return copy
   }
 
