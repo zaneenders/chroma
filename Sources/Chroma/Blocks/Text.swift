@@ -23,7 +23,7 @@ public struct Text: PrimitiveBlock {
     return copy
   }
 
-  public func selectable(_ id: WidgetID) -> Text {
+  public func selectable(_ id: WidgetID? = nil) -> Text {
     var copy = self
     copy.isSelectable = true
     copy.selectionID = id
@@ -37,7 +37,8 @@ public struct Text: PrimitiveBlock {
 
   public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let effectiveScale = scale * context.textScale
-    if isSelectable, let id = selectionID {
+    if isSelectable {
+      let id = selectionID ?? context.widgetID
       let interaction = context.interaction
       let metrics = interaction.fontMetrics
       let cellWidth = metrics.cellAdvance * effectiveScale
@@ -47,7 +48,7 @@ public struct Text: PrimitiveBlock {
         lineHeight: lineHeight, scale: effectiveScale)
       interaction.textSelection.layoutRegistry.register(id, layout: layout)
 
-      if let sel = interaction.textSelection.selection(for: layout) {
+      if let sel = interaction.textSelection.selection(for: id) {
         let selX = rect.minX + Float(sel.from) * cellWidth
         let selW = Float(sel.to - sel.from) * cellWidth
         drawList.fillRect(

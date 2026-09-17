@@ -13,7 +13,7 @@ public struct LazyVStack: PrimitiveBlock {
     }
   }
 
-  public var id: WidgetID
+  public var id: WidgetID?
   public var spacing: Float
   public var showsIndicator: Bool
   public var sticksToBottom: Bool
@@ -29,7 +29,7 @@ public struct LazyVStack: PrimitiveBlock {
   }
 
   public init(
-    id: WidgetID,
+    id: WidgetID? = nil,
     spacing: Float = 0,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
@@ -45,7 +45,7 @@ public struct LazyVStack: PrimitiveBlock {
   }
 
   @MainActor public init<Data: RandomAccessCollection, Content: Block>(
-    id: WidgetID,
+    id: WidgetID? = nil,
     data: Data,
     rowHeight: Float,
     spacing: Float = 0,
@@ -65,7 +65,7 @@ public struct LazyVStack: PrimitiveBlock {
   }
 
   @MainActor public init<Data: RandomAccessCollection, Content: Block>(
-    id: WidgetID,
+    id: WidgetID? = nil,
     data: Data,
     rowHeight: Float,
     spacing: Float = 0,
@@ -91,6 +91,7 @@ public struct LazyVStack: PrimitiveBlock {
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let id = id ?? context.widgetID
     let interaction = context.interaction
     interaction.registerScrollInput(id: id, rect: rect)
     let contentHeight: Float

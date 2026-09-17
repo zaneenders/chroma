@@ -1,12 +1,12 @@
 public struct ScrollView: PrimitiveBlock {
-  public var id: WidgetID
+  public var id: WidgetID?
   public var showsIndicator: Bool
   public var sticksToBottom: Bool
   public var controller: ScrollViewController?
   public var content: any Block
 
   public init(
-    id: WidgetID,
+    id: WidgetID? = nil,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
     controller: ScrollViewController? = nil,
@@ -25,6 +25,7 @@ public struct ScrollView: PrimitiveBlock {
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let id = id ?? context.widgetID
     let interaction = context.interaction
     interaction.registerScrollInput(id: id, rect: rect, horizontal: true)
     let contentSize = BlockEngine.measure(
