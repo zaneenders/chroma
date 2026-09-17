@@ -138,6 +138,10 @@ public final class TextSelectionManager {
     return layout.textInRange(from: s, to: e)
   }
 
+  func reconcile() {
+    if let id = originLayoutID, layoutRegistry.layout(for: id) == nil { clear() }
+  }
+
   func clear() {
     originLayoutRect = nil
     originLayoutID = nil

@@ -1,10 +1,10 @@
 public struct Interactive<Content: Block>: PrimitiveBlock {
-  public var id: WidgetID?
+  var id: WidgetID?
   public var action: @MainActor () -> Void
   public var content: @MainActor (InteractionPhase) -> Content
 
-  public init(
-    id: WidgetID? = nil,
+  init(
+    id: WidgetID?,
     action: @escaping @MainActor () -> Void,
     content: @escaping @MainActor (InteractionPhase) -> Content
   ) {
@@ -14,6 +14,13 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
   }
 
   public init(
+    action: @escaping @MainActor () -> Void,
+    content: @escaping @MainActor (InteractionPhase) -> Content
+  ) {
+    self.init(id: nil, action: action, content: content)
+  }
+
+  init(
     id: String,
     action: @escaping @MainActor () -> Void,
     content: @escaping @MainActor (InteractionPhase) -> Content
@@ -36,6 +43,8 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let id = id ?? context.widgetID
     let state = context.buttonState(id: id, in: rect, action: action)
+    var context = context
+    context.focusTargets = []
     BlockEngine.draw(content(state.phase), into: &drawList, in: rect, context: context)
   }
 }

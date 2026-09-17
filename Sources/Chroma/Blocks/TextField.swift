@@ -1,5 +1,5 @@
 public struct TextField: PrimitiveBlock {
-  public var id: WidgetID?
+  var id: WidgetID?
   public var placeholder: String
   public var getText: @MainActor () -> String
   public var onChange: @MainActor (String) -> Void
@@ -8,9 +8,9 @@ public struct TextField: PrimitiveBlock {
   public var padding: Float
   public var style: TextFieldStyle?
 
-  public init(
+  init(
     _ placeholder: String = "",
-    id: WidgetID? = nil,
+    id: WidgetID?,
     fontScale: Float = 1,
     padding: Float = 8,
     style: TextFieldStyle? = nil,
@@ -26,6 +26,20 @@ public struct TextField: PrimitiveBlock {
     self.fontScale = fontScale
     self.padding = padding
     self.style = style
+  }
+
+  public init(
+    _ placeholder: String = "",
+    fontScale: Float = 1,
+    padding: Float = 8,
+    style: TextFieldStyle? = nil,
+    text getText: @escaping @MainActor () -> String,
+    onChange: @escaping @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil
+  ) {
+    self.init(
+      placeholder, id: nil, fontScale: fontScale, padding: padding, style: style, text: getText, onChange: onChange,
+      onSubmit: onSubmit)
   }
 
   @MainActor public var expandsHorizontally: Bool { true }

@@ -1,19 +1,21 @@
 public struct LazyVStack: PrimitiveBlock {
   public struct Row: Identifiable {
-    public var id: WidgetID
+    public let id: AnyHashable
     public var content: any Block {
       didSet { measurementIdentity = LazyRowIdentity() }
     }
     // Copies retain measurements; replacing content or constructing a row invalidates them.
     var measurementIdentity = LazyRowIdentity()
+    let key: StructuralKey
 
-    public init(id: WidgetID, content: any Block) {
-      self.id = id
+    public init(id: some Hashable & Sendable, content: any Block) {
+      self.id = AnyHashable(id)
+      self.key = StructuralKey(id)
       self.content = content
     }
   }
 
-  public var id: WidgetID?
+  var id: WidgetID?
   public var spacing: Float
   public var showsIndicator: Bool
   public var sticksToBottom: Bool
@@ -28,8 +30,8 @@ public struct LazyVStack: PrimitiveBlock {
     let content: @MainActor (Int) -> any Block
   }
 
-  public init(
-    id: WidgetID? = nil,
+  init(
+    id: WidgetID?,
     spacing: Float = 0,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
@@ -44,8 +46,20 @@ public struct LazyVStack: PrimitiveBlock {
     self.rows = rows
   }
 
-  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
-    id: WidgetID? = nil,
+  public init(
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    rows: [Row]
+  ) {
+    self.init(
+      id: nil, spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller,
+      rows: rows)
+  }
+
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
+    id: WidgetID?,
     data: Data,
     rowHeight: Float,
     spacing: Float = 0,
@@ -65,7 +79,21 @@ public struct LazyVStack: PrimitiveBlock {
   }
 
   @MainActor public init<Data: RandomAccessCollection, Content: Block>(
-    id: WidgetID? = nil,
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) {
+    self.init(
+      id: nil, data: data, rowHeight: rowHeight, spacing: spacing,
+      showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
+    id: WidgetID?,
     data: Data,
     rowHeight: Float,
     spacing: Float = 0,
@@ -84,6 +112,20 @@ public struct LazyVStack: PrimitiveBlock {
     uniformRows = UniformRows(count: data.count, height: rowHeight, keys: keys) { offset in
       content(data[data.index(data.startIndex, offsetBy: offset)])
     }
+  }
+
+  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    self.init(
+      id: nil, data: data, rowHeight: rowHeight, spacing: spacing,
+      showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
   }
 
   @MainActor public var expandsHorizontally: Bool { true }
@@ -172,7 +214,7 @@ public struct LazyVStack: PrimitiveBlock {
             in: Rect(
               x: rect.minX, y: rect.minY + y - offset,
               width: rect.size.width, height: height),
-            context: context.scoped([.key(StructuralKey(rows[index].id))]))
+            context: context.scoped([.key(rows[index].key)]))
         }
         y = bottom + spacing
       }
@@ -208,7 +250,7 @@ public struct LazyVStack: PrimitiveBlock {
     {
       return
     }
-    var oldSizes: [WidgetID: (LazyRowIdentity, LazyRowMeasurement)] = [:]
+    var oldSizes: [AnyHashable: (LazyRowIdentity, LazyRowMeasurement)] = [:]
     if sameEnvironment {
       for index in cache.rowIDs.indices {
         let size = cache.measurements[index]
@@ -227,7 +269,7 @@ public struct LazyVStack: PrimitiveBlock {
             BlockEngine.measure(
               row.content,
               proposal: Size(width: width, height: Float.greatestFiniteMagnitude),
-              context: context.scoped([.key(StructuralKey(row.id))]))
+              context: context.scoped([.key(row.key)]))
           })
       }
     }

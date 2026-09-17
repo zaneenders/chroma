@@ -256,4 +256,43 @@ struct StructuralInteractionTests {
     #expect(context.interaction.buildingFocusTargets.isEmpty)
   }
 
+  @Test func removedScrollAndSelectionStateDoNotReturn() {
+    let harness = Harness()
+    let controller = ScrollViewController()
+    func content() -> ScrollView {
+      ScrollView(controller: controller) { Text("hello").selectable().sizing(y: .fixed(500)) }
+    }
+    harness.render(content())
+    harness.context.selection.selectAll(at: Point(x: 1, y: 1))
+    controller.scroll(to: 30)
+    harness.render(content())
+    #expect(harness.context.interaction.scrollOffsets.values.contains(30))
+    harness.render(EmptyBlock())
+    #expect(harness.context.interaction.scrollOffsets.isEmpty)
+    #expect(harness.context.selection.selectedText() == nil)
+    harness.render(content())
+    #expect(harness.context.interaction.scrollOffsets.values.allSatisfy { $0 == 0 })
+    #expect(harness.context.selection.selectedText() == nil)
+  }
+
+  @Test func virtualizedPressDoesNotReviveWhenRowReturns() {
+    let harness = Harness()
+    let controller = ScrollViewController()
+    var activations = 0
+    func content() -> LazyVStack {
+      LazyVStack(data: (0..<20).map { Item(id: $0) }, rowHeight: 40, controller: controller) { item in
+        Button(String(item.id)) { activations += 1 }
+      }
+    }
+    harness.render(content(), input: harness.press)
+    let original = harness.context.interaction.pressedLeaf
+    controller.scroll(to: 400)
+    harness.render(content(), input: InputState(pointerDown: true))
+    #expect(harness.context.interaction.pressedLeaf == nil)
+    controller.scrollToTop()
+    harness.render(content(), input: harness.release)
+    #expect(harness.context.interaction.tree?.findLeaf(original!) != nil)
+    #expect(activations == 0)
+  }
+
 }

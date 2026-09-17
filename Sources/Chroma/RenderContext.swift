@@ -18,7 +18,9 @@ public struct RenderContext {
   }
 
   var backgroundContext: RenderContext {
-    scoped([.background(backgroundDepth)])
+    var copy = scoped([.background(backgroundDepth)])
+    copy.focusTargets = []
+    return copy
   }
 
   func scoped(_ segments: [StructuralPath.Segment]) -> RenderContext {
@@ -48,7 +50,7 @@ public struct RenderContext {
 
   public var interactionMode: InteractionMode { interaction.mode }
 
-  public var activeTextInput: WidgetID? {
+  var activeTextInput: WidgetID? {
     interaction.isTextEditing ? interaction.editingLeaf : nil
   }
 
@@ -89,7 +91,7 @@ public struct RenderContext {
     return copy
   }
 
-  public func buttonState(
+  func buttonState(
     id: WidgetID, in rect: Rect, role: ActionRole = .normal,
     action: (@MainActor () -> Void)? = nil
   ) -> ButtonState {
@@ -97,7 +99,16 @@ public struct RenderContext {
     return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
   }
 
-  public func textInputState(
+  public func buttonState(
+    in rect: Rect, role: ActionRole = .normal,
+    action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    let id = widgetID
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
+  }
+
+  func textInputState(
     id: WidgetID,
     in rect: Rect,
     text: @escaping @MainActor () -> String,
@@ -108,6 +119,24 @@ public struct RenderContext {
     pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
     verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
   ) -> TextInputState {
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.registerTextInput(
+      id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
+      onEndEditing: onEndEditing, onTextEvent: onTextEvent,
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset)
+  }
+
+  public func textInputState(
+    in rect: Rect,
+    text: @escaping @MainActor () -> String,
+    onChange: @escaping @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
+  ) -> TextInputState {
+    let id = widgetID
     interaction.registerFocusTargets(focusTargets, id: id)
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
@@ -141,7 +170,7 @@ public struct RenderContext {
     interaction.endEditing()
   }
 
-  public func focus(_ id: WidgetID, editing: Bool = false) {
+  func focus(_ id: WidgetID, editing: Bool = false) {
     interaction.focus(id, editing: editing)
   }
 }

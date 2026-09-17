@@ -87,7 +87,9 @@ package final class FrameProducer {
       }
     }
     // Refresh targets before dispatching input to previous-frame registrations.
-    if !input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed || input.pointerReleased {
+    if !input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed || input.pointerReleased
+      || input.scrollDelta != .zero
+    {
       interaction.refreshingRegistrations = true
       interaction.beginFrame(input: InputState())
       var registrations = DrawList()

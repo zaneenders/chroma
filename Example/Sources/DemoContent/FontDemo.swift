@@ -9,24 +9,24 @@ struct FontDemo: Block {
         HStack(spacing: 8) {
           Text("BUNDLED MONOSPACE FONT").fontScale(0.7).foregroundColor(theme.accent)
           Spacer()
-          Button("-", id: WidgetID("font.smaller"), fontScale: 0.55) {
+          Button("-", fontScale: 0.55) {
             state.fontScale = max(0.5, state.fontScale - 0.25)
           }
           Text("\(Int(state.fontScale * 100))%").fontScale(0.55)
-          Button("+", id: WidgetID("font.larger"), fontScale: 0.55) {
+          Button("+", fontScale: 0.55) {
             state.fontScale = min(1.5, state.fontScale + 0.25)
           }
         }
         HStack(spacing: 16) {
-          ScrollView(id: WidgetID("font.scroll")) {
+          ScrollView {
             VStack(spacing: 16) {
               VStack(spacing: 8) {
                 heading("LIVE PREVIEW")
                 TextField(
-                  "Type a sample", id: WidgetID("font.sample"), fontScale: 0.65,
+                  "Type a sample", fontScale: 0.65,
                   text: { state.fontSample }, onChange: { state.fontSample = $0 })
                 Text(state.fontSample).fontScale(state.fontScale)
-                  .selectable(WidgetID("font.preview"))
+                  .selectable()
                   .clipped()
               }
               .padding(12).background(theme.surface)
@@ -114,7 +114,7 @@ struct GlyphExplorer: PrimitiveBlock {
         x: rect.minX + Float(index % columns) * cell,
         y: rect.minY + Float(index / columns) * cell, width: cell, height: cell)
       let text = String(glyph)
-      _ = context.buttonState(id: WidgetID("font.glyph.\(index)"), in: box, role: .normal) {
+      _ = context.childScope(index).buttonState(in: box, role: .normal) {
         state.inspectedGlyph = text
       }
       if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }

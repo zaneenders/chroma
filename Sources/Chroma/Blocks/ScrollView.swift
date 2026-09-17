@@ -1,12 +1,12 @@
 public struct ScrollView: PrimitiveBlock {
-  public var id: WidgetID?
+  var id: WidgetID?
   public var showsIndicator: Bool
   public var sticksToBottom: Bool
   public var controller: ScrollViewController?
   public var content: any Block
 
-  public init(
-    id: WidgetID? = nil,
+  init(
+    id: WidgetID?,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
     controller: ScrollViewController? = nil,
@@ -17,6 +17,16 @@ public struct ScrollView: PrimitiveBlock {
     self.sticksToBottom = sticksToBottom
     self.controller = controller
     self.content = VStack(content: content)
+  }
+
+  public init(
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController? = nil,
+    @BlockBuilder content: () -> TupleBlock
+  ) {
+    self.init(
+      id: nil, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
   }
 
   @MainActor public var expandsHorizontally: Bool { true }

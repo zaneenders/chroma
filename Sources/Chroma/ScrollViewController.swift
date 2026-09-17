@@ -33,7 +33,7 @@ struct LazyStackCache {
   var structuralPath: StructuralPath?
   var width: Float?
   var environment: LazyMeasurementEnvironment?
-  var rowIDs: [WidgetID] = []
+  var rowIDs: [AnyHashable] = []
   var identities: [LazyRowIdentity] = []
   var measurements: [LazyRowMeasurement] = []
   @MainActor var rowSizes: [Size] { measurements.map(\.size) }

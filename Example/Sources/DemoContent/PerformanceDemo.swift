@@ -131,25 +131,25 @@ private struct PerformanceScene: Block {
         .border(theme.border)
 
         HStack(spacing: 8) {
-          Button(state.isPaused ? "Resume" : "Pause", id: WidgetID("demo.pause"), fontScale: demoSmallText) {
+          Button(state.isPaused ? "Resume" : "Pause", fontScale: demoSmallText) {
             state.togglePaused()
           }
-          Button("− 500", id: WidgetID("demo.fewer"), fontScale: demoSmallText) {
+          Button("− 500", fontScale: demoSmallText) {
             state.adjustItems(by: -500)
           }
-          Button("+ 500", id: WidgetID("demo.more"), fontScale: demoSmallText) {
+          Button("+ 500", fontScale: demoSmallText) {
             state.adjustItems(by: 500)
           }
-          Button("Speed \(state.speedLabel)", id: WidgetID("demo.speed"), fontScale: demoSmallText) {
+          Button("Speed \(state.speedLabel)", fontScale: demoSmallText) {
             state.cycleSpeed()
           }
-          Button(state.palette.rawValue, id: WidgetID("demo.palette"), fontScale: demoSmallText) {
+          Button(state.palette.rawValue, fontScale: demoSmallText) {
             state.cyclePalette()
           }
-          Button(state.shape.rawValue, id: WidgetID("demo.shape"), fontScale: demoSmallText) {
+          Button(state.shape.rawValue, fontScale: demoSmallText) {
             state.cycleShape()
           }
-          Button("Burst!", id: WidgetID("demo.burst"), fontScale: demoSmallText) {
+          Button("Burst!", fontScale: demoSmallText) {
             state.triggerBurst()
           }
           Spacer()
@@ -214,18 +214,17 @@ private struct UUIDList: Block {
           .fontScale(demoSmallText)
           .foregroundColor(theme.secondaryForeground)
         HStack(spacing: 6) {
-          Button("Generate", id: WidgetID("demo.uuid.generate"), fontScale: demoSmallText) {
+          Button("Generate", fontScale: demoSmallText) {
             state.regenerateIdentifiers()
           }
-          Button("Top", id: WidgetID("demo.uuid.top"), fontScale: demoSmallText) {
+          Button("Top", fontScale: demoSmallText) {
             state.uuidScrollController.scrollToTop()
           }
-          Button("Bottom", id: WidgetID("demo.uuid.bottom"), fontScale: demoSmallText) {
+          Button("Bottom", fontScale: demoSmallText) {
             state.uuidScrollController.scrollToBottom()
           }
         }
         LazyVStack(
-          id: WidgetID("demo.uuid.scroll"),
           data: state.identifiers.indices, rowHeight: 48, spacing: 5,
           controller: state.uuidScrollController
         ) { index in
@@ -338,13 +337,13 @@ struct PerformanceDemo: Block {
   var body: some Block {
     VStack(spacing: 12) {
       HStack(spacing: 12) {
-        Button(state.page == .scene ? "[Scene]" : "Scene", id: WidgetID("tab.scene")) {
+        Button(state.page == .scene ? "[Scene]" : "Scene") {
           state.page = .scene
         }
-        Button(state.page == .clipboard ? "[Clipboard]" : "Clipboard", id: WidgetID("tab.clipboard")) {
+        Button(state.page == .clipboard ? "[Clipboard]" : "Clipboard") {
           state.page = .clipboard
         }
-        Button(state.page == .font ? "[Font]" : "Font", id: WidgetID("tab.font")) {
+        Button(state.page == .font ? "[Font]" : "Font") {
           state.page = .font
         }
         Spacer()
@@ -353,12 +352,12 @@ struct PerformanceDemo: Block {
         VStack(spacing: 16) {
           Text("CLIPBOARD")
           Text("Drag to select this text, then copy it to another app.")
-            .fontScale(0.65).selectable(WidgetID("clipboard.label"))
+            .fontScale(0.65).selectable()
           TextField(
-            "Copy source", id: WidgetID("clipboard.source"), fontScale: 0.7,
+            "Copy source", fontScale: 0.7,
             text: { state.sourceText }, onChange: { state.sourceText = $0 })
           TextField(
-            "Paste here…", id: WidgetID("clipboard.target"), fontScale: 0.7,
+            "Paste here…", fontScale: 0.7,
             text: { state.pastedText }, onChange: { state.pastedText = $0 })
           Text("Copy / cut / paste / select all: platform shortcut modifier + C / X / V / A. Escape ends editing.")
             .fontScale(0.55)

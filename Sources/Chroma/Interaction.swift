@@ -120,6 +120,12 @@ package final class Interaction {
     }
     focusTargets = [:]
     buildingFocusTargets = [:]
+    textSelection.clear()
+    textSelection.layoutRegistry.clear()
+    scrollOffsets = [:]
+    horizontalScrollOffsets = [:]
+    scrollLimits = [:]
+    horizontalScrollLimits = [:]
     animationRequested = false
     tree = nil
     pressedLeaf = nil
@@ -169,6 +175,7 @@ package final class Interaction {
     if refreshingRegistrations {
       // Registration draws must not replay the previous frame's input or activation.
       self.input = input
+      textSelection.layoutRegistry.clear()
       activatedLeaf = nil
       activatePending = false
       actionRoles = [:]
@@ -274,6 +281,11 @@ package final class Interaction {
       self.pressedLeaf = nil
     }
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
+    scrollOffsets = scrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
+    horizontalScrollOffsets = horizontalScrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
+    scrollLimits = scrollLimits.filter { buildingInputHandlers[$0.key] != nil }
+    horizontalScrollLimits = horizontalScrollLimits.filter { buildingInputHandlers[$0.key] != nil }
+    textSelection.reconcile()
     tree = newTree
     resolveFocusTargets()
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }

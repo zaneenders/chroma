@@ -3,7 +3,7 @@ public struct Text: PrimitiveBlock {
   public var color: Color
   public var scale: Float
   public var isSelectable: Bool = false
-  public var selectionID: WidgetID?
+  var selectionID: WidgetID?
 
   public init(_ content: String) {
     self.content = content
@@ -23,7 +23,11 @@ public struct Text: PrimitiveBlock {
     return copy
   }
 
-  public func selectable(_ id: WidgetID? = nil) -> Text {
+  public func selectable() -> Text {
+    selectable(nil)
+  }
+
+  func selectable(_ id: WidgetID?) -> Text {
     var copy = self
     copy.isSelectable = true
     copy.selectionID = id
