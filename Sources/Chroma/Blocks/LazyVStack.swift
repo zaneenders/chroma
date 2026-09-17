@@ -240,32 +240,32 @@ public struct LazyVStack: PrimitiveBlock {
   }
 
   @MainActor private func updateCache(width: Float, context: RenderContext) {
-    precondition(Set(rows.map(\.id)).count == rows.count, "Duplicate lazy row ID")
+    precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
     let cache = controller.lazyStackCache
     let environment = LazyMeasurementEnvironment(
       textScale: context.textScale, fontMetrics: context.fontMetrics, theme: context.theme)
     let sameEnvironment =
       cache.width == width && cache.environment == environment
       && cache.structuralPath == context.structuralPath
-    if sameEnvironment && cache.rowIDs.count == rows.count
-      && zip(cache.rowIDs, rows).allSatisfy({ $0.0 == $0.1.id })
+    if sameEnvironment && cache.rowKeys.count == rows.count
+      && zip(cache.rowKeys, rows).allSatisfy({ $0.0 == $0.1.key })
       && zip(cache.identities, rows).allSatisfy({ $0.0 === $0.1.measurementIdentity })
       && cache.measurements.allSatisfy(\.valid)
     {
       return
     }
-    var oldSizes: [AnyHashable: (LazyRowIdentity, LazyRowMeasurement)] = [:]
+    var oldSizes: [StructuralKey: (LazyRowIdentity, LazyRowMeasurement)] = [:]
     if sameEnvironment {
-      for index in cache.rowIDs.indices {
+      for index in cache.rowKeys.indices {
         let size = cache.measurements[index]
-        if size.valid { oldSizes[cache.rowIDs[index]] = (cache.identities[index], size) }
+        if size.valid { oldSizes[cache.rowKeys[index]] = (cache.identities[index], size) }
       }
     }
 
     var sizes: [LazyRowMeasurement] = []
     sizes.reserveCapacity(rows.count)
     for row in rows {
-      if let (identity, size) = oldSizes[row.id], identity === row.measurementIdentity {
+      if let (identity, size) = oldSizes[row.key], identity === row.measurementIdentity {
         sizes.append(size)
       } else {
         sizes.append(
@@ -278,7 +278,7 @@ public struct LazyVStack: PrimitiveBlock {
       }
     }
     controller.lazyStackCache = LazyStackCache(
-      structuralPath: context.structuralPath, width: width, environment: environment, rowIDs: rows.map(\.id),
+      structuralPath: context.structuralPath, width: width, environment: environment, rowKeys: rows.map(\.key),
       identities: rows.map(\.measurementIdentity), measurements: sizes)
   }
 }

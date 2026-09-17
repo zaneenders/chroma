@@ -37,6 +37,20 @@ struct IdentityDiagnosticsTests {
     #expect(diagnostic.contains("Duplicate lazy collection element ID"))
   }
 
+  @Test func distinctLazyRowKeyTypesSucceed() async {
+    await #expect(processExitsWith: .success) {
+      await MainActor.run {
+        Self.draw(
+          LazyVStack(
+            controller: ScrollViewController(),
+            rows: [
+              .init(id: Int(1), content: Text("Int")),
+              .init(id: Int64(1), content: Text("Int64")),
+            ]))
+      }
+    }
+  }
+
   @Test func duplicateLazyRowKeysFail() async {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {

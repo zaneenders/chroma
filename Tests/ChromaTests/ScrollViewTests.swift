@@ -533,6 +533,44 @@ struct ScrollViewTests {
     #expect(counter.measured == [4])
   }
 
+  @Test func lazyStackCachePreservesDistinctKeyTypesAcrossReordering() {
+    let context = RenderContext()
+    let controller = ScrollViewController()
+    let counter = DrawCounter()
+    let first = LazyVStack.Row(
+      id: Int(1), content: CountedRow(index: 0, height: 10, counter: counter))
+    let second = LazyVStack.Row(
+      id: Int64(1), content: CountedRow(index: 1, height: 20, counter: counter))
+
+    func frame(_ rows: [LazyVStack.Row]) {
+      counter.measured = []
+      counter.drawn = []
+      context.interaction.beginFrame(input: InputState())
+      var list = DrawList()
+      BlockEngine.draw(
+        LazyVStack(controller: controller, rows: rows),
+        into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
+      context.interaction.endFrame()
+    }
+
+    frame([first, second])
+    #expect(counter.measured == [0, 1])
+    let measurements = controller.lazyStackCache.measurements
+    frame([second, first])
+    #expect(counter.measured.isEmpty)
+    #expect(counter.drawn == [1, 0])
+    #expect(controller.lazyStackCache.measurements[0] === measurements[1])
+    #expect(controller.lazyStackCache.measurements[1] === measurements[0])
+    #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 10])
+
+    var replacement = first
+    replacement.content = CountedRow(index: 2, height: 30, counter: counter)
+    frame([second, replacement])
+    #expect(counter.measured == [2])
+    #expect(controller.lazyStackCache.measurements[0] === measurements[1])
+    #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 30])
+  }
+
   @Test func scrollInputRespectsClipOnBothAxes() {
     let interaction = Interaction()
 
