@@ -86,8 +86,8 @@ package final class FrameProducer {
         interaction.textSelectionRange = selection
       }
     }
-    // Value-capturing text getters must be refreshed before applying edits.
-    if !input.textEvents.isEmpty {
+    // Refresh targets before dispatching input to previous-frame registrations.
+    if !input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed || input.pointerReleased {
       interaction.refreshingRegistrations = true
       interaction.beginFrame(input: InputState())
       var registrations = DrawList()

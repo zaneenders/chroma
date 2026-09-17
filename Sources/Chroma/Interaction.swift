@@ -113,6 +113,7 @@ package final class Interaction {
   func resetRegistrations() {
     animationRequested = false
     tree = nil
+    pressedLeaf = nil
     inputHandlers = [:]
     buildingInputHandlers = [:]
     buttonActions = [:]
@@ -238,21 +239,13 @@ package final class Interaction {
   }
 
   package func endFrame() {
-    if refreshingRegistrations {
-      inputHandlers = buildingInputHandlers
-      buttonActions = buildingButtonActions
-      commandHandlers = buildingCommandHandlers
-      builderRoot = nil
-      builderStack = []
-      return
-    }
     defer {
       if input.pointerReleased {
         dragOrigin = nil
         textDragAnchor = nil
       }
     }
-    routePendingCommands()
+    if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {
       if let id = oldTree.node(at: selection)?.leafID {
@@ -267,6 +260,10 @@ package final class Interaction {
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
       endEditing()
     }
+    if let pressedLeaf, newTree.findLeaf(pressedLeaf) == nil {
+      self.pressedLeaf = nil
+    }
+    selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
     caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     tree = newTree
     commandHandlers = buildingCommandHandlers

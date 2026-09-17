@@ -1,6 +1,6 @@
 public struct Button: PrimitiveBlock {
   public var label: String
-  public var id: WidgetID
+  public var id: WidgetID?
   public var action: @MainActor () -> Void
   public var role: ActionRole
   public var fontScale: Float
@@ -9,7 +9,7 @@ public struct Button: PrimitiveBlock {
 
   public init(
     _ label: String,
-    id: WidgetID,
+    id: WidgetID? = nil,
     role: ActionRole = .normal,
     fontScale: Float = 1,
     style: ButtonStyle? = nil,
@@ -34,7 +34,7 @@ public struct Button: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let style = style ?? context.theme.button
-    let state = context.buttonState(id: id, in: rect, role: role) { action() }
+    let state = context.buttonState(id: id ?? context.widgetID, in: rect, role: role) { action() }
 
     let background: Color
     switch state.phase {

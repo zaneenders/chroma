@@ -1,6 +1,7 @@
 @MainActor
 public struct RenderContext {
   var structuralPath = StructuralPath()
+  var widgetID: WidgetID { WidgetID(path: structuralPath) }
   var backgroundDepth = 0
 
   /// Use distinct, stable slots for custom-container children in both measurement and drawing.

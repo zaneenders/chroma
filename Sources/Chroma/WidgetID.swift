@@ -1,5 +1,11 @@
 public struct WidgetID: Hashable, Sendable {
   public let rawValue: UInt64
+  private var structuralPath: StructuralPath?
+
+  init(path: StructuralPath) {
+    rawValue = 0
+    structuralPath = path
+  }
 
   public init(rawValue: UInt64) {
     self.rawValue = rawValue
