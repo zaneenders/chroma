@@ -2,8 +2,7 @@ public struct TupleBlock: PrimitiveBlock {
   var scopedChildren: [any Block]
 
   public var children: [any Block] {
-    get { scopedChildren.map { ($0 as? ScopedBlock)?.content ?? $0 } }
-    set { scopedChildren = newValue }
+    scopedChildren.map { ($0 as? ScopedBlock)?.content ?? $0 }
   }
 
   public init(children: [any Block]) {

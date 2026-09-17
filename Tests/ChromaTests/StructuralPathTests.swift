@@ -82,14 +82,23 @@ struct StructuralPathTests {
     #expect(nested.children.count == 2)
     let first = render(nested, recorder: recorder)
     #expect(first["first"] != first["second"])
-    var replaced = nested
-    replaced.children = [
+    let replaced = TupleBlock(children: [
       Probe(name: "third", recorder: recorder),
       Probe(name: "fourth", recorder: recorder),
-    ]
+    ])
     let second = render(replaced, recorder: recorder)
     #expect(second["third"] != second["fourth"])
     #expect(first == render(nested, recorder: recorder))
+  }
+
+  @Test func containerChildrenAreReadOnly() {
+    func expectReadOnly<Container>(_ keyPath: KeyPath<Container, [any Block]>) {
+      #expect(!(keyPath is WritableKeyPath<Container, [any Block]>))
+    }
+    expectReadOnly(\HStack.children)
+    expectReadOnly(\VStack.children)
+    expectReadOnly(\ZStack.children)
+    expectReadOnly(\TupleBlock.children)
   }
 
   private struct Pair: PrimitiveBlock {
