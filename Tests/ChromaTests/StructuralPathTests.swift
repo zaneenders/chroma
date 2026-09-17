@@ -190,6 +190,61 @@ struct StructuralPathTests {
         context: RenderContext()) == Size(width: 10, height: 36))
   }
 
+  @Test(arguments: ["vertical", "horizontal", "overlay"])
+  func modifiedCollectionsPreserveLayoutAndPaths(axis: String) {
+    let recorder = Recorder()
+    func content(_ modified: Bool, ids: [Int]) -> any Block {
+      let collection = ForEach(ids.map { Item(id: $0) }) { item in
+        Probe(name: String(item.id), recorder: recorder)
+        Probe(name: "extra-\(item.id)", recorder: recorder)
+      }
+      let child: any Block =
+        modified
+        ? collection.padding(0).border(.white).clipped().background(Color.white)
+        : collection
+      switch axis {
+      case "vertical":
+        return VStack(spacing: 3) {
+          child
+          Probe(name: "sibling", recorder: recorder)
+        }
+      case "horizontal":
+        return HStack(spacing: 3) {
+          child
+          Probe(name: "sibling", recorder: recorder)
+        }
+      default:
+        return ZStack {
+          child
+          Probe(name: "sibling", recorder: recorder)
+        }
+      }
+    }
+    let proposal = Size(width: 100, height: 100)
+    let plain = content(false, ids: [1, 2])
+    let styled = content(true, ids: [1, 2])
+    let paths = render(plain, recorder: recorder)
+    #expect(render(styled, recorder: recorder) == paths)
+    #expect(
+      BlockEngine.measure(plain, proposal: proposal, context: RenderContext())
+        == BlockEngine.measure(styled, proposal: proposal, context: RenderContext()))
+    let reordered = render(content(true, ids: [2, 3, 1]), recorder: recorder)
+    for (name, path) in paths { #expect(reordered[name] == path) }
+    #expect(render(content(true, ids: []), recorder: recorder)["sibling"] == paths["sibling"])
+  }
+
+  @Test func collectionPaddingAppliesToEachChild() {
+    let recorder = Recorder()
+    let block = VStack(spacing: 3) {
+      ForEach([Item(id: 1), Item(id: 2)]) { item in
+        Probe(name: String(item.id), recorder: recorder)
+      }.padding(2)
+    }
+    #expect(
+      BlockEngine.measure(block, proposal: Size(width: 100, height: 100), context: RenderContext())
+        == Size(width: 14, height: 31))
+  }
+
   @Test func collectionKeysAreParentScopedAndTypeSensitive() {
     let recorder = Recorder()
     let paths = render(

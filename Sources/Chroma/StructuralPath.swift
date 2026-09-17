@@ -17,7 +17,9 @@ struct ScopedBlock: Block {
   var body: Never { fatalError("ScopedBlock is resolved by BlockEngine") }
 }
 
-protocol IdentityTransparentBlock: PrimitiveBlock {}
+protocol IdentityTransparentBlock: PrimitiveBlock {
+  var content: any Block { get set }
+}
 
 struct StructuralKey: Hashable, Sendable {
   let value: any Hashable & Sendable

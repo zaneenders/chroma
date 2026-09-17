@@ -15,9 +15,9 @@ public enum BlockBuilder {
 
   private static func scopedChildren(
     _ component: any Block, prefix: [StructuralPath.Segment]
-  ) -> [any Block] {
-    if let collection = component as? any KeyedBlockCollection {
-      return scopedChildren(collection.keyedContent, prefix: prefix)
+  ) -> [ScopedBlock] {
+    if let children = collectionChildren(component, prefix: prefix) {
+      return children
     }
     if let scoped = component as? ScopedBlock {
       return scopedChildren(scoped.content, prefix: prefix + scoped.path)
@@ -28,6 +28,23 @@ public enum BlockBuilder {
       }
     }
     return [ScopedBlock(content: component, path: prefix)]
+  }
+
+  private static func collectionChildren(
+    _ component: any Block, prefix: [StructuralPath.Segment]
+  ) -> [ScopedBlock]? {
+    if let collection = component as? any KeyedBlockCollection {
+      return scopedChildren(collection.keyedContent, prefix: prefix)
+    }
+    guard let modifier = component as? any IdentityTransparentBlock,
+      let children = collectionChildren(modifier.content, prefix: prefix)
+    else { return nil }
+    return children.map { scoped in
+      // Keep collection scopes outside the modifier so backgrounds are row-scoped too.
+      var copy = modifier
+      copy.content = scoped.content
+      return ScopedBlock(content: copy, path: scoped.path)
+    }
   }
 
   public static func buildOptional(_ component: TupleBlock?) -> TupleBlock {

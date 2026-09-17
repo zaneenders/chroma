@@ -45,6 +45,48 @@ struct StructuralInteractionTests {
     #expect(calls == ["A"])
   }
 
+  @Test func collectionModifiersPreservePressAndSeparateBackgroundActions() {
+    struct Item: Identifiable { let id: Int }
+    let harness = Harness()
+    var activations = 0
+    let rows = ForEach([Item(id: 1), Item(id: 2)]) { _ in
+      Button("Row") { activations += 1 }
+    }
+    harness.render(VStack { rows }, input: harness.press)
+    let id = harness.context.interaction.pressedLeaf
+    #expect(id != nil)
+    let styled = VStack { rows.padding(0).background(Button("Background") {}) }
+    harness.render(styled, input: harness.release)
+    #expect(activations == 1)
+    #expect(harness.context.interaction.selectedLeafID == id)
+    #expect(harness.context.interaction.buttonActions.count == 4)
+  }
+
+  @Test func collectionModifiersPreserveEditingAcrossReordering() {
+    struct Item: Identifiable { let id: Int }
+    let harness = Harness()
+    let target = FocusTarget()
+    var text = ""
+    func content(_ ids: [Int], styled: Bool) -> VStack {
+      let rows = ForEach(ids.map { Item(id: $0) }) { item in
+        if item.id == 1 {
+          TextField(text: { text }, onChange: { text = $0 }).focusTarget(target)
+        } else {
+          Button("Other") {}
+        }
+      }
+      let child: any Block = styled ? rows.padding(0).clipped() : rows
+      return VStack { child }
+    }
+    target.focus(editing: true)
+    harness.render(content([1, 2], styled: false))
+    let id = harness.context.interaction.editingLeaf
+    #expect(id != nil)
+    harness.render(content([2, 1], styled: true), input: InputState(textEvents: [.insert("x")]))
+    #expect(harness.context.interaction.editingLeaf == id)
+    #expect(text == "x")
+  }
+
   @Test func labelChangesPreserveFocusAndPress() {
     let harness = Harness()
     var activations = 0

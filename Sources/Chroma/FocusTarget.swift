@@ -15,7 +15,7 @@ public final class FocusTarget {
 }
 
 public struct FocusTargetBlock: PrimitiveBlock, IdentityTransparentBlock {
-  let content: any Block
+  var content: any Block
   let target: FocusTarget
 
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
