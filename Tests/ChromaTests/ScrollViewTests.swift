@@ -195,20 +195,27 @@ struct ScrollViewTests {
     #expect(interaction.scrollOffset(for: scrollID) == 12)
   }
 
-  @Test(arguments: [false, true])
-  func frameProducerWheelCancelsPendingRevealRequest(horizontal: Bool) {
+  @Test(arguments: [(false, false), (false, true), (true, false)], ["first", "normal", "reset"])
+  func frameProducerWheelCancelsPendingRevealRequest(configuration: (Bool, Bool), frameState: String) {
+    let (lazy, horizontal) = configuration
     let context = RenderContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
-    let view = ScrollView(id: scrollID, controller: controller) {
-      FixedContent(size: Size(width: 1000, height: 1000))
-    }
+    let view: any Block =
+      lazy
+      ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+        Text("Row")
+      }
+      : ScrollView(id: scrollID, controller: controller) {
+        FixedContent(size: Size(width: 1000, height: 1000))
+      }
     func frame(_ input: InputState = InputState()) {
       _ = producer.render(
         content: view, viewport: viewport.size, input: input, context: context, onChange: {})
     }
 
-    frame()
+    if frameState != "first" { frame() }
+    if frameState == "reset" { producer.reset() }
     controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
     frame(
       InputState(
@@ -223,8 +230,8 @@ struct ScrollViewTests {
     #expect(context.interaction.horizontalScrollOffset(for: scrollID) == (horizontal ? 12 : 0))
   }
 
-  @Test(arguments: [false, true])
-  func frameProducerAppliesExplicitScrollRequestAfterWheel(lazy: Bool) {
+  @Test(arguments: [false, true], ["first", "normal", "reset"])
+  func frameProducerAppliesExplicitScrollRequestAfterWheel(lazy: Bool, frameState: String) {
     let context = RenderContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
@@ -241,10 +248,30 @@ struct ScrollViewTests {
         content: view, viewport: viewport.size, input: input, context: context, onChange: {})
     }
 
-    frame()
+    if frameState != "first" { frame() }
+    if frameState == "reset" { producer.reset() }
     controller.scroll(to: 50)
     frame(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -12)))
     #expect(context.interaction.scrollOffset(for: scrollID) == 50)
+    #expect(controller.request == nil)
+  }
+
+  @Test(arguments: [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)])
+  func lazyRevealSurvivesUnrelatedWheelInput(delta: Point) {
+    let context = RenderContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    let view = LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+      Text("Row")
+    }
+    controller.scrollToVisible(Rect(x: 0, y: 500, width: 10, height: 10))
+    _ = producer.render(
+      content: view, viewport: viewport.size,
+      input: InputState(
+        pointerPosition: delta.y != 0 ? Point(x: 200, y: 200) : Point(x: 10, y: 10),
+        scrollDelta: delta),
+      context: context, onChange: {})
+    #expect(context.interaction.scrollOffset(for: scrollID) == 490)
     #expect(controller.request == nil)
   }
 

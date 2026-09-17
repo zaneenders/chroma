@@ -76,11 +76,14 @@ package final class FrameProducer {
       let caret = interaction.caretOffset
       let selection = interaction.textSelectionRange
       interaction.beginFrame(input: InputState())
+      // Initialize input normally, but defer scroll requests until the real draw.
+      interaction.refreshingRegistrations = true
       var bootstrap = DrawList()
       if let content {
         BlockEngine.draw(content, into: &bootstrap, in: Rect(origin: .zero, size: viewport), context: context)
       }
       interaction.endFrame()
+      interaction.refreshingRegistrations = false
       if let editingLeaf, interaction.tree?.findLeaf(editingLeaf) != nil {
         interaction.beginEditing(editingLeaf, caretOffset: caret)
         interaction.textSelectionRange = selection
