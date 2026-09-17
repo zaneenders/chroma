@@ -89,8 +89,9 @@ package final class Interaction {
     textSelection.selectAll(at: point)
   }
 
-  var scrollOffsets: [WidgetID: Float] = [:]
-  var horizontalScrollOffsets: [WidgetID: Float] = [:]
+  // Offsets change during frame processing; pruning them must not invalidate sibling scroll views.
+  @ObservationIgnored var scrollOffsets: [WidgetID: Float] = [:]
+  @ObservationIgnored var horizontalScrollOffsets: [WidgetID: Float] = [:]
   @ObservationIgnored var scrollLimits: [WidgetID: Float] = [:]
   @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
 

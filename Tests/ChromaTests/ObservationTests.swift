@@ -19,6 +19,25 @@ struct ObservationTests {
     await drainObservationChanges()
   }
 
+  @Test func removingScrollViewDoesNotInvalidateItsSibling() async {
+    let model = Model()
+    let renderer = HeadlessRenderer()
+    defer { renderer.close() }
+    renderer.content = DeferredBlock {
+      HStack {
+        if model.primary { ScrollView { Text("First") } }
+        ScrollView { Text("Second") }
+      }
+    }
+    var redraws = 0
+    renderer.onRedrawRequested = { redraws += 1 }
+    renderer.render()
+    model.primary = false
+    renderer.render()
+    await drainChanges()
+    #expect(redraws == 0)
+  }
+
   @Test func tracksOnlyReadPropertiesAndRearmsAfterRendering() async {
     let model = Model()
     let renderer = HeadlessRenderer()

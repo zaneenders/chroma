@@ -19,15 +19,26 @@ public struct CommandHandlerBlock: PrimitiveBlock, IdentityTransparentBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let interaction = context.interaction
     // Root handlers remain available even when the content has no focusable controls.
-    let isRoot = interaction.builderPath.isEmpty
+    let isRoot =
+      interaction.builderPath.isEmpty
+      && context.structuralPath.segments.allSatisfy {
+        if case .component = $0 { return true }
+        return false
+      }
+    if isRoot {
+      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+      interaction.buildingCommandHandlers.append(
+        Interaction.ScopedCommandHandler(path: [], command: command, action: action))
+      return
+    }
     let handlerStart = interaction.buildingCommandHandlers.count
     interaction.beginGroup(rect: rect)
     interaction.buildingCommandHandlers.append(
       Interaction.ScopedCommandHandler(
-        path: isRoot ? [] : interaction.builderPath, command: command, action: action))
+        path: interaction.builderPath, command: command, action: action))
     BlockEngine.draw(content, into: &drawList, in: rect, context: context)
     if !interaction.endGroup() {
-      interaction.buildingCommandHandlers.removeSubrange((handlerStart + (isRoot ? 1 : 0))...)
+      interaction.buildingCommandHandlers.removeSubrange(handlerStart...)
     }
   }
 }
