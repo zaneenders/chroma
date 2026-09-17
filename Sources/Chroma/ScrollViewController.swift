@@ -30,6 +30,7 @@ struct LazyMeasurementEnvironment: Equatable {
 }
 
 struct LazyStackCache {
+  var structuralPath: StructuralPath?
   var width: Float?
   var environment: LazyMeasurementEnvironment?
   var rowIDs: [WidgetID] = []

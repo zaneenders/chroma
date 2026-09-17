@@ -154,4 +154,78 @@ struct StructuralPathTests {
     #expect(recorder.measured["content"] == expected)
   }
 
+  private struct Item: Identifiable {
+    let id: Int
+  }
+
+  @Test func keyedCollectionsPreserveItemsAndSiblingSlots() {
+    let recorder = Recorder()
+    func content(_ ids: [Int]) -> VStack {
+      VStack(spacing: 3) {
+        ForEach(ids.map { Item(id: $0) }) { item in
+          Probe(name: String(item.id), recorder: recorder)
+        }
+        Probe(name: "sibling", recorder: recorder)
+      }
+    }
+    let before = render(content([1, 2, 3]), recorder: recorder)
+    let after = render(content([3, 4, 1]), recorder: recorder)
+    #expect(before["1"] == after["1"])
+    #expect(before["3"] == after["3"])
+    #expect(before["sibling"] == after["sibling"])
+    #expect(Set(after.values).count == 4)
+    #expect(render(content([]), recorder: recorder)["sibling"] == before["sibling"])
+    #expect(
+      BlockEngine.measure(
+        content([1, 2]), proposal: Size(width: 100, height: 100),
+        context: RenderContext()) == Size(width: 10, height: 36))
+  }
+
+  @Test func collectionKeysAreParentScopedAndTypeSensitive() {
+    let recorder = Recorder()
+    let paths = render(
+      HStack {
+        ForEach([Item(id: 1)]) { _ in Probe(name: "first", recorder: recorder) }
+        ForEach([Item(id: 1)]) { _ in Probe(name: "second", recorder: recorder) }
+      }, recorder: recorder)
+    #expect(paths["first"] != paths["second"])
+    #expect(StructuralKey(1) != StructuralKey(Int64(1)))
+    #expect(StructuralKey(1) == StructuralKey(1))
+  }
+
+  @Test(arguments: [false, true])
+  func lazyRowsFollowKeysAcrossReordering(uniform: Bool) {
+    let recorder = Recorder()
+    let controller = ScrollViewController()
+    let context = RenderContext()
+    func draw(_ ids: [Int]) -> [String: StructuralPath] {
+      recorder.measured = [:]
+      recorder.drawn = [:]
+      let stack: LazyVStack
+      if uniform {
+        stack = LazyVStack(
+          id: WidgetID("list"), data: ids.map { Item(id: $0) },
+          rowHeight: 10, controller: controller
+        ) { item in
+          Probe(name: String(item.id), recorder: recorder)
+        }
+      } else {
+        stack = LazyVStack(
+          id: WidgetID("list"), controller: controller,
+          rows: ids.map { .init(id: WidgetID(String($0)), content: Probe(name: String($0), recorder: recorder)) })
+      }
+      context.interaction.beginFrame(input: InputState())
+      var list = DrawList()
+      BlockEngine.draw(stack, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
+      context.interaction.endFrame()
+      if !uniform { #expect(recorder.measured == recorder.drawn) }
+      return recorder.drawn
+    }
+    let before = draw([1, 2, 3])
+    let after = draw([3, 4, 1])
+    #expect(before["1"] == after["1"])
+    #expect(before["3"] == after["3"])
+    #expect(Set(after.values).count == 3)
+  }
+
 }
