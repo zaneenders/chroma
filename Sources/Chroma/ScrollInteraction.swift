@@ -1,6 +1,7 @@
 @MainActor
 extension Interaction {
   func registerScrollInput(id: WidgetID, rect: Rect, horizontal: Bool = false) {
+    let rect = clippedRect(rect)
     buildingInputHandlers[id] = { [weak self] in
       guard let self else { return }
       var offset = self.scrollOffset(for: id)

@@ -238,8 +238,9 @@ package final class Interaction {
 
     let hovered = tree.hitTest(input.pointerPosition)
     if input.pointerPressed {
-      if let hovered { moveCursor(to: hovered) }
-      pressedLeaf = hovered.flatMap { tree.node(at: $0)?.leafID }
+      let pressed = tree.hitTest(input.pointerPressPosition)
+      if let pressed { moveCursor(to: pressed) }
+      pressedLeaf = pressed.flatMap { tree.node(at: $0)?.leafID }
     } else if dragOrigin == nil, input.pointerPosition != lastPointerPosition, let hovered,
       hovered != selection
     {

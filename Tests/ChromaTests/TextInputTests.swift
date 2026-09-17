@@ -79,7 +79,7 @@ struct TextInputTests {
       input: InputState(pointerPosition: Point(x: 10, y: 10), pointerReleased: true),
       text: &text)
     #expect(state.editing)
-    #expect(state.caretOffset == 2)
+    #expect(state.caretOffset == 1)
     #expect(ctx.isTextEditing)
   }
 

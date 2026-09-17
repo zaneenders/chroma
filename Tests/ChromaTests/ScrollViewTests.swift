@@ -402,6 +402,29 @@ struct ScrollViewTests {
     #expect(counter.measured == [4])
   }
 
+  @Test func scrollInputRespectsClipOnBothAxes() {
+    let interaction = Interaction()
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      interaction.pushClip(Rect(x: 0, y: 0, width: 50, height: 50))
+      interaction.registerScrollInput(
+        id: scrollID, rect: Rect(x: 0, y: 0, width: 100, height: 100), horizontal: true)
+      interaction.setScrollLimit(100, for: scrollID)
+      interaction.setHorizontalScrollLimit(100, for: scrollID)
+      interaction.popClip()
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(pointerPosition: Point(x: 75, y: 25), scrollDelta: Point(x: -10, y: -15)))
+    #expect(interaction.scrollOffset(for: scrollID) == 0)
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 0)
+    frame(InputState(pointerPosition: Point(x: 25, y: 25), scrollDelta: Point(x: -10, y: -15)))
+    #expect(interaction.scrollOffset(for: scrollID) == 15)
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 10)
+  }
+
   @Test func clippedLeafCannotBeHitOutsideViewport() {
     let interaction = Interaction()
 

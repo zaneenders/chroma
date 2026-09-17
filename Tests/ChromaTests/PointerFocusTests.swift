@@ -84,6 +84,36 @@ struct PointerFocusTests {
     #expect(states[WidgetID("c")]?.held == false)
   }
 
+  @Test func batchedPressAndReleaseUsesPressPosition() {
+    let ctx = Interaction()
+    frame(ctx)
+    let states = frame(
+      ctx,
+      input: InputState(
+        pointerPosition: Point(x: 25, y: 30),
+        pointerPressPosition: Point(x: 25, y: 10),
+        pointerPressed: true, pointerReleased: true))
+    #expect(ctx.selection == [0, 0])
+    #expect(states.values.allSatisfy { !$0.clicked })
+  }
+
+  @Test func batchedPressAndReleaseOnSameControlClicks() {
+    let ctx = Interaction()
+    frame(ctx)
+    let states = frame(
+      ctx,
+      input: InputState(
+        pointerPosition: Point(x: 25, y: 30),
+        pointerPressPosition: Point(x: 20, y: 25),
+        pointerPressed: true, pointerReleased: true))
+    #expect(states[WidgetID("b")]?.clicked == true)
+  }
+
+  @Test func omittedPressPositionDefaultsToPointerPosition() {
+    let point = Point(x: 25, y: 30)
+    #expect(InputState(pointerPosition: point, pointerPressed: true).pointerPressPosition == point)
+  }
+
   @Test func pressInsideReleaseOutsideDoesNotClick() {
     let ctx = Interaction()
     frame(ctx)
