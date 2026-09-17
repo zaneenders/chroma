@@ -195,6 +195,59 @@ struct ScrollViewTests {
     #expect(interaction.scrollOffset(for: scrollID) == 12)
   }
 
+  @Test(arguments: [false, true])
+  func frameProducerWheelCancelsPendingRevealRequest(horizontal: Bool) {
+    let context = RenderContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    let view = ScrollView(id: scrollID, controller: controller) {
+      FixedContent(size: Size(width: 1000, height: 1000))
+    }
+    func frame(_ input: InputState = InputState()) {
+      _ = producer.render(
+        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+    }
+
+    frame()
+    controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
+    frame(
+      InputState(
+        pointerPosition: Point(x: 10, y: 10),
+        scrollDelta: horizontal ? Point(x: -12, y: 0) : Point(x: 0, y: -12)))
+
+    #expect(context.interaction.scrollOffset(for: scrollID) == (horizontal ? 0 : 12))
+    #expect(context.interaction.horizontalScrollOffset(for: scrollID) == (horizontal ? 12 : 0))
+    #expect(controller.request == nil)
+    frame()
+    #expect(context.interaction.scrollOffset(for: scrollID) == (horizontal ? 0 : 12))
+    #expect(context.interaction.horizontalScrollOffset(for: scrollID) == (horizontal ? 12 : 0))
+  }
+
+  @Test(arguments: [false, true])
+  func frameProducerAppliesExplicitScrollRequestAfterWheel(lazy: Bool) {
+    let context = RenderContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    let view: any Block =
+      lazy
+      ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+        Text("Row")
+      }
+      : ScrollView(id: scrollID, controller: controller) {
+        FixedContent(size: Size(width: 100, height: 1000))
+      }
+    func frame(_ input: InputState = InputState()) {
+      _ = producer.render(
+        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+    }
+
+    frame()
+    controller.scroll(to: 50)
+    frame(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -12)))
+    #expect(context.interaction.scrollOffset(for: scrollID) == 50)
+    #expect(controller.request == nil)
+  }
+
   @Test func oversizedRevealTargetDoesNotFightHorizontalScrolling() {
     let interaction = Interaction()
     let controller = ScrollViewController()

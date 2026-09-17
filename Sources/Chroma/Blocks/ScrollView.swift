@@ -56,7 +56,7 @@ public struct ScrollView: PrimitiveBlock {
     let isUserScrolling =
       pointerIsInside
       && (interaction.input.scrollDelta.x != 0 || interaction.input.scrollDelta.y != 0)
-    if let request = controller?.request {
+    if !interaction.refreshingRegistrations, let request = controller?.request {
       if isUserScrolling, case .visible = request {
         controller?.request = nil
       } else {

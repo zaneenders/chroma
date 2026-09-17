@@ -152,7 +152,7 @@ public struct LazyVStack: PrimitiveBlock {
     var offset = min(interaction.scrollOffset(for: id), maximumOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
-    if let request = controller.request {
+    if !interaction.refreshingRegistrations, let request = controller.request {
       switch request {
       case .top: offset = 0
       case .bottom: offset = maximumOffset
