@@ -1,15 +1,17 @@
 @MainActor
 extension Interaction {
+  func scrollDelta(in rect: Rect, horizontal: Bool = false) -> Point {
+    guard clippedRect(rect).contains(input.pointerPosition) else { return .zero }
+    return Point(x: horizontal ? input.scrollDelta.x : 0, y: input.scrollDelta.y)
+  }
+
   func registerScrollInput(id: WidgetID, rect: Rect, horizontal: Bool = false) {
     let rect = clippedRect(rect)
     buildingInputHandlers[id] = { [weak self] in
       guard let self else { return }
-      var offset = self.scrollOffset(for: id)
-      var x = self.horizontalScrollOffset(for: id)
-      if rect.contains(self.input.pointerPosition) {
-        offset -= self.input.scrollDelta.y
-        if horizontal { x -= self.input.scrollDelta.x }
-      }
+      let delta = self.scrollDelta(in: rect, horizontal: horizontal)
+      let offset = self.scrollOffset(for: id) - delta.y
+      let x = self.horizontalScrollOffset(for: id) - delta.x
       self.setScrollOffset(min(offset, self.scrollLimit(for: id)), for: id)
       if horizontal {
         self.setHorizontalScrollOffset(min(x, self.horizontalScrollLimit(for: id)), for: id)

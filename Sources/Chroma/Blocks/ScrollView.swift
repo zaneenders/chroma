@@ -52,12 +52,8 @@ public struct ScrollView: PrimitiveBlock {
       interaction.horizontalScrollOffset(for: id), maximumHorizontalOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
-    let pointerIsInside = rect.contains(interaction.input.pointerPosition)
-    let isUserScrolling =
-      pointerIsInside
-      && (interaction.input.scrollDelta.x != 0 || interaction.input.scrollDelta.y != 0)
     if !interaction.refreshingRegistrations, let request = controller?.request {
-      if isUserScrolling, case .visible = request {
+      if interaction.scrollDelta(in: rect, horizontal: true) != .zero, case .visible = request {
         controller?.request = nil
       } else {
         switch request {

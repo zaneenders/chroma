@@ -153,9 +153,7 @@ public struct LazyVStack: PrimitiveBlock {
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
     if !interaction.refreshingRegistrations, let request = controller.request {
-      let isUserScrolling =
-        rect.contains(interaction.input.pointerPosition) && interaction.input.scrollDelta.y != 0
-      if isUserScrolling, case .visible = request {
+      if interaction.scrollDelta(in: rect) != .zero, case .visible = request {
         controller.request = nil
       } else {
         switch request {
