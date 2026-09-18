@@ -36,6 +36,8 @@ struct FontDemo: Block {
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
+                heading("FRACTIONS / COMPARISONS")
+                Text("¼  ½  ¾  ≤  ≥    ½ unit · ≤4 KB · ≥1 KB").fontScale(0.7)
                 heading("CANONICAL EQUIVALENCE")
                 HStack(spacing: 24) {
                   comparison("BASE / U+0065", "e")
