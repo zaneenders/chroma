@@ -40,3 +40,29 @@ struct StructuralKey: Hashable, Sendable {
 protocol KeyedBlockCollection: Block {
   var keyedContent: TupleBlock { get }
 }
+
+extension Block {
+  /// Keys this subtree within its structural parent.
+  ///
+  /// Use this when the same position displays different logical content:
+  ///
+  /// ```swift
+  /// ScrollView {
+  ///   Text(document.content)
+  /// }
+  /// .id(document.id)
+  /// ```
+  ///
+  /// Changing the key replaces the subtree's interaction identity, resetting
+  /// editing, text selection, and scroll offsets. Returning to a previously
+  /// removed key does not restore its state. Focus uses the normal fallback
+  /// when the focused control is replaced.
+  ///
+  /// Keys are parent-scoped and type-sensitive, not global widget identifiers.
+  /// An unchanged key does not preserve state after the subtree disappears.
+  ///
+  /// - Parameter key: A stable key for the logical content of this subtree.
+  public func id(_ key: some Hashable & Sendable) -> some Block {
+    ScopedBlock(content: self, path: [.key(StructuralKey(key))])
+  }
+}

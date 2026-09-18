@@ -1,3 +1,5 @@
+import Observation
+import Synchronization
 import Testing
 
 @testable import Chroma
@@ -23,6 +25,116 @@ struct StructuralInteractionTests {
     var release: InputState {
       InputState(pointerPosition: Point(x: 5, y: 5), pointerReleased: true)
     }
+  }
+
+  @Test func keyPathCollectionPreservesEditingAcrossReordering() {
+    @MainActor final class Entry {
+      let value: Int
+      var key: Int { value }
+      init(_ value: Int) { self.value = value }
+    }
+    let harness = Harness()
+    let target = FocusTarget()
+    func content(_ keys: [Int]) -> VStack {
+      VStack {
+        ForEach(keys.map { Entry($0) }, id: \.key) { entry in
+          if entry.key == 1 {
+            TextField(text: { "hello" }, onChange: { _ in }).focusTarget(target)
+          } else {
+            Button("Other") {}
+          }
+        }
+      }
+    }
+    target.focus(editing: true)
+    harness.render(content([1, 2]))
+    let original = harness.context.interaction.editingLeaf
+    harness.render(content([2, 3, 1]))
+    #expect(original != nil)
+    #expect(harness.context.interaction.editingLeaf == original)
+    #expect(target.isFocused && target.isEditing)
+  }
+
+  @Test func explicitIdentityResetsEditingAndDoesNotRestoreIt() {
+    let harness = Harness()
+    let target = FocusTarget()
+    func content(_ key: Int) -> some Block {
+      TextField(text: { "hello" }, onChange: { _ in }).focusTarget(target).id(key)
+    }
+    target.focus(editing: true)
+    harness.render(content(1))
+    let original = harness.context.interaction.editingLeaf
+    harness.render(content(1))
+    #expect(harness.context.interaction.editingLeaf == original)
+    harness.render(content(2))
+    #expect(!target.isEditing)
+    #expect(harness.context.interaction.selectedLeafID != original)
+    harness.render(content(1))
+    #expect(harness.context.interaction.selectedLeafID == original)
+    #expect(!target.isEditing)
+  }
+
+  @Test func explicitIdentityResetsScrollAndSelection() {
+    let harness = Harness()
+    let controller = ScrollViewController()
+    func content(_ key: Int) -> some Block {
+      ScrollView(controller: controller) {
+        Text("hello").selectable().sizing(y: .fixed(500))
+      }.id(key)
+    }
+    harness.render(content(1))
+    harness.context.selection.selectAll(at: Point(x: 1, y: 1))
+    controller.scroll(to: 30)
+    harness.render(content(1))
+    #expect(harness.context.interaction.scrollOffsets.values.contains(30))
+    #expect(harness.context.selection.selectedText() != nil)
+    harness.render(content(2))
+    #expect(harness.context.interaction.scrollOffsets.values.allSatisfy { $0 == 0 })
+    #expect(harness.context.selection.selectedText() == nil)
+    harness.render(content(1))
+    #expect(harness.context.interaction.scrollOffsets.values.allSatisfy { $0 == 0 })
+    #expect(harness.context.selection.selectedText() == nil)
+  }
+
+  @Test func focusQueriesObserveResolvedStateAndRemoval() {
+    let harness = Harness()
+    let first = FocusTarget()
+    let second = FocusTarget()
+    let content = VStack {
+      TextField(text: { "hello" }, onChange: { _ in }).focusTarget(first)
+      TextField(text: { "other" }, onChange: { _ in }).focusTarget(second)
+    }
+    let changed = Mutex(false)
+    withObservationTracking {
+      #expect(!first.isFocused && !first.isEditing)
+    } onChange: {
+      changed.withLock { $0 = true }
+    }
+    first.focus(editing: true)
+    #expect(!first.isFocused && !first.isEditing)
+    harness.render(content)
+    #expect(changed.withLock { $0 })
+    #expect(first.isFocused && first.isEditing)
+    #expect(!second.isFocused && !second.isEditing)
+    changed.withLock { $0 = false }
+    withObservationTracking {
+      #expect(first.isEditing)
+    } onChange: {
+      changed.withLock { $0 = true }
+    }
+    harness.context.interaction.endEditing()
+    #expect(changed.withLock { $0 })
+    #expect(first.isFocused && !first.isEditing)
+    second.focus(editing: true)
+    harness.render(content)
+    #expect(!first.isFocused && !first.isEditing)
+    #expect(second.isFocused && second.isEditing)
+    harness.render(EmptyBlock())
+    #expect(!second.isFocused && !second.isEditing)
+    harness.render(content)
+    #expect(!second.isEditing)
+    harness.context.interaction.resetRegistrations()
+    #expect(!first.isFocused && !second.isFocused)
   }
 
   @Test(arguments: ["horizontal", "vertical", "overlay"])

@@ -24,6 +24,16 @@ struct IdentityDiagnosticsTests {
     #expect(diagnostic.contains("Duplicate collection element ID: 1"))
   }
 
+  @Test func duplicateKeyPathCollectionKeysFail() async {
+    let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
+      await MainActor.run {
+        _ = ForEach([1, 1], id: \.self) { _ in Text("Row") }
+      }
+    }
+    let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+    #expect(diagnostic.contains("Duplicate collection element ID: 1"))
+  }
+
   @Test func duplicateLazyDataKeysFail() async {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {

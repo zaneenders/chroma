@@ -33,6 +33,9 @@ public enum BlockBuilder {
   private static func collectionChildren(
     _ component: any Block, prefix: [StructuralPath.Segment]
   ) -> [ScopedBlock]? {
+    if let scoped = component as? ScopedBlock {
+      return collectionChildren(scoped.content, prefix: prefix + scoped.path)
+    }
     if let collection = component as? any KeyedBlockCollection {
       return scopedChildren(collection.keyedContent, prefix: prefix)
     }

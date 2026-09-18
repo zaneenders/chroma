@@ -116,6 +116,7 @@ package final class Interaction {
 
   func resetRegistrations() {
     for binding in focusTargets.values {
+      binding.target.boundID = nil
       binding.target.interaction = nil
       binding.target.pendingEditing = nil
     }

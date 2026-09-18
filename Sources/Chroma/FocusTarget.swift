@@ -4,7 +4,18 @@ import Observation
 @MainActor
 public final class FocusTarget {
   var pendingEditing: Bool?
-  @ObservationIgnored weak var interaction: Interaction?
+  weak var interaction: Interaction?
+  var boundID: WidgetID?
+
+  public var isFocused: Bool {
+    guard let interaction, let boundID else { return false }
+    return interaction.selectedLeafID == boundID
+  }
+
+  public var isEditing: Bool {
+    guard let interaction, let boundID else { return false }
+    return interaction.isTextEditing && interaction.editingLeaf == boundID
+  }
 
   public init() {}
 
@@ -53,12 +64,14 @@ extension Interaction {
 
   func resolveFocusTargets() {
     for (key, binding) in focusTargets where buildingFocusTargets[key] == nil {
+      binding.target.boundID = nil
       binding.target.interaction = nil
       binding.target.pendingEditing = nil
     }
     focusTargets = buildingFocusTargets
     for binding in focusTargets.values {
-      binding.target.interaction = self
+      binding.target.boundID = binding.id
+      if binding.target.interaction !== self { binding.target.interaction = self }
       if let editing = binding.target.pendingEditing {
         binding.target.pendingEditing = nil
         focus(binding.id, editing: editing)

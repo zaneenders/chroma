@@ -43,6 +43,27 @@ struct StructuralPathTests {
     return recorder.drawn
   }
 
+  @Test func explicitKeysAreParentScopedTypeSensitiveAndPreserveCollectionLayout() {
+    let recorder = Recorder()
+    func content(_ key: some Hashable & Sendable) -> VStack {
+      VStack {
+        ForEach([1, 2], id: \.self) { value in
+          Probe(name: "row\(value)", recorder: recorder)
+        }.id(key).padding(0)
+        Probe(name: "sibling", recorder: recorder).id(key)
+      }
+    }
+    let first = render(content(1), recorder: recorder)
+    #expect(first == render(content(1), recorder: recorder))
+    let changed = render(content("1"), recorder: recorder)
+    #expect(first["row1"] != changed["row1"])
+    #expect(first["row1"] != first["row2"])
+    #expect(first["row1"] != first["sibling"])
+    let size = BlockEngine.measure(
+      content(1), proposal: Size(width: 100, height: 100), context: RenderContext())
+    #expect(size.height == 30)
+  }
+
   @Test func optionalAndBranchesPreserveSiblingSlots() {
     let recorder = Recorder()
     func content(_ flag: Bool) -> VStack {
