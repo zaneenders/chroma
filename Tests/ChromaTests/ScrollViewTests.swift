@@ -10,6 +10,18 @@ private struct FixedContent: PrimitiveBlock {
   }
 }
 
+private struct ClippedScrollContent: PrimitiveBlock {
+  let content: any Block
+
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    context.withInteractionClip(Rect(x: 0, y: 0, width: 20, height: 20)) {
+      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    }
+  }
+}
+
 private final class DrawCounter {
   var measured: [Int] = []
   var drawn: [Int] = []
@@ -193,6 +205,125 @@ struct ScrollViewTests {
         pointerPosition: Point(x: 10, y: 10),
         scrollDelta: Point(x: 0, y: -12)))
     #expect(interaction.scrollOffset(for: scrollID) == 12)
+  }
+
+  @Test(arguments: [(false, false), (false, true), (true, false)], ["first", "normal", "reset"])
+  func frameProducerWheelCancelsPendingRevealRequest(configuration: (Bool, Bool), frameState: String) {
+    let (lazy, horizontal) = configuration
+    let context = RenderContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    let view: any Block =
+      lazy
+      ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+        Text("Row")
+      }
+      : ScrollView(id: scrollID, controller: controller) {
+        FixedContent(size: Size(width: 1000, height: 1000))
+      }
+    func frame(_ input: InputState = InputState()) {
+      _ = producer.render(
+        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+    }
+
+    if frameState != "first" { frame() }
+    if frameState == "reset" { producer.reset() }
+    controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
+    frame(
+      InputState(
+        pointerPosition: Point(x: 10, y: 10),
+        scrollDelta: horizontal ? Point(x: -12, y: 0) : Point(x: 0, y: -12)))
+
+    #expect(context.interaction.scrollOffset(for: scrollID) == (horizontal ? 0 : 12))
+    #expect(context.interaction.horizontalScrollOffset(for: scrollID) == (horizontal ? 12 : 0))
+    #expect(controller.request == nil)
+    frame()
+    #expect(context.interaction.scrollOffset(for: scrollID) == (horizontal ? 0 : 12))
+    #expect(context.interaction.horizontalScrollOffset(for: scrollID) == (horizontal ? 12 : 0))
+  }
+
+  @Test(arguments: [false, true], ["first", "normal", "reset"])
+  func frameProducerAppliesExplicitScrollRequestAfterWheel(lazy: Bool, frameState: String) {
+    let context = RenderContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    let view: any Block =
+      lazy
+      ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+        Text("Row")
+      }
+      : ScrollView(id: scrollID, controller: controller) {
+        FixedContent(size: Size(width: 100, height: 1000))
+      }
+    func frame(_ input: InputState = InputState()) {
+      _ = producer.render(
+        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+    }
+
+    if frameState != "first" { frame() }
+    if frameState == "reset" { producer.reset() }
+    controller.scroll(to: 50)
+    frame(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -12)))
+    #expect(context.interaction.scrollOffset(for: scrollID) == 50)
+    #expect(controller.request == nil)
+  }
+
+  @Test(arguments: [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)])
+  func lazyRevealSurvivesUnrelatedWheelInput(delta: Point) {
+    let context = RenderContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    let view = LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+      Text("Row")
+    }
+    controller.scrollToVisible(Rect(x: 0, y: 500, width: 10, height: 10))
+    _ = producer.render(
+      content: view, viewport: viewport.size,
+      input: InputState(
+        pointerPosition: delta.y != 0 ? Point(x: 200, y: 200) : Point(x: 10, y: 10),
+        scrollDelta: delta),
+      context: context, onChange: {})
+    #expect(context.interaction.scrollOffset(for: scrollID) == 490)
+    #expect(controller.request == nil)
+  }
+
+  @Test(
+    arguments: [false, true],
+    ["first", "normal", "reset"])
+  func clippedRevealRespectsWheelHitTesting(lazy: Bool, frameState: String) {
+    for pointer in [Point(x: 10, y: 10), Point(x: 10, y: 50), Point(x: 50, y: 10)] {
+      for delta in [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)] {
+        let context = RenderContext()
+        let producer = FrameProducer()
+        let controller = ScrollViewController()
+        let scroll: any Block =
+          lazy
+          ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+            Text("Row")
+          }
+          : ScrollView(id: scrollID, controller: controller) {
+            FixedContent(size: Size(width: 1000, height: 1000))
+          }
+        func frame(_ input: InputState = InputState()) {
+          _ = producer.render(
+            content: ClippedScrollContent(content: scroll), viewport: Size(width: 100, height: 100),
+            input: input, context: context, onChange: {})
+        }
+        if frameState != "first" { frame() }
+        if frameState == "reset" { producer.reset() }
+        controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
+        frame(InputState(pointerPosition: pointer, scrollDelta: delta))
+        let receivesWheel = pointer == Point(x: 10, y: 10) && (delta.y != 0 || (!lazy && delta.x != 0))
+        let expectedY: Float = receivesWheel ? -delta.y : 410
+        let expectedX: Float = lazy ? 0 : receivesWheel ? -delta.x : 410
+        #expect(context.interaction.scrollOffset(for: scrollID) == expectedY)
+        #expect(context.interaction.horizontalScrollOffset(for: scrollID) == expectedX)
+        #expect(controller.request == nil)
+        frame()
+        #expect(context.interaction.scrollOffset(for: scrollID) == expectedY)
+        #expect(context.interaction.horizontalScrollOffset(for: scrollID) == expectedX)
+      }
+    }
   }
 
   @Test func oversizedRevealTargetDoesNotFightHorizontalScrolling() {
@@ -402,12 +533,73 @@ struct ScrollViewTests {
     #expect(counter.measured == [4])
   }
 
+  @Test func lazyStackCachePreservesDistinctKeyTypesAcrossReordering() {
+    let context = RenderContext()
+    let controller = ScrollViewController()
+    let counter = DrawCounter()
+    let first = LazyVStack.Row(
+      id: Int(1), content: CountedRow(index: 0, height: 10, counter: counter))
+    let second = LazyVStack.Row(
+      id: Int64(1), content: CountedRow(index: 1, height: 20, counter: counter))
+
+    func frame(_ rows: [LazyVStack.Row]) {
+      counter.measured = []
+      counter.drawn = []
+      context.interaction.beginFrame(input: InputState())
+      var list = DrawList()
+      BlockEngine.draw(
+        LazyVStack(controller: controller, rows: rows),
+        into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
+      context.interaction.endFrame()
+    }
+
+    frame([first, second])
+    #expect(counter.measured == [0, 1])
+    let measurements = controller.lazyStackCache.measurements
+    frame([second, first])
+    #expect(counter.measured.isEmpty)
+    #expect(counter.drawn == [1, 0])
+    #expect(controller.lazyStackCache.measurements[0] === measurements[1])
+    #expect(controller.lazyStackCache.measurements[1] === measurements[0])
+    #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 10])
+
+    var replacement = first
+    replacement.content = CountedRow(index: 2, height: 30, counter: counter)
+    frame([second, replacement])
+    #expect(counter.measured == [2])
+    #expect(controller.lazyStackCache.measurements[0] === measurements[1])
+    #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 30])
+  }
+
+  @Test func scrollInputRespectsClipOnBothAxes() {
+    let interaction = Interaction()
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      interaction.pushClip(Rect(x: 0, y: 0, width: 50, height: 50))
+      interaction.registerScrollInput(
+        id: scrollID, rect: Rect(x: 0, y: 0, width: 100, height: 100), horizontal: true)
+      interaction.setScrollLimit(100, for: scrollID)
+      interaction.setHorizontalScrollLimit(100, for: scrollID)
+      interaction.popClip()
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(pointerPosition: Point(x: 75, y: 25), scrollDelta: Point(x: -10, y: -15)))
+    #expect(interaction.scrollOffset(for: scrollID) == 0)
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 0)
+    frame(InputState(pointerPosition: Point(x: 25, y: 25), scrollDelta: Point(x: -10, y: -15)))
+    #expect(interaction.scrollOffset(for: scrollID) == 15)
+    #expect(interaction.horizontalScrollOffset(for: scrollID) == 10)
+  }
+
   @Test func clippedLeafCannotBeHitOutsideViewport() {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) {
       interaction.beginFrame(input: input)
-      interaction.beginGroup(.vertical, rect: Rect(x: 0, y: 0, width: 100, height: 100))
+      interaction.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 100))
       _ = interaction.interactiveBehavior(
         id: WidgetID("visible"), rect: Rect(x: 0, y: 0, width: 100, height: 10))
       interaction.pushClip(Rect(x: 0, y: 10, width: 100, height: 10))

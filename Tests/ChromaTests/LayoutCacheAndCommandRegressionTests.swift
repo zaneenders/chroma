@@ -27,7 +27,7 @@ struct LayoutCacheAndCommandRegressionTests {
     #expect(interaction.scrollLimit(for: id) == 80)
   }
 
-  @Test func handledPageDownDoesNotScroll() {
+  @Test func handledApplicationCommandDoesNotScroll() {
     let interaction = Interaction()
     let id = WidgetID("scroll")
     var handled = 0
@@ -36,7 +36,7 @@ struct LayoutCacheAndCommandRegressionTests {
       var list = DrawList()
       let view = ScrollView(id: id) {
         Color.white.sizing(y: .fixed(100))
-      }.onCommand(.navigation(.pageDown)) {
+      }.onCommand(.application("resize")) {
         handled += 1
         return .handled
       }
@@ -46,7 +46,7 @@ struct LayoutCacheAndCommandRegressionTests {
       interaction.endFrame()
     }
     frame()
-    frame(InputState(commands: [.navigation(.pageDown)]))
+    frame(InputState(commands: [.application("resize")]))
     #expect(handled == 1)
     #expect(interaction.scrollOffset(for: id) == 0)
   }
@@ -95,7 +95,7 @@ struct LayoutCacheAndCommandRegressionTests {
     #expect(interaction.scrollLimit(for: id) == 60)
   }
 
-  @Test func unhandledPageDownStillScrollsAndConsumptionResets() {
+  @Test func commandConsumptionResetsBetweenFrames() {
     let interaction = Interaction()
     let id = WidgetID("scroll")
     var consumes = true
@@ -104,7 +104,7 @@ struct LayoutCacheAndCommandRegressionTests {
       var list = DrawList()
       let view = ScrollView(id: id) {
         Color.white.sizing(y: .fixed(100))
-      }.onCommand(.navigation(.pageDown)) {
+      }.onCommand(.application("resize")) {
         consumes ? .handled : .ignored
       }
       BlockEngine.draw(
@@ -113,11 +113,13 @@ struct LayoutCacheAndCommandRegressionTests {
       interaction.endFrame()
     }
     frame()
-    frame(InputState(commands: [.navigation(.pageDown)]))
+    frame(InputState(commands: [.application("resize")]))
     #expect(interaction.scrollOffset(for: id) == 0)
+    #expect(interaction.handledCommandIndices == [0])
     consumes = false
-    frame(InputState(commands: [.navigation(.pageDown)]))
-    #expect(interaction.scrollOffset(for: id) == 20)
+    frame(InputState(commands: [.application("resize")]))
+    #expect(interaction.scrollOffset(for: id) == 0)
+    #expect(interaction.handledCommandIndices.isEmpty)
   }
 
 }

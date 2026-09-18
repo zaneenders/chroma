@@ -1,19 +1,21 @@
 public struct LazyVStack: PrimitiveBlock {
-  public struct Row {
-    public var id: WidgetID
+  public struct Row: Identifiable {
+    public let id: AnyHashable
     public var content: any Block {
       didSet { measurementIdentity = LazyRowIdentity() }
     }
     // Copies retain measurements; replacing content or constructing a row invalidates them.
     var measurementIdentity = LazyRowIdentity()
+    let key: StructuralKey
 
-    public init(id: WidgetID, content: any Block) {
-      self.id = id
+    public init(id: some Hashable & Sendable, content: any Block) {
+      self.id = AnyHashable(id)
+      self.key = StructuralKey(id)
       self.content = content
     }
   }
 
-  public var id: WidgetID
+  var id: WidgetID?
   public var spacing: Float
   public var showsIndicator: Bool
   public var sticksToBottom: Bool
@@ -24,11 +26,12 @@ public struct LazyVStack: PrimitiveBlock {
   private struct UniformRows {
     let count: Int
     let height: Float
+    var keys: [StructuralKey]? = nil
     let content: @MainActor (Int) -> any Block
   }
 
-  public init(
-    id: WidgetID,
+  init(
+    id: WidgetID?,
     spacing: Float = 0,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
@@ -43,8 +46,20 @@ public struct LazyVStack: PrimitiveBlock {
     self.rows = rows
   }
 
-  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
-    id: WidgetID,
+  public init(
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    rows: [Row]
+  ) {
+    self.init(
+      id: nil, spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller,
+      rows: rows)
+  }
+
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
+    id: WidgetID?,
     data: Data,
     rowHeight: Float,
     spacing: Float = 0,
@@ -63,13 +78,63 @@ public struct LazyVStack: PrimitiveBlock {
     }
   }
 
+  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) {
+    self.init(
+      id: nil, data: data, rowHeight: rowHeight, spacing: spacing,
+      showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
+    id: WidgetID?,
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    precondition(rowHeight.isFinite && rowHeight > 0, "rowHeight must be finite and positive")
+    precondition(spacing.isFinite && spacing >= 0, "spacing must be finite and nonnegative")
+    let keys = data.map { StructuralKey($0.id) }
+    precondition(Set(keys).count == keys.count, "Duplicate lazy collection element ID")
+    self.init(
+      id: id, spacing: spacing, showsIndicator: showsIndicator,
+      sticksToBottom: sticksToBottom, controller: controller, rows: [])
+    uniformRows = UniformRows(count: data.count, height: rowHeight, keys: keys) { offset in
+      content(data[data.index(data.startIndex, offsetBy: offset)])
+    }
+  }
+
+  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    self.init(
+      id: nil, data: data, rowHeight: rowHeight, spacing: spacing,
+      showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let id = id ?? context.widgetID
     let interaction = context.interaction
-    interaction.registerScrollViewport(rect)
     interaction.registerScrollInput(id: id, rect: rect)
     let contentHeight: Float
     if let uniformRows {
@@ -87,19 +152,23 @@ public struct LazyVStack: PrimitiveBlock {
     var offset = min(interaction.scrollOffset(for: id), maximumOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
-    if let request = controller.request {
-      switch request {
-      case .top: offset = 0
-      case .bottom: offset = maximumOffset
-      case .offset(let requested): offset = requested
-      case .visible(let target):
-        if target.minY < rect.minY {
-          offset -= rect.minY - target.minY
-        } else if target.maxY > rect.maxY {
-          offset += target.maxY - rect.maxY
+    if !interaction.refreshingRegistrations, let request = controller.request {
+      if interaction.scrollDelta(in: rect) != .zero, case .visible = request {
+        controller.request = nil
+      } else {
+        switch request {
+        case .top: offset = 0
+        case .bottom: offset = maximumOffset
+        case .offset(let requested): offset = requested
+        case .visible(let target):
+          if target.minY < rect.minY {
+            offset -= rect.minY - target.minY
+          } else if target.maxY > rect.maxY {
+            offset += target.maxY - rect.maxY
+          }
         }
+        controller.request = nil
       }
-      controller.request = nil
     } else if sticksToBottom && wasAtBottom && maximumOffset > previousLimit {
       offset = maximumOffset
     }
@@ -110,7 +179,7 @@ public struct LazyVStack: PrimitiveBlock {
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
-    interaction.beginGroup(.vertical, rect: rect)
+    interaction.beginGroup(rect: rect)
     let visibleTop = offset
     let visibleBottom = offset + rect.size.height
     if let uniformRows {
@@ -133,7 +202,8 @@ public struct LazyVStack: PrimitiveBlock {
             uniformRows.content(index), into: &drawList,
             in: Rect(
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
-              width: rect.size.width, height: uniformRows.height), context: context)
+              width: rect.size.width, height: uniformRows.height),
+            context: uniformRows.keys.map { context.scoped([.key($0[index])]) } ?? context.childScope(index))
         }
       }
     } else {
@@ -147,7 +217,8 @@ public struct LazyVStack: PrimitiveBlock {
             into: &drawList,
             in: Rect(
               x: rect.minX, y: rect.minY + y - offset,
-              width: rect.size.width, height: height), context: context)
+              width: rect.size.width, height: height),
+            context: context.scoped([.key(rows[index].key)]))
         }
         y = bottom + spacing
       }
@@ -169,41 +240,45 @@ public struct LazyVStack: PrimitiveBlock {
   }
 
   @MainActor private func updateCache(width: Float, context: RenderContext) {
+    precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
     let cache = controller.lazyStackCache
     let environment = LazyMeasurementEnvironment(
       textScale: context.textScale, fontMetrics: context.fontMetrics, theme: context.theme)
-    let sameEnvironment = cache.width == width && cache.environment == environment
-    if sameEnvironment && cache.rowIDs.count == rows.count
-      && zip(cache.rowIDs, rows).allSatisfy({ $0.0 == $0.1.id })
+    let sameEnvironment =
+      cache.width == width && cache.environment == environment
+      && cache.structuralPath == context.structuralPath
+    if sameEnvironment && cache.rowKeys.count == rows.count
+      && zip(cache.rowKeys, rows).allSatisfy({ $0.0 == $0.1.key })
       && zip(cache.identities, rows).allSatisfy({ $0.0 === $0.1.measurementIdentity })
       && cache.measurements.allSatisfy(\.valid)
     {
       return
     }
-    var oldSizes: [WidgetID: (LazyRowIdentity, LazyRowMeasurement)] = [:]
+    var oldSizes: [StructuralKey: (LazyRowIdentity, LazyRowMeasurement)] = [:]
     if sameEnvironment {
-      for index in cache.rowIDs.indices {
+      for index in cache.rowKeys.indices {
         let size = cache.measurements[index]
-        if size.valid { oldSizes[cache.rowIDs[index]] = (cache.identities[index], size) }
+        if size.valid { oldSizes[cache.rowKeys[index]] = (cache.identities[index], size) }
       }
     }
 
     var sizes: [LazyRowMeasurement] = []
     sizes.reserveCapacity(rows.count)
     for row in rows {
-      if let (identity, size) = oldSizes[row.id], identity === row.measurementIdentity {
+      if let (identity, size) = oldSizes[row.key], identity === row.measurementIdentity {
         sizes.append(size)
       } else {
         sizes.append(
           LazyRowMeasurement {
             BlockEngine.measure(
               row.content,
-              proposal: Size(width: width, height: Float.greatestFiniteMagnitude), context: context)
+              proposal: Size(width: width, height: Float.greatestFiniteMagnitude),
+              context: context.scoped([.key(row.key)]))
           })
       }
     }
     controller.lazyStackCache = LazyStackCache(
-      width: width, environment: environment, rowIDs: rows.map(\.id),
+      structuralPath: context.structuralPath, width: width, environment: environment, rowKeys: rows.map(\.key),
       identities: rows.map(\.measurementIdentity), measurements: sizes)
   }
 }

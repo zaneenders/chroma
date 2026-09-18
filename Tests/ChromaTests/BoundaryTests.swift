@@ -17,7 +17,7 @@ private struct NamedBlock: PrimitiveBlock {
 @MainActor
 struct BoundaryTests {
   private func names(in tuple: TupleBlock) -> [String] {
-    BlockBuilder.flattenedChildren(tuple.children).compactMap { ($0 as? NamedBlock)?.name }
+    tuple.children.compactMap { ($0 as? NamedBlock)?.name }
   }
 
   @Test func builderFlattensConditionalsLoopsAndNestedTuplesInSourceOrder() {

@@ -1,4 +1,4 @@
-public struct SizingBlock: PrimitiveBlock {
+public struct SizingBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var x: Sizing
   public var y: Sizing

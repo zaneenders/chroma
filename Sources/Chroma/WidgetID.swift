@@ -1,11 +1,17 @@
-public struct WidgetID: Hashable, Sendable {
-  public let rawValue: UInt64
+package struct WidgetID: Hashable, Sendable {
+  package let rawValue: UInt64
+  private var structuralPath: StructuralPath?
 
-  public init(rawValue: UInt64) {
+  init(path: StructuralPath) {
+    rawValue = 0
+    structuralPath = path
+  }
+
+  package init(rawValue: UInt64) {
     self.rawValue = rawValue
   }
 
-  public init(_ string: String) {
+  package init(_ string: String) {
     var hash: UInt64 = 0xcbf2_9ce4_8422_2325
     for byte in string.utf8 {
       hash ^= UInt64(byte)

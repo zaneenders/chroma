@@ -1,21 +1,26 @@
 public struct TupleBlock: PrimitiveBlock {
-  public var children: [any Block]
+  var scopedChildren: [any Block]
+
+  public var children: [any Block] {
+    scopedChildren.map { ($0 as? ScopedBlock)?.content ?? $0 }
+  }
 
   public init(children: [any Block]) {
-    self.children = children
+    self.scopedChildren = children
   }
 
   @MainActor public var expandsHorizontally: Bool {
-    children.contains { BlockEngine.expandsHorizontally($0) }
+    scopedChildren.contains { BlockEngine.expandsHorizontally($0) }
   }
 
   @MainActor public var expandsVertically: Bool {
-    children.contains { BlockEngine.expandsVertically($0) }
+    scopedChildren.contains { BlockEngine.expandsVertically($0) }
   }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     var result = Size.zero
-    for child in children {
+    for (index, child) in scopedChildren.enumerated() {
+      let context = context.childContext(for: child, at: index)
       let size = BlockEngine.measure(child, proposal: proposal, context: context)
       result.width = max(result.width, size.width)
       result.height = max(result.height, size.height)
@@ -24,7 +29,8 @@ public struct TupleBlock: PrimitiveBlock {
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
-    for child in children {
+    for (index, child) in scopedChildren.enumerated() {
+      let context = context.childContext(for: child, at: index)
       BlockEngine.draw(child, into: &drawList, in: rect, context: context)
     }
   }

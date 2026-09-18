@@ -1,4 +1,4 @@
-public struct PaddingBlock: PrimitiveBlock {
+public struct PaddingBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var insets: EdgeInsets
 

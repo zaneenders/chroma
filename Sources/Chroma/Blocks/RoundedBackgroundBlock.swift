@@ -1,4 +1,4 @@
-public struct RoundedBackgroundBlock: PrimitiveBlock {
+public struct RoundedBackgroundBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var color: Color
   public var radii: CornerRadii

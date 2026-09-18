@@ -1,15 +1,15 @@
 public struct Button: PrimitiveBlock {
   public var label: String
-  public var id: WidgetID
+  var id: WidgetID?
   public var action: @MainActor () -> Void
   public var role: ActionRole
   public var fontScale: Float
   public var style: ButtonStyle?
   public var padding: EdgeInsets
 
-  public init(
+  init(
     _ label: String,
-    id: WidgetID,
+    id: WidgetID?,
     role: ActionRole = .normal,
     fontScale: Float = 1,
     style: ButtonStyle? = nil,
@@ -25,6 +25,17 @@ public struct Button: PrimitiveBlock {
     self.padding = padding
   }
 
+  public init(
+    _ label: String,
+    role: ActionRole = .normal,
+    fontScale: Float = 1,
+    style: ButtonStyle? = nil,
+    padding: EdgeInsets = EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16),
+    action: @escaping @MainActor () -> Void
+  ) {
+    self.init(label, id: nil, role: role, fontScale: fontScale, style: style, padding: padding, action: action)
+  }
+
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let textSize = context.fontMetrics.measure(label, scale: fontScale * context.textScale)
     return Size(
@@ -34,7 +45,7 @@ public struct Button: PrimitiveBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let style = style ?? context.theme.button
-    let state = context.buttonState(id: id, in: rect, role: role) { action() }
+    let state = context.buttonState(id: id ?? context.widgetID, in: rect, role: role) { action() }
 
     let background: Color
     switch state.phase {

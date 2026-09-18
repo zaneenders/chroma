@@ -101,8 +101,8 @@ public final class TextSelectionManager {
     }
   }
 
-  func selection(for layout: PlainTextLayout) -> (from: Int, to: Int)? {
-    guard let rect = originLayoutRect, rect == layout.rect else { return nil }
+  func selection(for id: WidgetID) -> (from: Int, to: Int)? {
+    guard originLayoutID == id else { return nil }
     guard let start = selectionStart, let end = selectionEnd else { return nil }
     if start <= end { return (start, end) }
     return (end, start)
@@ -136,6 +136,10 @@ public final class TextSelectionManager {
     let s = min(start, end)
     let e = max(start, end)
     return layout.textInRange(from: s, to: e)
+  }
+
+  func reconcile() {
+    if let id = originLayoutID, layoutRegistry.layout(for: id) == nil { clear() }
   }
 
   func clear() {

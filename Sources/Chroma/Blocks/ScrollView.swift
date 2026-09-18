@@ -1,12 +1,12 @@
 public struct ScrollView: PrimitiveBlock {
-  public var id: WidgetID
+  var id: WidgetID?
   public var showsIndicator: Bool
   public var sticksToBottom: Bool
   public var controller: ScrollViewController?
   public var content: any Block
 
-  public init(
-    id: WidgetID,
+  init(
+    id: WidgetID?,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
     controller: ScrollViewController? = nil,
@@ -19,14 +19,24 @@ public struct ScrollView: PrimitiveBlock {
     self.content = VStack(content: content)
   }
 
+  public init(
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController? = nil,
+    @BlockBuilder content: () -> TupleBlock
+  ) {
+    self.init(
+      id: nil, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    let id = id ?? context.widgetID
     let interaction = context.interaction
-    interaction.registerScrollViewport(rect)
     interaction.registerScrollInput(id: id, rect: rect, horizontal: true)
     let contentSize = BlockEngine.measure(
       content,
@@ -42,12 +52,8 @@ public struct ScrollView: PrimitiveBlock {
       interaction.horizontalScrollOffset(for: id), maximumHorizontalOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
-    let pointerIsInside = rect.contains(interaction.input.pointerPosition)
-    let isUserScrolling =
-      pointerIsInside
-      && (interaction.input.scrollDelta.x != 0 || interaction.input.scrollDelta.y != 0)
-    if let request = controller?.request {
-      if isUserScrolling, case .visible = request {
+    if !interaction.refreshingRegistrations, let request = controller?.request {
+      if interaction.scrollDelta(in: rect, horizontal: true) != .zero, case .visible = request {
         controller?.request = nil
       } else {
         switch request {

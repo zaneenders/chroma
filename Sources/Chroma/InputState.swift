@@ -10,7 +10,7 @@ public struct InputState: Equatable, Sendable {
 
   public init(
     pointerPosition: Point = .zero,
-    pointerPressPosition: Point = Point(x: -1, y: -1),
+    pointerPressPosition: Point? = nil,
     pointerDown: Bool = false,
     pointerPressed: Bool = false,
     pointerReleased: Bool = false,
@@ -19,7 +19,7 @@ public struct InputState: Equatable, Sendable {
     textEvents: [TextEditEvent] = []
   ) {
     self.pointerPosition = pointerPosition
-    self.pointerPressPosition = pointerPressPosition
+    self.pointerPressPosition = pointerPressPosition ?? pointerPosition
     self.pointerDown = pointerDown
     self.pointerPressed = pointerPressed
     self.pointerReleased = pointerReleased
