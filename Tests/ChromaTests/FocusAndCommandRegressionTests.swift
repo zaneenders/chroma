@@ -33,6 +33,37 @@ struct FocusAndCommandRegressionTests {
     #expect(calls == ["inner", "outer"])
   }
 
+  @Test func keyedRootHandlerRemainsAvailableWithoutControls() {
+    let harness = Harness()
+    var calls = 0
+    let content = Text("No controls")
+      .onCommand(.application("test")) {
+        calls += 1
+        return .handled
+      }
+      .id("document")
+    let input = InputState(commands: [.application("test")])
+    harness.render(content, input: input)
+    #expect(calls == 1)
+    harness.render(content, input: input)
+    #expect(calls == 2)
+  }
+
+  @Test func keyedTupleChildHandlerDoesNotInterceptSibling() {
+    let harness = Harness()
+    var calls = 0
+    let content = BlockBuilder.buildBlock(
+      Text("No controls")
+        .onCommand(.application("test")) {
+          calls += 1
+          return .handled
+        }
+        .id("document"),
+      Button("Sibling") {})
+    harness.render(content, input: InputState(commands: [.application("test")]))
+    #expect(calls == 0)
+  }
+
   @Test func rootHandlersBubbleFromInnerToOuter() {
     let harness = Harness()
     var calls: [String] = []

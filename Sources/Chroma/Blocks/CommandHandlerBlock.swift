@@ -22,8 +22,10 @@ public struct CommandHandlerBlock: PrimitiveBlock, IdentityTransparentBlock {
     let isRoot =
       interaction.builderPath.isEmpty
       && context.structuralPath.segments.allSatisfy {
-        if case .component = $0 { return true }
-        return false
+        switch $0 {
+        case .component, .key: true
+        case .slot, .branch, .background: false
+        }
       }
     if isRoot {
       BlockEngine.draw(content, into: &drawList, in: rect, context: context)
