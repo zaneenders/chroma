@@ -23,22 +23,20 @@ struct FocusTreeWalker {
 
   private mutating func move(along axis: FocusNode.Axis, direction: Int) -> Bool {
     guard let origin = root.node(at: path) else { return false }
-    var ancestor = root
-    for depth in path.indices {
+    for depth in path.indices.reversed() {
+      let ancestorPath = Array(path.prefix(depth))
+      guard let ancestor = root.node(at: ancestorPath) else { return false }
       let childIndex = path[depth]
       guard ancestor.children.indices.contains(childIndex) else { return false }
-      if ancestor.axis == axis {
-        let siblingIndex = childIndex + direction
-        if ancestor.children.indices.contains(siblingIndex),
-          let destination = nearestLeaf(in: ancestor.children[siblingIndex], to: origin.rect)
-        {
-          path.removeLast(path.count - depth)
-          path.append(siblingIndex)
-          path.append(contentsOf: destination)
-          return true
-        }
+      guard ancestor.axis == axis else { continue }
+
+      let siblingIndex = childIndex + direction
+      if ancestor.children.indices.contains(siblingIndex),
+        let destination = nearestLeaf(in: ancestor.children[siblingIndex], to: origin.rect)
+      {
+        path = ancestorPath + [siblingIndex] + destination
+        return true
       }
-      ancestor = ancestor.children[childIndex]
     }
     return false
   }

@@ -614,6 +614,7 @@ struct ScrollViewTests {
     frame(InputState(pointerPosition: Point(x: 50, y: 50)))
     #expect(interaction.selection == [0, 0])
     frame(InputState(pointerPosition: Point(x: 50, y: 15)))
-    #expect(interaction.selection == [0, 1])
+    #expect(interaction.selection == [0, 0])
+    #expect(interaction.hoveredLeafID == WidgetID("clipped"))
   }
 }

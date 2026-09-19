@@ -98,6 +98,7 @@ package final class Interaction {
   @ObservationIgnored var clipStack: [Rect] = []
 
   var selectedLeafID: WidgetID?
+  var hoveredLeafID: WidgetID?
 
   @ObservationIgnored var builderRoot: FocusNode?
   @ObservationIgnored var builderStack: [FocusNode] = []
@@ -240,6 +241,7 @@ package final class Interaction {
     guard let tree else { return }
 
     let hovered = tree.hitTest(input.pointerPosition)
+    hoveredLeafID = hovered.flatMap { tree.node(at: $0)?.leafID }
     if input.pointerPressed {
       let pressed = tree.hitTest(input.pointerPressPosition)
       if let pressed {
@@ -248,10 +250,6 @@ package final class Interaction {
         endEditing()
       }
       pressedLeaf = pressed.flatMap { tree.node(at: $0)?.leafID }
-    } else if dragOrigin == nil, input.pointerPosition != lastPointerPosition, let hovered,
-      hovered != selection
-    {
-      moveCursor(to: hovered)
     }
     if input.pointerReleased {
       if let pressedLeaf, let hovered, hovered == selection,
@@ -306,6 +304,7 @@ package final class Interaction {
       self.pressedLeaf = nil
     }
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
+    hoveredLeafID = newTree.hitTest(input.pointerPosition).flatMap { newTree.node(at: $0)?.leafID }
     scrollOffsets = scrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
     horizontalScrollOffsets = horizontalScrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
     scrollLimits = scrollLimits.filter { buildingInputHandlers[$0.key] != nil }
@@ -435,10 +434,11 @@ extension Interaction {
     parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect), role: role))
     if role != .normal, let action { actionRoles[role] = action }
 
-    let selected = selectedLeafID == id
+    let focused = selectedLeafID == id
+    let hovered = hoveredLeafID == id
     let held = pressedLeaf == id && input.pointerDown
     if let action { buildingButtonActions[id] = action }
-    return ButtonState(hovered: selected, held: held, clicked: activatedLeaf == id)
+    return ButtonState(hovered: hovered, focused: focused, held: held, clicked: activatedLeaf == id)
   }
 
   func clippedRect(_ rect: Rect) -> Rect {

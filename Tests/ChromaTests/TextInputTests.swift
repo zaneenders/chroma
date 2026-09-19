@@ -430,15 +430,15 @@ struct TextInputTests {
     #expect(text == "abc")
   }
 
-  @Test func cursorLeavingEndsInsertMode() {
+  @Test func pointerMovementDoesNotEndInsertMode() {
     let ctx = Interaction()
     var text = "abc"
     enterInsertMode(ctx, text: &text)
     let state = frame(ctx, input: InputState(pointerPosition: Point(x: 10, y: 30)), text: &text)
-    #expect(ctx.selection == [0, 1], "the cursor moved to the sibling leaf")
-    #expect(!state.editing)
-    #expect(!ctx.isTextEditing)
-    #expect(ctx.mode == .movement)
+    #expect(ctx.selection == [0, 0])
+    #expect(state.editing)
+    #expect(ctx.isTextEditing)
+    #expect(ctx.mode == .editing)
   }
 
   @Test func vanishingFieldEndsSession() {

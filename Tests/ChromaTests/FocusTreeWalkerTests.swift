@@ -34,6 +34,19 @@ struct FocusTreeWalkerTests {
     #expect(walker.path == [0, 0])
   }
 
+  @Test func nestedLayoutHandlesMovementBeforeAnOuterContainer() {
+    let root = group(
+      .vertical,
+      [
+        group(.horizontal, [leaf(1, x: 0, y: 0), leaf(2, x: 20, y: 0)]),
+        leaf(3, x: 0, y: 20),
+      ])
+    var walker = FocusTreeWalker(root: root, path: [0, 0])!
+
+    #expect(move(.right, walker: &walker))
+    #expect(walker.path == [0, 1])
+  }
+
   @Test func movementBetweenUnevenGroupsUsesTheNearestLeaf() {
     let root = group(
       .vertical,
