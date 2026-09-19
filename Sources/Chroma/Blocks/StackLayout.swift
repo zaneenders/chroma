@@ -63,7 +63,12 @@ struct StackLayout {
     }
     let sizes = layout(children, originals: originals, proposal: rect.size, context: context)
     let interaction = context.interaction
-    interaction.beginGroup(rect: rect)
+    let selectedGroup = interaction.isBuildingSelectedGroup()
+    interaction.beginGroup(
+      rect: rect, axis: axis == .horizontal ? .horizontal : .vertical)
+    if selectedGroup {
+      drawList.strokeRect(rect, width: 2, color: context.theme.focus.ring)
+    }
     var cursor = axis == .horizontal ? rect.minX : rect.minY
     if reversed { cursor += rect.size[keyPath: axis.main] }
     for (child, size) in zip(children, sizes) {

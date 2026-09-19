@@ -109,7 +109,10 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
   func handleKey(_ chord: KeyChord?, text: String?) {
     if keyBindings.prefersTextInsertion(chord: chord, text: text, isTextEditing: interaction.isTextEditing) {
       if let text { pendingTextEvents.append(.insert(text)) }
-    } else if let chord, let resolution = keyBindings.command(for: chord), let command = resolution {
+    } else if let chord,
+      let resolution = keyBindings.command(for: chord, isTextEditing: interaction.isTextEditing),
+      let command = resolution
+    {
       if case .editing(let event) = command {
         switch event {
         case .copy:

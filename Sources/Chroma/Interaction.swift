@@ -1,8 +1,10 @@
 import Observation
 
 public enum InteractionMode: Equatable, Sendable {
-  case movement
+  case visual
   case editing
+
+  public static var movement: Self { .visual }
 }
 
 @Observable
@@ -36,7 +38,7 @@ package final class Interaction {
   @ObservationIgnored var textDragAnchor: Int?
   package internal(set) var editingText: String?
 
-  public package(set) var mode: InteractionMode = .movement
+  public package(set) var mode: InteractionMode = .visual
   package var isTextEditing: Bool { mode == .editing }
 
   @ObservationIgnored var activatePending = false
@@ -157,7 +159,7 @@ package final class Interaction {
     inputLengthText = nil
     inputLength = 0
     textSelectionRange = nil
-    mode = .movement
+    mode = .visual
   }
 
   func requestRedraw() {
@@ -274,13 +276,30 @@ package final class Interaction {
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {
       if let id = oldTree.node(at: selection)?.leafID {
-        self.selection = newTree.findLeaf(id) ?? newTree.clamped(selection)
+        if let matchingPath = newTree.findLeaf(id) {
+          self.selection = matchingPath
+        } else {
+          let fallback = newTree.clamped(selection)
+          if let node = newTree.node(at: fallback), node.isLeaf {
+            self.selection = fallback
+          } else if let descendant = newTree.node(at: fallback)?.firstLeafPath() {
+            self.selection = fallback + descendant
+          } else {
+            self.selection = nil
+          }
+        }
+      } else if newTree.node(at: selection)?.isLeaf != true {
+        self.selection = selection
       } else {
-        self.selection = newTree.clamped(selection)
+        var ancestor = newTree.clamped(selection)
+        while !ancestor.isEmpty, newTree.node(at: ancestor)?.isLeaf == true {
+          ancestor.removeLast()
+        }
+        self.selection = ancestor.isEmpty ? newTree.firstLeafPath() : ancestor
       }
     }
-    if selection.flatMap({ newTree.node(at: $0)?.leafID }) == nil {
-      selection = newTree.firstLeafPath()
+    if self.selection == nil {
+      self.selection = newTree.firstLeafPath()
     }
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
       endEditing()
@@ -310,11 +329,19 @@ package final class Interaction {
 
 @MainActor
 extension Interaction {
-  func beginGroup(rect: Rect) {
+  func isBuildingSelectedGroup() -> Bool {
+    guard let selection, let parent = builderStack.last, selection.count == builderPath.count + 1,
+      selection.last == parent.children.count
+    else { return false }
+    for index in builderPath.indices where selection[index] != builderPath[index] { return false }
+    return tree?.node(at: selection)?.isLeaf == false
+  }
+
+  func beginGroup(rect: Rect, axis: FocusNode.Axis? = nil) {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
-    let node = FocusNode(kind: .group, rect: rect)
+    let node = FocusNode(kind: .group, rect: rect, axis: axis)
     parent.children.append(node)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
@@ -342,8 +369,17 @@ extension Interaction {
   }
 
   func moveCursor(to path: [Int]) {
-    guard tree?.node(at: path)?.isLeaf == true else { return }
+    guard tree?.node(at: path) != nil else { return }
     selection = path
+    if tree?.node(at: path)?.isLeaf != true {
+      endEditing()
+    }
+  }
+
+  private func selectedLeafPath(in tree: FocusNode, from path: [Int]) -> [Int]? {
+    guard let node = tree.node(at: path) else { return nil }
+    if node.isLeaf { return path }
+    return node.firstLeafPath().map { path + $0 }
   }
 
   private func isPrefix(_ prefix: [Int], of path: [Int]) -> Bool {
@@ -374,9 +410,17 @@ extension Interaction {
   func apply(_ command: Command) {
     guard tree != nil, selection != nil else { return }
     switch command {
-    case .application, .editing:
+    case .application:
       return
+    case .editing:
+      return
+    case .navigation(let navigation):
+      guard mode == .visual, let tree, let selection else { return }
+      guard var walker = FocusTreeWalker(root: tree, path: selection), walker.move(navigation) else { return }
+      moveCursor(to: walker.path)
     case .action(.activate):
+      guard let tree, let selection, let leafPath = selectedLeafPath(in: tree, from: selection) else { return }
+      moveCursor(to: leafPath)
       activatePending = true
     case .action(.submit), .action(.cancel), .action(.dismiss):
       return

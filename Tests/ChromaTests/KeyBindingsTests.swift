@@ -25,7 +25,9 @@ struct KeyBindingsTests {
 
 struct TextInsertionRoutingTests {
   @Test func printableShortcutsRemainTextWhileEditing() {
-    for (chord, text) in [(KeyChord(.space), " "), (KeyChord("f"), "f"), (KeyChord("j"), "j"), (KeyChord("f", modifiers: .shift), "F")] {
+    for (chord, text) in [
+      (KeyChord(.space), " "), (KeyChord("f"), "f"), (KeyChord("j"), "j"), (KeyChord("f", modifiers: .shift), "F"),
+    ] {
       #expect(KeyBindings().prefersTextInsertion(chord: chord, text: text, isTextEditing: true))
       #expect(!KeyBindings().prefersTextInsertion(chord: chord, text: text, isTextEditing: false))
     }
@@ -33,10 +35,53 @@ struct TextInsertionRoutingTests {
 
   @Test func modifiedShortcutsAndNonTextKeysKeepTheirBindings() {
     for modifier: KeyModifiers in [.command, .control, .superKey] {
-      #expect(!KeyBindings().prefersTextInsertion(
-        chord: KeyChord("v", modifiers: modifier), text: "v", isTextEditing: true))
+      #expect(
+        !KeyBindings().prefersTextInsertion(
+          chord: KeyChord("v", modifiers: modifier), text: "v", isTextEditing: true))
     }
     #expect(!KeyBindings().prefersTextInsertion(chord: KeyChord(.enter), text: nil, isTextEditing: true))
     #expect(!KeyBindings().prefersTextInsertion(chord: KeyChord(.space), text: "", isTextEditing: true))
+  }
+}
+
+extension KeyBindingsTests {
+  @Test func vimNavigationBindingsResolveAndPreserveTextInsertion() {
+    for (character, command) in [
+      ("f", NavigationCommand.up),
+      ("j", .down),
+      ("d", .left),
+      ("k", .right),
+      ("l", .inward),
+      ("s", .outward),
+    ] {
+      #expect(
+        KeyBindings.vimNavigation.command(for: KeyChord(Character(character)))
+          == .some(.some(.navigation(command))))
+      #expect(
+        KeyBindings.vimNavigation.prefersTextInsertion(
+          chord: KeyChord(Character(character)), text: character, isTextEditing: true))
+    }
+    #expect(KeyBindings.vimNavigation.command(for: KeyChord(.upArrow)) == .some(.some(.navigation(.up))))
+    #expect(KeyBindings.vimNavigation.command(for: KeyChord(.rightArrow)) == .some(.some(.navigation(.right))))
+  }
+
+  @Test func overlayCanSpecializeBindingsForEditingWithoutReplacingNavigation() {
+    let bindings = KeyBindings.vimNavigation.overlay {
+      bind(.upArrow, to: .editing(.moveCaretUp))
+      bind(.enter, to: .editing(.submit))
+    }
+
+    #expect(
+      bindings.command(for: KeyChord(.upArrow), isTextEditing: false)
+        == .some(.some(.navigation(.up))))
+    #expect(
+      bindings.command(for: KeyChord(.upArrow), isTextEditing: true)
+        == .some(.some(.editing(.moveCaretUp))))
+    #expect(
+      bindings.command(for: KeyChord(.enter), isTextEditing: false)
+        == .some(.some(.action(.activate))))
+    #expect(
+      bindings.command(for: KeyChord(.enter), isTextEditing: true)
+        == .some(.some(.editing(.submit))))
   }
 }

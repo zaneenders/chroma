@@ -40,8 +40,9 @@ final class MetalReplay {
     pass.colorAttachments[0].loadAction = .clear
     pass.colorAttachments[0].storeAction = .store
     let start = now()
-    guard let prepared = try renderer.prepareFrame(
-      list, viewport: viewport, rasterScale: rasterScale, queue: queue, renderPass: pass)
+    guard
+      let prepared = try renderer.prepareFrame(
+        list, viewport: viewport, rasterScale: rasterScale, queue: queue, renderPass: pass)
     else { throw BenchmarkError.failed("No Metal frame slot available") }
     let cpu = now() - start
     let completion = prepared.submit().waitUntilCompleted()

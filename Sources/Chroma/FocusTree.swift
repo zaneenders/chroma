@@ -1,4 +1,11 @@
+public enum FocusGroupAxis: Equatable, Sendable {
+  case horizontal
+  case vertical
+}
+
 final class FocusNode {
+  typealias Axis = FocusGroupAxis
+
   enum Kind: Equatable {
     case group
     case leaf(WidgetID)
@@ -7,13 +14,15 @@ final class FocusNode {
   let kind: Kind
   let rect: Rect
   var role: ActionRole = .normal
+  let axis: Axis?
   var commandHandlers: [Command: @MainActor () -> CommandResult] = [:]
   var children: [FocusNode] = []
 
-  init(kind: Kind, rect: Rect, role: ActionRole = .normal) {
+  init(kind: Kind, rect: Rect, role: ActionRole = .normal, axis: Axis? = nil) {
     self.kind = kind
     self.rect = rect
     self.role = role
+    self.axis = axis
   }
 
   var isLeaf: Bool {
@@ -31,7 +40,7 @@ extension FocusNode {
   func node(at path: [Int]) -> FocusNode? {
     var node = self
     for index in path {
-      guard index >= 0, index < node.children.count else { return nil }
+      guard node.children.indices.contains(index) else { return nil }
       node = node.children[index]
     }
     return node
@@ -49,7 +58,7 @@ extension FocusNode {
   func firstLeafPath() -> [Int]? {
     for (index, child) in children.enumerated() {
       if child.isLeaf { return [index] }
-      if let sub = child.firstLeafPath() { return [index] + sub }
+      if let subpath = child.firstLeafPath() { return [index] + subpath }
     }
     return nil
   }

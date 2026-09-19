@@ -112,7 +112,7 @@ final class WaylandKeyboard {
       return
     }
 
-    let resolution = bindings.command(for: chord)
+    let resolution = bindings.command(for: chord, isTextEditing: editing)
     if editing {
       if case .some(.some(let command)) = resolution, case .editing(let event) = command {
         if event == .selectAll {

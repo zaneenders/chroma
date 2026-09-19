@@ -152,4 +152,74 @@ struct FocusAndCommandRegressionTests {
     harness.render(replacement, input: InputState(commands: [.action(.activate)]))
     #expect(calls == 1)
   }
+
+  @Test func navigationSelectsGroupsAndOnlyActivatesLeaves() {
+    let harness = Harness()
+    var activations = 0
+    let content = VStack {
+      HStack {
+        Button("First") { activations += 1 }
+        Button("Second") { activations += 1 }
+      }
+      Button("Third") { activations += 1 }
+    }
+
+    harness.render(content)
+    #expect(harness.context.interaction.selection == [0, 0, 0])
+
+    harness.render(content, input: InputState(commands: [.navigation(.outward)]))
+    #expect(harness.context.interaction.selection == [0, 0])
+
+    harness.render(content, input: InputState(commands: [.navigation(.outward)]))
+    #expect(harness.context.interaction.selection == [0])
+
+    harness.render(content, input: InputState(commands: [.navigation(.outward), .action(.activate)]))
+    #expect(harness.context.interaction.selectedLeafID != nil)
+    #expect(activations == 1)
+  }
+
+  @Test func directionalNavigationFollowsStackStructure() {
+    let harness = Harness()
+    let first = FocusTarget()
+    let second = FocusTarget()
+    let third = FocusTarget()
+    let fourth = FocusTarget()
+    let content = VStack {
+      HStack {
+        Button("First") {}.focusTarget(first)
+        Button("Second") {}.focusTarget(second)
+      }
+      HStack {
+        Button("Third") {}.focusTarget(third)
+        Button("Fourth") {}.focusTarget(fourth)
+      }
+    }
+
+    second.focus()
+    harness.render(content)
+    #expect(harness.context.interaction.selectedLeafID == second.boundID)
+
+    harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    #expect(harness.context.interaction.selectedLeafID == fourth.boundID)
+
+    harness.render(content, input: InputState(commands: [.navigation(.left)]))
+    #expect(harness.context.interaction.selectedLeafID == third.boundID)
+
+    harness.render(content, input: InputState(commands: [.navigation(.up)]))
+    #expect(harness.context.interaction.selectedLeafID == first.boundID)
+  }
+
+  @Test func editingBlocksStructuralNavigation() {
+    let harness = Harness()
+    let first = FocusTarget()
+    let content = VStack {
+      Button("First") {}.focusTarget(first)
+      Button("Second") {}
+    }
+
+    harness.render(content)
+    harness.context.interaction.mode = .editing
+    harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    #expect(harness.context.interaction.selectedLeafID == first.boundID)
+  }
 }

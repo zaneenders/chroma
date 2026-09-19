@@ -68,21 +68,35 @@ public func disable(_ character: Character, modifiers: KeyModifiers = []) -> Key
 }
 
 public struct KeyBindings: Sendable {
-  private var entries: [KeyChord: Command?] = [:]
+  private var entries: [KeyChord: [Command?]] = [:]
 
   public init(@KeyBindingsBuilder _ content: () -> [KeyBinding]) {
-    for binding in content() { entries[binding.chord] = .some(binding.command) }
+    for binding in content() { entries[binding.chord] = [binding.command] }
   }
 
   public init() {}
 
-  public func command(for chord: KeyChord) -> Command?? { entries[chord] }
+  public func command(for chord: KeyChord) -> Command?? {
+    guard let command = entries[chord]?.last else { return nil }
+    return .some(command)
+  }
+
+  public func command(for chord: KeyChord, isTextEditing: Bool) -> Command?? {
+    guard let commands = entries[chord], let latest = commands.last else { return nil }
+    guard latest != nil else { return .some(nil) }
+    let preferred = commands.reversed().first { command in
+      guard let command else { return false }
+      if case .editing = command { return isTextEditing }
+      return !isTextEditing
+    }
+    return .some(preferred ?? latest)
+  }
 
   public func prefersTextInsertion(
     chord: KeyChord?, text: String?, isTextEditing: Bool
   ) -> Bool {
     guard isTextEditing, let text, !text.isEmpty else { return false }
-    if let chord, let resolution = command(for: chord) {
+    if let chord, let resolution = command(for: chord, isTextEditing: isTextEditing) {
       guard let command = resolution else { return false }
       if case .editing = command { return false }
     }
@@ -91,13 +105,30 @@ public struct KeyBindings: Sendable {
 
   public func overlay(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> KeyBindings {
     var result = self
-    for binding in content() { result.entries[binding.chord] = .some(binding.command) }
+    for binding in content() { result.entries[binding.chord, default: []].append(binding.command) }
     return result
   }
 
   public func overlay(_ other: KeyBindings) -> KeyBindings {
     var result = self
-    for (chord, command) in other.entries { result.entries[chord] = .some(command) }
+    for (chord, commands) in other.entries { result.entries[chord, default: []].append(contentsOf: commands) }
     return result
+  }
+}
+
+extension KeyBindings {
+  public static let vimNavigation = KeyBindings {
+    bind("f", to: .navigation(.up))
+    bind(.upArrow, to: .navigation(.up))
+    bind("j", to: .navigation(.down))
+    bind(.downArrow, to: .navigation(.down))
+    bind("d", to: .navigation(.left))
+    bind(.leftArrow, to: .navigation(.left))
+    bind("k", to: .navigation(.right))
+    bind(.rightArrow, to: .navigation(.right))
+    bind("l", to: .navigation(.inward))
+    bind("s", to: .navigation(.outward))
+    bind(.enter, to: .action(.activate))
+    bind(.space, to: .action(.activate))
   }
 }
