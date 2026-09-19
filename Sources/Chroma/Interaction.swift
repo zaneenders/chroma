@@ -51,7 +51,13 @@ package final class Interaction {
   }
   @ObservationIgnored var commandHandlers: [ScopedCommandHandler] = []
   @ObservationIgnored var buildingCommandHandlers: [ScopedCommandHandler] = []
-  @ObservationIgnored var actionRoles: [ActionRole: @MainActor () -> Void] = [:]
+  struct ScopedActionRole {
+    var path: [Int]
+    var role: ActionRole
+    var action: @MainActor () -> Void
+  }
+  @ObservationIgnored var actionRoles: [ScopedActionRole] = []
+  @ObservationIgnored var buildingActionRoles: [ScopedActionRole] = []
 
   @ObservationIgnored var lastPointerPosition = Point(x: -1, y: -1)
 
@@ -140,7 +146,8 @@ package final class Interaction {
     buildingButtonActions = [:]
     commandHandlers = []
     buildingCommandHandlers = []
-    actionRoles = [:]
+    actionRoles = []
+    buildingActionRoles = []
     caretClock.setActive(false)
   }
 
@@ -184,7 +191,7 @@ package final class Interaction {
       textSelection.layoutRegistry.clear()
       activatedLeaf = nil
       activatePending = false
-      actionRoles = [:]
+      buildingActionRoles = []
       let root = FocusNode(kind: .group, rect: .zero)
       builderRoot = root
       builderStack = [root]
@@ -202,6 +209,7 @@ package final class Interaction {
     routePendingCommands()
     pendingCommands = []
     buildingCommandHandlers = []
+    buildingActionRoles = []
     buildingInputHandlers = [:]
     buildingButtonActions = [:]
     activatedLeaf = nil
@@ -237,7 +245,6 @@ package final class Interaction {
         activatedLeaf = id
         buttonActions[id]?()
       }
-      actionRoles = [:]
     }
 
     guard let tree else { return }
@@ -318,6 +325,7 @@ package final class Interaction {
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
     caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     commandHandlers = buildingCommandHandlers
+    actionRoles = buildingActionRoles
     inputHandlers = buildingInputHandlers
     buttonActions = buildingButtonActions
     builderRoot = nil
@@ -397,13 +405,24 @@ extension Interaction {
       }
       switch command {
       case .action(.submit):
-        actionRoles[.defaultAction]?()
+        actionRole(.defaultAction)?()
       case .action(.cancel), .action(.dismiss):
-        actionRoles[.cancel]?()
+        if let action = actionRole(.cancel) {
+          action()
+        } else if mode == .editing {
+          endEditing()
+        }
       default:
         apply(command)
       }
     }
+  }
+
+  func actionRole(_ role: ActionRole) -> (@MainActor () -> Void)? {
+    actionRoles
+      .filter { $0.role == role && isPrefix($0.path, of: selection ?? []) }
+      .max { $0.path.count < $1.path.count }?
+      .action
   }
 
   func apply(_ command: Command) {
@@ -448,7 +467,9 @@ extension Interaction {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
     }
     parent.children.append(FocusNode(kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role))
-    if role != .normal, let action { actionRoles[role] = action }
+    if role != .normal, let action {
+      buildingActionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
+    }
 
     let focused = selectedLeafID == id
     let hovered = hoveredLeafID == id

@@ -220,4 +220,39 @@ struct FocusAndCommandRegressionTests {
     harness.render(content, input: InputState(commands: [.navigation(.down)]))
     #expect(harness.context.interaction.selectedLeafID == first.boundID)
   }
+
+  @Test func defaultActionUsesTheFocusedScope() {
+    let harness = Harness()
+    let left = FocusTarget()
+    var leftCalls = 0
+    var rightCalls = 0
+    let content = HStack {
+      VStack {
+        Button("Left control") {}.focusTarget(left)
+        Button("Left default", role: .defaultAction) { leftCalls += 1 }
+      }
+      VStack {
+        Button("Right control") {}
+        Button("Right default", role: .defaultAction) { rightCalls += 1 }
+      }
+    }
+
+    harness.render(content)
+    left.focus()
+    harness.render(content)
+    harness.render(content, input: InputState(commands: [.action(.submit)]))
+
+    #expect(leftCalls == 1)
+    #expect(rightCalls == 0)
+  }
+
+  @Test func cancelLeavesEditingWhenTheFocusedScopeHasNoCancelAction() {
+    let harness = Harness()
+    harness.render(TextField(text: { "text" }, onChange: { _ in }))
+    harness.context.interaction.beginEditing(harness.context.interaction.selectedLeafID!, caretOffset: 0)
+
+    harness.render(TextField(text: { "text" }, onChange: { _ in }), input: InputState(commands: [.action(.cancel)]))
+
+    #expect(harness.context.interaction.mode == .movement)
+  }
 }

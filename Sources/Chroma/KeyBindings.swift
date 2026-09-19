@@ -172,5 +172,6 @@ extension KeyBindings {
     bind(.rightArrow, to: .navigation(.right))
     bind(.enter, in: .movement, to: .action(.activate))
     bind(.space, in: .movement, to: .action(.activate))
+    bind(.escape, to: .action(.cancel))
   }
 }
