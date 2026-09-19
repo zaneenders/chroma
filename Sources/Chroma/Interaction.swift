@@ -1,10 +1,8 @@
 import Observation
 
 public enum InteractionMode: Equatable, Sendable {
-  case visual
+  case movement
   case editing
-
-  public static var movement: Self { .visual }
 }
 
 @Observable
@@ -38,7 +36,7 @@ package final class Interaction {
   @ObservationIgnored var textDragAnchor: Int?
   package internal(set) var editingText: String?
 
-  public package(set) var mode: InteractionMode = .visual
+  public package(set) var mode: InteractionMode = .movement
   package var isTextEditing: Bool { mode == .editing }
 
   @ObservationIgnored var activatePending = false
@@ -159,7 +157,7 @@ package final class Interaction {
     inputLengthText = nil
     inputLength = 0
     textSelectionRange = nil
-    mode = .visual
+    mode = .movement
   }
 
   func requestRedraw() {
@@ -401,7 +399,7 @@ extension Interaction {
     case .editing:
       return
     case .navigation(let navigation):
-      guard mode == .visual, let tree, let selection else { return }
+      guard mode == .movement, let tree, let selection else { return }
       guard var walker = FocusTreeWalker(root: tree, path: selection), walker.move(navigation) else { return }
       moveCursor(to: walker.path)
     case .action(.activate):

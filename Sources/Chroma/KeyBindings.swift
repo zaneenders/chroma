@@ -41,55 +41,79 @@ public enum KeyBindingsBuilder {
   public static func buildExpression(_ expression: KeyBinding) -> KeyBinding { expression }
 }
 
+public enum KeyBindingContext: Hashable, Sendable {
+  case shared
+  case movement
+  case editing
+}
+
 public struct KeyBinding: Hashable, Sendable {
   public var chord: KeyChord
+  public var context: KeyBindingContext
   public var command: Command?
 
-  public init(_ chord: KeyChord, to command: Command?) {
+  public init(_ chord: KeyChord, in context: KeyBindingContext? = nil, to command: Command?) {
     self.chord = chord
+    self.context = context ?? Self.defaultContext(for: command)
     self.command = command
+  }
+
+  private static func defaultContext(for command: Command?) -> KeyBindingContext {
+    guard let command else { return .shared }
+    return switch command {
+    case .navigation: .movement
+    case .editing: .editing
+    case .action, .application: .shared
+    }
   }
 }
 
-public func bind(_ key: Key, modifiers: KeyModifiers = [], to command: Command) -> KeyBinding {
-  KeyBinding(KeyChord(key, modifiers: modifiers), to: command)
+public func bind(
+  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil, to command: Command
+) -> KeyBinding {
+  KeyBinding(KeyChord(key, modifiers: modifiers), in: context, to: command)
 }
 
-public func bind(_ character: Character, modifiers: KeyModifiers = [], to command: Command) -> KeyBinding {
-  KeyBinding(KeyChord(character, modifiers: modifiers), to: command)
+public func bind(
+  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil, to command: Command
+) -> KeyBinding {
+  KeyBinding(KeyChord(character, modifiers: modifiers), in: context, to: command)
 }
 
-public func disable(_ key: Key, modifiers: KeyModifiers = []) -> KeyBinding {
-  KeyBinding(KeyChord(key, modifiers: modifiers), to: nil)
+public func disable(
+  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext = .shared
+) -> KeyBinding {
+  KeyBinding(KeyChord(key, modifiers: modifiers), in: context, to: nil)
 }
 
-public func disable(_ character: Character, modifiers: KeyModifiers = []) -> KeyBinding {
-  KeyBinding(KeyChord(character, modifiers: modifiers), to: nil)
+public func disable(
+  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext = .shared
+) -> KeyBinding {
+  KeyBinding(KeyChord(character, modifiers: modifiers), in: context, to: nil)
 }
 
 public struct KeyBindings: Sendable {
-  private var entries: [KeyChord: [Command?]] = [:]
+  private var entries: [KeyChord: [KeyBindingContext: Command?]] = [:]
 
   public init(@KeyBindingsBuilder _ content: () -> [KeyBinding]) {
-    for binding in content() { entries[binding.chord] = [binding.command] }
+    for binding in content() { entries[binding.chord, default: [:]][binding.context] = binding.command }
   }
 
   public init() {}
 
   public func command(for chord: KeyChord) -> Command?? {
-    guard let command = entries[chord]?.last else { return nil }
-    return .some(command)
+    for context in [.editing, .movement, .shared] as [KeyBindingContext] {
+      if let command = entries[chord]?[context] { return .some(command) }
+    }
+    return nil
   }
 
   public func command(for chord: KeyChord, isTextEditing: Bool) -> Command?? {
-    guard let commands = entries[chord], let latest = commands.last else { return nil }
-    guard latest != nil else { return .some(nil) }
-    let preferred = commands.reversed().first { command in
-      guard let command else { return false }
-      if case .editing = command { return isTextEditing }
-      return !isTextEditing
+    let contexts: [KeyBindingContext] = isTextEditing ? [.editing, .shared] : [.movement, .shared]
+    for context in contexts {
+      if let command = entries[chord]?[context] { return .some(command) }
     }
-    return .some(preferred ?? latest)
+    return nil
   }
 
   public func prefersTextInsertion(
@@ -97,21 +121,22 @@ public struct KeyBindings: Sendable {
   ) -> Bool {
     guard isTextEditing, let text, !text.isEmpty else { return false }
     if let chord, let resolution = command(for: chord, isTextEditing: isTextEditing) {
-      guard let command = resolution else { return false }
-      if case .editing = command { return false }
+      return resolution == nil
     }
     return chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true
   }
 
   public func overlay(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> KeyBindings {
     var result = self
-    for binding in content() { result.entries[binding.chord, default: []].append(binding.command) }
+    for binding in content() { result.entries[binding.chord, default: [:]][binding.context] = binding.command }
     return result
   }
 
   public func overlay(_ other: KeyBindings) -> KeyBindings {
     var result = self
-    for (chord, commands) in other.entries { result.entries[chord, default: []].append(contentsOf: commands) }
+    for (chord, bindings) in other.entries {
+      for (context, command) in bindings { result.entries[chord, default: [:]][context] = command }
+    }
     return result
   }
 }

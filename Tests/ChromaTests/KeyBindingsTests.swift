@@ -82,4 +82,34 @@ extension KeyBindingsTests {
       bindings.command(for: KeyChord(.enter), isTextEditing: true)
         == .some(.some(.editing(.submit))))
   }
+
+  @Test func activeContextTakesPrecedenceOverSharedBindings() {
+    let bindings = KeyBindings {
+      bind("x", in: .shared, to: .application("shared"))
+      bind("x", in: .movement, to: .application("movement"))
+      bind("x", in: .editing, to: .application("editing"))
+    }
+
+    #expect(
+      bindings.command(for: KeyChord("x"), isTextEditing: false)
+        == .some(.some(.application("movement"))))
+    #expect(
+      bindings.command(for: KeyChord("x"), isTextEditing: true)
+        == .some(.some(.application("editing"))))
+  }
+
+  @Test func laterBindingsReplaceTheirContextOnly() {
+    let bindings = KeyBindings {
+      bind("x", in: .shared, to: .application("first"))
+      bind("x", in: .movement, to: .application("movement"))
+      bind("x", in: .shared, to: .application("last"))
+    }
+
+    #expect(
+      bindings.command(for: KeyChord("x"), isTextEditing: false)
+        == .some(.some(.application("movement"))))
+    #expect(
+      bindings.command(for: KeyChord("x"), isTextEditing: true)
+        == .some(.some(.application("last"))))
+  }
 }
