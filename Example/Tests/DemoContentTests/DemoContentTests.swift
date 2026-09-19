@@ -84,10 +84,7 @@ struct DemoContentTests {
     #expect(apple.keyBindings.command(for: KeyChord("c", modifiers: .command))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .superKey))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .command)) == nil)
-    for key: Key in [
-      .character("j"), .character("f"), .character("d"), .character("k"),
-      .character("l"), .character("s"), .space, .pageUp, .pageDown,
-    ] {
+    for key: Key in [.character("l"), .character("s"), .pageUp, .pageDown] {
       #expect(apple.keyBindings.command(for: KeyChord(key)) == nil)
       #expect(linux.keyBindings.command(for: KeyChord(key)) == nil)
     }

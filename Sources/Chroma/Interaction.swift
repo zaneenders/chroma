@@ -405,24 +405,8 @@ extension Interaction {
   }
 
   package func resolve(_ input: KeyboardInput, appBindings: KeyBindings) -> ResolvedKeyboardInput? {
-    let isTextEditing = isTextEditing
-    if isTextEditing, let text = input.text, !text.isEmpty {
-      if let chord = input.chord,
-        keyBindingCommand(for: chord, isTextEditing: isTextEditing, appBindings: appBindings) != nil
-      {
-        return nil
-      }
-      if input.chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true {
-        return .text(.insert(text))
-      }
-    }
-    guard let chord = input.chord,
-      let resolution = keyBindingCommand(for: chord, isTextEditing: isTextEditing, appBindings: appBindings),
-      let command = resolution
-    else { return nil }
-    return switch command {
-    case .editing(let event): .text(event)
-    default: .command(command)
+    appBindings.resolve(input, isTextEditing: isTextEditing) { chord in
+      keyBindingCommand(for: chord, isTextEditing: isTextEditing, appBindings: appBindings)
     }
   }
 

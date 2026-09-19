@@ -117,17 +117,25 @@ public struct KeyBindings: Sendable {
   }
 
   public func resolve(_ input: KeyboardInput, isTextEditing: Bool) -> ResolvedKeyboardInput? {
+    resolve(input, isTextEditing: isTextEditing) { chord in
+      command(for: chord, isTextEditing: isTextEditing)
+    }
+  }
+
+  package func resolve(
+    _ input: KeyboardInput,
+    isTextEditing: Bool,
+    commandForChord: (KeyChord) -> Command??
+  ) -> ResolvedKeyboardInput? {
     if isTextEditing, let text = input.text, !text.isEmpty {
-      if let chord = input.chord,
-        let resolution = command(for: chord, isTextEditing: isTextEditing)
-      {
+      if let chord = input.chord, let resolution = commandForChord(chord) {
         if resolution == nil { return nil }
       } else if input.chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true {
         return .text(.insert(text))
       }
     }
     guard let chord = input.chord,
-      let resolution = command(for: chord, isTextEditing: isTextEditing),
+      let resolution = commandForChord(chord),
       let command = resolution
     else { return nil }
     return switch command {
