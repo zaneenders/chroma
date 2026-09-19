@@ -62,6 +62,30 @@ struct TextInsertionRoutingTests {
     }
   }
 
+  @Test func defaultActivationIsMovementOnly() {
+    for key: Key in [.enter, .space] {
+      #expect(
+        KeyBindings.vimNavigation.command(for: KeyChord(key), isTextEditing: false)
+          == .some(.some(.action(.activate))))
+      #expect(KeyBindings.vimNavigation.command(for: KeyChord(key), isTextEditing: true) == nil)
+    }
+  }
+
+  @Test func editingBindingsPreserveSpaceInsertionWithNavigationPreset() {
+    let bindings = KeyBindings.vimNavigation.overlay {
+      bind(.backspace, to: .editing(.backspace))
+      bind(.leftArrow, to: .editing(.moveCaretLeft))
+      bind(.enter, to: .editing(.submit))
+    }
+
+    #expect(
+      bindings.resolve(KeyboardInput(chord: KeyChord(.space), text: " "), isTextEditing: true)
+        == .text(.insert(" ")))
+    #expect(
+      bindings.resolve(KeyboardInput(chord: KeyChord(.enter)), isTextEditing: true)
+        == .text(.submit))
+  }
+
   @Test func modifiedShortcutsAndNonTextKeysKeepTheirBindings() {
     for modifier: KeyModifiers in [.command, .control, .superKey] {
       #expect(

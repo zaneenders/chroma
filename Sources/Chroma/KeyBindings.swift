@@ -170,7 +170,7 @@ extension KeyBindings {
     bind(.leftArrow, to: .navigation(.left))
     bind("k", to: .navigation(.right))
     bind(.rightArrow, to: .navigation(.right))
-    bind(.enter, to: .action(.activate))
-    bind(.space, to: .action(.activate))
+    bind(.enter, in: .movement, to: .action(.activate))
+    bind(.space, in: .movement, to: .action(.activate))
   }
 }
