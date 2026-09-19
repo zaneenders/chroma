@@ -51,6 +51,12 @@ package final class Interaction {
   }
   @ObservationIgnored var commandHandlers: [ScopedCommandHandler] = []
   @ObservationIgnored var buildingCommandHandlers: [ScopedCommandHandler] = []
+  struct ScopedKeyBindings {
+    var path: [Int]
+    var bindings: KeyBindings
+  }
+  @ObservationIgnored var keyBindingScopes: [ScopedKeyBindings] = []
+  @ObservationIgnored var buildingKeyBindingScopes: [ScopedKeyBindings] = []
   struct ScopedActionRole {
     var path: [Int]
     var role: ActionRole
@@ -146,6 +152,8 @@ package final class Interaction {
     buildingButtonActions = [:]
     commandHandlers = []
     buildingCommandHandlers = []
+    keyBindingScopes = []
+    buildingKeyBindingScopes = []
     actionRoles = []
     buildingActionRoles = []
     caretClock.setActive(false)
@@ -200,6 +208,7 @@ package final class Interaction {
       buildingInputHandlers = [:]
       buildingButtonActions = [:]
       buildingCommandHandlers = []
+      buildingKeyBindingScopes = []
       return
     }
     self.input = input
@@ -209,6 +218,7 @@ package final class Interaction {
     routePendingCommands()
     pendingCommands = []
     buildingCommandHandlers = []
+    buildingKeyBindingScopes = []
     buildingActionRoles = []
     buildingInputHandlers = [:]
     buildingButtonActions = [:]
@@ -325,6 +335,7 @@ package final class Interaction {
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
     caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     commandHandlers = buildingCommandHandlers
+    keyBindingScopes = buildingKeyBindingScopes
     actionRoles = buildingActionRoles
     inputHandlers = buildingInputHandlers
     buttonActions = buildingButtonActions
@@ -391,6 +402,41 @@ extension Interaction {
 
   private func isPrefix(_ prefix: [Int], of path: [Int]) -> Bool {
     prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
+  }
+
+  package func resolve(_ input: KeyboardInput, appBindings: KeyBindings) -> ResolvedKeyboardInput? {
+    let isTextEditing = isTextEditing
+    if isTextEditing, let text = input.text, !text.isEmpty {
+      if let chord = input.chord,
+        keyBindingCommand(for: chord, isTextEditing: isTextEditing, appBindings: appBindings) != nil
+      {
+        return nil
+      }
+      if input.chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true {
+        return .text(.insert(text))
+      }
+    }
+    guard let chord = input.chord,
+      let resolution = keyBindingCommand(for: chord, isTextEditing: isTextEditing, appBindings: appBindings),
+      let command = resolution
+    else { return nil }
+    return switch command {
+    case .editing(let event): .text(event)
+    default: .command(command)
+    }
+  }
+
+  private func keyBindingCommand(
+    for chord: KeyChord, isTextEditing: Bool, appBindings: KeyBindings
+  ) -> Command?? {
+    for scope
+      in keyBindingScopes
+      .filter({ isPrefix($0.path, of: selection ?? []) })
+      .sorted(by: { $0.path.count > $1.path.count })
+    {
+      if let command = scope.bindings.command(for: chord, isTextEditing: isTextEditing) { return command }
+    }
+    return appBindings.command(for: chord, isTextEditing: isTextEditing)
   }
 
   func routePendingCommands() {

@@ -107,7 +107,7 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
   private var pendingTextEvents: [TextEditEvent] = []
 
   func handleKey(_ input: KeyboardInput) {
-    guard let resolved = keyBindings.resolve(input, isTextEditing: interaction.isTextEditing) else { return }
+    guard let resolved = interaction.resolve(input, appBindings: keyBindings) else { return }
     switch resolved {
     case .command(let command): pendingCommands.append(command)
     case .text(let event): applyTextEvent(event)

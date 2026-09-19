@@ -255,4 +255,65 @@ struct FocusAndCommandRegressionTests {
 
     #expect(harness.context.interaction.mode == .movement)
   }
+
+  @Test func focusedBindingWinsWithoutRetryingAppBindingsAfterCommandHandling() {
+    let harness = Harness()
+    let target = FocusTarget()
+    var appCalls = 0
+    let content = Button("Control") {}.focusTarget(target)
+      .keyBindings { bind("x", to: .application("local")) }
+      .onCommand(.application("local")) { .ignored }
+      .onCommand(.application("app")) {
+        appCalls += 1
+        return .handled
+      }
+    let appBindings = KeyBindings { bind("x", to: .application("app")) }
+
+    target.focus()
+    harness.render(content)
+    #expect(
+      harness.context.interaction.resolve(KeyboardInput(chord: KeyChord("x")), appBindings: appBindings)
+        == .command(.application("local")))
+    harness.render(content, input: InputState(commands: [.application("local")]))
+
+    #expect(appCalls == 0)
+  }
+
+  @Test func innermostFocusedBindingWins() {
+    let harness = Harness()
+    let target = FocusTarget()
+    let content = Button("Control") {}.focusTarget(target)
+      .keyBindings { bind("x", to: .application("inner")) }
+      .keyBindings { bind("x", to: .application("outer")) }
+
+    target.focus()
+    harness.render(content)
+
+    #expect(
+      harness.context.interaction.resolve(
+        KeyboardInput(chord: KeyChord("x")),
+        appBindings: KeyBindings { bind("x", to: .application("app")) })
+        == .command(.application("inner")))
+  }
+
+  @Test func scopedBindingFollowsRestoredFocus() {
+    let harness = Harness()
+    let target = FocusTarget()
+    let bindings = KeyBindings { bind("x", to: .application("local")) }
+    let control = Button("Control") {}.focusTarget(target).keyBindings(bindings)
+
+    target.focus()
+    harness.render(control)
+    harness.render(
+      VStack {
+        Text("Added")
+        control
+      })
+
+    #expect(harness.context.interaction.selectedLeafID == target.boundID)
+    #expect(
+      harness.context.interaction.resolve(
+        KeyboardInput(chord: KeyChord("x")), appBindings: KeyBindings())
+        == .command(.application("local")))
+  }
 }
