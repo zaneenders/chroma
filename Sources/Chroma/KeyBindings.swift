@@ -51,17 +51,27 @@ public struct KeyBinding: Hashable, Sendable {
   public var chord: KeyChord
   public var context: KeyBindingContext
   public var command: Command?
+  fileprivate var contexts: Set<KeyBindingContext>
 
   public init(_ chord: KeyChord, in context: KeyBindingContext? = nil, to command: Command?) {
     self.chord = chord
     self.context = context ?? Self.defaultContext(for: command)
     self.command = command
+    self.contexts = [self.context]
+  }
+
+  fileprivate init(disabling chord: KeyChord, in context: KeyBindingContext?) {
+    self.chord = chord
+    self.context = context ?? .shared
+    self.command = nil
+    self.contexts = context.map { [$0] } ?? [.shared, .movement, .editing]
   }
 
   private static func defaultContext(for command: Command?) -> KeyBindingContext {
     guard let command else { return .shared }
     return switch command {
     case .navigation: .movement
+    case .editing(.copy), .editing(.selectAll): .shared
     case .editing: .editing
     case .action, .application: .shared
     }
@@ -81,22 +91,24 @@ public func bind(
 }
 
 public func disable(
-  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext = .shared
+  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil
 ) -> KeyBinding {
-  KeyBinding(KeyChord(key, modifiers: modifiers), in: context, to: nil)
+  KeyBinding(disabling: KeyChord(key, modifiers: modifiers), in: context)
 }
 
 public func disable(
-  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext = .shared
+  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil
 ) -> KeyBinding {
-  KeyBinding(KeyChord(character, modifiers: modifiers), in: context, to: nil)
+  KeyBinding(disabling: KeyChord(character, modifiers: modifiers), in: context)
 }
 
 public struct KeyBindings: Sendable {
   private var entries: [KeyChord: [KeyBindingContext: Command?]] = [:]
 
   public init(@KeyBindingsBuilder _ content: () -> [KeyBinding]) {
-    for binding in content() { entries[binding.chord, default: [:]][binding.context] = binding.command }
+    for binding in content() {
+      for context in binding.contexts { entries[binding.chord, default: [:]][context] = binding.command }
+    }
   }
 
   public init() {}
@@ -155,7 +167,9 @@ public struct KeyBindings: Sendable {
 
   public func overlay(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> KeyBindings {
     var result = self
-    for binding in content() { result.entries[binding.chord, default: [:]][binding.context] = binding.command }
+    for binding in content() {
+      for context in binding.contexts { result.entries[binding.chord, default: [:]][context] = binding.command }
+    }
     return result
   }
 

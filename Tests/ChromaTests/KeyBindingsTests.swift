@@ -21,6 +21,22 @@ struct KeyBindingsTests {
       #expect(bindings.command(for: KeyChord("l", modifiers: systemModifier)) == nil)
     }
   }
+
+  @Test func clipboardBindingsApplyOutsideTextEditing() {
+    let bindings = KeyBindings {
+      bind("a", modifiers: .command, to: .editing(.selectAll))
+      bind("c", modifiers: .command, to: .editing(.copy))
+    }
+
+    #expect(
+      bindings.resolve(
+        KeyboardInput(chord: KeyChord("a", modifiers: .command)), isTextEditing: false)
+        == .text(.selectAll))
+    #expect(
+      bindings.resolve(
+        KeyboardInput(chord: KeyChord("c", modifiers: .command)), isTextEditing: false)
+        == .text(.copy))
+  }
 }
 
 struct KeyboardInputResolutionTests {
@@ -164,5 +180,25 @@ extension KeyBindingsTests {
     #expect(
       bindings.command(for: KeyChord("x"), isTextEditing: true)
         == .some(.some(.application("last"))))
+  }
+}
+
+extension KeyBindingsTests {
+  @Test func disableWithoutContextSuppressesAllContexts() {
+    let bindings = KeyBindings.vimNavigation.overlay {
+      disable(.upArrow)
+    }
+
+    #expect(bindings.command(for: KeyChord(.upArrow), isTextEditing: false) == .some(nil))
+    #expect(bindings.command(for: KeyChord(.upArrow), isTextEditing: true) == .some(nil))
+  }
+
+  @Test func disableCanTargetOneContext() {
+    let bindings = KeyBindings.vimNavigation.overlay {
+      disable(.upArrow, in: .movement)
+    }
+
+    #expect(bindings.command(for: KeyChord(.upArrow), isTextEditing: false) == .some(nil))
+    #expect(bindings.command(for: KeyChord(.upArrow), isTextEditing: true) == nil)
   }
 }
