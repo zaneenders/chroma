@@ -5,6 +5,13 @@ public enum ActionCommand: Hashable, Sendable {
   case dismiss
 }
 
+public enum NavigationCommand: Hashable, Sendable {
+  case up
+  case down
+  case left
+  case right
+}
+
 public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
@@ -14,6 +21,7 @@ public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
 
 public enum Command: Hashable, Sendable {
   case action(ActionCommand)
+  case navigation(NavigationCommand)
   case editing(TextEditEvent)
   case application(CommandID)
 }
@@ -25,6 +33,10 @@ extension Command {
     case .action(.submit): "submit"
     case .action(.cancel): "cancel"
     case .action(.dismiss): "dismiss"
+    case .navigation(.up): "up"
+    case .navigation(.down): "down"
+    case .navigation(.left): "left"
+    case .navigation(.right): "right"
     case .editing(.insert): "insert"
     case .editing(.backspace): "backspace"
     case .editing(.deleteForward): "delete-forward"

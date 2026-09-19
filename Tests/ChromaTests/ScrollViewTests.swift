@@ -153,6 +153,176 @@ struct ScrollViewTests {
     #expect(interaction.scrollOffset(for: secondID) == 25)
   }
 
+  @Test func keyboardNavigationRevealsFocusedScrollContent() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        ScrollView(id: scrollID, showsIndicator: false) {
+          for _ in 0..<4 {
+            Interactive(action: {}) { _ in
+              RowContent(height: 10, color: .white)
+            }
+            .sizing(y: .fixed(10))
+          }
+        },
+        into: &list,
+        in: viewport,
+        context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(commands: [.navigation(.down)]))
+    #expect(interaction.scrollOffset(for: scrollID) == 0)
+
+    frame(InputState(commands: [.navigation(.down)]))
+    #expect(interaction.scrollOffset(for: scrollID) == 10)
+  }
+
+  @Test func keyboardNavigationReachesSpacedVirtualizedRows() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+    let controller = ScrollViewController()
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        LazyVStack(id: scrollID, data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller) { index in
+          Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
+            RowContent(height: 10, color: .white)
+          }
+        },
+        into: &list, in: viewport, context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    for index in 1..<5 {
+      frame(InputState(commands: [.navigation(.down)]))
+      #expect(interaction.selectedLeafID == WidgetID("row-\(index)"))
+    }
+    frame()
+    #expect(interaction.scrollOffset(for: scrollID) == 70)
+  }
+
+  @Test func keyboardNavigationReachesVariableHeightRowsInBothDirections() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+    let controller = ScrollViewController()
+    let heights: [Float] = [8, 18, 6, 15, 9]
+    let rows = heights.enumerated().map { index, height in
+      LazyVStack.Row(id: index, content: Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
+        RowContent(height: height, color: .white)
+      })
+    }
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        LazyVStack(id: scrollID, spacing: 7, showsIndicator: false, controller: controller, rows: rows),
+        into: &list, in: viewport, context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    for index in 1..<rows.count {
+      frame(InputState(commands: [.navigation(.down)]))
+      #expect(interaction.selectedLeafID == WidgetID("row-\(index)"))
+    }
+    for index in stride(from: rows.count - 2, through: 0, by: -1) {
+      frame(InputState(commands: [.navigation(.up)]))
+      #expect(interaction.selectedLeafID == WidgetID("row-\(index)"))
+    }
+  }
+
+  @Test func keyboardNavigationHandlesMultipleVirtualizedMovementsInOneFrame() {
+    let context = RenderContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    let view = LazyVStack(
+      id: scrollID, data: 0..<10, rowHeight: 10, spacing: 5, showsIndicator: false, controller: controller
+    ) { index in
+      Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
+        RowContent(height: 10, color: .white)
+      }
+    }
+
+    func frame(_ input: InputState = InputState()) {
+      _ = producer.render(content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+    }
+
+    frame()
+    frame(InputState(commands: [.navigation(.down), .navigation(.down), .navigation(.down)]))
+    #expect(context.interaction.tree?.node(at: context.interaction.selection ?? [])?.rect.minY == 10)
+    frame()
+    #expect(context.interaction.scrollOffset(for: scrollID) == 35)
+  }
+
+  @Test func keyboardNavigationRevealsNestedScrollContent() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+    let outerID = WidgetID("outer-scroll")
+    let innerID = WidgetID("inner-scroll")
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        ScrollView(id: outerID, showsIndicator: false) {
+          ScrollView(id: innerID, showsIndicator: false) {
+            for index in 0..<4 {
+              Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
+                RowContent(height: 10, color: .white)
+              }
+              .sizing(y: .fixed(10))
+            }
+          }
+          .sizing(y: .fixed(20))
+        },
+        into: &list, in: viewport, context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(commands: [.navigation(.down)]))
+    frame(InputState(commands: [.navigation(.down)]))
+    #expect(interaction.selectedLeafID == WidgetID("row-2"))
+    #expect(interaction.scrollOffset(for: innerID) == 10)
+    #expect(interaction.scrollOffset(for: outerID) == 0)
+  }
+
+  @Test func keyboardNavigationRevealsVirtualizedRows() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+    let controller = ScrollViewController()
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        LazyVStack(id: scrollID, data: 0..<10, rowHeight: 10, showsIndicator: false, controller: controller) { _ in
+          Interactive(action: {}) { _ in
+            RowContent(height: 10, color: .white)
+          }
+        },
+        into: &list,
+        in: viewport,
+        context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(commands: [.navigation(.down)]))
+    frame(InputState(commands: [.navigation(.down)]))
+    #expect(interaction.scrollOffset(for: scrollID) == 10)
+  }
+
   @Test func controllerScrollsToBottom() {
     let interaction = Interaction()
     let controller = ScrollViewController()
@@ -614,6 +784,7 @@ struct ScrollViewTests {
     frame(InputState(pointerPosition: Point(x: 50, y: 50)))
     #expect(interaction.selection == [0, 0])
     frame(InputState(pointerPosition: Point(x: 50, y: 15)))
-    #expect(interaction.selection == [0, 1])
+    #expect(interaction.selection == [0, 0])
+    #expect(interaction.hoveredLeafID == WidgetID("clipped"))
   }
 }

@@ -152,4 +152,303 @@ struct FocusAndCommandRegressionTests {
     harness.render(replacement, input: InputState(commands: [.action(.activate)]))
     #expect(calls == 1)
   }
+
+  @Test func navigationMovesOnlyBetweenInteractiveLeaves() {
+    let harness = Harness()
+    var activations = 0
+    let content = VStack {
+      HStack {
+        Button("First") { activations += 1 }
+        Button("Second") { activations += 1 }
+      }
+      Button("Third") { activations += 1 }
+    }
+
+    harness.render(content)
+    #expect(harness.context.interaction.selection == [0, 0, 0])
+
+    harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    #expect(harness.context.interaction.selection == [0, 1])
+    #expect(harness.context.interaction.selectedLeafID != nil)
+
+    harness.render(content, input: InputState(commands: [.action(.activate)]))
+    #expect(activations == 1)
+
+  }
+
+  @Test func directionalNavigationFollowsStackStructure() {
+    let harness = Harness()
+    let first = FocusTarget()
+    let second = FocusTarget()
+    let third = FocusTarget()
+    let fourth = FocusTarget()
+    let content = VStack {
+      HStack {
+        Button("First") {}.focusTarget(first)
+        Button("Second") {}.focusTarget(second)
+      }
+      HStack {
+        Button("Third") {}.focusTarget(third)
+        Button("Fourth") {}.focusTarget(fourth)
+      }
+    }
+
+    second.focus()
+    harness.render(content)
+    #expect(harness.context.interaction.selectedLeafID == second.boundID)
+
+    harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    #expect(harness.context.interaction.selectedLeafID == fourth.boundID)
+
+    harness.render(content, input: InputState(commands: [.navigation(.left)]))
+    #expect(harness.context.interaction.selectedLeafID == third.boundID)
+
+    harness.render(content, input: InputState(commands: [.navigation(.up)]))
+    #expect(harness.context.interaction.selectedLeafID == first.boundID)
+  }
+
+  @Test func editingBlocksStructuralNavigation() {
+    let harness = Harness()
+    let first = FocusTarget()
+    let content = VStack {
+      Button("First") {}.focusTarget(first)
+      Button("Second") {}
+    }
+
+    harness.render(content)
+    harness.context.interaction.mode = .editing
+    harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    #expect(harness.context.interaction.selectedLeafID == first.boundID)
+  }
+
+  @Test func defaultActionUsesTheFocusedScope() {
+    let harness = Harness()
+    let left = FocusTarget()
+    var leftCalls = 0
+    var rightCalls = 0
+    let content = HStack {
+      VStack {
+        Button("Left control") {}.focusTarget(left)
+        Button("Left default", role: .defaultAction) { leftCalls += 1 }
+      }
+      VStack {
+        Button("Right control") {}
+        Button("Right default", role: .defaultAction) { rightCalls += 1 }
+      }
+    }
+
+    harness.render(content)
+    left.focus()
+    harness.render(content)
+    harness.render(content, input: InputState(commands: [.action(.submit)]))
+
+    #expect(leftCalls == 1)
+    #expect(rightCalls == 0)
+  }
+
+  @Test func cancelLeavesEditingWhenTheFocusedScopeHasNoCancelAction() {
+    let harness = Harness()
+    harness.render(TextField(text: { "text" }, onChange: { _ in }))
+    harness.context.interaction.beginEditing(harness.context.interaction.selectedLeafID!, caretOffset: 0)
+
+    harness.render(TextField(text: { "text" }, onChange: { _ in }), input: InputState(commands: [.action(.cancel)]))
+
+    #expect(harness.context.interaction.mode == .movement)
+  }
+
+  @Test func focusedBindingWinsWithoutRetryingAppBindingsAfterCommandHandling() {
+    let harness = Harness()
+    let target = FocusTarget()
+    var appCalls = 0
+    let content = Button("Control") {}.focusTarget(target)
+      .keyBindings { bind("x", to: .application("local")) }
+      .onCommand(.application("local")) { .ignored }
+      .onCommand(.application("app")) {
+        appCalls += 1
+        return .handled
+      }
+    let appBindings = KeyBindings { bind("x", to: .application("app")) }
+
+    target.focus()
+    harness.render(content)
+    #expect(
+      harness.context.interaction.resolve(KeyboardInput(chord: KeyChord("x")), appBindings: appBindings)
+        == .command(.application("local")))
+    harness.render(content, input: InputState(commands: [.application("local")]))
+
+    #expect(appCalls == 0)
+  }
+
+  @Test func innermostFocusedBindingWins() {
+    let harness = Harness()
+    let target = FocusTarget()
+    let content = Button("Control") {}.focusTarget(target)
+      .keyBindings { bind("x", to: .application("inner")) }
+      .keyBindings { bind("x", to: .application("outer")) }
+
+    target.focus()
+    harness.render(content)
+
+    #expect(
+      harness.context.interaction.resolve(
+        KeyboardInput(chord: KeyChord("x")),
+        appBindings: KeyBindings { bind("x", to: .application("app")) })
+        == .command(.application("inner")))
+  }
+
+  @Test func scopedBindingFollowsRestoredFocus() {
+    let harness = Harness()
+    let target = FocusTarget()
+    let bindings = KeyBindings { bind("x", to: .application("local")) }
+    let control = Button("Control") {}.focusTarget(target).keyBindings(bindings)
+
+    target.focus()
+    harness.render(control)
+    harness.render(
+      VStack {
+        Text("Added")
+        control
+      })
+
+    #expect(harness.context.interaction.selectedLeafID == target.boundID)
+    #expect(
+      harness.context.interaction.resolve(
+        KeyboardInput(chord: KeyChord("x")), appBindings: KeyBindings())
+        == .command(.application("local")))
+  }
+
+  @Test func keyboardOnlyFlowNavigatesVirtualizedRowsAndRestoresFocus() {
+    let harness = Harness()
+    let controller = ScrollViewController()
+    let listID = WidgetID("keyboard-flow-list")
+    let field = FocusTarget()
+    let fallback = FocusTarget()
+    let panel = FocusTarget()
+    let rows = (0..<40).map { _ in FocusTarget() }
+    var text = ""
+    var fieldIsPresent = true
+    var panelIsOpen = false
+    var customShortcutCalls = 0
+    let bindings = KeyBindings.vimNavigation.overlay {
+      bind("x", modifiers: .control, to: .application("custom"))
+      bind("o", modifiers: .control, to: .application("open-panel"))
+    }
+
+    func content() -> any Block {
+      VStack {
+        LazyVStack(id: listID, data: 0...40, rowHeight: 20, controller: controller) { index in
+          if index < rows.count {
+            Button("Row \(index)") {}.focusTarget(rows[index])
+          } else if fieldIsPresent {
+            TextField(text: { text }, onChange: { text = $0 }).focusTarget(field)
+          } else {
+            Button("Fallback") {}.focusTarget(fallback)
+          }
+        }
+        if panelIsOpen { Button("Panel") {}.focusTarget(panel) }
+      }
+      .onCommand(.application("custom")) {
+        customShortcutCalls += 1
+        return .handled
+      }
+      .onCommand(.application("open-panel")) {
+        panelIsOpen = true
+        panel.focus()
+        return .handled
+      }
+      .onCommand(.action(.cancel)) {
+        guard panelIsOpen else { return .ignored }
+        panelIsOpen = false
+        if fieldIsPresent {
+          field.focus()
+        } else {
+          fallback.focus()
+        }
+        return .handled
+      }
+    }
+
+    func press(_ input: KeyboardInput) {
+      guard let resolved = harness.context.interaction.resolve(input, appBindings: bindings) else { return }
+      switch resolved {
+      case .command(let command):
+        harness.render(content(), input: InputState(commands: [command]))
+        harness.render(content())
+      case .text(let event): harness.render(content(), input: InputState(textEvents: [event]))
+      }
+    }
+
+    harness.render(content())
+    #expect(rows[0].isFocused)
+    for _ in 0..<15 { press(KeyboardInput(chord: KeyChord(.downArrow))) }
+    #expect(rows[15].isFocused)
+    #expect(harness.context.interaction.scrollOffset(for: listID) > 0)
+    for _ in 0..<15 { press(KeyboardInput(chord: KeyChord(.upArrow))) }
+    #expect(rows[0].isFocused)
+    #expect(harness.context.interaction.scrollOffset(for: listID) == 0)
+
+    for _ in 0..<40 { press(KeyboardInput(chord: KeyChord(.downArrow))) }
+    #expect(field.isFocused)
+    press(KeyboardInput(chord: KeyChord(.enter)))
+    #expect(field.isEditing)
+    press(KeyboardInput(chord: KeyChord(.space), text: " "))
+    press(KeyboardInput(chord: KeyChord(.space), text: " "))
+    #expect(text == "  ")
+
+    press(KeyboardInput(chord: KeyChord("x", modifiers: .control), text: "x"))
+    #expect(customShortcutCalls == 1)
+    press(KeyboardInput(chord: KeyChord(.escape)))
+    #expect(field.isFocused && !field.isEditing)
+
+    press(KeyboardInput(chord: KeyChord("o", modifiers: .control), text: "o"))
+    #expect(panelIsOpen && panel.isFocused)
+    press(KeyboardInput(chord: KeyChord(.escape)))
+    #expect(!panelIsOpen && field.isFocused)
+
+    press(KeyboardInput(chord: KeyChord("o", modifiers: .control), text: "o"))
+    #expect(panelIsOpen && panel.isFocused)
+    fieldIsPresent = false
+    press(KeyboardInput(chord: KeyChord(.escape)))
+    #expect(!panelIsOpen && fallback.isFocused)
+  }
+
+  @Test func scopedResolutionPreservesTextEditingShortcutRules() {
+    func resolve(
+      _ input: KeyboardInput,
+      scoped: KeyBindings = KeyBindings(),
+      app: KeyBindings = KeyBindings()
+    ) -> ResolvedKeyboardInput? {
+      let harness = Harness()
+      let target = FocusTarget()
+      let field = TextField(text: { "" }, onChange: { _ in })
+        .focusTarget(target)
+        .keyBindings(scoped)
+      target.focus(editing: true)
+      harness.render(field)
+      return harness.context.interaction.resolve(input, appBindings: app)
+    }
+
+    #expect(
+      resolve(
+        KeyboardInput(chord: KeyChord("x", modifiers: .control), text: "x"),
+        app: KeyBindings { bind("x", modifiers: .control, to: .application("cut")) })
+        == .command(.application("cut")))
+    #expect(
+      resolve(
+        KeyboardInput(chord: KeyChord("x"), text: "x"),
+        scoped: KeyBindings { bind("x", in: .editing, to: .application("local")) })
+        == .command(.application("local")))
+    #expect(
+      resolve(
+        KeyboardInput(chord: KeyChord("x"), text: "x"),
+        scoped: KeyBindings { disable("x", in: .editing) })
+        == nil)
+    #expect(resolve(KeyboardInput(chord: KeyChord("x"), text: "x")) == .text(.insert("x")))
+    #expect(
+      resolve(
+        KeyboardInput(chord: KeyChord("x"), text: "x"),
+        scoped: KeyBindings { bind("x", in: .editing, to: .application("scoped")) },
+        app: KeyBindings { bind("x", in: .editing, to: .application("app")) })
+        == .command(.application("scoped")))
+  }
 }

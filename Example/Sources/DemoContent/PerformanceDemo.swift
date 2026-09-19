@@ -347,6 +347,8 @@ struct PerformanceDemo: Block {
           state.page = .font
         }
         Spacer()
+        Text("hjkl / arrows navigate • Enter select")
+          .fontScale(demoSmallText)
       }
       if state.page == .clipboard {
         VStack(spacing: 16) {

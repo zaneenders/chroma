@@ -12,6 +12,7 @@ extension Interaction {
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     let selected = selectedLeafID == id
+    let hovered = hoveredLeafID == id
     let held = pressedLeaf == id && input.pointerDown
 
     if selected && activatePending {
@@ -47,7 +48,7 @@ extension Interaction {
           textSelectionRange = lower == upper ? nil : lower..<upper
         }
         return TextInputState(
-          hovered: selected, held: held, editing: true,
+          hovered: hovered, focused: selected, held: held, editing: true,
           caretOffset: caretOffset, selectionRange: textSelectionRange)
       }
       var characters = Array(text)
@@ -184,7 +185,7 @@ extension Interaction {
       }
     }
     return TextInputState(
-      hovered: selected, held: held, editing: editing,
+      hovered: hovered, focused: selected, held: held, editing: editing,
       caretOffset: editing ? caretOffset : nil,
       selectionRange: editing ? textSelectionRange : nil)
   }
@@ -205,7 +206,7 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("registerTextInput outside of a frame")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect)))
+    parent.children.append(FocusNode(kind: .leaf(id), rect: rect, hitRect: clippedRect(rect)))
     buildingInputHandlers[id] = { [weak self] in
       guard let self else { return }
       _ = self.updateTextInput(
@@ -229,7 +230,8 @@ extension Interaction {
       }
     }
     return TextInputState(
-      hovered: selectedLeafID == id, held: pressedLeaf == id && input.pointerDown,
+      hovered: hoveredLeafID == id, focused: selectedLeafID == id,
+      held: pressedLeaf == id && input.pointerDown,
       editing: editing, caretOffset: editing ? caretOffset : nil,
       selectionRange: editing ? textSelectionRange : nil)
   }

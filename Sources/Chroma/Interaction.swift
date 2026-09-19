@@ -51,7 +51,19 @@ package final class Interaction {
   }
   @ObservationIgnored var commandHandlers: [ScopedCommandHandler] = []
   @ObservationIgnored var buildingCommandHandlers: [ScopedCommandHandler] = []
-  @ObservationIgnored var actionRoles: [ActionRole: @MainActor () -> Void] = [:]
+  struct ScopedKeyBindings {
+    var path: [Int]
+    var bindings: KeyBindings
+  }
+  @ObservationIgnored var keyBindingScopes: [ScopedKeyBindings] = []
+  @ObservationIgnored var buildingKeyBindingScopes: [ScopedKeyBindings] = []
+  struct ScopedActionRole {
+    var path: [Int]
+    var role: ActionRole
+    var action: @MainActor () -> Void
+  }
+  @ObservationIgnored var actionRoles: [ScopedActionRole] = []
+  @ObservationIgnored var buildingActionRoles: [ScopedActionRole] = []
 
   @ObservationIgnored var lastPointerPosition = Point(x: -1, y: -1)
 
@@ -94,10 +106,12 @@ package final class Interaction {
   @ObservationIgnored var horizontalScrollOffsets: [WidgetID: Float] = [:]
   @ObservationIgnored var scrollLimits: [WidgetID: Float] = [:]
   @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
+  @ObservationIgnored var pendingScrollReveals: [WidgetID: Rect] = [:]
 
   @ObservationIgnored var clipStack: [Rect] = []
 
   var selectedLeafID: WidgetID?
+  var hoveredLeafID: WidgetID?
 
   @ObservationIgnored var builderRoot: FocusNode?
   @ObservationIgnored var builderStack: [FocusNode] = []
@@ -128,6 +142,7 @@ package final class Interaction {
     horizontalScrollOffsets = [:]
     scrollLimits = [:]
     horizontalScrollLimits = [:]
+    pendingScrollReveals = [:]
     animationRequested = false
     tree = nil
     pressedLeaf = nil
@@ -137,7 +152,10 @@ package final class Interaction {
     buildingButtonActions = [:]
     commandHandlers = []
     buildingCommandHandlers = []
-    actionRoles = [:]
+    keyBindingScopes = []
+    buildingKeyBindingScopes = []
+    actionRoles = []
+    buildingActionRoles = []
     caretClock.setActive(false)
   }
 
@@ -181,7 +199,7 @@ package final class Interaction {
       textSelection.layoutRegistry.clear()
       activatedLeaf = nil
       activatePending = false
-      actionRoles = [:]
+      buildingActionRoles = []
       let root = FocusNode(kind: .group, rect: .zero)
       builderRoot = root
       builderStack = [root]
@@ -190,6 +208,7 @@ package final class Interaction {
       buildingInputHandlers = [:]
       buildingButtonActions = [:]
       buildingCommandHandlers = []
+      buildingKeyBindingScopes = []
       return
     }
     self.input = input
@@ -199,6 +218,8 @@ package final class Interaction {
     routePendingCommands()
     pendingCommands = []
     buildingCommandHandlers = []
+    buildingKeyBindingScopes = []
+    buildingActionRoles = []
     buildingInputHandlers = [:]
     buildingButtonActions = [:]
     activatedLeaf = nil
@@ -234,12 +255,12 @@ package final class Interaction {
         activatedLeaf = id
         buttonActions[id]?()
       }
-      actionRoles = [:]
     }
 
     guard let tree else { return }
 
     let hovered = tree.hitTest(input.pointerPosition)
+    hoveredLeafID = hovered.flatMap { tree.node(at: $0)?.leafID }
     if input.pointerPressed {
       let pressed = tree.hitTest(input.pointerPressPosition)
       if let pressed {
@@ -248,10 +269,6 @@ package final class Interaction {
         endEditing()
       }
       pressedLeaf = pressed.flatMap { tree.node(at: $0)?.leafID }
-    } else if dragOrigin == nil, input.pointerPosition != lastPointerPosition, let hovered,
-      hovered != selection
-    {
-      moveCursor(to: hovered)
     }
     if input.pointerReleased {
       if let pressedLeaf, let hovered, hovered == selection,
@@ -274,13 +291,30 @@ package final class Interaction {
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {
       if let id = oldTree.node(at: selection)?.leafID {
-        self.selection = newTree.findLeaf(id) ?? newTree.clamped(selection)
+        if let matchingPath = newTree.findLeaf(id) {
+          self.selection = matchingPath
+        } else {
+          let fallback = newTree.clamped(selection)
+          if let node = newTree.node(at: fallback), node.isLeaf {
+            self.selection = fallback
+          } else if let descendant = newTree.node(at: fallback)?.firstLeafPath() {
+            self.selection = fallback + descendant
+          } else {
+            self.selection = nil
+          }
+        }
+      } else if newTree.node(at: selection)?.isLeaf != true {
+        self.selection = selection
       } else {
-        self.selection = newTree.clamped(selection)
+        var ancestor = newTree.clamped(selection)
+        while !ancestor.isEmpty, newTree.node(at: ancestor)?.isLeaf == true {
+          ancestor.removeLast()
+        }
+        self.selection = ancestor.isEmpty ? newTree.firstLeafPath() : ancestor
       }
     }
-    if selection.flatMap({ newTree.node(at: $0)?.leafID }) == nil {
-      selection = newTree.firstLeafPath()
+    if self.selection == nil {
+      self.selection = newTree.firstLeafPath()
     }
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
       endEditing()
@@ -289,6 +323,7 @@ package final class Interaction {
       self.pressedLeaf = nil
     }
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
+    hoveredLeafID = newTree.hitTest(input.pointerPosition).flatMap { newTree.node(at: $0)?.leafID }
     scrollOffsets = scrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
     horizontalScrollOffsets = horizontalScrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
     scrollLimits = scrollLimits.filter { buildingInputHandlers[$0.key] != nil }
@@ -300,6 +335,8 @@ package final class Interaction {
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
     caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     commandHandlers = buildingCommandHandlers
+    keyBindingScopes = buildingKeyBindingScopes
+    actionRoles = buildingActionRoles
     inputHandlers = buildingInputHandlers
     buttonActions = buildingButtonActions
     builderRoot = nil
@@ -310,11 +347,15 @@ package final class Interaction {
 
 @MainActor
 extension Interaction {
-  func beginGroup(rect: Rect) {
+  func beginGroup(
+    rect: Rect,
+    axis: FocusNode.Axis? = nil,
+    scrollID: WidgetID? = nil
+  ) {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
-    let node = FocusNode(kind: .group, rect: rect)
+    let node = FocusNode(kind: .group, rect: rect, axis: axis, scrollID: scrollID)
     parent.children.append(node)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
@@ -342,12 +383,44 @@ extension Interaction {
   }
 
   func moveCursor(to path: [Int]) {
-    guard tree?.node(at: path)?.isLeaf == true else { return }
+    guard let tree, tree.node(at: path) != nil else { return }
     selection = path
+    reveal(path, in: tree)
+    if tree.node(at: path)?.isLeaf != true {
+      endEditing()
+    }
+  }
+
+  private func reveal(_ path: [Int], in tree: FocusNode) {
+    guard let target = tree.node(at: path)?.rect else { return }
+    for depth in 0...path.count {
+      let ancestorPath = Array(path.prefix(depth))
+      guard let scrollID = tree.node(at: ancestorPath)?.scrollID else { continue }
+      pendingScrollReveals[scrollID] = target
+    }
   }
 
   private func isPrefix(_ prefix: [Int], of path: [Int]) -> Bool {
     prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
+  }
+
+  package func resolve(_ input: KeyboardInput, appBindings: KeyBindings) -> ResolvedKeyboardInput? {
+    appBindings.resolve(input, isTextEditing: isTextEditing) { chord in
+      keyBindingCommand(for: chord, isTextEditing: isTextEditing, appBindings: appBindings)
+    }
+  }
+
+  private func keyBindingCommand(
+    for chord: KeyChord, isTextEditing: Bool, appBindings: KeyBindings
+  ) -> Command?? {
+    for scope
+      in keyBindingScopes
+      .filter({ isPrefix($0.path, of: selection ?? []) })
+      .sorted(by: { $0.path.count > $1.path.count })
+    {
+      if let command = scope.bindings.command(for: chord, isTextEditing: isTextEditing) { return command }
+    }
+    return appBindings.command(for: chord, isTextEditing: isTextEditing)
   }
 
   func routePendingCommands() {
@@ -362,21 +435,39 @@ extension Interaction {
       }
       switch command {
       case .action(.submit):
-        actionRoles[.defaultAction]?()
+        actionRole(.defaultAction)?()
       case .action(.cancel), .action(.dismiss):
-        actionRoles[.cancel]?()
+        if let action = actionRole(.cancel) {
+          action()
+        } else if mode == .editing {
+          endEditing()
+        }
       default:
         apply(command)
       }
     }
   }
 
+  func actionRole(_ role: ActionRole) -> (@MainActor () -> Void)? {
+    actionRoles
+      .filter { $0.role == role && isPrefix($0.path, of: selection ?? []) }
+      .max { $0.path.count < $1.path.count }?
+      .action
+  }
+
   func apply(_ command: Command) {
     guard tree != nil, selection != nil else { return }
     switch command {
-    case .application, .editing:
+    case .application:
       return
+    case .editing:
+      return
+    case .navigation(let navigation):
+      guard mode == .movement, let tree, let selection else { return }
+      guard var walker = FocusTreeWalker(root: tree, path: selection), walker.move(navigation) else { return }
+      moveCursor(to: walker.path)
     case .action(.activate):
+      guard let tree, let selection, tree.node(at: selection)?.isLeaf == true else { return }
       activatePending = true
     case .action(.submit), .action(.cancel), .action(.dismiss):
       return
@@ -405,13 +496,16 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect), role: role))
-    if role != .normal, let action { actionRoles[role] = action }
+    parent.children.append(FocusNode(kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role))
+    if role != .normal, let action {
+      buildingActionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
+    }
 
-    let selected = selectedLeafID == id
+    let focused = selectedLeafID == id
+    let hovered = hoveredLeafID == id
     let held = pressedLeaf == id && input.pointerDown
     if let action { buildingButtonActions[id] = action }
-    return ButtonState(hovered: selected, held: held, clicked: activatedLeaf == id)
+    return ButtonState(hovered: hovered, focused: focused, held: held, clicked: activatedLeaf == id)
   }
 
   func clippedRect(_ rect: Rect) -> Rect {

@@ -31,7 +31,7 @@ public struct DemoApplication: App {
   }
 
   public var keyBindings: KeyBindings {
-    var bindings = KeyBindings {
+    var bindings = KeyBindings.vimNavigation.overlay {
       bind("c", modifiers: shortcutModifier, to: .editing(.copy))
       bind("x", modifiers: shortcutModifier, to: .editing(.cut))
       bind("v", modifiers: shortcutModifier, to: .editing(.paste))
