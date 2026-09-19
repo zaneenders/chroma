@@ -5,8 +5,4 @@ extension Block {
   ) -> CommandHandlerBlock {
     CommandHandlerBlock(content: self, command: command, action: action)
   }
-
-  public func keyBindings(@KeyBindingsBuilder _ bindings: () -> [KeyBinding]) -> KeyBindingBlock {
-    KeyBindingBlock(content: self, bindings: KeyBindings(bindings))
-  }
 }

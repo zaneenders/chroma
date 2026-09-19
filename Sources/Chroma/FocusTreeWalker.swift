@@ -18,8 +18,6 @@ struct FocusTreeWalker {
       return move(along: .horizontal, direction: -1)
     case .right:
       return move(along: .horizontal, direction: 1)
-    case .inward, .outward:
-      return false
     }
   }
 

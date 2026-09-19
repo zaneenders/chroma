@@ -10,8 +10,6 @@ public enum NavigationCommand: Hashable, Sendable {
   case down
   case left
   case right
-  case inward
-  case outward
 }
 
 public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
@@ -39,8 +37,6 @@ extension Command {
     case .navigation(.down): "down"
     case .navigation(.left): "left"
     case .navigation(.right): "right"
-    case .navigation(.inward): "in"
-    case .navigation(.outward): "out"
     case .editing(.insert): "insert"
     case .editing(.backspace): "backspace"
     case .editing(.deleteForward): "delete-forward"

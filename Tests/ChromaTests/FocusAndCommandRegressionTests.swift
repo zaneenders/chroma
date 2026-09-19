@@ -174,8 +174,6 @@ struct FocusAndCommandRegressionTests {
     harness.render(content, input: InputState(commands: [.action(.activate)]))
     #expect(activations == 1)
 
-    harness.render(content, input: InputState(commands: [.navigation(.inward), .navigation(.outward)]))
-    #expect(harness.context.interaction.selection == [0, 1])
   }
 
   @Test func directionalNavigationFollowsStackStructure() {

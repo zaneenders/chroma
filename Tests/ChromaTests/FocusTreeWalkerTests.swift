@@ -66,10 +66,8 @@ struct FocusTreeWalkerTests {
 
   @Test func movementSelectsOnlyLeaves() {
     let root = group(.vertical, [group(.horizontal, [leaf(1)])])
-    var walker = FocusTreeWalker(root: root, path: [0, 0])!
+    let walker = FocusTreeWalker(root: root, path: [0, 0])!
 
-    #expect(!move(.inward, walker: &walker))
-    #expect(!move(.outward, walker: &walker))
     #expect(walker.path == [0, 0])
     #expect(FocusTreeWalker(root: root, path: [0]) == nil)
   }

@@ -51,8 +51,6 @@ extension KeyBindingsTests {
       ("j", .down),
       ("d", .left),
       ("k", .right),
-      ("l", .inward),
-      ("s", .outward),
     ] {
       #expect(
         KeyBindings.vimNavigation.command(for: KeyChord(Character(character)))
