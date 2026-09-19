@@ -23,6 +23,35 @@ struct KeyBindingsTests {
   }
 }
 
+struct KeyboardInputResolutionTests {
+  @Test func resolvesTextAndCommandsIndependentlyOfTheBackend() {
+    let bindings = KeyBindings.vimNavigation.overlay {
+      bind(.upArrow, to: .editing(.moveCaretUp))
+      bind("x", modifiers: .control, to: .application("close"))
+    }
+
+    #expect(
+      bindings.resolve(KeyboardInput(chord: KeyChord("j"), text: "j"), isTextEditing: false)
+        == .command(.navigation(.down)))
+    #expect(
+      bindings.resolve(KeyboardInput(chord: KeyChord("j"), text: "j"), isTextEditing: true)
+        == .text(.insert("j")))
+    #expect(
+      bindings.resolve(KeyboardInput(chord: KeyChord(.upArrow)), isTextEditing: true)
+        == .text(.moveCaretUp))
+    #expect(
+      bindings.resolve(
+        KeyboardInput(chord: KeyChord("x", modifiers: .control), text: "x"), isTextEditing: true)
+        == .command(.application("close")))
+  }
+
+  @Test func disabledBindingsSuppressTextInsertion() {
+    let bindings = KeyBindings { disable("x", in: .editing) }
+
+    #expect(bindings.resolve(KeyboardInput(chord: KeyChord("x"), text: "x"), isTextEditing: true) == nil)
+  }
+}
+
 struct TextInsertionRoutingTests {
   @Test func printableShortcutsRemainTextWhileEditing() {
     for (chord, text) in [

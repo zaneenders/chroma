@@ -116,14 +116,33 @@ public struct KeyBindings: Sendable {
     return nil
   }
 
+  public func resolve(_ input: KeyboardInput, isTextEditing: Bool) -> ResolvedKeyboardInput? {
+    if isTextEditing, let text = input.text, !text.isEmpty {
+      if let chord = input.chord,
+        let resolution = command(for: chord, isTextEditing: isTextEditing)
+      {
+        if resolution == nil { return nil }
+      } else if input.chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true {
+        return .text(.insert(text))
+      }
+    }
+    guard let chord = input.chord,
+      let resolution = command(for: chord, isTextEditing: isTextEditing),
+      let command = resolution
+    else { return nil }
+    return switch command {
+    case .editing(let event): .text(event)
+    default: .command(command)
+    }
+  }
+
   public func prefersTextInsertion(
     chord: KeyChord?, text: String?, isTextEditing: Bool
   ) -> Bool {
-    guard isTextEditing, let text, !text.isEmpty else { return false }
-    if let chord, let resolution = command(for: chord, isTextEditing: isTextEditing) {
-      return resolution == nil
+    if case .some(.text(.insert)) = resolve(KeyboardInput(chord: chord, text: text), isTextEditing: isTextEditing) {
+      return true
     }
-    return chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true
+    return false
   }
 
   public func overlay(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> KeyBindings {
