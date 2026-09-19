@@ -3,7 +3,7 @@ struct FocusTreeWalker {
   private(set) var path: [Int]
 
   init?(root: FocusNode, path: [Int]) {
-    guard root.node(at: path) != nil else { return nil }
+    guard root.node(at: path)?.isLeaf == true else { return nil }
     self.root = root
     self.path = path
   }
@@ -18,24 +18,25 @@ struct FocusTreeWalker {
       return move(along: .horizontal, direction: -1)
     case .right:
       return move(along: .horizontal, direction: 1)
-    case .inward:
-      return moveInward()
-    case .outward:
-      return moveOutward()
+    case .inward, .outward:
+      return false
     }
   }
 
   private mutating func move(along axis: FocusNode.Axis, direction: Int) -> Bool {
+    guard let origin = root.node(at: path) else { return false }
     var ancestor = root
     for depth in path.indices {
       let childIndex = path[depth]
       guard ancestor.children.indices.contains(childIndex) else { return false }
       if ancestor.axis == axis {
         let siblingIndex = childIndex + direction
-        if ancestor.children.indices.contains(siblingIndex) {
-          path[depth] = siblingIndex
-          replayDescendantPath(in: ancestor.children[siblingIndex], after: depth, direction: direction)
-          skipTransparentGroups()
+        if ancestor.children.indices.contains(siblingIndex),
+          let destination = nearestLeaf(in: ancestor.children[siblingIndex], to: origin.rect)
+        {
+          path.removeLast(path.count - depth)
+          path.append(siblingIndex)
+          path.append(contentsOf: destination)
           return true
         }
       }
@@ -44,42 +45,29 @@ struct FocusTreeWalker {
     return false
   }
 
-  private mutating func replayDescendantPath(
-    in destination: FocusNode, after depth: Int, direction: Int
-  ) {
-    var node = destination
-    var index = depth + 1
-    while index < path.count, !node.children.isEmpty {
-      let desiredIndex = path[index]
-      let destinationIndex: Int
-      if node.children.indices.contains(desiredIndex) {
-        destinationIndex = desiredIndex
-      } else {
-        destinationIndex =
-          direction > 0 ? node.children.startIndex : node.children.index(before: node.children.endIndex)
+  private func nearestLeaf(in root: FocusNode, to origin: Rect) -> [Int]? {
+    var bestPath: [Int]?
+    var bestDistance = Float.infinity
+    let originCenter = Point(x: origin.minX + origin.size.width / 2, y: origin.minY + origin.size.height / 2)
+
+    func visit(_ node: FocusNode, path: [Int]) {
+      if node.isLeaf {
+        let center = Point(x: node.rect.minX + node.rect.size.width / 2, y: node.rect.minY + node.rect.size.height / 2)
+        let x = center.x - originCenter.x
+        let y = center.y - originCenter.y
+        let distance = x * x + y * y
+        if distance < bestDistance {
+          bestDistance = distance
+          bestPath = path
+        }
+        return
       }
-      path[index] = destinationIndex
-      node = node.children[destinationIndex]
-      index += 1
+      for (index, child) in node.children.enumerated() {
+        visit(child, path: path + [index])
+      }
     }
-    path.removeLast(path.count - index)
-  }
 
-  private mutating func moveInward() -> Bool {
-    guard let node = root.node(at: path), !node.isLeaf, !node.children.isEmpty else { return false }
-    path.append(node.children.startIndex)
-    return true
-  }
-
-  private mutating func skipTransparentGroups() {
-    while let node = root.node(at: path), !node.isLeaf, node.axis == nil, node.children.count == 1 {
-      path.append(node.children.startIndex)
-    }
-  }
-
-  private mutating func moveOutward() -> Bool {
-    guard !path.isEmpty else { return false }
-    path.removeLast()
-    return true
+    visit(root, path: [])
+    return bestPath
   }
 }

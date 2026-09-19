@@ -153,7 +153,7 @@ struct FocusAndCommandRegressionTests {
     #expect(calls == 1)
   }
 
-  @Test func navigationSelectsGroupsAndOnlyActivatesLeaves() {
+  @Test func navigationMovesOnlyBetweenInteractiveLeaves() {
     let harness = Harness()
     var activations = 0
     let content = VStack {
@@ -167,15 +167,15 @@ struct FocusAndCommandRegressionTests {
     harness.render(content)
     #expect(harness.context.interaction.selection == [0, 0, 0])
 
-    harness.render(content, input: InputState(commands: [.navigation(.outward)]))
-    #expect(harness.context.interaction.selection == [0, 0])
-
-    harness.render(content, input: InputState(commands: [.navigation(.outward)]))
-    #expect(harness.context.interaction.selection == [0])
-
-    harness.render(content, input: InputState(commands: [.navigation(.outward), .action(.activate)]))
+    harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    #expect(harness.context.interaction.selection == [0, 1])
     #expect(harness.context.interaction.selectedLeafID != nil)
+
+    harness.render(content, input: InputState(commands: [.action(.activate)]))
     #expect(activations == 1)
+
+    harness.render(content, input: InputState(commands: [.navigation(.inward), .navigation(.outward)]))
+    #expect(harness.context.interaction.selection == [0, 1])
   }
 
   @Test func directionalNavigationFollowsStackStructure() {

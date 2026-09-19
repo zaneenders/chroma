@@ -3,8 +3,8 @@ import Testing
 @testable import Chroma
 
 struct FocusTreeWalkerTests {
-  private func leaf(_ id: UInt64) -> FocusNode {
-    FocusNode(kind: .leaf(WidgetID(rawValue: id)), rect: .zero)
+  private func leaf(_ id: UInt64, x: Float = 0, y: Float = 0) -> FocusNode {
+    FocusNode(kind: .leaf(WidgetID(rawValue: id)), rect: Rect(x: x, y: y, width: 10, height: 10))
   }
 
   private func group(_ axis: FocusNode.Axis? = nil, _ children: [FocusNode]) -> FocusNode {
@@ -17,118 +17,68 @@ struct FocusTreeWalkerTests {
     walker.move(command)
   }
 
-  @Test func directionalMovementPreservesDescendantPath() {
+  @Test func directionalMovementUsesVisiblePositions() {
     let root = group(
       .vertical,
       [
-        group(.horizontal, [leaf(1), leaf(2)]),
-        group(.horizontal, [leaf(3), leaf(4)]),
+        group(.horizontal, [leaf(1, x: 0, y: 0), leaf(2, x: 20, y: 0)]),
+        group(.horizontal, [leaf(3, x: 0, y: 20), leaf(4, x: 20, y: 20)]),
       ])
     var walker = FocusTreeWalker(root: root, path: [0, 1])!
 
-    do {
-      let didMove = move(.down, walker: &walker)
-      #expect(didMove)
-    }
+    #expect(move(.down, walker: &walker))
     #expect(walker.path == [1, 1])
-    do {
-      let didMove = move(.left, walker: &walker)
-      #expect(didMove)
-    }
+    #expect(move(.left, walker: &walker))
     #expect(walker.path == [1, 0])
-    do {
-      let didMove = move(.up, walker: &walker)
-      #expect(didMove)
-    }
+    #expect(move(.up, walker: &walker))
     #expect(walker.path == [0, 0])
   }
 
-  @Test func unevenDestinationUsesTheFacingEdge() {
+  @Test func movementBetweenUnevenGroupsUsesTheNearestLeaf() {
     let root = group(
       .vertical,
       [
-        group(.horizontal, [leaf(1), leaf(2), leaf(3)]),
-        group(.horizontal, [leaf(4)]),
+        group(.horizontal, [leaf(1, x: 0, y: 0), leaf(2, x: 20, y: 0), leaf(3, x: 40, y: 0)]),
+        group(.horizontal, [leaf(4, x: 0, y: 20)]),
       ])
     var walker = FocusTreeWalker(root: root, path: [0, 2])!
 
-    do {
-      let didMove = move(.down, walker: &walker)
-      #expect(didMove)
-    }
+    #expect(move(.down, walker: &walker))
     #expect(walker.path == [1, 0])
-    do {
-      let didMove = move(.up, walker: &walker)
-      #expect(didMove)
-    }
+    #expect(move(.up, walker: &walker))
     #expect(walker.path == [0, 0])
   }
 
-  @Test func directionalMovementContinuesPastAnExhaustedInnerGroup() {
+  @Test func oppositeDirectionsReturnToTheSameLeaf() {
     let root = group(
       .vertical,
       [
-        group(.vertical, [group(.horizontal, [leaf(1), leaf(2)])]),
-        group(.horizontal, [leaf(3), leaf(4)]),
+        group(.horizontal, [leaf(1, x: 0, y: 0), leaf(2, x: 20, y: 0), leaf(3, x: 40, y: 0)]),
+        group(.horizontal, [leaf(4, x: 0, y: 20), leaf(5, x: 20, y: 20), leaf(6, x: 40, y: 20)]),
       ])
-    var walker = FocusTreeWalker(root: root, path: [0, 0, 1])!
+    var walker = FocusTreeWalker(root: root, path: [0, 1])!
 
-    do {
-      let didMove = move(.down, walker: &walker)
-      #expect(didMove)
-    }
-    #expect(walker.path == [1, 0])
-
-    do {
-      let didMove = move(.up, walker: &walker)
-      #expect(didMove)
-    }
-    #expect(walker.path == [0, 0])
+    #expect(move(.down, walker: &walker))
+    #expect(walker.path == [1, 1])
+    #expect(move(.up, walker: &walker))
+    #expect(walker.path == [0, 1])
   }
 
-  @Test func inwardAndOutwardSelectOneStructuralLevel() {
+  @Test func movementSelectsOnlyLeaves() {
     let root = group(.vertical, [group(.horizontal, [leaf(1)])])
     var walker = FocusTreeWalker(root: root, path: [0, 0])!
 
-    do {
-      let didMove = move(.outward, walker: &walker)
-      #expect(didMove)
-    }
-    #expect(walker.path == [0])
-    do {
-      let didMove = move(.outward, walker: &walker)
-      #expect(didMove)
-    }
-    #expect(walker.path == [])
-    do {
-      let didMove = move(.inward, walker: &walker)
-      #expect(didMove)
-    }
-    #expect(walker.path == [0])
-    do {
-      let didMove = move(.inward, walker: &walker)
-      #expect(didMove)
-    }
+    #expect(!move(.inward, walker: &walker))
+    #expect(!move(.outward, walker: &walker))
     #expect(walker.path == [0, 0])
-    do {
-      let didMove = move(.inward, walker: &walker)
-      #expect(!didMove)
-    }
-    do {
-      let didMove = move(.outward, walker: &walker)
-      #expect(didMove)
-    }
-    #expect(walker.path == [0])
+    #expect(FocusTreeWalker(root: root, path: [0]) == nil)
   }
 
   @Test func boundariesAndInvalidPathsDoNotMove() {
     let root = group(.horizontal, [leaf(1)])
     var walker = FocusTreeWalker(root: root, path: [0])!
 
-    do {
-      let didMove = move(.left, walker: &walker)
-      #expect(!didMove)
-    }
+    #expect(!move(.left, walker: &walker))
     #expect(walker.path == [0])
     #expect(FocusTreeWalker(root: root, path: [1]) == nil)
   }

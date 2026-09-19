@@ -329,14 +329,6 @@ package final class Interaction {
 
 @MainActor
 extension Interaction {
-  func isBuildingSelectedGroup() -> Bool {
-    guard let selection, let parent = builderStack.last, selection.count == builderPath.count + 1,
-      selection.last == parent.children.count
-    else { return false }
-    for index in builderPath.indices where selection[index] != builderPath[index] { return false }
-    return tree?.node(at: selection)?.isLeaf == false
-  }
-
   func beginGroup(rect: Rect, axis: FocusNode.Axis? = nil) {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
@@ -376,12 +368,6 @@ extension Interaction {
     }
   }
 
-  private func selectedLeafPath(in tree: FocusNode, from path: [Int]) -> [Int]? {
-    guard let node = tree.node(at: path) else { return nil }
-    if node.isLeaf { return path }
-    return node.firstLeafPath().map { path + $0 }
-  }
-
   private func isPrefix(_ prefix: [Int], of path: [Int]) -> Bool {
     prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
   }
@@ -419,8 +405,7 @@ extension Interaction {
       guard var walker = FocusTreeWalker(root: tree, path: selection), walker.move(navigation) else { return }
       moveCursor(to: walker.path)
     case .action(.activate):
-      guard let tree, let selection, let leafPath = selectedLeafPath(in: tree, from: selection) else { return }
-      moveCursor(to: leafPath)
+      guard let tree, let selection, tree.node(at: selection)?.isLeaf == true else { return }
       activatePending = true
     case .action(.submit), .action(.cancel), .action(.dismiss):
       return
