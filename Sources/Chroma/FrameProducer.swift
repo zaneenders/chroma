@@ -94,7 +94,7 @@ package final class FrameProducer {
       || input.scrollDelta != .zero
     {
       interaction.refreshingRegistrations = true
-      interaction.beginFrame(input: InputState())
+      interaction.beginFrame(input: InputState(commands: input.commands))
       var registrations = DrawList()
       if let content {
         BlockEngine.draw(content, into: &registrations, in: Rect(origin: .zero, size: viewport), context: context)

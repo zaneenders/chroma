@@ -190,20 +190,23 @@ public struct LazyVStack: PrimitiveBlock {
     interaction.beginGroup(rect: rect, axis: .vertical, scrollID: id)
     let visibleTop = offset
     let visibleBottom = offset + rect.size.height
+    let (before, after) = focusBuffer(for: interaction)
     if let uniformRows {
       let stride = uniformRows.height + spacing
-      let first = Int(
+      let visibleFirst = Int(
         min(
           Float(uniformRows.count),
           max(
             0,
             ((visibleTop - uniformRows.height) / stride).rounded(.up))))
-      let end = Int(
+      let visibleEnd = Int(
         min(
           Float(uniformRows.count),
           max(
             0,
             (visibleBottom / stride).rounded(.down) + 1)))
+      let first = max(0, visibleFirst - before)
+      let end = min(uniformRows.count, visibleEnd + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
           BlockEngine.draw(
@@ -216,19 +219,34 @@ public struct LazyVStack: PrimitiveBlock {
       }
     } else {
       var y: Float = 0
+      var visibleFirst: Int?
+      var visibleLast: Int?
       for index in rows.indices {
         let height = controller.lazyStackCache.measurements[index].size.height
         let bottom = y + height
         if bottom >= visibleTop && y <= visibleBottom {
-          BlockEngine.draw(
-            rows[index].content,
-            into: &drawList,
-            in: Rect(
-              x: rect.minX, y: rect.minY + y - offset,
-              width: rect.size.width, height: height),
-            context: context.scoped([.key(rows[index].key)]))
+          visibleFirst = visibleFirst ?? index
+          visibleLast = index
         }
         y = bottom + spacing
+      }
+      if let visibleFirst, let visibleLast {
+        let first = max(0, visibleFirst - before)
+        let end = min(rows.count, visibleLast + 1 + after)
+        y = 0
+        for index in rows.indices {
+          let height = controller.lazyStackCache.measurements[index].size.height
+          if index >= first && index < end {
+            BlockEngine.draw(
+              rows[index].content,
+              into: &drawList,
+              in: Rect(
+                x: rect.minX, y: rect.minY + y - offset,
+                width: rect.size.width, height: height),
+              context: context.scoped([.key(rows[index].key)]))
+          }
+          y += height + spacing
+        }
       }
     }
     interaction.endGroup()
@@ -245,6 +263,20 @@ public struct LazyVStack: PrimitiveBlock {
       )
     }
     drawList.popClip()
+  }
+
+  @MainActor private func focusBuffer(for interaction: Interaction) -> (before: Int, after: Int) {
+    var before = 0
+    var after = 0
+    for command in interaction.input.commands {
+      guard case .navigation(let navigation) = command else { continue }
+      switch navigation {
+      case .up: before += 1
+      case .down: after += 1
+      case .left, .right: break
+      }
+    }
+    return (before, after)
   }
 
   @MainActor private func updateCache(width: Float, context: RenderContext) {
