@@ -52,6 +52,7 @@ public struct ScrollView: PrimitiveBlock {
       interaction.horizontalScrollOffset(for: id), maximumHorizontalOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
+    let reveal = interaction.pendingScrollReveals.removeValue(forKey: id)
     if !interaction.refreshingRegistrations, let request = controller?.request {
       if interaction.scrollDelta(in: rect, horizontal: true) != .zero, case .visible = request {
         controller?.request = nil
@@ -79,6 +80,20 @@ public struct ScrollView: PrimitiveBlock {
     } else if sticksToBottom && wasAtBottom && maximumOffset > previousLimit {
       offset = maximumOffset
     }
+    if let reveal {
+      if reveal.minY < rect.minY {
+        offset -= rect.minY - reveal.minY
+      } else if reveal.maxY > rect.maxY {
+        offset += reveal.maxY - rect.maxY
+      }
+      if reveal.size.width <= rect.size.width {
+        if reveal.minX < rect.minX {
+          horizontalOffset -= rect.minX - reveal.minX
+        } else if reveal.maxX > rect.maxX {
+          horizontalOffset += reveal.maxX - rect.maxX
+        }
+      }
+    }
 
     offset = min(max(0, offset), maximumOffset)
     horizontalOffset = min(max(0, horizontalOffset), maximumHorizontalOffset)
@@ -89,12 +104,14 @@ public struct ScrollView: PrimitiveBlock {
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
+    interaction.beginGroup(rect: rect, scrollID: id)
     BlockEngine.draw(
       content,
       into: &drawList,
       in: Rect(
         x: rect.minX - horizontalOffset, y: rect.minY - offset,
         width: contentSize.width, height: contentSize.height), context: context)
+    interaction.endGroup()
     interaction.popClip()
 
     let style = context.theme.scrollView

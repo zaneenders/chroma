@@ -152,6 +152,7 @@ public struct LazyVStack: PrimitiveBlock {
     var offset = min(interaction.scrollOffset(for: id), maximumOffset)
     let wasAtBottom = abs(offset - previousLimit) <= 1
 
+    let reveal = interaction.pendingScrollReveals.removeValue(forKey: id)
     if !interaction.refreshingRegistrations, let request = controller.request {
       if interaction.scrollDelta(in: rect) != .zero, case .visible = request {
         controller.request = nil
@@ -172,6 +173,13 @@ public struct LazyVStack: PrimitiveBlock {
     } else if sticksToBottom && wasAtBottom && maximumOffset > previousLimit {
       offset = maximumOffset
     }
+    if let reveal {
+      if reveal.minY < rect.minY {
+        offset -= rect.minY - reveal.minY
+      } else if reveal.maxY > rect.maxY {
+        offset += reveal.maxY - rect.maxY
+      }
+    }
 
     offset = min(max(0, offset), maximumOffset)
     interaction.setScrollOffset(offset, for: id)
@@ -179,7 +187,7 @@ public struct LazyVStack: PrimitiveBlock {
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
-    interaction.beginGroup(rect: rect)
+    interaction.beginGroup(rect: rect, axis: .vertical, scrollID: id)
     let visibleTop = offset
     let visibleBottom = offset + rect.size.height
     if let uniformRows {

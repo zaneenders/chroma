@@ -13,16 +13,27 @@ final class FocusNode {
 
   let kind: Kind
   let rect: Rect
+  let hitRect: Rect
   var role: ActionRole = .normal
   let axis: Axis?
+  let scrollID: WidgetID?
   var commandHandlers: [Command: @MainActor () -> CommandResult] = [:]
   var children: [FocusNode] = []
 
-  init(kind: Kind, rect: Rect, role: ActionRole = .normal, axis: Axis? = nil) {
+  init(
+    kind: Kind,
+    rect: Rect,
+    hitRect: Rect? = nil,
+    role: ActionRole = .normal,
+    axis: Axis? = nil,
+    scrollID: WidgetID? = nil
+  ) {
     self.kind = kind
     self.rect = rect
+    self.hitRect = hitRect ?? rect
     self.role = role
     self.axis = axis
+    self.scrollID = scrollID
   }
 
   var isLeaf: Bool {
@@ -48,7 +59,7 @@ extension FocusNode {
 
   func hitTest(_ point: Point) -> [Int]? {
     for (index, child) in children.enumerated().reversed() {
-      guard child.rect.contains(point) else { continue }
+      guard child.hitRect.contains(point) else { continue }
       if child.isLeaf { return [index] }
       if let sub = child.hitTest(point) { return [index] + sub }
     }

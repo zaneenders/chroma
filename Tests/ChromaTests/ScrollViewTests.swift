@@ -153,6 +153,62 @@ struct ScrollViewTests {
     #expect(interaction.scrollOffset(for: secondID) == 25)
   }
 
+  @Test func keyboardNavigationRevealsFocusedScrollContent() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        ScrollView(id: scrollID, showsIndicator: false) {
+          for _ in 0..<4 {
+            Interactive(action: {}) { _ in
+              RowContent(height: 10, color: .white)
+            }
+            .sizing(y: .fixed(10))
+          }
+        },
+        into: &list,
+        in: viewport,
+        context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(commands: [.navigation(.down)]))
+    #expect(interaction.scrollOffset(for: scrollID) == 0)
+
+    frame(InputState(commands: [.navigation(.down)]))
+    #expect(interaction.scrollOffset(for: scrollID) == 10)
+  }
+
+  @Test func keyboardNavigationRevealsVirtualizedRows() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+    let controller = ScrollViewController()
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        LazyVStack(id: scrollID, data: 0..<10, rowHeight: 10, showsIndicator: false, controller: controller) { _ in
+          Interactive(action: {}) { _ in
+            RowContent(height: 10, color: .white)
+          }
+        },
+        into: &list,
+        in: viewport,
+        context: context)
+      interaction.endFrame()
+    }
+
+    frame()
+    frame(InputState(commands: [.navigation(.down)]))
+    frame(InputState(commands: [.navigation(.down)]))
+    #expect(interaction.scrollOffset(for: scrollID) == 10)
+  }
+
   @Test func controllerScrollsToBottom() {
     let interaction = Interaction()
     let controller = ScrollViewController()

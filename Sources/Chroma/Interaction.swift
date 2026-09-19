@@ -94,6 +94,7 @@ package final class Interaction {
   @ObservationIgnored var horizontalScrollOffsets: [WidgetID: Float] = [:]
   @ObservationIgnored var scrollLimits: [WidgetID: Float] = [:]
   @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
+  @ObservationIgnored var pendingScrollReveals: [WidgetID: Rect] = [:]
 
   @ObservationIgnored var clipStack: [Rect] = []
 
@@ -129,6 +130,7 @@ package final class Interaction {
     horizontalScrollOffsets = [:]
     scrollLimits = [:]
     horizontalScrollLimits = [:]
+    pendingScrollReveals = [:]
     animationRequested = false
     tree = nil
     pressedLeaf = nil
@@ -326,11 +328,15 @@ package final class Interaction {
 
 @MainActor
 extension Interaction {
-  func beginGroup(rect: Rect, axis: FocusNode.Axis? = nil) {
+  func beginGroup(
+    rect: Rect,
+    axis: FocusNode.Axis? = nil,
+    scrollID: WidgetID? = nil
+  ) {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
-    let node = FocusNode(kind: .group, rect: rect, axis: axis)
+    let node = FocusNode(kind: .group, rect: rect, axis: axis, scrollID: scrollID)
     parent.children.append(node)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
@@ -358,10 +364,20 @@ extension Interaction {
   }
 
   func moveCursor(to path: [Int]) {
-    guard tree?.node(at: path) != nil else { return }
+    guard let tree, tree.node(at: path) != nil else { return }
     selection = path
-    if tree?.node(at: path)?.isLeaf != true {
+    reveal(path, in: tree)
+    if tree.node(at: path)?.isLeaf != true {
       endEditing()
+    }
+  }
+
+  private func reveal(_ path: [Int], in tree: FocusNode) {
+    guard let target = tree.node(at: path)?.rect else { return }
+    for depth in 0...path.count {
+      let ancestorPath = Array(path.prefix(depth))
+      guard let scrollID = tree.node(at: ancestorPath)?.scrollID else { continue }
+      pendingScrollReveals[scrollID] = target
     }
   }
 
@@ -431,7 +447,7 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: clippedRect(rect), role: role))
+    parent.children.append(FocusNode(kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role))
     if role != .normal, let action { actionRoles[role] = action }
 
     let focused = selectedLeafID == id
