@@ -87,7 +87,11 @@ public struct TextField: PrimitiveBlock {
     drawList.fillRoundedRect(
       rect,
       radius: style.cornerRadius,
-      color: state.editing ? style.editingBackground : state.hovered ? style.hoveredBackground : style.idleBackground)
+      color: state.editing ? style.editingBackground : style.idleBackground)
+    if !state.editing, state.phase == .hovered {
+      drawList.fillRoundedRect(
+        rect, radius: style.cornerRadius, color: HoverStyle.standardTint(in: context.theme))
+    }
     drawList.strokeRoundedRect(
       rect,
       radius: style.cornerRadius,

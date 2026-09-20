@@ -9,8 +9,7 @@ struct DefaultFocusTests {
   private let context = RenderContext()
 
   private var standardHighlight: Color {
-    let base = context.theme.button.hoveredBackground
-    return Color(r: base.r, g: base.g, b: base.b, a: base.a * 0.5)
+    HoverStyle.standardTint(in: context.theme)
   }
 
   @discardableResult
@@ -95,10 +94,8 @@ struct DefaultFocusTests {
       input: InputState(
         pointerPosition: Point(x: target.minX + 1, y: target.minY + 1),
         pointerDown: true, pointerPressed: true))
-    let pressed = context.theme.button.pressedBackground
-    #expect(
-      list.commands.contains(
-        .fillRect(rect: target, color: Color(r: pressed.r, g: pressed.g, b: pressed.b, a: pressed.a * 0.5))))
+    let pressed = HoverStyle.standardTint(in: context.theme, pressed: true)
+    #expect(list.commands.contains(.fillRect(rect: target, color: pressed)))
   }
 
   @Test func hoverStyleOverridesTheHighlight() {
@@ -209,10 +206,8 @@ struct DefaultFocusTests {
     let list = render(
       content,
       input: InputState(pointerPosition: Point(x: 60, y: 10), pointerDown: true, pointerPressed: true))
-    let pressed = context.theme.button.pressedBackground
-    #expect(
-      list.commands.contains(
-        .fillRect(rect: rects[1], color: Color(r: pressed.r, g: pressed.g, b: pressed.b, a: pressed.a * 0.5))))
+    let pressed = HoverStyle.standardTint(in: context.theme, pressed: true)
+    #expect(list.commands.contains(.fillRect(rect: rects[1], color: pressed)))
   }
 
   @Test func focusableCellsHonorHoverOverrides() {

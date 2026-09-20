@@ -21,7 +21,7 @@ struct FontDemo: Block {
           ScrollView {
             VStack(spacing: 16) {
               VStack(spacing: 8) {
-                heading("LIVE PREVIEW")
+                heading("LIVE PREVIEW", theme)
                 TextField(
                   "Type a sample", fontScale: 0.65,
                   text: { state.fontSample }, onChange: { state.fontSample = $0 })
@@ -31,12 +31,12 @@ struct FontDemo: Block {
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("GLYPH EXPLORER / CLICK OR NAVIGATE + ENTER")
+                heading("GLYPH EXPLORER / CLICK OR NAVIGATE + ENTER", theme)
                 GlyphExplorer(state: state)
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("CANONICAL EQUIVALENCE")
+                heading("CANONICAL EQUIVALENCE", theme)
                 HStack(spacing: 24) {
                   comparison("BASE / U+0065", "e")
                   comparison("U+00E9", "é")
@@ -46,12 +46,12 @@ struct FontDemo: Block {
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("TERMINAL / CONTIGUOUS 12 x 28 CELLS")
+                heading("TERMINAL / CONTIGUOUS 12 x 28 CELLS", theme)
                 TerminalSpecimen().sizing(y: .fixed(84))
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("KNOWN LIMITS / EXPECTED REPLACEMENT GLYPHS")
+                heading("KNOWN LIMITS / EXPECTED REPLACEMENT GLYPHS", theme)
                 Text("🙂  👩‍💻  e\u{0301}\u{0308}  �").fontScale(0.9)
                 Text("Emoji and stacked accents are not supported yet.").fontScale(0.5)
               }
@@ -59,7 +59,7 @@ struct FontDemo: Block {
             }
           }.sizing(x: .grow, y: .grow)
           VStack(spacing: 12) {
-            heading("CELL INSPECTOR")
+            heading("CELL INSPECTOR", theme)
             GlyphInspection(glyph: state.inspectedGlyph)
               .sizing(y: .fixed(240))
             Text(
@@ -68,7 +68,7 @@ struct FontDemo: Block {
               }.joined(separator: " ")
             ).fontScale(0.65)
             Text("BUNDLED FONT / \(Int(FontMetrics().cellAdvance)) PT ADVANCE").fontScale(0.5)
-            Text("Blue: advance boundary").fontScale(0.5)
+            Text("Green: advance boundary").fontScale(0.5)
             Text("Gray: 20 x 28 glyph canvas").fontScale(0.5)
             Text("8x magnification").fontScale(0.5)
             Spacer()
@@ -81,8 +81,8 @@ struct FontDemo: Block {
     }
   }
 
-  private func heading(_ text: String) -> Text {
-    Text(text).fontScale(0.5).foregroundColor(Color(r: 0.2, g: 0.65, b: 1, a: 1))
+  private func heading(_ text: String, _ theme: ChromaTheme) -> Text {
+    Text(text).fontScale(0.5).foregroundColor(theme.accent)
   }
 
   @MainActor private func comparison(_ label: String, _ sample: String) -> some Block {
