@@ -23,6 +23,8 @@ struct ReviewRegressionTests {
     let model: Model
     let capture: Capture
 
+    var focusRule: FocusRule { .control }
+
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
     func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
@@ -35,6 +37,8 @@ struct ReviewRegressionTests {
   struct Row: PrimitiveBlock {
     let model: Model
     let capture: Capture
+
+    var focusRule: FocusRule { .standard }
 
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
       capture.measurements += 1
@@ -124,6 +128,8 @@ struct ReviewRegressionTests {
 
   struct InputProbe: PrimitiveBlock {
     let capture: InputCapture
+
+    var focusRule: FocusRule { .control }
 
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 

@@ -164,6 +164,7 @@ struct ObservationTests {
     let model = Model()
     struct MutatingBlock: PrimitiveBlock {
       let model: Model
+      var focusRule: FocusRule { .standard }
       func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
       func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
         drawList.fillRect(rect, color: model.first)

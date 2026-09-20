@@ -168,4 +168,84 @@ struct DefaultFocusTests {
     #expect(leafRects().count == 1)
     #expect(context.interaction.tree?.firstLeafPath() != nil)
   }
+
+  /// A custom primitive that paints cells the way immediate-mode content does.
+  private struct CellGrid: PrimitiveBlock {
+    let action: (@MainActor () -> Void)?
+
+    var focusRule: FocusRule { .container }
+
+    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+      Size(width: proposal.width, height: 40)
+    }
+
+    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+      context.withFocusGroup(in: rect, axis: .horizontal) {
+        for column in 0..<2 {
+          let box = Rect(
+            x: rect.minX + Float(column) * 50, y: rect.minY, width: 50, height: 40)
+          context.childScope(column).focusable(in: box, into: &drawList, action: action)
+        }
+      }
+    }
+  }
+
+  @Test func focusableCellsPaintTheStandardHighlight() {
+    let content = CellGrid(action: nil)
+
+    render(content, input: parked)
+    let rects = leafRects()
+    #expect(rects == [Rect(x: 0, y: 0, width: 50, height: 40), Rect(x: 50, y: 0, width: 50, height: 40)])
+
+    // Keyboard focus paints the standard tint over the first cell.
+    let focused = render(content, input: parked)
+    #expect(focused.commands.contains(.fillRect(rect: rects[0], color: standardHighlight)))
+
+    // Pointer hover paints the same tint over the hovered cell.
+    let hovered = render(content, input: InputState(pointerPosition: Point(x: 60, y: 10)))
+    #expect(hovered.commands.contains(.fillRect(rect: rects[1], color: standardHighlight)))
+
+    // Pressing uses the pressed tint.
+    let list = render(
+      content,
+      input: InputState(pointerPosition: Point(x: 60, y: 10), pointerDown: true, pointerPressed: true))
+    let pressed = context.theme.button.pressedBackground
+    #expect(
+      list.commands.contains(
+        .fillRect(rect: rects[1], color: Color(r: pressed.r, g: pressed.g, b: pressed.b, a: pressed.a * 0.5))))
+  }
+
+  @Test func focusableCellsHonorHoverOverrides() {
+    let tint = Color(r: 1, g: 0, b: 0, a: 0.25)
+    let decorative = CellGrid(action: nil).hover(.none)
+    let tinted = CellGrid(action: nil).hover(.tint(tint))
+
+    render(decorative, input: parked)
+    #expect(leafRects().isEmpty, "decorative cells register no focus leaf")
+
+    render(tinted, input: parked)
+    let list = render(tinted, input: parked)
+    let first = leafRects()[0]
+    #expect(list.commands.contains(.fillRect(rect: first, color: tint)))
+    #expect(!list.commands.contains(.fillRect(rect: first, color: standardHighlight)))
+  }
+
+  @Test func focusableCellsActivateTheirAction() {
+    var calls = 0
+    let content = CellGrid { calls += 1 }
+
+    render(content, input: parked)
+    render(content, input: InputState(commands: [.action(.activate)]))
+    #expect(calls == 1)
+  }
+
+  @Test func stacksOfOnlyDecorativeContentRegisterNoLeaf() {
+    let content = VStack(spacing: 0) {
+      Text("hidden").hover(.none)
+      Spacer()
+    }
+
+    render(content, input: parked)
+    #expect(leafRects().isEmpty, "a stack declares .container: its focus lives in its children")
+  }
 }

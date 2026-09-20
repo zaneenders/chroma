@@ -5,6 +5,8 @@ public struct Text: PrimitiveBlock {
   public var isSelectable: Bool = false
   var selectionID: WidgetID?
 
+  public var focusRule: FocusRule { .standard }
+
   public init(_ content: String) {
     self.content = content
     self.color = .white

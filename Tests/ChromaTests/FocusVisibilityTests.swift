@@ -89,6 +89,8 @@ struct FocusVisibilityTests {
 
 /// A column taller than the clip it is drawn in, with no scroll container to reveal it.
 private struct ClippedColumn: PrimitiveBlock {
+  var focusRule: FocusRule { .container }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {

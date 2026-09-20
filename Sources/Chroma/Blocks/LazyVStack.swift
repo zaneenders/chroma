@@ -128,6 +128,8 @@ public struct LazyVStack: PrimitiveBlock {
       showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
@@ -282,12 +284,8 @@ public struct LazyVStack: PrimitiveBlock {
     var rowContext = rowContext
     rowContext.focusLeafClaimed = true
     BlockEngine.draw(content, into: &drawList, in: rect, context: rowContext)
-    guard rowContext.hoverStyle != HoverStyle.none, group.children.count == children else { return }
-    group.children.append(
-      FocusNode(
-        kind: .leaf(rowContext.widgetID), rect: rect, hitRect: interaction.clippedRect(rect),
-        canBeRevealed: group.canBeRevealed))
-    BlockEngine.drawHighlight(for: rowContext.widgetID, into: &drawList, in: rect, context: rowContext)
+    guard group.children.count == children else { return }
+    rowContext.focusable(in: rect, into: &drawList)
   }
 
   @MainActor private func focusBuffer(for interaction: Interaction) -> (before: Int, after: Int) {

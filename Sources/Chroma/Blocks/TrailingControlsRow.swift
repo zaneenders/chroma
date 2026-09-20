@@ -13,6 +13,8 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: PrimitiveBlock
     self.controls = controls()
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { true }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {

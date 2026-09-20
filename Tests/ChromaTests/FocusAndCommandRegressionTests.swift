@@ -505,6 +505,8 @@ private struct GridProbe: PrimitiveBlock {
   let columns: Int
   private let cell: Float = 20
 
+  var focusRule: FocusRule { .container }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: Float(columns) * cell, height: Float(rows) * cell)
   }

@@ -21,6 +21,8 @@ public struct VStack: PrimitiveBlock {
     return copy
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool {
     scopedChildren.contains { child in
       !BlockEngine.isSpacer(child) && BlockEngine.expandsHorizontally(child)

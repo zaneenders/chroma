@@ -254,6 +254,8 @@ private struct UUIDList: Block {
 private struct ShapeCanvas: PrimitiveBlock {
   let state: PerformanceDemoState
 
+  var focusRule: FocusRule { .standard }
+
   var expandsHorizontally: Bool { true }
   var expandsVertically: Bool { true }
 

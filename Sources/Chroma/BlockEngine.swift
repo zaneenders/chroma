@@ -43,33 +43,35 @@ public enum BlockEngine {
     drawResolved(resolved.primitive, into: &drawList, in: rect, context: resolved.context)
   }
 
-  /// Draws a resolved primitive. When neither the primitive nor its descendants register a
-  /// focus node, the primitive itself becomes the default focus leaf: keyboard focus and
-  /// pointer hover reach every visible element — text, images, custom content — and both
-  /// draw the same highlight. Layout wrappers (`IdentityTransparentBlock`), invisible blocks,
-  /// and content already owned by a control's leaf do not register.
+  /// Draws a resolved primitive. A `.standard` primitive that draws without registering a
+  /// focus node becomes the default focus leaf itself: the engine registers its rect and
+  /// paints the standard highlight, so keyboard focus and pointer hover reach every
+  /// visible element — text, images, custom content — and both draw the same highlight.
+  /// `.control` primitives must register their own leaf while drawing; `.container`
+  /// primitives own their focus structure; `.decorative` primitives never join the tree.
+  /// Content a registered leaf already owns (`focusLeafClaimed`) and `.hover(.none)`
+  /// content never register a default leaf.
   static func drawResolved(
     _ primitive: any PrimitiveBlock,
     into drawList: inout DrawList,
     in rect: Rect,
     context: RenderContext
   ) {
-    let interaction = context.interaction
-    let registersDefaultLeaf =
-      !(primitive is any IdentityTransparentBlock)
-      && !(primitive is Spacer) && !(primitive is EmptyBlock)
-      && !context.focusLeafClaimed
-      && context.hoverStyle != HoverStyle.none
-    let parent = interaction.builderStack.last
+    let parent = context.interaction.builderStack.last
     let registered = parent?.children.count
     primitive.draw(into: &drawList, in: rect, context: context)
-    guard registersDefaultLeaf, let parent, parent.children.count == registered else { return }
-    let id = context.widgetID
-    parent.children.append(
-      FocusNode(
-        kind: .leaf(id), rect: rect, hitRect: interaction.clippedRect(rect),
-        canBeRevealed: parent.canBeRevealed))
-    drawHighlight(for: id, into: &drawList, in: rect, context: context)
+    guard let parent, parent.children.count == registered else { return }
+    switch primitive.focusRule {
+    case .control:
+      preconditionFailure(
+        "\(String(describing: type(of: primitive))) declares focusRule .control but registered no focus leaf; "
+          + "call buttonState while drawing")
+    case .standard:
+      guard !context.focusLeafClaimed, context.hoverStyle != HoverStyle.none else { return }
+      context.focusable(in: rect, into: &drawList)
+    case .container, .decorative:
+      break
+    }
   }
 
   static func drawHighlight(

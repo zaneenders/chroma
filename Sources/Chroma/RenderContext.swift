@@ -116,6 +116,26 @@ public struct RenderContext {
     return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
   }
 
+  /// Registers a focus leaf for content a custom primitive paints itself and draws the
+  /// standard highlight over it: keyboard focus, pointer hover, and press all tint the
+  /// leaf like default content. Call after drawing the leaf's content so the highlight
+  /// layers over it. `.hover(.none)` removes the leaves; `.hover(.tint)` recolors the
+  /// highlight. Controls that paint their own feedback use `buttonState` instead.
+  @discardableResult
+  public func focusable(
+    in rect: Rect, into drawList: inout DrawList,
+    role: ActionRole = .normal,
+    action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    guard hoverStyle != HoverStyle.none else {
+      return ButtonState(hovered: false, held: false, clicked: false)
+    }
+    let id = widgetID
+    let state = buttonState(in: rect, role: role, action: action)
+    BlockEngine.drawHighlight(for: id, into: &drawList, in: rect, context: self)
+    return state
+  }
+
   func textInputState(
     id: WidgetID,
     in rect: Rect,

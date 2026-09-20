@@ -7,6 +7,8 @@ private struct CommandProbe: PrimitiveBlock {
   var size = Size(width: 10, height: 10)
   var color = Color.white
 
+  var focusRule: FocusRule { .standard }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { size }
 
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {

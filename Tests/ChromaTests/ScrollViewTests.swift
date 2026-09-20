@@ -4,6 +4,7 @@ import Testing
 
 private struct FixedContent: PrimitiveBlock {
   var size: Size
+  var focusRule: FocusRule { .standard }
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { size }
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     drawList.fillRect(rect, color: .white)
@@ -12,6 +13,8 @@ private struct FixedContent: PrimitiveBlock {
 
 private struct ClippedScrollContent: PrimitiveBlock {
   let content: any Block
+
+  var focusRule: FocusRule { .container }
 
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
@@ -36,6 +39,8 @@ private struct CountedRow: PrimitiveBlock {
   let height: Float
   let counter: DrawCounter
 
+  var focusRule: FocusRule { .standard }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     counter.measured.append(index)
     return Size(width: proposal.width, height: height)
@@ -49,6 +54,8 @@ private struct CountedRow: PrimitiveBlock {
 private struct RowContent: PrimitiveBlock {
   let height: Float
   let color: Color
+
+  var focusRule: FocusRule { .standard }
 
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: proposal.width, height: height)

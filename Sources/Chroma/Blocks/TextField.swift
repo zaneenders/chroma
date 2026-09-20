@@ -42,6 +42,8 @@ public struct TextField: PrimitiveBlock {
       onSubmit: onSubmit)
   }
 
+  public var focusRule: FocusRule { .control }
+
   @MainActor public var expandsHorizontally: Bool { true }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {

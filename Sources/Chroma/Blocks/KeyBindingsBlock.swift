@@ -7,6 +7,8 @@ public struct KeyBindingsBlock: PrimitiveBlock, IdentityTransparentBlock {
     self.bindings = bindings
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 

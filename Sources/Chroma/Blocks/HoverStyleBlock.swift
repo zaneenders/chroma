@@ -19,6 +19,8 @@ public struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var style: HoverStyle
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
@@ -37,8 +39,8 @@ extension Block {
   /// Overrides the default interactivity of this content: every visible block is
   /// keyboard-focusable and pointer-hoverable with a standard highlight. `.none` marks
   /// decorative content — it registers no focus leaf; `.tint` keeps the leaf but draws a
-  /// custom highlight. Controls that draw their own state (Button, TextField, Interactive)
-  /// ignore it.
+  /// custom highlight. Leaves registered by `focusable` honor it; controls that draw
+  /// their own state (Button, TextField, Interactive) ignore it.
   public func hover(_ style: HoverStyle) -> HoverStyleBlock {
     HoverStyleBlock(content: self, style: style)
   }

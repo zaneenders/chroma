@@ -7,6 +7,8 @@ public struct Button: PrimitiveBlock {
   public var style: ButtonStyle?
   public var padding: EdgeInsets
 
+  public var focusRule: FocusRule { .control }
+
   init(
     _ label: String,
     id: WidgetID?,

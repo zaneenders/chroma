@@ -244,6 +244,8 @@ public struct ThemeReader<Content: Block>: PrimitiveBlock {
     self.content = content
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { false }
   @MainActor public var expandsVertically: Bool { false }
 
@@ -259,6 +261,8 @@ public struct ThemeReader<Content: Block>: PrimitiveBlock {
 public struct ThemeBlock: PrimitiveBlock {
   public var content: any Block
   public var theme: ChromaTheme
+
+  public var focusRule: FocusRule { .container }
 
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }

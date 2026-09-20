@@ -104,6 +104,8 @@ struct GlyphExplorer: PrimitiveBlock {
   )
   private let cell: Float = 40
 
+  var focusRule: FocusRule { .container }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let columns = max(1, Int(proposal.width / cell))
     return Size(width: proposal.width, height: Float((Self.glyphs.count + columns - 1) / columns) * cell)
@@ -123,23 +125,14 @@ struct GlyphExplorer: PrimitiveBlock {
             let box = Rect(
               x: rowRect.minX + Float(column) * cell, y: rowRect.minY, width: cell, height: cell)
             let text = String(Self.glyphs[index])
-            // Cells own their focus leaves, so the engine's automatic default-leaf highlight
-            // never applies inside this primitive; paint the same standard tint from the
-            // state the engine hands back.
-            let phase = context.childScope(index).buttonState(in: box, role: .normal) {
-              state.inspectedGlyph = text
-            }.phase
             if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
-            switch phase {
-            case .idle: break
-            case .hovered: drawList.fillRect(box, color: HoverStyle.standardTint(in: context.theme))
-            case .pressed:
-              drawList.fillRect(box, color: HoverStyle.standardTint(in: context.theme, pressed: true))
-            }
             drawList.strokeRect(box, width: 0.5, color: context.theme.border)
             drawList.text(
               text, at: Point(x: box.minX + 10, y: box.minY + 6),
               color: state.inspectedGlyph == text ? context.theme.accent : context.theme.foreground)
+            context.childScope(index).focusable(in: box, into: &drawList) {
+              state.inspectedGlyph = text
+            }
           }
         }
       }
@@ -149,6 +142,8 @@ struct GlyphExplorer: PrimitiveBlock {
 
 struct GlyphInspection: PrimitiveBlock {
   let glyph: String
+
+  var focusRule: FocusRule { .standard }
 
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: 200, height: 240)
@@ -176,6 +171,8 @@ struct GlyphInspection: PrimitiveBlock {
 
 struct TerminalSpecimen: PrimitiveBlock {
   static let rows = ["╭────╮ ┌────┐ ░▒▓█", "│    │ │    │ ←↑→↓", "╰────╯ └────┘ ⠁⠃⠇⠏"]
+
+  var focusRule: FocusRule { .standard }
 
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: 360, height: 84)

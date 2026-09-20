@@ -9,6 +9,8 @@ public struct CommandHandlerBlock: PrimitiveBlock, IdentityTransparentBlock {
     self.action = action
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 

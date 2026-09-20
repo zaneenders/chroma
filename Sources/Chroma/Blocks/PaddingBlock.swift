@@ -2,6 +2,8 @@ public struct PaddingBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var insets: EdgeInsets
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 

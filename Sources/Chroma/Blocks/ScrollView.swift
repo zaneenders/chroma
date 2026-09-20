@@ -29,6 +29,8 @@ public struct ScrollView: PrimitiveBlock {
       id: nil, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
 
