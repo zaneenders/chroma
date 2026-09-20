@@ -73,7 +73,9 @@ struct FontDemo: Block {
             Text("8x magnification").fontScale(0.5)
             Spacer()
           }
-          .padding(12).sizing(x: .fixed(270), y: .grow).background(theme.surface)
+          .padding(12)
+          .sizing(x: .fixed(270), y: .grow)
+          .background(theme.surface)
         }.sizing(x: .grow, y: .grow)
       }.padding(12).background(theme.background)
     }

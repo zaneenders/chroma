@@ -16,7 +16,11 @@ struct HeadlessRendererTests {
     #expect(first.viewport == Size(width: 120, height: 80))
     #expect(
       first.commands == [
-        .fillRect(rect: Rect(x: 0, y: 0, width: 120, height: 80), color: .yellow)
+        .fillRect(rect: Rect(x: 0, y: 0, width: 120, height: 80), color: .yellow),
+        // The automatic first selection highlights the content.
+        .fillRect(
+          rect: Rect(x: 0, y: 0, width: 120, height: 80),
+          color: HoverStyle.standardTint(in: .dark)),
       ])
     #expect(renderer.lastFrame == second)
   }
@@ -28,7 +32,7 @@ struct HeadlessRendererTests {
     renderer.run(title: "Snapshot")
 
     #expect(renderer.title == "Snapshot")
-    #expect(renderer.lastFrame?.commands.count == 1)
+    #expect(renderer.lastFrame?.commands.count == 2)
   }
 
   @Test func repeatedFramesPreserveButtonInteractionState() {

@@ -373,8 +373,11 @@ extension DemoContentTests {
     }
 
     #expect(firstVisibleRow() == 1)
-    for _ in 0..<20 {
+    // Arrow keys walk every focusable element on the way to the list; keep walking
+    // until the focused row must be revealed by scrolling.
+    for _ in 0..<200 {
       renderer.render(input: InputState(commands: [.navigation(.down)]))
+      if let row = firstVisibleRow(), row > 1 { break }
     }
     #expect((firstVisibleRow() ?? 0) > 1)
   }

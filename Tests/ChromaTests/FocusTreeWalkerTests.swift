@@ -93,4 +93,20 @@ struct FocusTreeWalkerTests {
     #expect(walker.path == [0])
     #expect(FocusTreeWalker(root: root, path: [1]) == nil)
   }
+
+  @Test func movementSkipsDecorativeSiblings() {
+    let root = group(
+      .vertical,
+      [
+        group(.horizontal, [leaf(1, x: 0, y: 0), leaf(2, x: 20, y: 0)]),
+        group(.horizontal, []),
+        group(.horizontal, [leaf(3, x: 0, y: 20)]),
+      ])
+    var walker = FocusTreeWalker(root: root, path: [0, 0])!
+
+    #expect(move(.down, walker: &walker))
+    #expect(walker.path == [2, 0])
+    #expect(move(.up, walker: &walker))
+    #expect(walker.path == [0, 0])
+  }
 }

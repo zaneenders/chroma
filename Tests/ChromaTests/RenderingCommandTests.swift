@@ -112,6 +112,10 @@ struct RenderingCommandTests {
           position: Point(x: 18, y: 5), text: "BC",
           color: ChromaTheme.light.focus.selectionForeground, scale: 1),
         .text(position: Point(x: 34, y: 5), text: "D", color: textColor, scale: 1),
+        // The pointer remains over the held text, drawing the hover tint.
+        .fillRect(
+          rect: rect,
+          color: HoverStyle.standardTint(in: .light)),
       ])
   }
 
@@ -157,6 +161,10 @@ struct RenderingCommandTests {
           color: ChromaTheme.light.focus.selectionForeground, scale: 1),
         .text(
           position: Point(x: 16, y: 5), text: "C", color: .white, scale: 1),
+        // The pointer remains over the held text, drawing the hover tint.
+        .fillRect(
+          rect: rect,
+          color: HoverStyle.standardTint(in: .light)),
       ])
   }
 
@@ -244,10 +252,10 @@ struct RenderingCommandTests {
   @Test func zeroRadiusBorderUsesRectangularCommand() {
     let rect = Rect(x: 2, y: 3, width: 40, height: 24)
     let content = CommandProbe(name: "square")
-    let context = RenderContext()
-    let square = render(content.border(.yellow, width: 2), in: rect, context: context)
+    let square = render(
+      content.border(.yellow, width: 2), in: rect, context: RenderContext())
     let rounded = render(
-      content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: context)
+      content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: RenderContext())
     #expect(rounded.commands == square.commands)
   }
 

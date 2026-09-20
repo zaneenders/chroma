@@ -5,6 +5,13 @@ public struct RenderContext {
   var backgroundDepth = 0
   var focusTargets: [FocusTarget] = []
 
+  /// Set while drawing content that a registered leaf already owns — Interactive content,
+  /// decorative backgrounds — so it does not register default focus leaves of its own.
+  var focusLeafClaimed = false
+
+  /// Overrides the highlight drawn for default focus leaves; `nil` uses the theme standard.
+  public var hoverStyle: HoverStyle?
+
   /// Use distinct, stable slots for custom-container children in both measurement and drawing.
   /// Slots describe source structure, not visible-child indices or draw order.
   public func childScope(_ slot: Int) -> RenderContext {
@@ -20,6 +27,7 @@ public struct RenderContext {
   var backgroundContext: RenderContext {
     var copy = scoped([.background(backgroundDepth)])
     copy.focusTargets = []
+    copy.focusLeafClaimed = true
     return copy
   }
 

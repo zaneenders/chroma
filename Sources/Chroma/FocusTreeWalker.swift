@@ -30,12 +30,14 @@ struct FocusTreeWalker {
       guard ancestor.children.indices.contains(childIndex) else { return false }
       guard ancestor.axis == axis else { continue }
 
-      let siblingIndex = childIndex + direction
-      if ancestor.children.indices.contains(siblingIndex),
-        let destination = nearestLeaf(in: ancestor.children[siblingIndex], to: origin.rect)
-      {
-        path = ancestorPath + [siblingIndex] + destination
-        return true
+      // Skip decorative siblings without focusable content.
+      var siblingIndex = childIndex + direction
+      while ancestor.children.indices.contains(siblingIndex) {
+        if let destination = nearestLeaf(in: ancestor.children[siblingIndex], to: origin.rect) {
+          path = ancestorPath + [siblingIndex] + destination
+          return true
+        }
+        siblingIndex += direction
       }
     }
     return false

@@ -45,6 +45,7 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
     let state = context.buttonState(id: id, in: rect, action: action)
     var context = context
     context.focusTargets = []
+    context.focusLeafClaimed = true
     BlockEngine.draw(content(state.phase), into: &drawList, in: rect, context: context)
   }
 }

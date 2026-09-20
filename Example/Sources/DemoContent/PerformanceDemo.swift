@@ -228,19 +228,17 @@ private struct UUIDList: Block {
           data: state.identifiers.indices, rowHeight: 48, spacing: 5,
           controller: state.uuidScrollController
         ) { index in
-          Interactive(action: { state.lastAction = "Selected UUID \(index + 1)" }) { phase in
-            VStack(spacing: 3) {
-              Text("UUID \(index + 1)")
-                .fontScale(demoSmallText)
-                .foregroundColor(theme.secondaryForeground)
-              Text(state.identifiers[index])
-                .fontScale(demoSmallText)
-                .foregroundColor(theme.foreground)
-            }
-            .padding(8)
-            .sizing(x: .grow)
-            .roundedBackground(rowBackground(for: phase, theme: theme), radius: 4)
+          VStack(spacing: 3) {
+            Text("UUID \(index + 1)")
+              .fontScale(demoSmallText)
+              .foregroundColor(theme.secondaryForeground)
+            Text(state.identifiers[index])
+              .fontScale(demoSmallText)
+              .foregroundColor(theme.foreground)
           }
+          .padding(8)
+          .sizing(x: .grow)
+          .roundedBackground(theme.elevatedSurface, radius: 4)
         }
         .padding(8)
         .sizing(x: .grow, y: .grow)
@@ -250,14 +248,6 @@ private struct UUIDList: Block {
       .background(theme.surface)
       .border(theme.border)
     }
-  }
-}
-
-private func rowBackground(for phase: InteractionPhase, theme: ChromaTheme) -> Color {
-  switch phase {
-  case .idle: theme.elevatedSurface
-  case .hovered: theme.button.hoveredBackground
-  case .pressed: theme.button.pressedBackground
   }
 }
 
@@ -359,6 +349,7 @@ struct PerformanceDemo: Block {
         Spacer()
         Text("f/j/d/k or arrows navigate • Enter select • Esc exits input")
           .fontScale(demoSmallText)
+          .hover(.none)
       }
       if state.page == .clipboard {
         VStack(spacing: 16) {
@@ -374,7 +365,7 @@ struct PerformanceDemo: Block {
           Text("Copy / cut / paste / select all: platform shortcut modifier + C / X / V / A. Escape ends editing.")
             .fontScale(0.55)
           Spacer()
-        }.padding(20)
+        }.padding(20).hover(.none)
       } else if state.page == .font {
         FontDemo(state: state)
       } else {

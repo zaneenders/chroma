@@ -26,8 +26,6 @@ package final class Interaction {
 
   @ObservationIgnored var tree: FocusNode?
 
-  var pressedLeaf: WidgetID?
-
   package internal(set) var editingLeaf: WidgetID?
   package private(set) var editingSessionGeneration: Int = 0
 
@@ -110,8 +108,32 @@ package final class Interaction {
 
   @ObservationIgnored var clipStack: [Rect] = []
 
-  var selectedLeafID: WidgetID?
-  var hoveredLeafID: WidgetID?
+  /// Keyboard focus, pointer hover, and press are render-derived paint state. The framework
+  /// reads them through `untrackedLeafState` while drawing so focus and hover changes never
+  /// widen a frame's redraw graph; the computed properties still register reads for observers.
+  package struct LeafState: Equatable, Sendable {
+    var selected: WidgetID?
+    var hovered: WidgetID?
+    var pressed: WidgetID?
+  }
+
+  @ObservationIgnored private var leafState = LeafState()
+  package var untrackedLeafState: LeafState { leafState }
+
+  var pressedLeaf: WidgetID? {
+    get { leafState.pressed }
+    set { leafState.pressed = newValue }
+  }
+
+  var selectedLeafID: WidgetID? {
+    get { leafState.selected }
+    set { leafState.selected = newValue }
+  }
+
+  var hoveredLeafID: WidgetID? {
+    get { leafState.hovered }
+    set { leafState.hovered = newValue }
+  }
 
   @ObservationIgnored var builderRoot: FocusNode?
   @ObservationIgnored var builderStack: [FocusNode] = []
@@ -317,7 +339,8 @@ package final class Interaction {
     if self.selection == nil {
       self.selection = newTree.firstLeafPath()
     }
-    if self.selection != previousSelection, let selection {
+    // The automatic first selection must not scroll content into view; only movement does.
+    if self.selection != previousSelection, previousSelection != nil, let selection {
       reveal(selection, in: newTree)
     }
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {

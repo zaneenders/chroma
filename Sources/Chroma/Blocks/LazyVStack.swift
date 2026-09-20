@@ -268,7 +268,9 @@ public struct LazyVStack: PrimitiveBlock {
   }
 
   /// Rows without controls of their own stay reachable: the row itself becomes a focus leaf, so arrow
-  /// keys step through the list and reveal the focused row.
+  /// keys step through the list and reveal the focused row. Row content is claimed by that leaf —
+  /// text inside a row is part of the row's selection rather than a stop of its own, while controls
+  /// in the row still register themselves.
   @MainActor private func drawRow(
     _ content: any Block, into drawList: inout DrawList, in rect: Rect,
     context rowContext: RenderContext, interaction: Interaction
@@ -277,12 +279,15 @@ public struct LazyVStack: PrimitiveBlock {
       preconditionFailure("drawRow outside of a frame; call beginFrame first")
     }
     let children = group.children.count
+    var rowContext = rowContext
+    rowContext.focusLeafClaimed = true
     BlockEngine.draw(content, into: &drawList, in: rect, context: rowContext)
-    guard group.children.count == children else { return }
+    guard rowContext.hoverStyle != HoverStyle.none, group.children.count == children else { return }
     group.children.append(
       FocusNode(
         kind: .leaf(rowContext.widgetID), rect: rect, hitRect: interaction.clippedRect(rect),
         canBeRevealed: group.canBeRevealed))
+    BlockEngine.drawHighlight(for: rowContext.widgetID, into: &drawList, in: rect, context: rowContext)
   }
 
   @MainActor private func focusBuffer(for interaction: Interaction) -> (before: Int, after: Int) {

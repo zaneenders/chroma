@@ -71,7 +71,7 @@ struct StackLayout {
       let extent = size[keyPath: axis.main]
       if reversed { cursor -= extent }
       let origin = axis == .horizontal ? Point(x: cursor, y: rect.minY) : Point(x: rect.minX, y: cursor)
-      child.primitive.draw(into: &drawList, in: Rect(origin: origin, size: size), context: child.context)
+      BlockEngine.drawResolved(child.primitive, into: &drawList, in: Rect(origin: origin, size: size), context: child.context)
       cursor += reversed ? -spacing : extent + spacing
     }
     interaction.endGroup()

@@ -40,7 +40,55 @@ public enum BlockEngine {
     context: RenderContext
   ) {
     let resolved = resolve(block, context: context)
-    resolved.primitive.draw(into: &drawList, in: rect, context: resolved.context)
+    drawResolved(resolved.primitive, into: &drawList, in: rect, context: resolved.context)
+  }
+
+  /// Draws a resolved primitive. When neither the primitive nor its descendants register a
+  /// focus node, the primitive itself becomes the default focus leaf: keyboard focus and
+  /// pointer hover reach every visible element — text, images, custom content — and both
+  /// draw the same highlight. Layout wrappers (`IdentityTransparentBlock`), invisible blocks,
+  /// and content already owned by a control's leaf do not register.
+  static func drawResolved(
+    _ primitive: any PrimitiveBlock,
+    into drawList: inout DrawList,
+    in rect: Rect,
+    context: RenderContext
+  ) {
+    let interaction = context.interaction
+    let registersDefaultLeaf =
+      !(primitive is any IdentityTransparentBlock)
+      && !(primitive is Spacer) && !(primitive is EmptyBlock)
+      && !context.focusLeafClaimed
+      && context.hoverStyle != HoverStyle.none
+    let parent = interaction.builderStack.last
+    let registered = parent?.children.count
+    primitive.draw(into: &drawList, in: rect, context: context)
+    guard registersDefaultLeaf, let parent, parent.children.count == registered else { return }
+    let id = context.widgetID
+    parent.children.append(
+      FocusNode(
+        kind: .leaf(id), rect: rect, hitRect: interaction.clippedRect(rect),
+        canBeRevealed: parent.canBeRevealed))
+    drawHighlight(for: id, into: &drawList, in: rect, context: context)
+  }
+
+  static func drawHighlight(
+    for id: WidgetID,
+    into drawList: inout DrawList,
+    in rect: Rect,
+    context: RenderContext
+  ) {
+    let leafState = context.interaction.untrackedLeafState
+    let pressed = leafState.pressed == id && context.interaction.input.pointerDown
+    guard leafState.selected == id || leafState.hovered == id || pressed else { return }
+    switch context.hoverStyle ?? .standard {
+    case .none:
+      return
+    case .tint(let color):
+      drawList.fillRect(rect, color: color)
+    case .standard:
+      drawList.fillRect(rect, color: HoverStyle.standardTint(in: context.theme, pressed: pressed))
+    }
   }
 
   public static func expandsHorizontally(_ block: any Block) -> Bool {

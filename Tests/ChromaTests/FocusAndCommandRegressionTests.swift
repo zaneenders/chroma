@@ -52,14 +52,15 @@ struct FocusAndCommandRegressionTests {
   @Test func keyedTupleChildHandlerDoesNotInterceptSibling() {
     let harness = Harness()
     var calls = 0
+    // The button is the first leaf, so the keyed child's handler must not intercept for it.
     let content = BlockBuilder.buildBlock(
+      Button("Sibling") {},
       Text("No controls")
         .onCommand(.application("test")) {
           calls += 1
           return .handled
         }
-        .id("document"),
-      Button("Sibling") {})
+        .id("document"))
     harness.render(content, input: InputState(commands: [.application("test")]))
     #expect(calls == 0)
   }
@@ -351,8 +352,8 @@ struct FocusAndCommandRegressionTests {
     harness.render(control)
     harness.render(
       VStack {
-        Text("Added")
         control
+        Text("Added")
       })
 
     #expect(harness.context.interaction.selectedLeafID == target.boundID)
