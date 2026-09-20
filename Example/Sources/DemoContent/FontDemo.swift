@@ -31,7 +31,7 @@ struct FontDemo: Block {
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("GLYPH EXPLORER / CLICK A CELL")
+                heading("GLYPH EXPLORER / CLICK OR NAVIGATE + ENTER")
                 GlyphExplorer(state: state)
               }
               .padding(12).background(theme.surface)
@@ -123,10 +123,19 @@ struct GlyphExplorer: PrimitiveBlock {
             let box = Rect(
               x: rowRect.minX + Float(column) * cell, y: rowRect.minY, width: cell, height: cell)
             let text = String(Self.glyphs[index])
-            _ = context.childScope(index).buttonState(in: box, role: .normal) {
+            // Cells own their focus leaves, so the engine's automatic default-leaf highlight
+            // never applies inside this primitive; paint the same standard tint from the
+            // state the engine hands back.
+            let phase = context.childScope(index).buttonState(in: box, role: .normal) {
               state.inspectedGlyph = text
-            }
+            }.phase
             if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
+            switch phase {
+            case .idle: break
+            case .hovered: drawList.fillRect(box, color: HoverStyle.standardTint(in: context.theme))
+            case .pressed:
+              drawList.fillRect(box, color: HoverStyle.standardTint(in: context.theme, pressed: true))
+            }
             drawList.strokeRect(box, width: 0.5, color: context.theme.border)
             drawList.text(
               text, at: Point(x: box.minX + 10, y: box.minY + 6),

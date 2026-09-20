@@ -216,6 +216,20 @@ private func clickFontTab(_ renderer: HeadlessRenderer) throws {
       pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
 }
 
+/// The glyph grid's focused cell draws a 40 x 40 tint; every other stop on the font page
+/// has a different size, so the tint identifies the grid without activating anything.
+@MainActor
+private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
+  let frame = renderer.render(input: InputState(pointerPosition: Point(x: 5000, y: 5000)))
+  for command in frame.commands {
+    if case .fillRect(let rect, let color) = command,
+      color == HoverStyle.standardTint(in: .dark),
+      rect.size.width == 40, rect.size.height == 40
+    { return rect }
+  }
+  return nil
+}
+
 @MainActor
 @Test func fontTabOpensAndSurvivesCaptureRoundTrip() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
@@ -279,8 +293,12 @@ private func clickFontTab(_ renderer: HeadlessRenderer) throws {
 
   let initialHighlight = try #require(highlightedCell())
   let cell: Float = 40
-  press(.navigation(.down))
-  press(.navigation(.down))
+  // Arrow keys stop on every focusable element — tabs, headings, the preview field —
+  // so walk down until the grid takes focus.
+  for _ in 0..<50 {
+    press(.navigation(.down))
+    if focusedGlyphCell(renderer) != nil { break }
+  }
   let firstRow = try activateCell()
   press(.navigation(.down))
   let secondRow = try activateCell()
@@ -330,8 +348,11 @@ private func clickFontTab(_ renderer: HeadlessRenderer) throws {
 
   // Esc resolves to the edit-exit event while a field is being edited.
   renderer.render(input: InputState(textEvents: [.endEditing]))
-  press(.navigation(.down))
-  press(.navigation(.down))
+  // Navigation resumes: walk down until the grid takes focus, then activate.
+  for _ in 0..<50 {
+    press(.navigation(.down))
+    if focusedGlyphCell(renderer) != nil { break }
+  }
   #expect(activate() != before)
 }
 
@@ -359,8 +380,51 @@ private func clickFontTab(_ renderer: HeadlessRenderer) throws {
     })
 }
 
+@MainActor
+@Test func glyphExplorerCellsHighlightHoverAndFocus() {
+  let state = PerformanceDemoState(itemCount: 100)
+  let renderer = HeadlessRenderer(size: Size(width: 400, height: 800))
+  renderer.content = GlyphExplorer(state: state)
+  let tint = HoverStyle.standardTint(in: .dark)
+  let pressedTint = HoverStyle.standardTint(in: .dark, pressed: true)
+  let parked = InputState(pointerPosition: Point(x: 5000, y: 5000))
+
+  func tintRects() -> [Rect] {
+    renderer.render(input: parked).commands.compactMap { command -> Rect? in
+      if case .fillRect(let rect, let color) = command, color == tint { return rect }
+      return nil
+    }
+  }
+
+  // Keyboard focus starts on the first cell and paints the standard tint.
+  renderer.render(input: parked)
+  #expect(tintRects() == [Rect(x: 0, y: 0, width: 40, height: 40)])
+
+  // Pointer hover paints the same tint over the hovered cell.
+  let hovered = renderer.render(input: InputState(pointerPosition: Point(x: 45, y: 85)))
+  #expect(
+    hovered.commands.contains { command in
+      if case .fillRect(let rect, let color) = command {
+        return rect == Rect(x: 40, y: 80, width: 40, height: 40) && color == tint
+      }
+      return false
+    })
+
+  // Pressing swaps in the pressed tint.
+  let pressed = renderer.render(
+    input: InputState(
+      pointerPosition: Point(x: 45, y: 85), pointerDown: true, pointerPressed: true))
+  #expect(
+    pressed.commands.contains { command in
+      if case .fillRect(let rect, let color) = command {
+        return rect == Rect(x: 40, y: 80, width: 40, height: 40) && color == pressedTint
+      }
+      return false
+    })
+}
+
 extension DemoContentTests {
-  @Test func scenePageScrollsTheUuidListWithArrowKeys() {
+  @Test func scenePageScrollsTheUuidListWithArrowKeys() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
     let renderer = HeadlessRenderer(size: demo.windowSize)
     renderer.content = demo.body
@@ -372,8 +436,24 @@ extension DemoContentTests {
       }.min()
     }
 
+    // The list sits beside the shape canvas: vertical walking stays in the left column
+    // and ends at the status bar, so enter the list by clicking its header first.
+    let header = try #require(
+      renderer.render().commands.compactMap { command -> Point? in
+        if case .text(let point, let text, _, _) = command, text.hasSuffix("UUIDs / SCROLL TEST") {
+          return point
+        }
+        return nil
+      }.first)
+    let click = Point(x: header.x + 2, y: header.y + 2)
+    renderer.render(
+      input: InputState(
+        pointerPosition: click, pointerPressPosition: click, pointerDown: true, pointerPressed: true))
+    renderer.render(
+      input: InputState(pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
+
     #expect(firstVisibleRow() == 1)
-    // Arrow keys walk every focusable element on the way to the list; keep walking
+    // Arrow keys walk every focusable element on the way down the list; keep walking
     // until the focused row must be revealed by scrolling.
     for _ in 0..<200 {
       renderer.render(input: InputState(commands: [.navigation(.down)]))
