@@ -27,6 +27,10 @@ private final class DrawCounter {
   var drawn: [Int] = []
 }
 
+private final class PhaseLog {
+  var phases: [Int: InteractionPhase] = [:]
+}
+
 private struct CountedRow: PrimitiveBlock {
   let index: Int
   let height: Float
@@ -208,6 +212,40 @@ struct ScrollViewTests {
     }
     frame()
     #expect(interaction.scrollOffset(for: scrollID) == 70)
+  }
+
+  @Test func keyboardFocusedRowsShowHoverPhase() {
+    let interaction = Interaction()
+    let context = RenderContext(interaction: interaction)
+    let controller = ScrollViewController()
+    let listRect = Rect(x: 0, y: 0, width: 100, height: 40)
+    let log = PhaseLog()
+
+    func frame(_ input: InputState = InputState()) {
+      interaction.beginFrame(input: input)
+      var list = DrawList()
+      BlockEngine.draw(
+        LazyVStack(id: scrollID, data: 0..<4, rowHeight: 10, showsIndicator: false, controller: controller) { index in
+          Interactive(id: WidgetID("row-\(index)"), action: {}) { phase in
+            log.phases[index] = phase
+            return RowContent(height: 10, color: .white)
+          }
+        },
+        into: &list, in: listRect, context: context)
+      interaction.endFrame()
+    }
+
+    frame(InputState(pointerPosition: Point(x: 500, y: 500)))
+    frame(InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
+    #expect(interaction.selectedLeafID == WidgetID("row-1"))
+    #expect(log.phases[0] == .idle)
+    #expect(log.phases[1] == .hovered, "keyboard focus shows the hovered phase")
+
+    frame(InputState(pointerPosition: Point(x: 5, y: 25)))
+    #expect(interaction.selectedLeafID == WidgetID("row-1"), "hover does not move keyboard focus")
+    #expect(log.phases[2] == .hovered)
+    #expect(log.phases[3] == .idle)
+    #expect(log.phases[2] == log.phases[1], "pointer hover and keyboard focus share one UI state")
   }
 
   @Test func keyboardNavigationReachesVariableHeightRowsInBothDirections() {

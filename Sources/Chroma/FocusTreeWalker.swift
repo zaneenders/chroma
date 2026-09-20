@@ -48,6 +48,7 @@ struct FocusTreeWalker {
 
     func visit(_ node: FocusNode, path: [Int]) {
       if node.isLeaf {
+        guard node.acceptsFocus else { return }
         let center = Point(x: node.rect.minX + node.rect.size.width / 2, y: node.rect.minY + node.rect.size.height / 2)
         let x = center.x - originCenter.x
         let y = center.y - originCenter.y

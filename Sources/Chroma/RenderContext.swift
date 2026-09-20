@@ -144,11 +144,17 @@ public struct RenderContext {
       pointerOffset: pointerOffset, verticalOffset: verticalOffset)
   }
 
+  /// Scopes focusable content drawn in `rect` into one group of the focus tree.
+  ///
+  /// `axis` declares the direction siblings inside the closure are laid out in, so custom containers
+  /// navigate like the built-in stacks. Nested groups declare their own axis; `nil` inherits movement
+  /// from the nearest enclosing group with a matching axis.
   public func withFocusGroup<Result>(
     in rect: Rect,
+    axis: FocusGroupAxis? = nil,
     _ body: () throws -> Result
   ) rethrows -> Result {
-    interaction.beginGroup(rect: rect)
+    interaction.beginGroup(rect: rect, axis: axis)
     defer { interaction.endGroup() }
     return try body()
   }

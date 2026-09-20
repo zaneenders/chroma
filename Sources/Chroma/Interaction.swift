@@ -287,6 +287,7 @@ package final class Interaction {
         textDragAnchor = nil
       }
     }
+    let previousSelection = selection
     if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
     if let selection, let oldTree = tree {
@@ -295,7 +296,7 @@ package final class Interaction {
           self.selection = matchingPath
         } else {
           let fallback = newTree.clamped(selection)
-          if let node = newTree.node(at: fallback), node.isLeaf {
+          if let node = newTree.node(at: fallback), node.isLeaf, node.acceptsFocus {
             self.selection = fallback
           } else if let descendant = newTree.node(at: fallback)?.firstLeafPath() {
             self.selection = fallback + descendant
@@ -315,6 +316,9 @@ package final class Interaction {
     }
     if self.selection == nil {
       self.selection = newTree.firstLeafPath()
+    }
+    if self.selection != previousSelection, let selection {
+      reveal(selection, in: newTree)
     }
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
       endEditing()
@@ -355,7 +359,9 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
-    let node = FocusNode(kind: .group, rect: rect, axis: axis, scrollID: scrollID)
+    let node = FocusNode(
+      kind: .group, rect: rect, axis: axis, scrollID: scrollID,
+      canBeRevealed: scrollID != nil || (builderStack.last?.canBeRevealed ?? false))
     parent.children.append(node)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
@@ -375,7 +381,9 @@ extension Interaction {
   }
 
   func focus(_ id: WidgetID, editing: Bool = false) {
-    guard let tree, let path = tree.findLeaf(id) else { return }
+    guard let tree, let path = tree.findLeaf(id), tree.node(at: path)?.acceptsFocus == true else {
+      return
+    }
     moveCursor(to: path)
     if editing {
       beginEditing(id, caretOffset: .max)
@@ -425,6 +433,12 @@ extension Interaction {
 
   func routePendingCommands() {
     for (index, command) in pendingCommands.enumerated() where !handledCommandIndices.contains(index) {
+      // Leaving text input outranks cancel actions and the scoped handlers registered for them.
+      if mode == .editing, command == .action(.cancel) || command == .action(.dismiss) {
+        endEditing()
+        handledCommandIndices.insert(index)
+        continue
+      }
       let handlers =
         commandHandlers
         .filter { $0.command == command && isPrefix($0.path, of: selection ?? []) }
@@ -496,7 +510,10 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role))
+    parent.children.append(
+      FocusNode(
+        kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role,
+        canBeRevealed: parent.canBeRevealed))
     if role != .normal, let action {
       buildingActionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
     }

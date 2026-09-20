@@ -207,6 +207,51 @@ struct FocusAndCommandRegressionTests {
     #expect(harness.context.interaction.selectedLeafID == first.boundID)
   }
 
+  @Test func customFocusGroupsNavigateAsAGrid() {
+    let harness = Harness()
+    let content = GridProbe(rows: 3, columns: 3)
+
+    harness.render(content)
+    #expect(harness.context.interaction.selection == [0, 0, 0])
+
+    harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    #expect(harness.context.interaction.selection == [0, 1, 0])
+
+    harness.render(content, input: InputState(commands: [.navigation(.right)]))
+    #expect(harness.context.interaction.selection == [0, 1, 1])
+
+    harness.render(content, input: InputState(commands: [.navigation(.up)]))
+    #expect(harness.context.interaction.selection == [0, 0, 1])
+
+    harness.render(content, input: InputState(commands: [.navigation(.left)]))
+    #expect(harness.context.interaction.selection == [0, 0, 0])
+  }
+
+  @Test func virtualizedRowsWithoutControlsStayReachable() {
+    let harness = Harness()
+    let controller = ScrollViewController()
+    let listID = WidgetID("plain-row-list")
+    let content = LazyVStack(id: listID, data: 0..<20, rowHeight: 25, controller: controller) { index in
+      Text("Row \(index)")
+    }
+
+    harness.render(content)
+    let firstRow = harness.context.interaction.selectedLeafID
+    #expect(firstRow != nil)
+
+    for _ in 0..<4 {
+      harness.render(content, input: InputState(commands: [.navigation(.down)]))
+    }
+    #expect(harness.context.interaction.scrollOffset(for: listID) == 25)
+    #expect(harness.context.interaction.selectedLeafID != firstRow)
+
+    for _ in 0..<4 {
+      harness.render(content, input: InputState(commands: [.navigation(.up)]))
+    }
+    #expect(harness.context.interaction.selectedLeafID == firstRow)
+    #expect(harness.context.interaction.scrollOffset(for: listID) == 0)
+  }
+
   @Test func editingBlocksStructuralNavigation() {
     let harness = Harness()
     let first = FocusTarget()
@@ -450,5 +495,32 @@ struct FocusAndCommandRegressionTests {
         scoped: KeyBindings { bind("x", in: .editing, to: .application("scoped")) },
         app: KeyBindings { bind("x", in: .editing, to: .application("app")) })
         == .command(.application("scoped")))
+  }
+}
+
+/// Draws a `rows` x `columns` grid of controls using only public container APIs.
+private struct GridProbe: PrimitiveBlock {
+  let rows: Int
+  let columns: Int
+  private let cell: Float = 20
+
+  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    Size(width: Float(columns) * cell, height: Float(rows) * cell)
+  }
+
+  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    context.withFocusGroup(in: rect, axis: .vertical) {
+      for row in 0..<rows {
+        let rowRect = Rect(
+          x: rect.minX, y: rect.minY + Float(row) * cell, width: rect.size.width, height: cell)
+        context.withFocusGroup(in: rowRect, axis: .horizontal) {
+          for column in 0..<columns {
+            let box = Rect(
+              x: rowRect.minX + Float(column) * cell, y: rowRect.minY, width: cell, height: cell)
+            _ = context.childScope(row * columns + column).buttonState(in: box) {}
+          }
+        }
+      }
+    }
   }
 }

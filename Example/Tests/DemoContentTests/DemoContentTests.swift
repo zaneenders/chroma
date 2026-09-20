@@ -200,23 +200,28 @@ private func captureTestDirectory() throws -> URL {
 }
 
 @MainActor
-@Test func fontTabOpensAndSurvivesCaptureRoundTrip() throws {
-  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
-  renderer.content = demo.body
+private func clickFontTab(_ renderer: HeadlessRenderer) throws {
   let initial = renderer.render()
-  let position = try #require(
+  let tab = try #require(
     initial.commands.compactMap { command -> Point? in
       if case .text(let point, "Font", _, _) = command { return point }
       return nil
     }.first)
-  let click = Point(x: position.x + 2, y: position.y + 2)
+  let click = Point(x: tab.x + 2, y: tab.y + 2)
   renderer.render(
     input: InputState(
       pointerPosition: click, pointerPressPosition: click, pointerDown: true, pointerPressed: true))
   renderer.render(
     input: InputState(
       pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
+}
+
+@MainActor
+@Test func fontTabOpensAndSurvivesCaptureRoundTrip() throws {
+  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
+  let renderer = HeadlessRenderer(size: demo.windowSize)
+  renderer.content = demo.body
+  try clickFontTab(renderer)
   let frame = renderer.render()
   #expect(
     frame.commands.contains { command in
@@ -247,6 +252,90 @@ private func captureTestDirectory() throws -> URL {
 }
 
 @MainActor
+@Test func fontPageArrowKeysMoveTheGlyphHighlight() throws {
+  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
+  let renderer = HeadlessRenderer(size: demo.windowSize)
+  renderer.content = demo.body
+  try clickFontTab(renderer)
+
+  /// The glyph grid draws the inspected cell in the accent color; the page heading supplies that color.
+  func highlightedCell() -> Point? {
+    let frame = renderer.render()
+    var accent: Color?
+    for case .text(_, "BUNDLED MONOSPACE FONT", let color, _) in frame.commands { accent = color }
+    guard let accent else { return nil }
+    for case .text(let position, let text, let color, _) in frame.commands
+    where text.count == 1 && color == accent { return position }
+    return nil
+  }
+
+  func press(_ command: Command) {
+    renderer.render(input: InputState(commands: [command]))
+  }
+  func activateCell() throws -> Point {
+    press(.action(.activate))
+    return try #require(highlightedCell())
+  }
+
+  let initialHighlight = try #require(highlightedCell())
+  let cell: Float = 40
+  press(.navigation(.down))
+  press(.navigation(.down))
+  let firstRow = try activateCell()
+  press(.navigation(.down))
+  let secondRow = try activateCell()
+  #expect(secondRow.x == firstRow.x)
+  #expect(secondRow.y == firstRow.y + cell)
+  press(.navigation(.right))
+  let secondRowNextColumn = try activateCell()
+  #expect(secondRowNextColumn.x == secondRow.x + cell)
+  #expect(secondRowNextColumn.y == secondRow.y)
+  press(.navigation(.up))
+  let firstRowNextColumn = try activateCell()
+  #expect(firstRowNextColumn.x == firstRow.x + cell)
+  #expect(firstRowNextColumn.y == firstRow.y)
+  #expect(initialHighlight != firstRow)
+}
+
+@MainActor
+@Test func escapeLeavesTheFontPreviewField() throws {
+  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
+  let renderer = HeadlessRenderer(size: demo.windowSize)
+  renderer.content = demo.body
+  try clickFontTab(renderer)
+
+  func highlightedCell() -> Point? {
+    let frame = renderer.render()
+    var accent: Color?
+    for case .text(_, "BUNDLED MONOSPACE FONT", let color, _) in frame.commands { accent = color }
+    guard let accent else { return nil }
+    for case .text(let position, let text, let color, _) in frame.commands
+    where text.count == 1 && color == accent { return position }
+    return nil
+  }
+  func press(_ command: Command) {
+    renderer.render(input: InputState(commands: [command]))
+  }
+  func activate() -> Point? {
+    press(.action(.activate))
+    return highlightedCell()
+  }
+
+  let before = try #require(highlightedCell())
+  press(.navigation(.down))
+  press(.action(.activate))
+  press(.navigation(.down))
+  press(.navigation(.down))
+  #expect(activate() == before)
+
+  // Esc resolves to the edit-exit event while a field is being edited.
+  renderer.render(input: InputState(textEvents: [.endEditing]))
+  press(.navigation(.down))
+  press(.navigation(.down))
+  #expect(activate() != before)
+}
+
+@MainActor
 @Test func glyphExplorerSelectionUpdatesInspectorState() {
   let state = PerformanceDemoState(itemCount: 100)
   let renderer = HeadlessRenderer(size: Size(width: 400, height: 800))
@@ -271,6 +360,25 @@ private func captureTestDirectory() throws -> URL {
 }
 
 extension DemoContentTests {
+  @Test func scenePageScrollsTheUuidListWithArrowKeys() {
+    let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
+    let renderer = HeadlessRenderer(size: demo.windowSize)
+    renderer.content = demo.body
+
+    func firstVisibleRow() -> Int? {
+      renderer.render().commands.compactMap { command -> Int? in
+        guard case .text(_, let text, _, _) = command, text.hasPrefix("UUID ") else { return nil }
+        return Int(text.dropFirst("UUID ".count))
+      }.min()
+    }
+
+    #expect(firstVisibleRow() == 1)
+    for _ in 0..<20 {
+      renderer.render(input: InputState(commands: [.navigation(.down)]))
+    }
+    #expect((firstVisibleRow() ?? 0) > 1)
+  }
+
   @Test func animationRequestsFramesWithoutInputAndStopsWhenInactive() async throws {
     let state = PerformanceDemoState(itemCount: 100)
     let renderer = HeadlessRenderer()

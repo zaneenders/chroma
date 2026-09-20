@@ -206,7 +206,10 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("registerTextInput outside of a frame")
     }
-    parent.children.append(FocusNode(kind: .leaf(id), rect: rect, hitRect: clippedRect(rect)))
+    parent.children.append(
+      FocusNode(
+        kind: .leaf(id), rect: rect, hitRect: clippedRect(rect),
+        canBeRevealed: parent.canBeRevealed))
     buildingInputHandlers[id] = { [weak self] in
       guard let self else { return }
       _ = self.updateTextInput(

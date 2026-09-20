@@ -17,6 +17,8 @@ final class FocusNode {
   var role: ActionRole = .normal
   let axis: Axis?
   let scrollID: WidgetID?
+  /// True when a scroll container above this node scrolls the node into view on focus.
+  let canBeRevealed: Bool
   var commandHandlers: [Command: @MainActor () -> CommandResult] = [:]
   var children: [FocusNode] = []
 
@@ -26,7 +28,8 @@ final class FocusNode {
     hitRect: Rect? = nil,
     role: ActionRole = .normal,
     axis: Axis? = nil,
-    scrollID: WidgetID? = nil
+    scrollID: WidgetID? = nil,
+    canBeRevealed: Bool = false
   ) {
     self.kind = kind
     self.rect = rect
@@ -34,11 +37,17 @@ final class FocusNode {
     self.role = role
     self.axis = axis
     self.scrollID = scrollID
+    self.canBeRevealed = canBeRevealed
   }
 
   var isLeaf: Bool {
     guard case .leaf = kind else { return false }
     return true
+  }
+
+  /// Keyboard focus only lands on controls the user can see, or that a scroll container reveals.
+  var acceptsFocus: Bool {
+    hitRect != .zero || canBeRevealed
   }
 
   var leafID: WidgetID? {
@@ -68,7 +77,7 @@ extension FocusNode {
 
   func firstLeafPath() -> [Int]? {
     for (index, child) in children.enumerated() {
-      if child.isLeaf { return [index] }
+      if child.isLeaf, child.acceptsFocus { return [index] }
       if let subpath = child.firstLeafPath() { return [index] + subpath }
     }
     return nil

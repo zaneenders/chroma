@@ -109,19 +109,29 @@ struct GlyphExplorer: PrimitiveBlock {
 
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let columns = max(1, Int(rect.size.width / cell))
-    for (index, glyph) in Self.glyphs.enumerated() {
-      let box = Rect(
-        x: rect.minX + Float(index % columns) * cell,
-        y: rect.minY + Float(index / columns) * cell, width: cell, height: cell)
-      let text = String(glyph)
-      _ = context.childScope(index).buttonState(in: box, role: .normal) {
-        state.inspectedGlyph = text
+    let rows = (Self.glyphs.count + columns - 1) / columns
+    context.withFocusGroup(in: rect, axis: .vertical) {
+      for row in 0..<rows {
+        let rowRect = Rect(
+          x: rect.minX, y: rect.minY + Float(row) * cell, width: rect.size.width, height: cell)
+        context.withFocusGroup(in: rowRect, axis: .horizontal) {
+          for column in 0..<columns {
+            let index = row * columns + column
+            guard index < Self.glyphs.count else { break }
+            let box = Rect(
+              x: rowRect.minX + Float(column) * cell, y: rowRect.minY, width: cell, height: cell)
+            let text = String(Self.glyphs[index])
+            _ = context.childScope(index).buttonState(in: box, role: .normal) {
+              state.inspectedGlyph = text
+            }
+            if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
+            drawList.strokeRect(box, width: 0.5, color: context.theme.border)
+            drawList.text(
+              text, at: Point(x: box.minX + 10, y: box.minY + 6),
+              color: state.inspectedGlyph == text ? context.theme.accent : context.theme.foreground)
+          }
+        }
       }
-      if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
-      drawList.strokeRect(box, width: 0.5, color: context.theme.border)
-      drawList.text(
-        text, at: Point(x: box.minX + 10, y: box.minY + 6),
-        color: state.inspectedGlyph == text ? context.theme.accent : context.theme.foreground)
     }
   }
 }

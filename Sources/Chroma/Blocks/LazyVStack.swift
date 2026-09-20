@@ -209,12 +209,13 @@ public struct LazyVStack: PrimitiveBlock {
       let end = min(uniformRows.count, visibleEnd + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
-          BlockEngine.draw(
+          drawRow(
             uniformRows.content(index), into: &drawList,
             in: Rect(
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
               width: rect.size.width, height: uniformRows.height),
-            context: uniformRows.keys.map { context.scoped([.key($0[index])]) } ?? context.childScope(index))
+            context: uniformRows.keys.map { context.scoped([.key($0[index])]) } ?? context.childScope(index),
+            interaction: interaction)
         }
       }
     } else {
@@ -237,13 +238,14 @@ public struct LazyVStack: PrimitiveBlock {
         for index in rows.indices {
           let height = controller.lazyStackCache.measurements[index].size.height
           if index >= first && index < end {
-            BlockEngine.draw(
+            drawRow(
               rows[index].content,
               into: &drawList,
               in: Rect(
                 x: rect.minX, y: rect.minY + y - offset,
                 width: rect.size.width, height: height),
-              context: context.scoped([.key(rows[index].key)]))
+              context: context.scoped([.key(rows[index].key)]),
+              interaction: interaction)
           }
           y += height + spacing
         }
@@ -263,6 +265,24 @@ public struct LazyVStack: PrimitiveBlock {
       )
     }
     drawList.popClip()
+  }
+
+  /// Rows without controls of their own stay reachable: the row itself becomes a focus leaf, so arrow
+  /// keys step through the list and reveal the focused row.
+  @MainActor private func drawRow(
+    _ content: any Block, into drawList: inout DrawList, in rect: Rect,
+    context rowContext: RenderContext, interaction: Interaction
+  ) {
+    guard let group = interaction.builderStack.last else {
+      preconditionFailure("drawRow outside of a frame; call beginFrame first")
+    }
+    let children = group.children.count
+    BlockEngine.draw(content, into: &drawList, in: rect, context: rowContext)
+    guard group.children.count == children else { return }
+    group.children.append(
+      FocusNode(
+        kind: .leaf(rowContext.widgetID), rect: rect, hitRect: interaction.clippedRect(rect),
+        canBeRevealed: group.canBeRevealed))
   }
 
   @MainActor private func focusBuffer(for interaction: Interaction) -> (before: Int, after: Int) {
