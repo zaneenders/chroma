@@ -10,6 +10,10 @@ public enum NavigationCommand: Hashable, Sendable {
   case down
   case left
   case right
+  /// Enters the nearest focus scope, restoring its last-focused control.
+  case stepIn
+  /// Leaves the enclosing focus scope for the nearest control outside it.
+  case stepOut
 }
 
 public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
@@ -37,6 +41,8 @@ extension Command {
     case .navigation(.down): "down"
     case .navigation(.left): "left"
     case .navigation(.right): "right"
+    case .navigation(.stepIn): "step-in"
+    case .navigation(.stepOut): "step-out"
     case .editing(.insert): "insert"
     case .editing(.backspace): "backspace"
     case .editing(.deleteForward): "delete-forward"

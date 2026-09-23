@@ -177,6 +177,7 @@ private struct PerformanceScene: Block {
               .clipped()
           }
           .sizing(x: .grow, y: .grow)
+          .focusScope()
 
           UUIDList(state: state)
             .sizing(x: .fixed(330), y: .grow)
@@ -349,7 +350,7 @@ struct PerformanceDemo: Block {
           state.page = .font
         }
         Spacer()
-        Text("f/j/d/k or arrows navigate • Enter select • Esc exits input")
+        Text("f/j/d/k or arrows navigate • s steps out, l steps in • Enter select • Esc exits input")
           .fontScale(demoSmallText)
           .hover(.none)
       }

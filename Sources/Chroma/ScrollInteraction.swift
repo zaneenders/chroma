@@ -51,4 +51,10 @@ extension Interaction {
     horizontalScrollLimits[id] = max(0, limit)
   }
 
+  /// Records where the focused leaf of a scroll scope sits in the scope's content, so
+  /// `stepIn` can reveal a remembered row that virtualization later discards.
+  func recordFocusScopeRow(id: WidgetID, leafID: WidgetID, rowKey: StructuralKey, rect: Rect) {
+    focusScopeRows[id, default: [:]][leafID] = rect
+    focusScopeRowKeys[id, default: [:]][leafID] = rowKey
+  }
 }

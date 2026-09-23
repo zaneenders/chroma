@@ -176,13 +176,15 @@ public struct RenderContext {
   ///
   /// `axis` declares the direction siblings inside the closure are laid out in, so custom containers
   /// navigate like the built-in stacks. Nested groups declare their own axis; `nil` inherits movement
-  /// from the nearest enclosing group with a matching axis.
+  /// from the nearest enclosing group with a matching axis. Pass `scope: true` to make the group a
+  /// focus scope boundary for `stepIn`/`stepOut` navigation, matching `.focusScope()`.
   public func withFocusGroup<Result>(
     in rect: Rect,
     axis: FocusGroupAxis? = nil,
+    scope: Bool = false,
     _ body: () throws -> Result
   ) rethrows -> Result {
-    interaction.beginGroup(rect: rect, axis: axis)
+    interaction.beginGroup(rect: rect, axis: axis, scopeID: scope ? widgetID : nil)
     defer { interaction.endGroup() }
     return try body()
   }

@@ -1,6 +1,8 @@
 struct FocusTreeWalker {
   let root: FocusNode
   private(set) var path: [Int]
+  /// The scope entered by the last successful `stepIn`, for focus-memory lookup.
+  private(set) var enteredScopeID: WidgetID?
 
   init?(root: FocusNode, path: [Int]) {
     guard root.node(at: path)?.isLeaf == true else { return nil }
@@ -18,6 +20,10 @@ struct FocusTreeWalker {
       return move(along: .horizontal, direction: -1)
     case .right:
       return move(along: .horizontal, direction: 1)
+    case .stepIn:
+      return stepIn()
+    case .stepOut:
+      return stepOut()
     }
   }
 
@@ -68,5 +74,110 @@ struct FocusTreeWalker {
 
     visit(root, path: [])
     return bestPath
+  }
+
+  private func center(of rect: Rect) -> Point {
+    Point(x: rect.minX + rect.size.width / 2, y: rect.minY + rect.size.height / 2)
+  }
+
+  private func squaredDistance(_ a: Point, _ b: Point) -> Float {
+    let x = a.x - b.x
+    let y = a.y - b.y
+    return x * x + y * y
+  }
+}
+
+extension FocusTreeWalker {
+  /// Leaves the nearest enclosing focus scope for the closest focusable control outside it.
+  ///
+  /// Candidates may only climb out: leaves inside scopes unrelated to the exited one are
+  /// skipped, so a step out never dives sideways into a different scope.
+  mutating func stepOut() -> Bool {
+    guard let origin = root.node(at: path) else { return false }
+    guard let scopePath = enclosingScopePath(of: path) else { return false }
+    let originCenter = center(of: origin.rect)
+    var bestPath: [Int]?
+    var bestDistance = Float.infinity
+
+    func visit(_ node: FocusNode, path current: [Int]) {
+      if isPrefixed(scopePath, of: current) { return }
+      if node.isScope, !isPrefixed(current, of: scopePath) {
+        // Unrelated scope: every leaf below sits inside it, so the whole subtree is skipped.
+        return
+      }
+      if node.isLeaf {
+        guard node.acceptsFocus else { return }
+        for depth in current.indices {
+          let ancestorPath = Array(current.prefix(depth))
+          guard let ancestor = root.node(at: ancestorPath), ancestor.isScope else { continue }
+          // Only scopes that also enclose the exited scope may be crossed on the way out.
+          guard isPrefixed(ancestorPath, of: scopePath) else { return }
+        }
+        let distance = squaredDistance(center(of: node.rect), originCenter)
+        if distance < bestDistance {
+          bestDistance = distance
+          bestPath = current
+        }
+        return
+      }
+      for (index, child) in node.children.enumerated() {
+        visit(child, path: current + [index])
+      }
+    }
+
+    visit(root, path: [])
+    guard let bestPath else { return false }
+    path = bestPath
+    return true
+  }
+
+  /// Enters the nearest focus scope that does not contain the current focus, landing on
+  /// its first focusable leaf. The caller overlays the scope's remembered leaf when one exists.
+  ///
+  /// Scopes that contain the current focus are already entered and stay transparent so nested
+  /// sibling scopes inside them remain reachable; non-containing scopes are atomic targets.
+  mutating func stepIn() -> Bool {
+    guard let origin = root.node(at: path) else { return false }
+    let originCenter = center(of: origin.rect)
+    var bestPath: [Int]?
+    var bestScopeID: WidgetID?
+    var bestDistance = Float.infinity
+
+    func visit(_ node: FocusNode, path current: [Int]) {
+      if node.isScope, !isPrefixed(current, of: path) {
+        if let leaf = node.firstLeafPath() {
+          let distance = squaredDistance(center(of: node.rect), originCenter)
+          if distance < bestDistance {
+            bestDistance = distance
+            bestPath = current + leaf
+            bestScopeID = node.scopeID
+          }
+        }
+        return
+      }
+      for (index, child) in node.children.enumerated() {
+        visit(child, path: current + [index])
+      }
+    }
+
+    visit(root, path: [])
+    guard let bestPath, let bestScopeID else { return false }
+    path = bestPath
+    enteredScopeID = bestScopeID
+    return true
+  }
+
+  private func isPrefixed(_ prefix: [Int], of path: [Int]) -> Bool {
+    prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
+  }
+
+  private func enclosingScopePath(of path: [Int]) -> [Int]? {
+    for depth in path.indices.reversed() {
+      let ancestorPath = Array(path.prefix(depth))
+      if let node = root.node(at: ancestorPath), node.isScope {
+        return ancestorPath
+      }
+    }
+    return nil
   }
 }

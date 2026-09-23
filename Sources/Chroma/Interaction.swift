@@ -106,6 +106,42 @@ package final class Interaction {
   @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
   @ObservationIgnored var pendingScrollReveals: [WidgetID: Rect] = [:]
 
+  /// Roving focus memory: each focus scope remembers the leaf last focused inside it, so
+  /// `stepIn` returns to where the user left off instead of the scope's first control.
+  @ObservationIgnored var focusMemory: [WidgetID: WidgetID] = [:]
+
+  struct PendingFocus: Equatable {
+    var leaf: WidgetID
+    var scope: WidgetID
+  }
+
+  /// A `stepIn` whose remembered leaf is not materialized yet: the scope's scroll container
+  /// was asked to reveal it, and focus lands as soon as the leaf is drawn.
+  @ObservationIgnored var pendingFocus: PendingFocus?
+
+  /// Content-relative rects of the leaves each scroll scope last drew, keyed by scope then
+  /// leaf. Lets `stepIn` reveal a remembered row that virtualization has discarded.
+  @ObservationIgnored var focusScopeRows: [WidgetID: [WidgetID: Rect]] = [:]
+  @ObservationIgnored var focusScopeRowKeys: [WidgetID: [WidgetID: StructuralKey]] = [:]
+  @ObservationIgnored var focusScopeLayouts: [WidgetID: FocusScopeLayout] = [:]
+
+  struct FocusScopeLayout: Equatable {
+    var width: Float
+    var spacing: Float
+    var rowKeys: [StructuralKey]
+    var rowHeights: [Float]
+  }
+
+  /// True when the currently focused leaf lies inside the scope with `id`. Read during
+  /// drawing from the previous frame's tree, like other paint state.
+  func isFocusInside(scopeID: WidgetID) -> Bool {
+    guard let tree, let selection else { return false }
+    for depth in 0...selection.count where tree.node(at: Array(selection.prefix(depth)))?.scopeID == scopeID {
+      return true
+    }
+    return false
+  }
+
   @ObservationIgnored var clipStack: [Rect] = []
 
   /// Keyboard focus, pointer hover, and press are render-derived paint state. The framework
@@ -165,6 +201,11 @@ package final class Interaction {
     scrollLimits = [:]
     horizontalScrollLimits = [:]
     pendingScrollReveals = [:]
+    focusMemory = [:]
+    pendingFocus = nil
+    focusScopeRows = [:]
+    focusScopeRowKeys = [:]
+    focusScopeLayouts = [:]
     animationRequested = false
     tree = nil
     pressedLeaf = nil
@@ -343,6 +384,18 @@ package final class Interaction {
     if self.selection != previousSelection, previousSelection != nil, let selection {
       reveal(selection, in: newTree)
     }
+    if let pending = pendingFocus {
+      if let path = newTree.findLeaf(pending.leaf), newTree.node(at: path)?.acceptsFocus == true,
+        isDescendant(path, of: pending.scope, in: newTree)
+      {
+        pendingFocus = nil
+        selection = path
+        recordFocusMemory(for: path, in: newTree)
+      } else if pendingScrollReveals[pending.scope] == nil {
+        // The reveal was consumed and the row still is not focusable; stop waiting for it.
+        pendingFocus = nil
+      }
+    }
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
       endEditing()
     }
@@ -355,6 +408,9 @@ package final class Interaction {
     horizontalScrollOffsets = horizontalScrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
     scrollLimits = scrollLimits.filter { buildingInputHandlers[$0.key] != nil }
     horizontalScrollLimits = horizontalScrollLimits.filter { buildingInputHandlers[$0.key] != nil }
+    focusScopeRows = focusScopeRows.filter { buildingInputHandlers[$0.key] != nil }
+    focusScopeRowKeys = focusScopeRowKeys.filter { buildingInputHandlers[$0.key] != nil }
+    focusScopeLayouts = focusScopeLayouts.filter { buildingInputHandlers[$0.key] != nil }
     textSelection.reconcile()
     tree = newTree
     resolveFocusTargets()
@@ -377,13 +433,15 @@ extension Interaction {
   func beginGroup(
     rect: Rect,
     axis: FocusNode.Axis? = nil,
-    scrollID: WidgetID? = nil
+    scrollID: WidgetID? = nil,
+    scopeID: WidgetID? = nil
   ) {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
     let node = FocusNode(
       kind: .group, rect: rect, axis: axis, scrollID: scrollID,
+      scopeID: scopeID ?? scrollID,
       canBeRevealed: scrollID != nil || (builderStack.last?.canBeRevealed ?? false))
     parent.children.append(node)
     builderPath.append(parent.children.count - 1)
@@ -415,10 +473,23 @@ extension Interaction {
 
   func moveCursor(to path: [Int]) {
     guard let tree, tree.node(at: path) != nil else { return }
+    pendingFocus = nil
     selection = path
+    recordFocusMemory(for: path, in: tree)
     reveal(path, in: tree)
     if tree.node(at: path)?.isLeaf != true {
       endEditing()
+    }
+  }
+
+  /// Every focus move updates each enclosing scope's memory, so the most recently focused
+  /// leaf is where a later `stepIn` returns to.
+  private func recordFocusMemory(for path: [Int], in tree: FocusNode) {
+    guard let leafID = tree.node(at: path)?.leafID else { return }
+    for depth in 0...path.count {
+      if let scopeID = tree.node(at: Array(path.prefix(depth)))?.scopeID {
+        focusMemory[scopeID] = leafID
+      }
     }
   }
 
@@ -433,6 +504,59 @@ extension Interaction {
 
   private func isPrefix(_ prefix: [Int], of path: [Int]) -> Bool {
     prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
+  }
+
+  private func isDescendant(_ path: [Int], of scopeID: WidgetID, in tree: FocusNode) -> Bool {
+    path.indices.contains { depth in
+      tree.node(at: Array(path.prefix(depth)))?.scopeID == scopeID
+    }
+  }
+
+  func updateFocusScopeLayout(id: WidgetID, layout: FocusScopeLayout) {
+    if let previous = focusScopeLayouts[id], previous != layout {
+      focusScopeRows[id] = nil
+      focusScopeRowKeys[id] = nil
+      pendingScrollReveals[id] = nil
+      if pendingFocus?.scope == id { pendingFocus = nil }
+    }
+    focusScopeLayouts[id] = layout
+  }
+
+  private enum StepInTarget {
+    /// Focus the remembered leaf now.
+    case path([Int])
+    /// The remembered row is not drawn; a scroll reveal was queued and focus lands when
+    /// the row materializes.
+    case pending
+    /// The scope has no usable memory; land on its first focusable leaf.
+    case fallback
+  }
+
+  private func stepInTarget(for walker: FocusTreeWalker, in tree: FocusNode) -> StepInTarget {
+    guard let scopeID = walker.enteredScopeID, let remembered = focusMemory[scopeID] else {
+      return .fallback
+    }
+    if let path = tree.findLeaf(remembered), tree.node(at: path)?.acceptsFocus == true,
+      isDescendant(path, of: scopeID, in: tree)
+    {
+      return .path(path)
+    }
+    if let contentRect = focusScopeRows[scopeID]?[remembered],
+      let rowKey = focusScopeRowKeys[scopeID]?[remembered],
+      focusScopeLayouts[scopeID]?.rowKeys.contains(rowKey) == true
+    {
+      // Virtualization discarded the remembered row: reveal it in the scope's scroll
+      // container, then land focus once the row is drawn.
+      let offset = scrollOffset(for: scopeID)
+      pendingScrollReveals[scopeID] = Rect(
+        x: contentRect.minX,
+        y: contentRect.minY - offset,
+        width: contentRect.size.width,
+        height: contentRect.size.height)
+      pendingFocus = PendingFocus(leaf: remembered, scope: scopeID)
+      return .pending
+    }
+    return .fallback
   }
 
   package func resolve(_ input: KeyboardInput, appBindings: KeyBindings) -> ResolvedKeyboardInput? {
@@ -502,7 +626,18 @@ extension Interaction {
     case .navigation(let navigation):
       guard mode == .movement, let tree, let selection else { return }
       guard var walker = FocusTreeWalker(root: tree, path: selection), walker.move(navigation) else { return }
-      moveCursor(to: walker.path)
+      guard case .stepIn = navigation else {
+        moveCursor(to: walker.path)
+        return
+      }
+      switch stepInTarget(for: walker, in: tree) {
+      case .path(let path):
+        moveCursor(to: path)
+      case .pending:
+        break
+      case .fallback:
+        moveCursor(to: walker.path)
+      }
     case .action(.activate):
       guard let tree, let selection, tree.node(at: selection)?.isLeaf == true else { return }
       activatePending = true

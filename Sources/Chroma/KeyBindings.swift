@@ -192,6 +192,8 @@ extension KeyBindings {
     bind(.leftArrow, to: .navigation(.left))
     bind("k", to: .navigation(.right))
     bind(.rightArrow, to: .navigation(.right))
+    bind("s", to: .navigation(.stepOut))
+    bind("l", to: .navigation(.stepIn))
     bind(.enter, in: .movement, to: .action(.activate))
     bind(.space, in: .movement, to: .action(.activate))
     bind(.escape, to: .action(.cancel))

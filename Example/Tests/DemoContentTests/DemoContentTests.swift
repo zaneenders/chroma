@@ -84,7 +84,17 @@ struct DemoContentTests {
     #expect(apple.keyBindings.command(for: KeyChord("c", modifiers: .command))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .superKey))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .command)) == nil)
-    for key: Key in [.character("l"), .character("s"), .pageUp, .pageDown] {
+    // Plain s/l step in and out of focus scopes; they stay free for text while editing.
+    for (key, command) in [
+      (Key.character("s"), NavigationCommand.stepOut),
+      (Key.character("l"), NavigationCommand.stepIn),
+    ] {
+      #expect(apple.keyBindings.command(for: KeyChord(key))! == .navigation(command))
+      #expect(linux.keyBindings.command(for: KeyChord(key))! == .navigation(command))
+      #expect(apple.keyBindings.command(for: KeyChord(key), isTextEditing: true) == nil)
+      #expect(linux.keyBindings.command(for: KeyChord(key), isTextEditing: true) == nil)
+    }
+    for key: Key in [.pageUp, .pageDown] {
       #expect(apple.keyBindings.command(for: KeyChord(key)) == nil)
       #expect(linux.keyBindings.command(for: KeyChord(key)) == nil)
     }
@@ -460,6 +470,77 @@ extension DemoContentTests {
       if let row = firstVisibleRow(), row > 1 { break }
     }
     #expect((firstVisibleRow() ?? 0) > 1)
+  }
+
+  @Test func scenePageStepsOutOfTheUuidListAndBackToTheRememberedRow() throws {
+    let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
+    let renderer = HeadlessRenderer(size: demo.windowSize)
+    renderer.content = demo.body
+    let parked = InputState(pointerPosition: Point(x: 5000, y: 5000))
+
+    func firstVisibleRow() -> Int? {
+      renderer.render(input: parked).commands.compactMap { command -> Int? in
+        guard case .text(_, let text, _, _) = command, text.hasPrefix("UUID ") else { return nil }
+        return Int(text.dropFirst("UUID ".count))
+      }.min()
+    }
+
+    // Focused rows paint the standard tint over their content; a focused control outside
+    // the list (buttons paint rounded tints, text paints flat ones elsewhere) never
+    // covers a UUID row's text.
+    func tintRects() -> [Rect] {
+      renderer.render(input: parked).commands.compactMap { command -> Rect? in
+        if case .fillRect(let rect, let color) = command, color == HoverStyle.standardTint(in: .dark) {
+          return rect
+        }
+        return nil
+      }
+    }
+
+    func uuidTextOrigins() -> [Point] {
+      renderer.render(input: parked).commands.compactMap { command -> Point? in
+        guard case .text(let point, let text, _, _) = command, text.hasPrefix("UUID ") else { return nil }
+        return point
+      }
+    }
+
+    func focusCoversARow() -> Bool {
+      let tints = tintRects()
+      return uuidTextOrigins().contains { origin in tints.contains { $0.contains(origin) } }
+    }
+
+    // Enter the list by clicking its header, then walk until focus is deep enough to scroll.
+    let header = try #require(
+      renderer.render().commands.compactMap { command -> Point? in
+        if case .text(let point, let text, _, _) = command, text.hasSuffix("UUIDs / SCROLL TEST") {
+          return point
+        }
+        return nil
+      }.first)
+    let click = Point(x: header.x + 2, y: header.y + 2)
+    renderer.render(
+      input: InputState(
+        pointerPosition: click, pointerPressPosition: click, pointerDown: true, pointerPressed: true))
+    renderer.render(
+      input: InputState(pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
+    #expect(firstVisibleRow() == 1)
+
+    for _ in 0..<200 {
+      renderer.render(input: InputState(commands: [.navigation(.down)]))
+      if let row = firstVisibleRow(), row > 1 { break }
+    }
+    let deepRow = try #require(firstVisibleRow())
+    #expect(deepRow > 1)
+    #expect(focusCoversARow())
+
+    // A single step out leaves the row list, no matter how deep the scroll went.
+    renderer.render(input: InputState(commands: [.navigation(.stepOut)]))
+    #expect(!focusCoversARow())
+
+    // A single step back in returns to the remembered row, with no walking.
+    renderer.render(input: InputState(commands: [.navigation(.stepIn)]))
+    #expect(firstVisibleRow() == deepRow)
+    #expect(focusCoversARow())
   }
 
   @Test func animationRequestsFramesWithoutInputAndStopsWhenInactive() async throws {
