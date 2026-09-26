@@ -3,6 +3,8 @@ public struct SizingBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var x: Sizing
   public var y: Sizing
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { x == .grow }
   @MainActor public var expandsVertically: Bool { y == .grow }
 

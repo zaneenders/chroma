@@ -13,6 +13,7 @@ struct AnimationFrameTests {
   struct Animated: PrimitiveBlock {
     let samples: Samples
     var active = true
+    var focusRule: FocusRule { .standard }
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
     func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
       samples.timestamps.append(context.animationFrame(active: active).timestamp)

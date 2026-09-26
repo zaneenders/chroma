@@ -26,14 +26,16 @@ struct PointerFocusTests {
     input: InputState = InputState(),
     draw: @MainActor (Interaction, inout [WidgetID: ButtonState]) -> Void = drawFixture
   ) -> [WidgetID: ButtonState] {
+    let isInitialFrame = ctx.tree == nil
     ctx.beginFrame(input: input)
     var states: [WidgetID: ButtonState] = [:]
     draw(ctx, &states)
     ctx.endFrame()
+    if isInitialFrame { ctx.focusFirstControlForTest() }
     return states
   }
 
-  @Test func firstFrameSelectsFirstLeaf() {
+  @Test func explicitFixtureFocusSelectsFirstLeaf() {
     let ctx = Interaction()
     frame(ctx)
     #expect(ctx.selection == [0, 0])
@@ -45,26 +47,29 @@ struct PointerFocusTests {
     ctx.focus(WidgetID("b"))
     let states = frame(ctx, input: InputState(commands: [.action(.activate)]))
     #expect(states[WidgetID("b")]?.clicked == true)
-    #expect(states[WidgetID("b")]?.hovered == true)
+    #expect(states[WidgetID("b")]?.focused == true)
+    #expect(states[WidgetID("b")]?.hovered == false)
     #expect(states[WidgetID("a")]?.clicked == false)
-    #expect(states[WidgetID("a")]?.hovered == false, "exactly one widget carries the cursor")
+    #expect(states[WidgetID("a")]?.focused == false)
   }
 
-  @Test func hoverSelectsNestedLeaf() {
+  @Test func hoverDoesNotMoveFocus() {
     let ctx = Interaction()
     frame(ctx)
-    frame(ctx, input: InputState(pointerPosition: Point(x: 75, y: 50)))
-    #expect(ctx.selection == [0, 2, 1])
+    let states = frame(ctx, input: InputState(pointerPosition: Point(x: 75, y: 50)))
+    #expect(ctx.selection == [0, 0])
+    #expect(states[WidgetID("d")]?.hovered == true)
+    #expect(states[WidgetID("d")]?.focused == false)
+    #expect(states[WidgetID("a")]?.focused == true)
   }
 
   @Test func parkedPointerPreservesProgrammaticFocus() {
     let ctx = Interaction()
     frame(ctx)
     frame(ctx, input: InputState(pointerPosition: Point(x: 75, y: 50)))
-    #expect(ctx.selection == [0, 2, 1])
     ctx.focus(WidgetID("b"))
     frame(ctx, input: InputState(pointerPosition: Point(x: 75, y: 50)))
-    #expect(ctx.selection == [0, 1], "the still pointer did not re-assert its hover")
+    #expect(ctx.selection == [0, 1])
   }
 
   @Test func clickSelectsThenActivates() {
@@ -138,8 +143,16 @@ struct PointerFocusTests {
         id: WidgetID("front"), rect: Rect(x: 0, y: 0, width: 100, height: 100))
       ctx.endGroup()
     }
-    frame(ctx, input: InputState(pointerPosition: Point(x: 50, y: 50)))
-    #expect(ctx.selection == [0, 1], "front is the last-drawn child")
+    frame(ctx, input: InputState(pointerPosition: Point(x: 50, y: 50))) { ctx, states in
+      ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 100))
+      states[WidgetID("back")] = ctx.interactiveBehavior(
+        id: WidgetID("back"), rect: Rect(x: 0, y: 0, width: 100, height: 100))
+      states[WidgetID("front")] = ctx.interactiveBehavior(
+        id: WidgetID("front"), rect: Rect(x: 0, y: 0, width: 100, height: 100))
+      ctx.endGroup()
+    }
+    #expect(ctx.selection == [0, 0])
+    #expect(ctx.hoveredLeafID == WidgetID("front"))
   }
 
   @Test func emptyGroupsArePruned() {

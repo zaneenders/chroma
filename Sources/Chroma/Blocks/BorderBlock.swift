@@ -4,6 +4,8 @@ public struct BorderBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var radii: CornerRadii = .zero
   public var width: Float
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 

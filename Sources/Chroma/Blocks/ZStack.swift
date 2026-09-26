@@ -9,6 +9,8 @@ public struct ZStack: PrimitiveBlock {
     self.scopedChildren = BlockBuilder.flattenedChildren(content().scopedChildren)
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool {
     scopedChildren.contains { BlockEngine.expandsHorizontally($0) }
   }

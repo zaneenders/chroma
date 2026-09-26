@@ -6,22 +6,25 @@ public enum InteractionPhase: Equatable, Sendable {
 
 public struct ButtonState: Equatable, Sendable {
   public var hovered: Bool
+  public var focused: Bool
   public var held: Bool
   public var clicked: Bool
 
-  public init(hovered: Bool, held: Bool, clicked: Bool) {
+  public init(hovered: Bool, focused: Bool = false, held: Bool, clicked: Bool) {
     self.hovered = hovered
+    self.focused = focused
     self.held = held
     self.clicked = clicked
   }
 
   public var phase: InteractionPhase {
-    held ? .pressed : hovered ? .hovered : .idle
+    held ? .pressed : hovered || focused ? .hovered : .idle
   }
 }
 
 public struct TextInputState: Equatable, Sendable {
   public var hovered: Bool
+  public var focused: Bool
   public var held: Bool
   public var editing: Bool
   public var caretOffset: Int?
@@ -29,12 +32,14 @@ public struct TextInputState: Equatable, Sendable {
 
   public init(
     hovered: Bool,
+    focused: Bool = false,
     held: Bool,
     editing: Bool,
     caretOffset: Int?,
     selectionRange: Range<Int>? = nil
   ) {
     self.hovered = hovered
+    self.focused = focused
     self.held = held
     self.editing = editing
     self.caretOffset = caretOffset
@@ -42,6 +47,6 @@ public struct TextInputState: Equatable, Sendable {
   }
 
   public var phase: InteractionPhase {
-    held ? .pressed : hovered ? .hovered : .idle
+    held ? .pressed : hovered || focused ? .hovered : .idle
   }
 }

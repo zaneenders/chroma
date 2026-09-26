@@ -13,6 +13,8 @@ public struct Image: PrimitiveBlock {
     self.alignment = alignment
   }
 
+  public var focusRule: FocusRule { .standard }
+
   public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     resource.size
   }

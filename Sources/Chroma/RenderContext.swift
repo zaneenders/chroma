@@ -5,6 +5,14 @@ public struct RenderContext {
   var backgroundDepth = 0
   var focusTargets: [FocusTarget] = []
 
+  /// Set while drawing content that a registered leaf already owns — Interactive content,
+  /// decorative backgrounds — so it does not register default focus leaves of its own.
+  var focusLeafClaimed = false
+  var navigationIgnored = false
+
+  /// Overrides the highlight drawn for default focus leaves; `nil` uses the theme standard.
+  public var hoverStyle: HoverStyle?
+
   /// Use distinct, stable slots for custom-container children in both measurement and drawing.
   /// Slots describe source structure, not visible-child indices or draw order.
   public func childScope(_ slot: Int) -> RenderContext {
@@ -20,6 +28,7 @@ public struct RenderContext {
   var backgroundContext: RenderContext {
     var copy = scoped([.background(backgroundDepth)])
     copy.focusTargets = []
+    copy.focusLeafClaimed = true
     return copy
   }
 
@@ -47,6 +56,20 @@ public struct RenderContext {
   public func setSelectAllHandler(_ handler: (@MainActor () -> Bool)?) {
     interaction.onSelectAll = handler
   }
+
+  public var navigationBreadcrumb: [String] {
+    guard let root = interaction.navigation else { return ["Window"] }
+    return ["Window"]
+      + interaction.navigationPath.indices.compactMap { depth in
+        root.node(at: Array(interaction.navigationPath.prefix(depth + 1)))?.name
+      }
+  }
+
+  public var navigationSelectionIsGroup: Bool {
+    interaction.navigation?.node(at: interaction.navigationPath)?.isGroup ?? true
+  }
+
+  public var isSelectingText: Bool { interaction.isTextEditing && interaction.editingReadOnly }
 
   public var interactionMode: InteractionMode { interaction.mode }
 
@@ -96,7 +119,8 @@ public struct RenderContext {
     action: (@MainActor () -> Void)? = nil
   ) -> ButtonState {
     interaction.registerFocusTargets(focusTargets, id: id)
-    return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
+    return interaction.interactiveBehavior(
+      id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
   }
 
   public func buttonState(
@@ -105,7 +129,28 @@ public struct RenderContext {
   ) -> ButtonState {
     let id = widgetID
     interaction.registerFocusTargets(focusTargets, id: id)
-    return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
+    return interaction.interactiveBehavior(
+      id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
+  }
+
+  /// Registers a focus leaf for content a custom primitive paints itself and draws the
+  /// standard highlight over it: keyboard focus, pointer hover, and press all tint the
+  /// leaf like default content. Call after drawing the leaf's content so the highlight
+  /// layers over it. `.navigationIgnored()` removes the leaves; `.hover(.tint)` recolors the
+  /// highlight. Controls that paint their own feedback use `buttonState` instead.
+  @discardableResult
+  public func focusable(
+    in rect: Rect, into drawList: inout DrawList,
+    role: ActionRole = .normal,
+    action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    guard !navigationIgnored else {
+      return ButtonState(hovered: false, held: false, clicked: false)
+    }
+    let id = widgetID
+    let state = buttonState(in: rect, role: role, action: action)
+    BlockEngine.drawHighlight(for: id, into: &drawList, in: rect, context: self)
+    return state
   }
 
   func textInputState(
@@ -123,7 +168,7 @@ public struct RenderContext {
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-      pointerOffset: pointerOffset, verticalOffset: verticalOffset)
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored)
   }
 
   public func textInputState(
@@ -141,14 +186,18 @@ public struct RenderContext {
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-      pointerOffset: pointerOffset, verticalOffset: verticalOffset)
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored)
   }
 
+  ///
+  /// `axis` declares the direction siblings inside the closure are laid out in, so custom containers
+  /// navigate like the built-in stacks. Nested groups declare their own axis; `nil` inherits movement
   public func withFocusGroup<Result>(
     in rect: Rect,
+    axis: FocusGroupAxis? = nil,
     _ body: () throws -> Result
   ) rethrows -> Result {
-    interaction.beginGroup(rect: rect)
+    interaction.beginGroup(rect: rect, axis: axis)
     defer { interaction.endGroup() }
     return try body()
   }

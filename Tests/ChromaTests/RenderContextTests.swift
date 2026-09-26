@@ -107,6 +107,8 @@ private final class ContextRecorder {
 private struct ContextRecordingBlock: PrimitiveBlock {
   let recorder: ContextRecorder
 
+  var focusRule: FocusRule { .standard }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     recorder.measuredInteraction = context.interaction
     return proposal

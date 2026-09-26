@@ -41,63 +41,176 @@ public enum KeyBindingsBuilder {
   public static func buildExpression(_ expression: KeyBinding) -> KeyBinding { expression }
 }
 
+public enum KeyBindingContext: Hashable, Sendable {
+  case shared
+  case movement
+  case editing
+}
+
 public struct KeyBinding: Hashable, Sendable {
   public var chord: KeyChord
+  public var context: KeyBindingContext
   public var command: Command?
+  fileprivate var contexts: Set<KeyBindingContext>
 
-  public init(_ chord: KeyChord, to command: Command?) {
+  public init(_ chord: KeyChord, in context: KeyBindingContext? = nil, to command: Command?) {
     self.chord = chord
+    self.context = context ?? Self.defaultContext(for: command)
     self.command = command
+    self.contexts = [self.context]
+  }
+
+  fileprivate init(disabling chord: KeyChord, in context: KeyBindingContext?) {
+    self.chord = chord
+    self.context = context ?? .shared
+    self.command = nil
+    self.contexts = context.map { [$0] } ?? [.shared, .movement, .editing]
+  }
+
+  private static func defaultContext(for command: Command?) -> KeyBindingContext {
+    guard let command else { return .shared }
+    return switch command {
+    case .navigation: .movement
+    case .editing(.copy), .editing(.selectAll): .shared
+    case .editing: .editing
+    case .action, .application: .shared
+    }
   }
 }
 
-public func bind(_ key: Key, modifiers: KeyModifiers = [], to command: Command) -> KeyBinding {
-  KeyBinding(KeyChord(key, modifiers: modifiers), to: command)
+public func bind(
+  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil, to command: Command
+) -> KeyBinding {
+  KeyBinding(KeyChord(key, modifiers: modifiers), in: context, to: command)
 }
 
-public func bind(_ character: Character, modifiers: KeyModifiers = [], to command: Command) -> KeyBinding {
-  KeyBinding(KeyChord(character, modifiers: modifiers), to: command)
+public func bind(
+  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil, to command: Command
+) -> KeyBinding {
+  KeyBinding(KeyChord(character, modifiers: modifiers), in: context, to: command)
 }
 
-public func disable(_ key: Key, modifiers: KeyModifiers = []) -> KeyBinding {
-  KeyBinding(KeyChord(key, modifiers: modifiers), to: nil)
+public func disable(
+  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil
+) -> KeyBinding {
+  KeyBinding(disabling: KeyChord(key, modifiers: modifiers), in: context)
 }
 
-public func disable(_ character: Character, modifiers: KeyModifiers = []) -> KeyBinding {
-  KeyBinding(KeyChord(character, modifiers: modifiers), to: nil)
+public func disable(
+  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil
+) -> KeyBinding {
+  KeyBinding(disabling: KeyChord(character, modifiers: modifiers), in: context)
 }
 
 public struct KeyBindings: Sendable {
-  private var entries: [KeyChord: Command?] = [:]
+  private var entries: [KeyChord: [KeyBindingContext: Command?]] = [:]
 
   public init(@KeyBindingsBuilder _ content: () -> [KeyBinding]) {
-    for binding in content() { entries[binding.chord] = .some(binding.command) }
+    for binding in content() {
+      for context in binding.contexts { entries[binding.chord, default: [:]][context] = binding.command }
+    }
   }
 
   public init() {}
 
-  public func command(for chord: KeyChord) -> Command?? { entries[chord] }
+  public func command(for chord: KeyChord) -> Command?? {
+    for context in [.editing, .movement, .shared] as [KeyBindingContext] {
+      if let command = entries[chord]?[context] { return .some(command) }
+    }
+    return nil
+  }
+
+  public func command(for chord: KeyChord, isTextEditing: Bool) -> Command?? {
+    let contexts: [KeyBindingContext] = isTextEditing ? [.editing, .shared] : [.movement, .shared]
+    for context in contexts {
+      if let command = entries[chord]?[context] { return .some(command) }
+    }
+    return nil
+  }
+
+  public func resolve(_ input: KeyboardInput, isTextEditing: Bool) -> ResolvedKeyboardInput? {
+    resolve(input, isTextEditing: isTextEditing) { chord in
+      command(for: chord, isTextEditing: isTextEditing)
+    }
+  }
+
+  package func resolve(
+    _ input: KeyboardInput,
+    isTextEditing: Bool,
+    commandForChord: (KeyChord) -> Command??
+  ) -> ResolvedKeyboardInput? {
+    if isTextEditing, let text = input.text, !text.isEmpty {
+      if let chord = input.chord, let resolution = commandForChord(chord) {
+        if resolution == nil { return nil }
+      } else if input.chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true {
+        return .text(.insert(text))
+      }
+    }
+    guard let chord = input.chord,
+      let resolution = commandForChord(chord),
+      let command = resolution
+    else { return nil }
+    return switch command {
+    case .editing(let event): .text(event)
+    default: .command(command)
+    }
+  }
 
   public func prefersTextInsertion(
     chord: KeyChord?, text: String?, isTextEditing: Bool
   ) -> Bool {
-    guard isTextEditing, let text, !text.isEmpty else { return false }
-    if let chord, let resolution = command(for: chord) {
-      guard let command = resolution else { return false }
-      if case .editing = command { return false }
+    if case .some(.text(.insert)) = resolve(KeyboardInput(chord: chord, text: text), isTextEditing: isTextEditing) {
+      return true
     }
-    return chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true
+    return false
   }
 
   public func overlay(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> KeyBindings {
     var result = self
-    for binding in content() { result.entries[binding.chord] = .some(binding.command) }
+    for binding in content() {
+      for context in binding.contexts { result.entries[binding.chord, default: [:]][context] = binding.command }
+    }
     return result
   }
 
   public func overlay(_ other: KeyBindings) -> KeyBindings {
     var result = self
-    for (chord, command) in other.entries { result.entries[chord] = .some(command) }
+    for (chord, bindings) in other.entries {
+      for (context, command) in bindings { result.entries[chord, default: [:]][context] = command }
+    }
     return result
+  }
+}
+
+extension KeyBindings {
+  public static let vimNavigation = KeyBindings {
+    bind("f", to: .navigation(.up))
+    bind(.upArrow, to: .navigation(.up))
+    bind("j", to: .navigation(.down))
+    bind(.downArrow, to: .navigation(.down))
+    bind("d", to: .navigation(.left))
+    bind(.leftArrow, to: .navigation(.left))
+    bind("k", to: .navigation(.right))
+    bind(.rightArrow, to: .navigation(.right))
+    bind("d", modifiers: .shift, to: .navigation(.sectionLeft))
+    bind("f", modifiers: .shift, to: .navigation(.sectionUp))
+    bind("j", modifiers: .shift, to: .navigation(.sectionDown))
+    bind("k", modifiers: .shift, to: .navigation(.sectionRight))
+    bind(.leftArrow, in: .editing, to: .editing(.moveCaretLeft))
+    bind(.rightArrow, in: .editing, to: .editing(.moveCaretRight))
+    bind(.upArrow, in: .editing, to: .editing(.moveCaretUp))
+    bind(.downArrow, in: .editing, to: .editing(.moveCaretDown))
+    bind(.leftArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretLeft))
+    bind(.rightArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretRight))
+    bind(.upArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretUp))
+    bind(.downArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretDown))
+    bind(.home, in: .editing, to: .editing(.moveCaretToStart))
+    bind(.end, in: .editing, to: .editing(.moveCaretToEnd))
+    bind(.escape, in: .editing, to: .editing(.endEditing))
+    bind("s", to: .navigation(.stepOut))
+    bind("l", to: .navigation(.stepIn))
+    bind(.enter, in: .movement, to: .action(.activate))
+    bind(.space, in: .movement, to: .action(.activate))
+    bind(.escape, to: .action(.cancel))
   }
 }

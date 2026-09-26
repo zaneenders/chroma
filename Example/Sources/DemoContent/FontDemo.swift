@@ -21,7 +21,7 @@ struct FontDemo: Block {
           ScrollView {
             VStack(spacing: 16) {
               VStack(spacing: 8) {
-                heading("LIVE PREVIEW")
+                heading("LIVE PREVIEW", theme)
                 TextField(
                   "Type a sample", fontScale: 0.65,
                   text: { state.fontSample }, onChange: { state.fontSample = $0 })
@@ -31,12 +31,12 @@ struct FontDemo: Block {
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("GLYPH EXPLORER / CLICK A CELL")
+                heading("GLYPH EXPLORER / CLICK OR NAVIGATE + ENTER", theme)
                 GlyphExplorer(state: state)
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("CANONICAL EQUIVALENCE")
+                heading("CANONICAL EQUIVALENCE", theme)
                 HStack(spacing: 24) {
                   comparison("BASE / U+0065", "e")
                   comparison("U+00E9", "é")
@@ -46,12 +46,12 @@ struct FontDemo: Block {
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("TERMINAL / CONTIGUOUS 12 x 28 CELLS")
+                heading("TERMINAL / CONTIGUOUS 12 x 28 CELLS", theme)
                 TerminalSpecimen().sizing(y: .fixed(84))
               }
               .padding(12).background(theme.surface)
               VStack(spacing: 8) {
-                heading("KNOWN LIMITS / EXPECTED REPLACEMENT GLYPHS")
+                heading("KNOWN LIMITS / EXPECTED REPLACEMENT GLYPHS", theme)
                 Text("🙂  👩‍💻  e\u{0301}\u{0308}  �").fontScale(0.9)
                 Text("Emoji and stacked accents are not supported yet.").fontScale(0.5)
               }
@@ -59,7 +59,7 @@ struct FontDemo: Block {
             }
           }.sizing(x: .grow, y: .grow)
           VStack(spacing: 12) {
-            heading("CELL INSPECTOR")
+            heading("CELL INSPECTOR", theme)
             GlyphInspection(glyph: state.inspectedGlyph)
               .sizing(y: .fixed(240))
             Text(
@@ -68,19 +68,21 @@ struct FontDemo: Block {
               }.joined(separator: " ")
             ).fontScale(0.65)
             Text("BUNDLED FONT / \(Int(FontMetrics().cellAdvance)) PT ADVANCE").fontScale(0.5)
-            Text("Blue: advance boundary").fontScale(0.5)
+            Text("Green: advance boundary").fontScale(0.5)
             Text("Gray: 20 x 28 glyph canvas").fontScale(0.5)
             Text("8x magnification").fontScale(0.5)
             Spacer()
           }
-          .padding(12).sizing(x: .fixed(270), y: .grow).background(theme.surface)
+          .padding(12)
+          .sizing(x: .fixed(270), y: .grow)
+          .background(theme.surface)
         }.sizing(x: .grow, y: .grow)
       }.padding(12).background(theme.background)
     }
   }
 
-  private func heading(_ text: String) -> Text {
-    Text(text).fontScale(0.5).foregroundColor(Color(r: 0.2, g: 0.65, b: 1, a: 1))
+  private func heading(_ text: String, _ theme: ChromaTheme) -> Text {
+    Text(text).fontScale(0.5).foregroundColor(theme.accent)
   }
 
   @MainActor private func comparison(_ label: String, _ sample: String) -> some Block {
@@ -102,6 +104,8 @@ struct GlyphExplorer: PrimitiveBlock {
   )
   private let cell: Float = 40
 
+  var focusRule: FocusRule { .container }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     let columns = max(1, Int(proposal.width / cell))
     return Size(width: proposal.width, height: Float((Self.glyphs.count + columns - 1) / columns) * cell)
@@ -109,25 +113,37 @@ struct GlyphExplorer: PrimitiveBlock {
 
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let columns = max(1, Int(rect.size.width / cell))
-    for (index, glyph) in Self.glyphs.enumerated() {
-      let box = Rect(
-        x: rect.minX + Float(index % columns) * cell,
-        y: rect.minY + Float(index / columns) * cell, width: cell, height: cell)
-      let text = String(glyph)
-      _ = context.childScope(index).buttonState(in: box, role: .normal) {
-        state.inspectedGlyph = text
+    let rows = (Self.glyphs.count + columns - 1) / columns
+    context.withFocusGroup(in: rect, axis: .vertical) {
+      for row in 0..<rows {
+        let rowRect = Rect(
+          x: rect.minX, y: rect.minY + Float(row) * cell, width: rect.size.width, height: cell)
+        context.withFocusGroup(in: rowRect, axis: .horizontal) {
+          for column in 0..<columns {
+            let index = row * columns + column
+            guard index < Self.glyphs.count else { break }
+            let box = Rect(
+              x: rowRect.minX + Float(column) * cell, y: rowRect.minY, width: cell, height: cell)
+            let text = String(Self.glyphs[index])
+            if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
+            drawList.strokeRect(box, width: 0.5, color: context.theme.border)
+            drawList.text(
+              text, at: Point(x: box.minX + 10, y: box.minY + 6),
+              color: state.inspectedGlyph == text ? context.theme.accent : context.theme.foreground)
+            context.childScope(index).focusable(in: box, into: &drawList) {
+              state.inspectedGlyph = text
+            }
+          }
+        }
       }
-      if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
-      drawList.strokeRect(box, width: 0.5, color: context.theme.border)
-      drawList.text(
-        text, at: Point(x: box.minX + 10, y: box.minY + 6),
-        color: state.inspectedGlyph == text ? context.theme.accent : context.theme.foreground)
     }
   }
 }
 
 struct GlyphInspection: PrimitiveBlock {
   let glyph: String
+
+  var focusRule: FocusRule { .standard }
 
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: 200, height: 240)
@@ -155,6 +171,8 @@ struct GlyphInspection: PrimitiveBlock {
 
 struct TerminalSpecimen: PrimitiveBlock {
   static let rows = ["╭────╮ ┌────┐ ░▒▓█", "│    │ │    │ ←↑→↓", "╰────╯ └────┘ ⠁⠃⠇⠏"]
+
+  var focusRule: FocusRule { .standard }
 
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: 360, height: 84)

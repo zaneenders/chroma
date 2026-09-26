@@ -70,6 +70,7 @@ package final class FrameProducer {
     self.interaction = context.interaction
     let generation = generation
     let interaction = context.interaction
+    interaction.viewport = Rect(origin: .zero, size: viewport)
     interaction.animationFrame = AnimationFrame(timestamp: clock())
     if interaction.tree == nil {
       let editingLeaf = interaction.editingLeaf
@@ -94,7 +95,7 @@ package final class FrameProducer {
       || input.scrollDelta != .zero
     {
       interaction.refreshingRegistrations = true
-      interaction.beginFrame(input: InputState())
+      interaction.beginFrame(input: InputState(commands: input.commands))
       var registrations = DrawList()
       if let content {
         BlockEngine.draw(content, into: &registrations, in: Rect(origin: .zero, size: viewport), context: context)
@@ -124,7 +125,9 @@ package final class FrameProducer {
       }
     }
     interaction.endFrame()
+    var result = drawList
+    interaction.paintNavigation(into: &result, theme: context.theme)
     needsAnimationFrame = interaction.animationRequested
-    return drawList
+    return result
   }
 }

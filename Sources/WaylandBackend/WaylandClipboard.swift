@@ -65,7 +65,9 @@ final class WaylandClipboard {
   }
 
   func copyEditableSelectionToClipboard() -> Bool {
-    guard let text = interaction.editableSelectionText(), !text.isEmpty else { return false }
+    guard interaction.acceptsTextInsertion, let text = interaction.editableSelectionText(), !text.isEmpty else {
+      return false
+    }
     return copyToClipboard(text)
   }
 
@@ -88,7 +90,7 @@ final class WaylandClipboard {
   }
 
   func pasteFromClipboard(id: Int32) {
-    guard let editingLeaf = interaction.editingLeaf, let offer = selectionOffer,
+    guard interaction.acceptsTextInsertion, let editingLeaf = interaction.editingLeaf, let offer = selectionOffer,
       let offered = offeredMIMETypes[offer],
       let mimeType = Self.clipboardMIMETypes.first(where: offered.contains)
     else {

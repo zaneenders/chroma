@@ -80,7 +80,7 @@ public struct HighResolutionFontAtlas: Sendable {
       let size = w * h
       guard bytes.byteCount - cursor >= size else { throw AssetError.invalidAtlas }
       let input = Span<UInt8>(viewing: bytes.extracting(cursor..<(cursor + size)))
-      let pixels = Array<UInt8>(capacity: size) { output in
+      let pixels = [UInt8](capacity: size) { output in
         for index in input.indices { output.append(input[index]) }
       }
       levels.append(FontAtlasMipLevel(width: w, height: h, pixels: pixels))

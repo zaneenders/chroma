@@ -3,6 +3,7 @@ import Chroma
 @MainActor
 public struct DemoApplication: App {
   private let capture: DemoSceneCapture?
+  private let workspace = WorkspaceState()
   private let state: PerformanceDemoState
   private let shortcutModifier: KeyModifiers
 
@@ -22,8 +23,8 @@ public struct DemoApplication: App {
     self.shortcutModifier = shortcutModifier
   }
 
-  public var title: String { "Chroma Demo" }
-  public var windowSize: Size { Size(width: 1100, height: 720) }
+  public var title: String { "Chroma — Move through the interface" }
+  public var windowSize: Size { Size(width: 1200, height: 820) }
 
   public var frameObserver: FrameObserver? {
     guard let capture else { return nil }
@@ -31,7 +32,7 @@ public struct DemoApplication: App {
   }
 
   public var keyBindings: KeyBindings {
-    var bindings = KeyBindings {
+    var bindings = KeyBindings.vimNavigation.overlay {
       bind("c", modifiers: shortcutModifier, to: .editing(.copy))
       bind("x", modifiers: shortcutModifier, to: .editing(.cut))
       bind("v", modifiers: shortcutModifier, to: .editing(.paste))
@@ -67,20 +68,18 @@ public struct DemoApplication: App {
   }
 
   public var body: some Block {
-    if let capture {
-      VStack(spacing: 0) {
-        PerformanceDemo(state: state).sizing(x: .grow, y: .grow)
-        CaptureStatus(capture: capture)
-      }
-      .chromaTheme(.dark)
-      .onCommand(.application("demo.capture")) {
-        capture.request()
-        return .handled
-      }
-    } else {
-      PerformanceDemo(state: state).chromaTheme(.dark)
+    VStack(spacing: 0) {
+      WorkspaceDemo(state: workspace, gallery: state).sizing(x: .grow, y: .grow)
+      if let capture { CaptureStatus(capture: capture) }
+    }
+    .chromaTheme(.dark)
+    .onCommand(.application("demo.capture")) {
+      guard let capture else { return .ignored }
+      capture.request()
+      return .handled
     }
   }
+
 }
 
 private struct CaptureStatus: Block {

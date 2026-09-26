@@ -7,6 +7,8 @@ public struct Button: PrimitiveBlock {
   public var style: ButtonStyle?
   public var padding: EdgeInsets
 
+  public var focusRule: FocusRule { .control }
+
   init(
     _ label: String,
     id: WidgetID?,
@@ -49,11 +51,14 @@ public struct Button: PrimitiveBlock {
 
     let background: Color
     switch state.phase {
-    case .idle: background = style.idleBackground
-    case .hovered: background = style.hoveredBackground
+    case .idle, .hovered: background = style.idleBackground
     case .pressed: background = style.pressedBackground
     }
     drawList.fillRoundedRect(rect, radius: style.cornerRadius, color: background)
+    if state.phase == .hovered {
+      drawList.fillRoundedRect(
+        rect, radius: style.cornerRadius, color: HoverStyle.standardTint(in: context.theme))
+    }
     drawList.strokeRoundedRect(
       rect, radius: style.cornerRadius, width: style.borderWidth, color: style.border)
     drawList.text(
