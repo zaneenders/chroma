@@ -128,8 +128,12 @@ extension KeyBindingsTests {
         KeyBindings.vimNavigation.prefersTextInsertion(
           chord: KeyChord(Character(character)), text: character, isTextEditing: true))
     }
-    #expect(KeyBindings.vimNavigation.command(for: KeyChord(.upArrow)) == .some(.some(.navigation(.up))))
-    #expect(KeyBindings.vimNavigation.command(for: KeyChord(.rightArrow)) == .some(.some(.navigation(.right))))
+    #expect(
+      KeyBindings.vimNavigation.command(for: KeyChord(.upArrow), isTextEditing: false) == .some(.some(.navigation(.up)))
+    )
+    #expect(
+      KeyBindings.vimNavigation.command(for: KeyChord(.rightArrow), isTextEditing: false)
+        == .some(.some(.navigation(.right))))
   }
 
   @Test func overlayCanSpecializeBindingsForEditingWithoutReplacingNavigation() {
@@ -199,6 +203,6 @@ extension KeyBindingsTests {
     }
 
     #expect(bindings.command(for: KeyChord(.upArrow), isTextEditing: false) == .some(nil))
-    #expect(bindings.command(for: KeyChord(.upArrow), isTextEditing: true) == nil)
+    #expect(bindings.command(for: KeyChord(.upArrow), isTextEditing: true) == .some(.some(.editing(.moveCaretUp))))
   }
 }

@@ -6,10 +6,6 @@ extension Interaction {
     let previousSelection = navigationPath
     let previousLeafID = previous?.node(at: previousSelection)?.id
     navigation = next
-    guard next.containsNavigationBoundaries else {
-      navigationPath = []
-      return
-    }
     guard let previous else {
       navigationPath = []
       selection = nil
@@ -91,7 +87,6 @@ extension Interaction {
       selection = renderPath
       selectedLeafID = leafID
       pendingFocus = nil
-      recordFocusMemory(for: renderPath, in: tree)
       reveal(renderPath, in: tree)
     } else {
       selection = nil
@@ -114,7 +109,7 @@ extension Interaction {
   }
 
   func paintNavigation(into drawList: inout DrawList, theme: ChromaTheme) {
-    guard let navigation, navigation.containsNavigationBoundaries else { return }
+    guard let navigation else { return }
     let activePath = Array(navigationPath.dropLast())
     guard let activeGroup = navigation.node(at: activePath) else { return }
     drawList.strokeRoundedRect(activeGroup.visibleRect, radius: 5, width: 1, color: theme.border)
@@ -157,12 +152,13 @@ extension Interaction {
       } else if !selected.children.isEmpty {
         setNavigationSelection(navigationPath + [0])
       }
-    case .left, .right, .up, .down:
+    case .left, .right, .up, .down, .sectionLeft, .sectionRight, .sectionUp, .sectionDown:
       if navigationPath.isEmpty, !activeGroup.children.isEmpty {
         setNavigationSelection([0])
         return
       }
-      var path = navigationPath
+      let crossesSections = [.sectionLeft, .sectionRight, .sectionUp, .sectionDown].contains(command)
+      var path = crossesSections ? activePath : navigationPath
       while !path.isEmpty {
         let parentPath = Array(path.dropLast())
         if let parent = navigation.node(at: parentPath),
@@ -171,6 +167,7 @@ extension Interaction {
           setNavigationSelection(target)
           return
         }
+        guard crossesSections else { return }
         path = parentPath
       }
     }
@@ -186,16 +183,16 @@ extension Interaction {
     let direction: Int
     let primaryAxis: FocusNode.Axis
     switch command {
-    case .left:
+    case .left, .sectionLeft:
       direction = -1
       primaryAxis = .horizontal
-    case .right:
+    case .right, .sectionRight:
       direction = 1
       primaryAxis = .horizontal
-    case .up:
+    case .up, .sectionUp:
       direction = -1
       primaryAxis = .vertical
-    case .down:
+    case .down, .sectionDown:
       direction = 1
       primaryAxis = .vertical
     case .stepIn, .stepOut: return nil
@@ -204,7 +201,8 @@ extension Interaction {
     let currentPrefix = Array(currentPath.dropLast())
     let originCenter = center(of: current.rect)
     guard let currentIndex = currentPath.last else { return nil }
-    let candidates = activeGroup.children.enumerated().compactMap { index, sibling -> (path: [Int], distance: Float)? in
+    let candidates = activeGroup.children.enumerated().compactMap {
+      index, sibling -> (path: [Int], aligned: Bool, distance: Float)? in
       guard index != currentIndex else { return nil }
       let delta = center(of: sibling.rect)
       let primaryDistance =
@@ -225,10 +223,14 @@ extension Interaction {
         ? (direction < 0 ? sibling.rect.maxX <= current.rect.minX : sibling.rect.minX >= current.rect.maxX)
         : (direction < 0 ? sibling.rect.maxY <= current.rect.minY : sibling.rect.minY >= current.rect.maxY)
       guard separated else { return nil }
-      return ([index], primaryDistance + secondaryDistance)
+      let edgeDistance =
+        primaryAxis == .horizontal
+        ? (direction < 0 ? current.rect.minX - sibling.rect.maxX : sibling.rect.minX - current.rect.maxX)
+        : (direction < 0 ? current.rect.minY - sibling.rect.maxY : sibling.rect.minY - current.rect.maxY)
+      return ([index], overlaps, edgeDistance + (overlaps ? 0 : secondaryDistance))
     }
 
-    if let winner = candidates.min(by: { $0.distance < $1.distance }) {
+    if let winner = candidates.min(by: { $0.aligned != $1.aligned ? $0.aligned : $0.distance < $1.distance }) {
       return currentPrefix + winner.path
     }
 

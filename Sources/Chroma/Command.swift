@@ -10,9 +10,10 @@ public enum NavigationCommand: Hashable, Sendable {
   case down
   case left
   case right
-  /// Enters the nearest focus scope, restoring its last-focused control.
+  case sectionUp, sectionDown, sectionLeft, sectionRight
+  /// Enters the selected group or activates the selected control.
   case stepIn
-  /// Leaves the enclosing focus scope for the nearest control outside it.
+  /// Selects the containing group.
   case stepOut
 }
 
@@ -41,6 +42,10 @@ extension Command {
     case .navigation(.down): "down"
     case .navigation(.left): "left"
     case .navigation(.right): "right"
+    case .navigation(.sectionUp): "section-up"
+    case .navigation(.sectionDown): "section-down"
+    case .navigation(.sectionLeft): "section-left"
+    case .navigation(.sectionRight): "section-right"
     case .navigation(.stepIn): "step-in"
     case .navigation(.stepOut): "step-out"
     case .editing(.insert): "insert"
@@ -50,6 +55,8 @@ extension Command {
     case .editing(.moveCaretRight): "caret-right"
     case .editing(.moveCaretUp): "caret-up"
     case .editing(.moveCaretDown): "caret-down"
+    case .editing(.selectCaretLeft): "select-caret-left"
+    case .editing(.selectCaretRight): "select-caret-right"
     case .editing(.selectCaretUp): "select-caret-up"
     case .editing(.selectCaretDown): "select-caret-down"
     case .editing(.moveCaretToStart): "caret-start"

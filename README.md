@@ -47,11 +47,21 @@ The **Render gallery** tab keeps the graphics, font, and virtualized-list exampl
 - **MOVE:** `d` left, `f` up, `j` down, `k` right (arrow keys also work).
 - **`l`:** enter the selected group, activate a button, or begin editing a field.
 - **`s`:** select the containing group. **Escape:** leave EDIT mode for MOVE.
-- At an edge, directional navigation searches outward and selects a neighboring
-  section without descending into it. Groups remember their selected child.
+- Plain movement stays inside the current group. **Shift+d/f/j/k** searches
+  outside that group for a neighboring section without descending into it.
+  Groups remember their selected child.
+- Enter selectable text with `l`: arrows move the caret, Shift+arrows select,
+  Command+C / Ctrl+C copies, and Escape returns to MOVE. Paste into an editable field.
 - History does not follow new messages automatically. **Latest** explicitly moves
   to the bottom; switching sessions preserves drafts and scroll positions.
 
 `Group("Composer") { ... }` defines a navigation boundary without adding layout.
 Stacks and visual modifiers do not add navigation levels. `ScrollView("History")`
 creates a scroll boundary. Optional names appear in the demo's navigation trail.
+
+Navigation is enabled by default for `App`. Every interface starts at the window
+root; stacks never implicitly create levels. Standalone `LazyVStack` is a scrolling
+navigation boundary. Use `.navigationIgnored()` for decorative content;
+`.hover(.none)` only suppresses its tint. `Text(...).selectable()` supports read-only
+keyboard selection, including multiline text. Retain a `ScrollViewController` to
+preserve position while its view is absent; changing view identity resets it.

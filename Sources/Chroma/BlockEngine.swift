@@ -49,7 +49,7 @@ public enum BlockEngine {
   /// visible element — text, images, custom content — and both draw the same highlight.
   /// `.control` primitives must register their own leaf while drawing; `.container`
   /// primitives own their focus structure; `.decorative` primitives never join the tree.
-  /// Content a registered leaf already owns (`focusLeafClaimed`) and `.hover(.none)`
+  /// Content a registered leaf already owns (`focusLeafClaimed`) and `.navigationIgnored()`
   /// content never register a default leaf.
   static func drawResolved(
     _ primitive: any PrimitiveBlock,
@@ -67,7 +67,7 @@ public enum BlockEngine {
         "\(String(describing: type(of: primitive))) declares focusRule .control but registered no focus leaf; "
           + "call buttonState while drawing")
     case .standard:
-      guard !context.focusLeafClaimed, context.hoverStyle != HoverStyle.none else { return }
+      guard !context.focusLeafClaimed, !context.navigationIgnored else { return }
       context.focusable(in: rect, into: &drawList)
     case .container, .decorative:
       break

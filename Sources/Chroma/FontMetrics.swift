@@ -7,6 +7,9 @@ public struct FontMetrics: Equatable, Sendable {
   public init() {}
 
   public func measure(_ text: String, scale: Float = 1) -> Size {
-    Size(width: Float(text.count) * cellAdvance * scale, height: glyphHeight * scale)
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    return Size(
+      width: Float(lines.map(\.count).max() ?? 0) * cellAdvance * scale,
+      height: (glyphHeight + Float(max(0, lines.count - 1)) * lineAdvance) * scale)
   }
 }

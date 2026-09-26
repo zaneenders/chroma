@@ -217,6 +217,9 @@ struct ImageRenderingTests {
         .fillRect(
           rect: Rect(x: 0, y: 0, width: 120, height: 80),
           color: HoverStyle.standardTint(in: .dark)),
+        .strokeRoundedRect(
+          rect: Rect(x: 0, y: 0, width: 120, height: 80),
+          radii: CornerRadii(5), width: 1, color: ChromaTheme.dark.border),
       ])
   }
 

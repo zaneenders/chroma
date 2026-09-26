@@ -26,7 +26,7 @@ struct FrameUpdateTests {
     renderer.render()
     // Keyboard focus starts on the text; move to the button and activate in one frame.
     let frame = renderer.render(
-      input: InputState(commands: [.navigation(.down), .action(.activate)]))
+      input: InputState(commands: [.navigation(.down), .navigation(.down), .action(.activate)]))
     #expect(model.actions == 1)
     #expect(
       frame.commands.contains { command in
@@ -49,7 +49,7 @@ struct FrameUpdateTests {
     renderer.render()
     // Keyboard focus starts on the text; move to the field and activate in one frame.
     renderer.render(
-      input: InputState(commands: [.navigation(.down), .action(.activate)]))
+      input: InputState(commands: [.navigation(.down), .navigation(.down), .action(.activate)]))
     let frame = renderer.render(input: InputState(textEvents: [.insert("!")]))
     #expect(model.text == "before!")
     #expect(

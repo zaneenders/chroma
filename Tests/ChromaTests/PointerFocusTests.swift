@@ -26,14 +26,16 @@ struct PointerFocusTests {
     input: InputState = InputState(),
     draw: @MainActor (Interaction, inout [WidgetID: ButtonState]) -> Void = drawFixture
   ) -> [WidgetID: ButtonState] {
+    let isInitialFrame = ctx.tree == nil
     ctx.beginFrame(input: input)
     var states: [WidgetID: ButtonState] = [:]
     draw(ctx, &states)
     ctx.endFrame()
+    if isInitialFrame { ctx.focusFirstControlForTest() }
     return states
   }
 
-  @Test func firstFrameSelectsFirstLeaf() {
+  @Test func explicitFixtureFocusSelectsFirstLeaf() {
     let ctx = Interaction()
     frame(ctx)
     #expect(ctx.selection == [0, 0])

@@ -20,6 +20,7 @@ final class FocusNode {
   let navigationName: String?
   let navigationID: WidgetID?
   /// True when a scroll container above this node scrolls the node into view on focus.
+  let navigationIgnored: Bool
   let canBeRevealed: Bool
   var commandHandlers: [Command: @MainActor () -> CommandResult] = [:]
   var children: [FocusNode] = []
@@ -33,8 +34,10 @@ final class FocusNode {
     scrollID: WidgetID? = nil,
     navigationID: WidgetID? = nil,
     navigationName: String? = nil,
-    canBeRevealed: Bool = false
+    canBeRevealed: Bool = false,
+    navigationIgnored: Bool = false
   ) {
+    self.navigationIgnored = navigationIgnored
     self.kind = kind
     self.rect = rect
     self.hitRect = hitRect ?? rect
@@ -53,7 +56,7 @@ final class FocusNode {
 
   /// Keyboard focus only lands on controls the user can see, or that a scroll container reveals.
   var acceptsFocus: Bool {
-    hitRect != .zero || canBeRevealed
+    !navigationIgnored && (hitRect != .zero || canBeRevealed)
   }
 
   var leafID: WidgetID? {

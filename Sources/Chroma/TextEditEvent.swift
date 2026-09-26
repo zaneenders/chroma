@@ -6,6 +6,8 @@ public enum TextEditEvent: Hashable, Sendable {
   case moveCaretRight
   case moveCaretUp
   case moveCaretDown
+  case selectCaretLeft
+  case selectCaretRight
   case selectCaretUp
   case selectCaretDown
   case moveCaretToStart

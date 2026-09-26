@@ -226,19 +226,17 @@ private struct UUIDList: Block {
             state.uuidScrollController.scrollToBottom()
           }
         }
-        Group("UUID list") {
-          LazyVStack(
-            data: state.identifiers.indices, rowHeight: 48, spacing: 5,
-            controller: state.uuidScrollController
-          ) { index in
-            VStack(spacing: 3) {
-              Text("UUID \(index + 1)")
-                .fontScale(demoSmallText)
-                .foregroundColor(theme.secondaryForeground)
-              Text(state.identifiers[index])
-                .fontScale(demoSmallText)
-                .foregroundColor(theme.foreground)
-            }
+        LazyVStack(
+          data: state.identifiers.indices, rowHeight: 48, spacing: 5,
+          controller: state.uuidScrollController
+        ) { index in
+          VStack(spacing: 3) {
+            Text("UUID \(index + 1)")
+              .fontScale(demoSmallText)
+              .foregroundColor(theme.secondaryForeground)
+            Text(state.identifiers[index])
+              .fontScale(demoSmallText)
+              .foregroundColor(theme.foreground)
           }
           .padding(8)
           .sizing(x: .grow)

@@ -8,6 +8,7 @@ public struct RenderContext {
   /// Set while drawing content that a registered leaf already owns — Interactive content,
   /// decorative backgrounds — so it does not register default focus leaves of its own.
   var focusLeafClaimed = false
+  var navigationIgnored = false
 
   /// Overrides the highlight drawn for default focus leaves; `nil` uses the theme standard.
   public var hoverStyle: HoverStyle?
@@ -68,6 +69,8 @@ public struct RenderContext {
     interaction.navigation?.node(at: interaction.navigationPath)?.isGroup ?? true
   }
 
+  public var isSelectingText: Bool { interaction.isTextEditing && interaction.editingReadOnly }
+
   public var interactionMode: InteractionMode { interaction.mode }
 
   var activeTextInput: WidgetID? {
@@ -116,7 +119,8 @@ public struct RenderContext {
     action: (@MainActor () -> Void)? = nil
   ) -> ButtonState {
     interaction.registerFocusTargets(focusTargets, id: id)
-    return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
+    return interaction.interactiveBehavior(
+      id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
   }
 
   public func buttonState(
@@ -125,13 +129,14 @@ public struct RenderContext {
   ) -> ButtonState {
     let id = widgetID
     interaction.registerFocusTargets(focusTargets, id: id)
-    return interaction.interactiveBehavior(id: id, rect: rect, role: role, action: action)
+    return interaction.interactiveBehavior(
+      id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
   }
 
   /// Registers a focus leaf for content a custom primitive paints itself and draws the
   /// standard highlight over it: keyboard focus, pointer hover, and press all tint the
   /// leaf like default content. Call after drawing the leaf's content so the highlight
-  /// layers over it. `.hover(.none)` removes the leaves; `.hover(.tint)` recolors the
+  /// layers over it. `.navigationIgnored()` removes the leaves; `.hover(.tint)` recolors the
   /// highlight. Controls that paint their own feedback use `buttonState` instead.
   @discardableResult
   public func focusable(
@@ -139,7 +144,7 @@ public struct RenderContext {
     role: ActionRole = .normal,
     action: (@MainActor () -> Void)? = nil
   ) -> ButtonState {
-    guard hoverStyle != HoverStyle.none else {
+    guard !navigationIgnored else {
       return ButtonState(hovered: false, held: false, clicked: false)
     }
     let id = widgetID
@@ -163,7 +168,7 @@ public struct RenderContext {
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-      pointerOffset: pointerOffset, verticalOffset: verticalOffset)
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored)
   }
 
   public func textInputState(
@@ -181,7 +186,7 @@ public struct RenderContext {
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-      pointerOffset: pointerOffset, verticalOffset: verticalOffset)
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored)
   }
 
   ///

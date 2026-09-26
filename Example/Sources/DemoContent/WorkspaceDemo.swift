@@ -55,10 +55,10 @@ final class WorkspaceState {
       messages: [
         "Welcome to Chroma. This is a GUI you can explore like a tree.",
         "MOVE: d left, f up, j down, k right. l goes in. s comes out.",
-        "Sections are destinations, not traps. Move past an edge to reach a neighboring section without diving into it.",
+        "Plain movement stays inside a section. Shift + d / f / j / k changes sections without diving into them.",
         "Try the composer below. Select the input and press l to EDIT. Escape returns to MOVE; your draft stays put.",
-        "Now move left to Sessions. Enter, open Field notes, then return here. Groups remember where you left off.",
-        "Messages are groups too. Enter one to read its text, save it, or quote it into your draft.",
+        "Now press Shift+d to select Sessions. Enter, open Field notes, then return here. Groups remember where you left off.",
+        "Messages are groups too. Enter one, then enter its text. Shift+arrows selects a passage; Cmd/Ctrl+C copies it. Escape returns to MOVE.",
         "Scrolling follows your selection only when needed. Sending a message will not drag you away from what you are reading.",
         "Use Latest when you want the bottom. There is no automatic follow mode in this workspace.",
       ]),
@@ -81,8 +81,7 @@ final class WorkspaceState {
 
   func open(_ session: WorkspaceSession) {
     selectedSession = session.id
-    session.scroll.scroll(to: session.scroll.offset)
-    status = "Opened \(session.title). k moves toward the conversation; l enters it."
+    status = "Opened \(session.title). Shift+k moves toward the conversation; l enters it."
   }
 }
 
@@ -103,13 +102,13 @@ struct WorkspaceDemo: Block {
       Group("Tabs") {
         HStack(spacing: 12) {
           VStack(spacing: 3) {
-            Text("CHROMA").fontScale(0.8).foregroundColor(WorkspacePalette.accent).hover(.none)
-            Text("A GUI you can move through").fontScale(0.38).foregroundColor(WorkspacePalette.muted).hover(.none)
+            Text("CHROMA").fontScale(0.8).foregroundColor(WorkspacePalette.accent).navigationIgnored()
+            Text("A GUI you can move through").fontScale(0.38).foregroundColor(WorkspacePalette.muted)
+              .navigationIgnored()
           }
           Spacer()
           Button(state.showsGallery ? "Workspace" : "Workspace *", fontScale: 0.5) {
             state.showsGallery = false
-            state.session.scroll.scroll(to: state.session.scroll.offset)
           }
           Button(state.showsGallery ? "Render gallery *" : "Render gallery", fontScale: 0.5) {
             state.showsGallery = true
@@ -131,7 +130,7 @@ struct WorkspaceDemo: Block {
       }
       NavigationGuide()
       Text(state.status).fontScale(0.4).foregroundColor(WorkspacePalette.muted)
-        .hover(.none).sizing(x: .grow).clipped()
+        .navigationIgnored().sizing(x: .grow).clipped()
     }
     .padding(16)
     .background(WorkspacePalette.background)
@@ -140,7 +139,7 @@ struct WorkspaceDemo: Block {
   @MainActor private var sidebar: some Block {
     Group("Sessions") {
       VStack(spacing: 14) {
-        Text("SESSIONS").fontScale(0.42).foregroundColor(WorkspacePalette.accent).hover(.none)
+        Text("SESSIONS").fontScale(0.42).foregroundColor(WorkspacePalette.accent).navigationIgnored()
         ForEach(state.sessions) { session in
           Interactive(action: { state.open(session) }) { phase in
             VStack(spacing: 7) {
@@ -154,7 +153,7 @@ struct WorkspaceDemo: Block {
         }
         Spacer()
         Text("THE EXPERIMENT\n\nLeave a draft.\nSwitch sessions.\nFind your way back.\n\nNo mouse required.")
-          .fontScale(0.42).foregroundColor(WorkspacePalette.muted).hover(.none)
+          .fontScale(0.42).foregroundColor(WorkspacePalette.muted).navigationIgnored()
       }.padding(16)
     }.sizing(x: .fixed(250), y: .grow)
       .roundedBackground(WorkspacePalette.panel, radius: 10)
@@ -169,9 +168,9 @@ private struct ConversationPanel: Block {
     Group("Conversation") {
       VStack(spacing: 12) {
         HStack {
-          Text(session.title).fontScale(0.75).hover(.none)
+          Text(session.title).fontScale(0.75).navigationIgnored()
           Spacer()
-          Text("LOCAL / SIMULATED").fontScale(0.35).foregroundColor(WorkspacePalette.accent).hover(.none)
+          Text("LOCAL / SIMULATED").fontScale(0.35).foregroundColor(WorkspacePalette.accent).navigationIgnored()
         }.padding(8)
         ScrollView("History", controller: session.scroll) {
           ForEach(session.messages) { message in
@@ -188,7 +187,7 @@ private struct ConversationPanel: Block {
     Group("Composer") {
       VStack(spacing: 10) {
         Text("COMPOSE / l to edit / Escape to move").fontScale(0.38)
-          .foregroundColor(WorkspacePalette.accent).hover(.none)
+          .foregroundColor(WorkspacePalette.accent).navigationIgnored()
         HStack(spacing: 10) {
           TextField(
             "Leave a thought here...", fontScale: 0.55,
@@ -220,7 +219,7 @@ private struct MessageCard: Block {
     Group("Message \(message.id + 1)") {
       VStack(spacing: 10) {
         Text("\(message.author) / \(String(format: "%02d", message.id + 1))")
-          .fontScale(0.35).foregroundColor(WorkspacePalette.accent).hover(.none)
+          .fontScale(0.35).foregroundColor(WorkspacePalette.accent).navigationIgnored()
         WrappedMessage(text: message.text)
         HStack(spacing: 8) {
           Button(message.saved ? "Saved" : "Save", fontScale: 0.35) {
@@ -280,12 +279,14 @@ private struct NavigationGuide: PrimitiveBlock {
 
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let editing = context.interactionMode == .editing
-    let mode = editing ? "EDIT" : "MOVE"
+    let mode = context.isSelectingText ? "SELECT" : editing ? "EDIT" : "MOVE"
     let location = context.navigationBreadcrumb.joined(separator: " / ")
     let hint =
-      editing
-      ? "Escape  return to MOVE     Enter  send     Your draft stays here."
-      : "d left   f up   j down   k right     s out     l \(context.navigationSelectionIsGroup ? "enter" : "use / edit")"
+      context.isSelectingText
+      ? "Arrows  caret   Shift+arrows  select   Cmd/Ctrl+C  copy   Escape  MOVE"
+      : editing
+        ? "Escape  return to MOVE     Enter  send     Your draft stays here."
+        : "dfjk move   Shift+dfjk section     s out     l \(context.navigationSelectionIsGroup ? "enter" : "use / edit")"
     drawList.fillRoundedRect(rect, radius: 8, color: WorkspacePalette.card)
     drawList.pushClip(rect)
     drawList.text(

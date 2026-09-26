@@ -120,11 +120,11 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
     case .copy:
       if let text = interaction.copyText() { _ = copy(text) }
     case .cut:
-      if let text = interaction.editableSelectionText(), !text.isEmpty, copy(text) {
+      if interaction.acceptsTextInsertion, let text = interaction.editableSelectionText(), !text.isEmpty, copy(text) {
         pendingTextEvents.append(.deleteForward)
       }
     case .paste:
-      if interaction.isTextEditing, let text = NSPasteboard.general.string(forType: .string) {
+      if interaction.acceptsTextInsertion, let text = NSPasteboard.general.string(forType: .string) {
         pendingTextEvents.append(.insert(text))
       }
     case .selectAll where !interaction.isTextEditing:

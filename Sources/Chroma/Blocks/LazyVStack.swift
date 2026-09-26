@@ -137,6 +137,7 @@ public struct LazyVStack: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let id = id ?? context.widgetID
     let interaction = context.interaction
+    controller.restore(id: id, interaction: interaction)
     interaction.registerScrollInput(id: id, rect: rect)
     let contentHeight: Float
     if let uniformRows {
@@ -196,12 +197,13 @@ public struct LazyVStack: PrimitiveBlock {
     }
 
     offset = min(max(0, offset), maximumOffset)
+    controller.offset = offset
     interaction.setScrollOffset(offset, for: id)
     interaction.setScrollLimit(maximumOffset, for: id)
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
-    interaction.beginGroup(rect: rect, axis: .vertical, scrollID: id)
+    interaction.beginGroup(rect: rect, axis: .vertical, scrollID: id, navigationID: id)
     let visibleTop = offset
     let visibleBottom = offset + rect.size.height
     let (before, after) = focusBuffer(for: interaction)
@@ -336,7 +338,7 @@ public struct LazyVStack: PrimitiveBlock {
       switch navigation {
       case .up: before += 1
       case .down: after += 1
-      case .left, .right, .stepIn, .stepOut: break
+      case .left, .right, .stepIn, .stepOut, .sectionLeft, .sectionRight, .sectionUp, .sectionDown: break
       }
     }
     return (before, after)

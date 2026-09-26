@@ -14,6 +14,7 @@ struct TextInputTests {
     pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
+    let isInitialFrame = ctx.tree == nil
     ctx.beginFrame(input: input)
     var result = TextInputState(hovered: false, held: false, editing: false, caretOffset: nil)
     ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
@@ -27,6 +28,7 @@ struct TextInputTests {
       id: WidgetID("b"), rect: Rect(x: 0, y: 20, width: 100, height: 20))
     ctx.endGroup()
     ctx.endFrame()
+    if isInitialFrame { ctx.focusFirstControlForTest() }
     return result
   }
 

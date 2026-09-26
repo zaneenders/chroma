@@ -421,8 +421,9 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
     }
   }
 
-  // Keyboard focus starts on the first cell and paints the standard tint.
+  // Explicitly select the first cell from the window root.
   renderer.render(input: parked)
+  renderer.render(input: InputState(commands: [.navigation(.down)]))
   #expect(tintRects() == [Rect(x: 0, y: 0, width: 40, height: 40)])
 
   // Pointer hover paints the same tint over the hovered cell.

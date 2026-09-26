@@ -215,6 +215,7 @@ struct ScrollViewTests {
     }
 
     frame()
+    frame(InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
     for index in 1..<5 {
       frame(InputState(commands: [.navigation(.down)]))
       #expect(interaction.selectedLeafID == WidgetID("row-\(index)"))
@@ -245,6 +246,7 @@ struct ScrollViewTests {
     }
 
     frame(InputState(pointerPosition: Point(x: 500, y: 500)))
+    frame(InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
     frame(InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     #expect(interaction.selectedLeafID == WidgetID("row-1"))
     #expect(log.phases[0] == .idle)
@@ -280,6 +282,7 @@ struct ScrollViewTests {
     }
 
     frame()
+    frame(InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
     for index in 1..<rows.count {
       frame(InputState(commands: [.navigation(.down)]))
       #expect(interaction.selectedLeafID == WidgetID("row-\(index)"))
@@ -307,6 +310,7 @@ struct ScrollViewTests {
     }
 
     frame()
+    frame(InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
     frame(InputState(commands: [.navigation(.down), .navigation(.down), .navigation(.down)]))
     #expect(context.interaction.tree?.node(at: context.interaction.selection ?? [])?.rect.minY == 10)
     frame()
@@ -368,6 +372,7 @@ struct ScrollViewTests {
     }
 
     frame()
+    frame(InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
     frame(InputState(commands: [.navigation(.down)]))
     frame(InputState(commands: [.navigation(.down)]))
     #expect(interaction.scrollOffset(for: scrollID) == 10)
@@ -831,6 +836,7 @@ struct ScrollViewTests {
     }
 
     frame()
+    interaction.focusFirstControlForTest()
     frame(InputState(pointerPosition: Point(x: 50, y: 50)))
     #expect(interaction.selection == [0, 0])
     frame(InputState(pointerPosition: Point(x: 50, y: 15)))

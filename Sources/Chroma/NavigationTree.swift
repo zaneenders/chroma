@@ -63,15 +63,6 @@ struct NavigationNode {
     return false
   }
 
-  var isNavigationBoundary: Bool {
-    if case .group(let id) = kind { return id != nil }
-    return false
-  }
-
-  var containsNavigationBoundaries: Bool {
-    children.contains { $0.isNavigationBoundary || $0.containsNavigationBoundaries }
-  }
-
   func path(to renderPath: [Int]) -> [Int]? {
     for (index, child) in children.enumerated() {
       if child.renderPath == renderPath { return [index] }

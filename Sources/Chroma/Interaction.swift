@@ -37,6 +37,8 @@ package final class Interaction {
   package internal(set) var textSelectionRange: Range<Int>?
   @ObservationIgnored var textDragAnchor: Int?
   package internal(set) var editingText: String?
+  package var editingReadOnly = false
+  package var acceptsTextInsertion: Bool { isTextEditing && !editingReadOnly }
 
   public package(set) var mode: InteractionMode = .movement
   package var isTextEditing: Bool { mode == .editing }
@@ -109,9 +111,6 @@ package final class Interaction {
   @ObservationIgnored var scrollLimits: [WidgetID: Float] = [:]
   @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
   @ObservationIgnored var pendingScrollReveals: [WidgetID: Rect] = [:]
-
-  /// `stepIn` returns to where the user left off instead of the scope's first control.
-  @ObservationIgnored var focusMemory: [WidgetID: WidgetID] = [:]
 
   struct PendingFocus: Equatable {
     var leaf: WidgetID
@@ -211,7 +210,6 @@ package final class Interaction {
     scrollLimits = [:]
     horizontalScrollLimits = [:]
     pendingScrollReveals = [:]
-    focusMemory = [:]
     pendingFocus = nil
     scrollRows = [:]
     scrollRowKeys = [:]
@@ -249,6 +247,7 @@ package final class Interaction {
   func endEditing() {
     if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
+    editingReadOnly = false
     editingText = nil
     inputLengthText = nil
     inputLength = 0
@@ -367,42 +366,8 @@ package final class Interaction {
         textDragAnchor = nil
       }
     }
-    let previousSelection = selection
     if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
-
-    let nextNavigation = NavigationNode(root: newTree, viewport: viewport)
-    let usesHierarchicalNavigation = nextNavigation.containsNavigationBoundaries
-    if !usesHierarchicalNavigation {
-      if let selection, let oldTree = tree {
-        if let id = oldTree.node(at: selection)?.leafID {
-          if let matchingPath = newTree.findLeaf(id) {
-            self.selection = matchingPath
-          } else {
-            let fallback = newTree.clamped(selection)
-            if let node = newTree.node(at: fallback), node.isLeaf, node.acceptsFocus {
-              self.selection = fallback
-            } else if let descendant = newTree.node(at: fallback)?.firstLeafPath() {
-              self.selection = fallback + descendant
-            } else {
-              self.selection = nil
-            }
-          }
-        } else if newTree.node(at: selection)?.isLeaf != true {
-          self.selection = selection
-        } else {
-          var ancestor = newTree.clamped(selection)
-          while !ancestor.isEmpty, newTree.node(at: ancestor)?.isLeaf == true {
-            ancestor.removeLast()
-          }
-          self.selection = ancestor.isEmpty ? newTree.firstLeafPath() : ancestor
-        }
-      }
-      if selection == nil { selection = newTree.firstLeafPath() }
-      if selection != previousSelection, previousSelection != nil, let selection {
-        reveal(selection, in: newTree)
-      }
-    }
 
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil { endEditing() }
     if let pressedLeaf, newTree.findLeaf(pressedLeaf) == nil { self.pressedLeaf = nil }
@@ -417,9 +382,7 @@ package final class Interaction {
     tree = newTree
     reconcileNavigation(in: newTree)
     resolveFocusTargets()
-    if usesHierarchicalNavigation {
-      hoveredLeafID = newTree.hitTest(input.pointerPosition).flatMap { newTree.node(at: $0)?.leafID }
-    }
+    hoveredLeafID = newTree.hitTest(input.pointerPosition).flatMap { newTree.node(at: $0)?.leafID }
 
     if let pending = pendingFocus {
       if let path = newTree.findLeaf(pending.leaf), newTree.node(at: path)?.acceptsFocus == true,
@@ -428,7 +391,6 @@ package final class Interaction {
         pendingFocus = nil
         selection = path
         selectedLeafID = pending.leaf
-        recordFocusMemory(for: path, in: newTree)
         if let navigationPath = navigation?.path(to: path) {
           self.navigationPath = navigationPath
           if let navigation { rememberNavigation(navigationPath, in: navigation) }
@@ -503,24 +465,6 @@ extension Interaction {
       selectNavigation(pathInNavigation)
       return
     }
-    pendingFocus = nil
-    selection = path
-    recordFocusMemory(for: path, in: tree)
-    reveal(path, in: tree)
-    if tree.node(at: path)?.isLeaf != true {
-      endEditing()
-    }
-  }
-
-  /// Every focus move updates each enclosing scope's memory, so the most recently focused
-  /// leaf is where a later `stepIn` returns to.
-  func recordFocusMemory(for path: [Int], in tree: FocusNode) {
-    guard let leafID = tree.node(at: path)?.leafID else { return }
-    for depth in 0...path.count {
-      if let scrollID = tree.node(at: Array(path.prefix(depth)))?.scrollID {
-        focusMemory[scrollID] = leafID
-      }
-    }
   }
 
   func reveal(_ path: [Int], in tree: FocusNode) {
@@ -550,43 +494,6 @@ extension Interaction {
       if pendingFocus?.scrollID == id { pendingFocus = nil }
     }
     scrollLayouts[id] = layout
-  }
-
-  private enum StepInTarget {
-    /// Focus the remembered leaf now.
-    case path([Int])
-    /// The remembered row is not drawn; a scroll reveal was queued and focus lands when
-    /// the row materializes.
-    case pending
-    /// The scroll container has no usable memory; land on its first focusable leaf.
-    case fallback
-  }
-
-  private func stepInTarget(for walker: FocusTreeWalker, in tree: FocusNode) -> StepInTarget {
-    guard let scrollID = walker.enteredScrollID, let remembered = focusMemory[scrollID] else {
-      return .fallback
-    }
-    if let path = tree.findLeaf(remembered), tree.node(at: path)?.acceptsFocus == true,
-      isDescendant(path, of: scrollID, in: tree)
-    {
-      return .path(path)
-    }
-    if let contentRect = scrollRows[scrollID]?[remembered],
-      let rowKey = scrollRowKeys[scrollID]?[remembered],
-      scrollLayouts[scrollID]?.rowKeys.contains(rowKey) == true
-    {
-      // Virtualization discarded the remembered row: reveal it in the scope's scroll
-      // container, then land focus once the row is drawn.
-      let offset = scrollOffset(for: scrollID)
-      pendingScrollReveals[scrollID] = Rect(
-        x: contentRect.minX,
-        y: contentRect.minY - offset,
-        width: contentRect.size.width,
-        height: contentRect.size.height)
-      pendingFocus = PendingFocus(leaf: remembered, scrollID: scrollID)
-      return .pending
-    }
-    return .fallback
   }
 
   package func resolve(_ input: KeyboardInput, appBindings: KeyBindings) -> ResolvedKeyboardInput? {
@@ -655,22 +562,7 @@ extension Interaction {
       return
     case .navigation(let command):
       guard mode == .movement else { return }
-      if navigation?.containsNavigationBoundaries == true {
-        moveNavigation(command)
-      } else {
-        guard let tree, let selection,
-          var walker = FocusTreeWalker(root: tree, path: selection), walker.move(command)
-        else { return }
-        guard case .stepIn = command else {
-          moveCursor(to: walker.path)
-          return
-        }
-        switch stepInTarget(for: walker, in: tree) {
-        case .path(let path): moveCursor(to: path)
-        case .pending: break
-        case .fallback: moveCursor(to: walker.path)
-        }
-      }
+      moveNavigation(command)
     case .action(.activate):
       guard let tree, let selection, tree.node(at: selection)?.isLeaf == true else { return }
       activatePending = true
@@ -696,7 +588,7 @@ extension Interaction {
 
   func interactiveBehavior(
     id: WidgetID, rect: Rect, role: ActionRole = .normal,
-    action: (@MainActor () -> Void)? = nil
+    action: (@MainActor () -> Void)? = nil, navigationIgnored: Bool = false
   ) -> ButtonState {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
@@ -704,7 +596,7 @@ extension Interaction {
     parent.children.append(
       FocusNode(
         kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role,
-        canBeRevealed: parent.canBeRevealed))
+        canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
     if role != .normal, let action {
       buildingActionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
     }

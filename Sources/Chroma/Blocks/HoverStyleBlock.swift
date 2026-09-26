@@ -2,7 +2,7 @@
 public enum HoverStyle: Equatable, Sendable {
   /// Translucent `focus.highlight` tint (`focus.pressedHighlight` while pressed).
   case standard
-  /// The content is decorative: it registers no default focus leaf and draws no highlight.
+  /// Draws no hover tint. Navigation participation is unchanged.
   case none
   /// A custom translucent tint; the color's own alpha is respected.
   case tint(Color)
@@ -36,11 +36,7 @@ public struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
 }
 
 extension Block {
-  /// Overrides the default interactivity of this content: every visible block is
-  /// keyboard-focusable and pointer-hoverable with a standard highlight. `.none` marks
-  /// decorative content — it registers no focus leaf; `.tint` keeps the leaf but draws a
-  /// custom highlight. Leaves registered by `focusable` honor it; controls that draw
-  /// their own state (Button, TextField, Interactive) ignore it.
+  /// Changes highlight appearance without changing navigation participation.
   public func hover(_ style: HoverStyle) -> HoverStyleBlock {
     HoverStyleBlock(content: self, style: style)
   }

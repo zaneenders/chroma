@@ -106,18 +106,12 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(
-          rect: Rect(x: 18, y: 5, width: 16, height: 16),
-          color: ChromaTheme.light.focus.selectionBackground),
-        .text(position: Point(x: 10, y: 5), text: "A", color: textColor, scale: 1),
-        .text(
-          position: Point(x: 18, y: 5), text: "BC",
-          color: ChromaTheme.light.focus.selectionForeground, scale: 1),
-        .text(position: Point(x: 34, y: 5), text: "D", color: textColor, scale: 1),
-        // The pointer remains over the held text, drawing the hover tint.
-        .fillRect(
-          rect: rect,
-          color: HoverStyle.standardTint(in: .light)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .text(position: Point(x: 10, y: 5), text: "ABCD", color: textColor, scale: 1),
+        .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .pushClip(Rect(x: 18, y: 5, width: 16, height: 16)),
+        .text(position: Point(x: 10, y: 5), text: "ABCD", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .popClip,
       ])
   }
 
@@ -153,20 +147,12 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(
-          rect: Rect(x: 10, y: 5, width: 6, height: 16),
-          color: ChromaTheme.light.focus.selectionBackground),
-        .text(
-          position: Point(x: 4, y: 5), text: "A", color: .white, scale: 1),
-        .text(
-          position: Point(x: 10, y: 5), text: "B",
-          color: ChromaTheme.light.focus.selectionForeground, scale: 1),
-        .text(
-          position: Point(x: 16, y: 5), text: "C", color: .white, scale: 1),
-        // The pointer remains over the held text, drawing the hover tint.
-        .fillRect(
-          rect: rect,
-          color: HoverStyle.standardTint(in: .light)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .text(position: Point(x: 4, y: 5), text: "ABC", color: .white, scale: 1),
+        .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .pushClip(Rect(x: 10, y: 5, width: 6, height: 16)),
+        .text(position: Point(x: 4, y: 5), text: "ABC", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .popClip,
       ])
   }
 

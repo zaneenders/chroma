@@ -42,6 +42,7 @@ public struct ScrollView: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let id = id ?? context.widgetID
     let interaction = context.interaction
+    controller?.restore(id: id, interaction: interaction)
     interaction.registerScrollInput(id: id, rect: rect, horizontal: true)
     let contentSize = BlockEngine.measure(
       content,
@@ -103,6 +104,7 @@ public struct ScrollView: PrimitiveBlock {
     offset = min(max(0, offset), maximumOffset)
     horizontalOffset = min(max(0, horizontalOffset), maximumHorizontalOffset)
     controller?.offset = offset
+    controller?.horizontalOffset = horizontalOffset
     interaction.setScrollOffset(offset, for: id)
     interaction.setHorizontalScrollOffset(horizontalOffset, for: id)
     interaction.setScrollLimit(maximumOffset, for: id)

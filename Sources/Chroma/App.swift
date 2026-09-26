@@ -21,7 +21,7 @@ extension App {
   public var title: String { String(describing: Self.self) }
   public var windowSize: Size { Size(width: 800, height: 600) }
   public var minimumRefreshRate: Double { 0 }
-  public var keyBindings: KeyBindings { KeyBindings() }
+  public var keyBindings: KeyBindings { .vimNavigation }
   public var frameObserver: FrameObserver? { nil }
 
   @MainActor

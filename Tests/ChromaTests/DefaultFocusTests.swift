@@ -14,10 +14,12 @@ struct DefaultFocusTests {
 
   @discardableResult
   private func render(_ content: any Block, input: InputState) -> DrawList {
+    let isInitialFrame = context.interaction.tree == nil
     context.interaction.beginFrame(input: input)
     var list = DrawList()
     BlockEngine.draw(content, into: &list, in: viewport, context: context)
     context.interaction.endFrame()
+    if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     return list
   }
 
@@ -113,10 +115,10 @@ struct DefaultFocusTests {
     #expect(!list.commands.contains(.fillRect(rect: target, color: standardHighlight)))
   }
 
-  @Test func hoverNoneRemovesDefaultFocusability() {
+  @Test func navigationIgnoredRemovesDefaultFocusability() {
     let content = VStack(spacing: 10) {
       Text("alpha")
-      Text("beta").hover(.none)
+      Text("beta").navigationIgnored()
     }
 
     render(content, input: parked)
@@ -212,13 +214,14 @@ struct DefaultFocusTests {
 
   @Test func focusableCellsHonorHoverOverrides() {
     let tint = Color(r: 1, g: 0, b: 0, a: 0.25)
-    let decorative = CellGrid(action: nil).hover(.none)
+    let decorative = CellGrid(action: nil).navigationIgnored()
     let tinted = CellGrid(action: nil).hover(.tint(tint))
 
     render(decorative, input: parked)
     #expect(leafRects().isEmpty, "decorative cells register no focus leaf")
 
     render(tinted, input: parked)
+    context.interaction.focusFirstControlForTest()
     let list = render(tinted, input: parked)
     let first = leafRects()[0]
     #expect(list.commands.contains(.fillRect(rect: first, color: tint)))
@@ -236,7 +239,7 @@ struct DefaultFocusTests {
 
   @Test func stacksOfOnlyDecorativeContentRegisterNoLeaf() {
     let content = VStack(spacing: 0) {
-      Text("hidden").hover(.none)
+      Text("hidden").navigationIgnored()
       Spacer()
     }
 

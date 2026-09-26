@@ -9,9 +9,11 @@ struct FocusAndCommandRegressionTests {
     let producer = FrameProducer()
 
     func render(_ content: any Block, input: InputState = InputState()) {
+      let isInitialFrame = context.interaction.tree == nil
       _ = producer.render(
         content: content, viewport: Size(width: 200, height: 100),
         input: input, context: context, onChange: {})
+      if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     }
   }
 
@@ -140,7 +142,7 @@ struct FocusAndCommandRegressionTests {
     harness.render(EmptyBlock())
     #expect(harness.context.interaction.selection == nil)
     harness.render(replacement)
-    harness.render(replacement, input: InputState(commands: [.action(.activate)]))
+    harness.render(replacement, input: InputState(commands: [.navigation(.down), .action(.activate)]))
     #expect(calls == 1)
   }
 
@@ -150,7 +152,7 @@ struct FocusAndCommandRegressionTests {
     harness.render(Button("Before") {})
     let replacement = VStack { Button("After") { calls += 1 } }
     harness.render(replacement)
-    harness.render(replacement, input: InputState(commands: [.action(.activate)]))
+    harness.render(replacement, input: InputState(commands: [.navigation(.down), .action(.activate)]))
     #expect(calls == 1)
   }
 
