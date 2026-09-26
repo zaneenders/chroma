@@ -1,8 +1,8 @@
 struct FocusTreeWalker {
   let root: FocusNode
   private(set) var path: [Int]
-  /// The scope entered by the last successful `stepIn`, for focus-memory lookup.
-  private(set) var enteredScopeID: WidgetID?
+  /// The scroll entered by the last successful `stepIn`, for focus-memory lookup.
+  private(set) var enteredScrollID: WidgetID?
 
   init?(root: FocusNode, path: [Int]) {
     guard root.node(at: path)?.isLeaf == true else { return nil }
@@ -88,30 +88,30 @@ struct FocusTreeWalker {
 }
 
 extension FocusTreeWalker {
-  /// Leaves the nearest enclosing focus scope for the closest focusable control outside it.
+  /// Leaves the nearest enclosing scroll container for the closest focusable control outside it.
   ///
-  /// Candidates may only climb out: leaves inside scopes unrelated to the exited one are
-  /// skipped, so a step out never dives sideways into a different scope.
+  /// Candidates may only climb out: leaves inside scrolls unrelated to the exited one are
+  /// skipped, so a step out never dives sideways into a different scroll container.
   mutating func stepOut() -> Bool {
     guard let origin = root.node(at: path) else { return false }
-    guard let scopePath = enclosingScopePath(of: path) else { return false }
+    guard let scrollPath = enclosingScopePath(of: path) else { return false }
     let originCenter = center(of: origin.rect)
     var bestPath: [Int]?
     var bestDistance = Float.infinity
 
     func visit(_ node: FocusNode, path current: [Int]) {
-      if isPrefixed(scopePath, of: current) { return }
-      if node.isScope, !isPrefixed(current, of: scopePath) {
-        // Unrelated scope: every leaf below sits inside it, so the whole subtree is skipped.
+      if isPrefixed(scrollPath, of: current) { return }
+      if node.scrollID != nil, !isPrefixed(current, of: scrollPath) {
+        // Unrelated scroll container: every leaf below sits inside it, so the whole subtree is skipped.
         return
       }
       if node.isLeaf {
         guard node.acceptsFocus else { return }
         for depth in current.indices {
           let ancestorPath = Array(current.prefix(depth))
-          guard let ancestor = root.node(at: ancestorPath), ancestor.isScope else { continue }
-          // Only scopes that also enclose the exited scope may be crossed on the way out.
-          guard isPrefixed(ancestorPath, of: scopePath) else { return }
+          guard let ancestor = root.node(at: ancestorPath), ancestor.scrollID != nil else { continue }
+          // Only scroll containers that also enclose the exited scroll may be crossed on the way out.
+          guard isPrefixed(ancestorPath, of: scrollPath) else { return }
         }
         let distance = squaredDistance(center(of: node.rect), originCenter)
         if distance < bestDistance {
@@ -131,26 +131,26 @@ extension FocusTreeWalker {
     return true
   }
 
-  /// Enters the nearest focus scope that does not contain the current focus, landing on
-  /// its first focusable leaf. The caller overlays the scope's remembered leaf when one exists.
+  /// Enters the nearest scroll container that does not contain the current focus, landing on
+  /// its first focusable leaf. The caller overlays the scroll container's remembered leaf when one exists.
   ///
-  /// Scopes that contain the current focus are already entered and stay transparent so nested
-  /// sibling scopes inside them remain reachable; non-containing scopes are atomic targets.
+  /// Scroll containers that contain the current focus are already entered and stay transparent so nested
+  /// sibling scroll containers inside them remain reachable; non-containing scroll containers are atomic targets.
   mutating func stepIn() -> Bool {
     guard let origin = root.node(at: path) else { return false }
     let originCenter = center(of: origin.rect)
     var bestPath: [Int]?
-    var bestScopeID: WidgetID?
+    var bestScrollID: WidgetID?
     var bestDistance = Float.infinity
 
     func visit(_ node: FocusNode, path current: [Int]) {
-      if node.isScope, !isPrefixed(current, of: path) {
+      if let scrollID = node.scrollID, !isPrefixed(current, of: path) {
         if let leaf = node.firstLeafPath() {
           let distance = squaredDistance(center(of: node.rect), originCenter)
           if distance < bestDistance {
             bestDistance = distance
             bestPath = current + leaf
-            bestScopeID = node.scopeID
+            bestScrollID = scrollID
           }
         }
         return
@@ -161,9 +161,9 @@ extension FocusTreeWalker {
     }
 
     visit(root, path: [])
-    guard let bestPath, let bestScopeID else { return false }
+    guard let bestPath, let bestScrollID else { return false }
     path = bestPath
-    enteredScopeID = bestScopeID
+    enteredScrollID = bestScrollID
     return true
   }
 
@@ -174,9 +174,7 @@ extension FocusTreeWalker {
   private func enclosingScopePath(of path: [Int]) -> [Int]? {
     for depth in path.indices.reversed() {
       let ancestorPath = Array(path.prefix(depth))
-      if let node = root.node(at: ancestorPath), node.isScope {
-        return ancestorPath
-      }
+      if root.node(at: ancestorPath)?.scrollID != nil { return ancestorPath }
     }
     return nil
   }

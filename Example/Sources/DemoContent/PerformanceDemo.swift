@@ -159,25 +159,26 @@ private struct PerformanceScene: Block {
         .border(theme.border)
 
         HStack(spacing: 10) {
-          VStack(spacing: 10) {
-            VStack(spacing: 6) {
-              Text("MANDELBROT / 640 × 400 RGBA")
-                .fontScale(demoSmallText)
-                .foregroundColor(theme.accent)
-              Image(state.image, scaling: .contain)
-                .sizing(x: .grow, y: .fixed(160))
-                .background(theme.background)
-            }
-            .padding(10)
-            .background(theme.surface)
-            .border(theme.border)
+          Group {
+            VStack(spacing: 10) {
+              VStack(spacing: 6) {
+                Text("MANDELBROT / 640 × 400 RGBA")
+                  .fontScale(demoSmallText)
+                  .foregroundColor(theme.accent)
+                Image(state.image, scaling: .contain)
+                  .sizing(x: .grow, y: .fixed(160))
+                  .background(theme.background)
+              }
+              .padding(10)
+              .background(theme.surface)
+              .border(theme.border)
 
-            ShapeCanvas(state: state)
-              .sizing(x: .grow, y: .grow)
-              .clipped()
+              ShapeCanvas(state: state)
+                .sizing(x: .grow, y: .grow)
+                .clipped()
+            }
           }
           .sizing(x: .grow, y: .grow)
-          .focusScope()
 
           UUIDList(state: state)
             .sizing(x: .fixed(330), y: .grow)
@@ -225,17 +226,19 @@ private struct UUIDList: Block {
             state.uuidScrollController.scrollToBottom()
           }
         }
-        LazyVStack(
-          data: state.identifiers.indices, rowHeight: 48, spacing: 5,
-          controller: state.uuidScrollController
-        ) { index in
-          VStack(spacing: 3) {
-            Text("UUID \(index + 1)")
-              .fontScale(demoSmallText)
-              .foregroundColor(theme.secondaryForeground)
-            Text(state.identifiers[index])
-              .fontScale(demoSmallText)
-              .foregroundColor(theme.foreground)
+        Group("UUID list") {
+          LazyVStack(
+            data: state.identifiers.indices, rowHeight: 48, spacing: 5,
+            controller: state.uuidScrollController
+          ) { index in
+            VStack(spacing: 3) {
+              Text("UUID \(index + 1)")
+                .fontScale(demoSmallText)
+                .foregroundColor(theme.secondaryForeground)
+              Text(state.identifiers[index])
+                .fontScale(demoSmallText)
+                .foregroundColor(theme.foreground)
+            }
           }
           .padding(8)
           .sizing(x: .grow)

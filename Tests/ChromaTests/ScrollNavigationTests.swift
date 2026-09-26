@@ -3,7 +3,7 @@ import Testing
 @testable import Chroma
 
 @MainActor
-struct FocusScopeTests {
+struct ScrollNavigationTests {
   @MainActor private final class Harness {
     let context = RenderContext()
     let producer = FrameProducer()
@@ -18,7 +18,7 @@ struct FocusScopeTests {
   @Test func stepOutEscapesDeepVirtualizedRowsInOneStep() {
     let harness = Harness()
     let controller = ScrollViewController()
-    let listID = WidgetID("scope-escape-list")
+    let listID = WidgetID("scroll-escape-list")
     let after = FocusTarget()
     let rows = (0..<40).map { _ in FocusTarget() }
     let content = VStack {
@@ -49,7 +49,7 @@ struct FocusScopeTests {
   @Test func stepInRestoresAVirtualizedRowByRevealingIt() {
     let harness = Harness()
     let controller = ScrollViewController()
-    let listID = WidgetID("scope-restore-list")
+    let listID = WidgetID("scroll-restore-list")
     let after = FocusTarget()
     let rows = (0..<40).map { _ in FocusTarget() }
     let content = VStack {
@@ -79,7 +79,7 @@ struct FocusScopeTests {
     #expect(rows[12].isFocused)
   }
 
-  @Test func stepInLandsOnTheFirstLeafOfAnUnvisitedScope() {
+  @Test func stepInEntersTheNearestUnvisitedScrollContainer() {
     let harness = Harness()
     let before = FocusTarget()
     let rows = (0..<10).map { _ in FocusTarget() }
@@ -99,10 +99,10 @@ struct FocusScopeTests {
     #expect(rows[0].isFocused)
   }
 
-  @Test func stepOutSkipsSiblingScopes() {
+  @Test func stepOutSkipsSiblingScrollContainers() {
     let harness = Harness()
-    let leftList = WidgetID("scope-left-list")
-    let rightList = WidgetID("scope-right-list")
+    let leftList = WidgetID("scroll-left-list")
+    let rightList = WidgetID("scroll-right-list")
     let left = FocusTarget()
     let leftRows = (0..<20).map { _ in FocusTarget() }
     let rightRows = (0..<20).map { _ in FocusTarget() }
@@ -139,7 +139,7 @@ struct FocusScopeTests {
     #expect(leftRows[12].isFocused)
   }
 
-  @Test func stepCommandsDoNothingWithoutScopes() {
+  @Test func stepCommandsDoNothingWithoutScrollContainers() {
     let harness = Harness()
     let first = FocusTarget()
     let second = FocusTarget()
@@ -160,7 +160,7 @@ struct FocusScopeTests {
   @Test func layoutChangesInvalidateVirtualizedRowCoordinates() {
     let harness = Harness()
     let controller = ScrollViewController()
-    let listID = WidgetID("scope-layout-change")
+    let listID = WidgetID("scroll-layout-change")
     let keys = (0..<30).map { index in "row-\(index)" }
     let targets = Dictionary(uniqueKeysWithValues: keys.map { ($0, FocusTarget()) })
     let outside = FocusTarget()
@@ -190,85 +190,6 @@ struct FocusScopeTests {
     harness.render(resized)
     harness.render(resized, input: InputState(commands: [.navigation(.stepIn)]))
     #expect(harness.context.interaction.pendingFocus == nil)
-  }
-
-  @Test func focusScopeBlocksFormBoundariesAndRememberTheirContent() {
-    let harness = Harness()
-    let header = FocusTarget()
-    let panelField = FocusTarget()
-    let outside = FocusTarget()
-    let content = VStack {
-      Button("Header") {}.focusTarget(header)
-      HStack {
-        VStack {
-          Button("Field") {}.focusTarget(panelField)
-        }.focusScope()
-      }
-      Button("Outside") {}.focusTarget(outside)
-    }
-
-    harness.render(content)
-    #expect(header.isFocused)
-
-    // Enter the marked panel, then leave it in one step from the inside: the nearest
-    // control beyond the scope edge is the header right above it.
-    harness.render(content, input: InputState(commands: [.navigation(.stepIn)]))
-    #expect(panelField.isFocused)
-    harness.render(content, input: InputState(commands: [.navigation(.stepOut)]))
-    #expect(header.isFocused)
-
-    // The panel remembers its field even though it was left behind.
-    harness.render(content, input: InputState(commands: [.navigation(.stepIn)]))
-    #expect(panelField.isFocused)
-
-    // Directional navigation still crosses the scope edge normally.
-    harness.render(content, input: InputState(commands: [.navigation(.down)]))
-    #expect(outside.isFocused)
-  }
-
-  @Test func focusScopePaintsAnAccentBorderOnlyWhileFocusIsInside() {
-    let context = RenderContext()
-    let producer = FrameProducer()
-    let header = FocusTarget()
-    let field = FocusTarget()
-    let outside = FocusTarget()
-    let content = VStack {
-      Button("Header") {}.focusTarget(header)
-      HStack {
-        VStack {
-          Button("Field") {}.focusTarget(field)
-        }.focusScope()
-      }
-      Button("Outside") {}.focusTarget(outside)
-    }
-    let ring = ChromaTheme.dark.focus.ring
-
-    func ringStrokes(_ drawList: DrawList) -> [Rect] {
-      drawList.commands.compactMap { command -> Rect? in
-        guard case .strokeRoundedRect(let rect, _, _, let color) = command, color == ring else {
-          return nil
-        }
-        return rect
-      }
-    }
-
-    var drawList = producer.render(
-      content: content, viewport: Size(width: 200, height: 100),
-      input: InputState(), context: context, onChange: {})
-    #expect(header.isFocused)
-    #expect(ringStrokes(drawList).isEmpty)
-
-    drawList = producer.render(
-      content: content, viewport: Size(width: 200, height: 100),
-      input: InputState(commands: [.navigation(.stepIn)]), context: context, onChange: {})
-    #expect(field.isFocused)
-    #expect(ringStrokes(drawList).count == 1)
-
-    drawList = producer.render(
-      content: content, viewport: Size(width: 200, height: 100),
-      input: InputState(commands: [.navigation(.stepOut)]), context: context, onChange: {})
-    #expect(header.isFocused)
-    #expect(ringStrokes(drawList).isEmpty)
   }
 
   @Test func stepKeysInsertTextWhileEditing() {

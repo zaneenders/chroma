@@ -56,6 +56,18 @@ public struct RenderContext {
     interaction.onSelectAll = handler
   }
 
+  public var navigationBreadcrumb: [String] {
+    guard let root = interaction.navigation else { return ["Window"] }
+    return ["Window"]
+      + interaction.navigationPath.indices.compactMap { depth in
+        root.node(at: Array(interaction.navigationPath.prefix(depth + 1)))?.name
+      }
+  }
+
+  public var navigationSelectionIsGroup: Bool {
+    interaction.navigation?.node(at: interaction.navigationPath)?.isGroup ?? true
+  }
+
   public var interactionMode: InteractionMode { interaction.mode }
 
   var activeTextInput: WidgetID? {
@@ -172,19 +184,15 @@ public struct RenderContext {
       pointerOffset: pointerOffset, verticalOffset: verticalOffset)
   }
 
-  /// Scopes focusable content drawn in `rect` into one group of the focus tree.
   ///
   /// `axis` declares the direction siblings inside the closure are laid out in, so custom containers
   /// navigate like the built-in stacks. Nested groups declare their own axis; `nil` inherits movement
-  /// from the nearest enclosing group with a matching axis. Pass `scope: true` to make the group a
-  /// focus scope boundary for `stepIn`/`stepOut` navigation, matching `.focusScope()`.
   public func withFocusGroup<Result>(
     in rect: Rect,
     axis: FocusGroupAxis? = nil,
-    scope: Bool = false,
     _ body: () throws -> Result
   ) rethrows -> Result {
-    interaction.beginGroup(rect: rect, axis: axis, scopeID: scope ? widgetID : nil)
+    interaction.beginGroup(rect: rect, axis: axis)
     defer { interaction.endGroup() }
     return try body()
   }

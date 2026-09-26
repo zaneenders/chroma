@@ -144,16 +144,16 @@ public struct LazyVStack: PrimitiveBlock {
         Float(uniformRows.count) * uniformRows.height
         + spacing * Float(max(0, uniformRows.count - 1))
       let rowKeys = uniformRows.keys ?? (0..<uniformRows.count).map { StructuralKey($0) }
-      interaction.updateFocusScopeLayout(
+      interaction.updateScrollLayout(
         id: id,
-        layout: Interaction.FocusScopeLayout(
+        layout: Interaction.ScrollLayout(
           width: rect.size.width, spacing: spacing, rowKeys: rowKeys,
           rowHeights: Array(repeating: uniformRows.height, count: uniformRows.count)))
     } else {
       updateCache(width: rect.size.width, context: context)
-      interaction.updateFocusScopeLayout(
+      interaction.updateScrollLayout(
         id: id,
-        layout: Interaction.FocusScopeLayout(
+        layout: Interaction.ScrollLayout(
           width: rect.size.width, spacing: spacing,
           rowKeys: controller.lazyStackCache.rowKeys,
           rowHeights: controller.lazyStackCache.rowSizes.map(\.height)))
@@ -229,7 +229,7 @@ public struct LazyVStack: PrimitiveBlock {
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
               width: rect.size.width, height: uniformRows.height),
             context: uniformRows.keys.map { context.scoped([.key($0[index])]) } ?? context.childScope(index),
-            interaction: interaction, offset: offset, scopeID: id,
+            interaction: interaction, offset: offset, scrollID: id,
             rowKey: uniformRows.keys?[index] ?? StructuralKey(index))
         }
       }
@@ -260,7 +260,7 @@ public struct LazyVStack: PrimitiveBlock {
                 x: rect.minX, y: rect.minY + y - offset,
                 width: rect.size.width, height: height),
               context: context.scoped([.key(rows[index].key)]),
-              interaction: interaction, offset: offset, scopeID: id, rowKey: rows[index].key)
+              interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key)
           }
           y += height + spacing
         }
@@ -288,7 +288,7 @@ public struct LazyVStack: PrimitiveBlock {
   /// in the row still register themselves.
   @MainActor private func drawRow(
     _ content: any Block, into drawList: inout DrawList, in rect: Rect,
-    context rowContext: RenderContext, interaction: Interaction, offset: Float, scopeID: WidgetID,
+    context rowContext: RenderContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
     rowKey: StructuralKey
   ) {
     guard let group = interaction.builderStack.last else {
@@ -301,27 +301,27 @@ public struct LazyVStack: PrimitiveBlock {
     if group.children.count == children {
       rowContext.focusable(in: rect, into: &drawList)
     }
-    recordFocusScopeRows(
-      in: group.children[children...], offset: offset, scopeID: scopeID,
+    recordScrollRows(
+      in: group.children[children...], offset: offset, scrollID: scrollID,
       rowKey: rowKey, interaction: interaction)
   }
 
   /// Logs where the focused leaf of a drawn row sits in the list's content, so a remembered
   /// row can be revealed even after virtualization discards it.
-  @MainActor private func recordFocusScopeRows(
-    in nodes: ArraySlice<FocusNode>, offset: Float, scopeID: WidgetID,
+  @MainActor private func recordScrollRows(
+    in nodes: ArraySlice<FocusNode>, offset: Float, scrollID: WidgetID,
     rowKey: StructuralKey, interaction: Interaction
   ) {
     for node in nodes {
       guard case .leaf(let leafID) = node.kind else {
-        recordFocusScopeRows(
-          in: node.children[...], offset: offset, scopeID: scopeID,
+        recordScrollRows(
+          in: node.children[...], offset: offset, scrollID: scrollID,
           rowKey: rowKey, interaction: interaction)
         continue
       }
       guard leafID == interaction.selectedLeafID else { continue }
-      interaction.recordFocusScopeRow(
-        id: scopeID, leafID: leafID, rowKey: rowKey,
+      interaction.recordScrollRow(
+        id: scrollID, leafID: leafID, rowKey: rowKey,
         rect: Rect(
           x: node.rect.minX, y: node.rect.minY + offset,
           width: node.rect.size.width, height: node.rect.size.height))

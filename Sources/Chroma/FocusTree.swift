@@ -17,9 +17,8 @@ final class FocusNode {
   var role: ActionRole = .normal
   let axis: Axis?
   let scrollID: WidgetID?
-  /// Identity of the focus scope this group forms, if any. Scopes are the boundaries
-  /// `stepIn`/`stepOut` navigation moves across; they remember their last-focused leaf.
-  let scopeID: WidgetID?
+  let navigationName: String?
+  let navigationID: WidgetID?
   /// True when a scroll container above this node scrolls the node into view on focus.
   let canBeRevealed: Bool
   var commandHandlers: [Command: @MainActor () -> CommandResult] = [:]
@@ -32,7 +31,8 @@ final class FocusNode {
     role: ActionRole = .normal,
     axis: Axis? = nil,
     scrollID: WidgetID? = nil,
-    scopeID: WidgetID? = nil,
+    navigationID: WidgetID? = nil,
+    navigationName: String? = nil,
     canBeRevealed: Bool = false
   ) {
     self.kind = kind
@@ -41,7 +41,8 @@ final class FocusNode {
     self.role = role
     self.axis = axis
     self.scrollID = scrollID
-    self.scopeID = scopeID
+    self.navigationID = navigationID
+    self.navigationName = navigationName
     self.canBeRevealed = canBeRevealed
   }
 
@@ -60,9 +61,6 @@ final class FocusNode {
     return id
   }
 
-  /// True when this group is a focus scope: scroll containers and explicitly marked
-  /// containers form the boundaries that `stepIn`/`stepOut` navigation moves across.
-  var isScope: Bool { scopeID != nil }
 }
 
 extension FocusNode {

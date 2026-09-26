@@ -37,3 +37,21 @@ swift run --package-path Benchmarks -c release RenderBenchmark --scene text --st
 
 Benchmark reports use schema version 4; regenerate baselines rather than comparing
 against former wire/pipeline results.
+
+## Move through the interface
+
+The default demo is a local conversation workspace. Switch sessions, leave drafts,
+enter messages to save or quote them, and return without losing your place.
+The **Render gallery** tab keeps the graphics, font, and virtualized-list examples.
+
+- **MOVE:** `d` left, `f` up, `j` down, `k` right (arrow keys also work).
+- **`l`:** enter the selected group, activate a button, or begin editing a field.
+- **`s`:** select the containing group. **Escape:** leave EDIT mode for MOVE.
+- At an edge, directional navigation searches outward and selects a neighboring
+  section without descending into it. Groups remember their selected child.
+- History does not follow new messages automatically. **Latest** explicitly moves
+  to the bottom; switching sessions preserves drafts and scroll positions.
+
+`Group("Composer") { ... }` defines a navigation boundary without adding layout.
+Stacks and visual modifiers do not add navigation levels. `ScrollView("History")`
+creates a scroll boundary. Optional names appear in the demo's navigation trail.

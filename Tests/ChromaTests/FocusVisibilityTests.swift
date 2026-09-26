@@ -54,6 +54,7 @@ struct FocusVisibilityTests {
       }
     }
     render(content)
+    render(content, input: InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
     let first = interaction.selectedLeafID
 
     for _ in 0..<3 {

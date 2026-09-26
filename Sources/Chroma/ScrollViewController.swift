@@ -11,6 +11,7 @@ enum ScrollRequest: Equatable, Sendable {
 @Observable
 @MainActor
 public final class ScrollViewController {
+  @ObservationIgnored public internal(set) var offset: Float = 0
   var request: ScrollRequest?
   @ObservationIgnored var lazyStackCache = LazyStackCache()
 

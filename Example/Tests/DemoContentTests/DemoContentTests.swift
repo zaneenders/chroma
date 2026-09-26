@@ -235,7 +235,9 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
     if case .fillRect(let rect, let color) = command,
       color == HoverStyle.standardTint(in: .dark),
       rect.size.width == 40, rect.size.height == 40
-    { return rect }
+    {
+      return rect
+    }
   }
   return nil
 }
@@ -244,7 +246,8 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @Test func fontTabOpensAndSurvivesCaptureRoundTrip() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
   let renderer = HeadlessRenderer(size: demo.windowSize)
-  renderer.content = demo.body
+  let gallery = PerformanceDemoState(itemCount: 100)
+  renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
   let frame = renderer.render()
   #expect(
@@ -279,7 +282,8 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @Test func fontPageArrowKeysMoveTheGlyphHighlight() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
   let renderer = HeadlessRenderer(size: demo.windowSize)
-  renderer.content = demo.body
+  let gallery = PerformanceDemoState(itemCount: 100)
+  renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
 
   /// The glyph grid draws the inspected cell in the accent color; the page heading supplies that color.
@@ -301,6 +305,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
     return try #require(highlightedCell())
   }
 
+  renderer.render(input: InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
   let initialHighlight = try #require(highlightedCell())
   let cell: Float = 40
   // Arrow keys stop on every focusable element — tabs, headings, the preview field —
@@ -329,7 +334,8 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @Test func escapeLeavesTheFontPreviewField() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
   let renderer = HeadlessRenderer(size: demo.windowSize)
-  renderer.content = demo.body
+  let gallery = PerformanceDemoState(itemCount: 100)
+  renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
 
   func highlightedCell() -> Point? {
@@ -349,6 +355,15 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
     return highlightedCell()
   }
 
+  let preview = try #require(
+    renderer.render().commands.compactMap { command -> Point? in
+      if case .text(let point, "LIVE PREVIEW", _, _) = command { return point }
+      return nil
+    }.first)
+  let click = Point(x: preview.x + 15, y: preview.y + 35)
+  renderer.render(
+    input: InputState(pointerPosition: click, pointerPressPosition: click, pointerDown: true, pointerPressed: true))
+  renderer.render(input: InputState(pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
   let before = try #require(highlightedCell())
   press(.navigation(.down))
   press(.action(.activate))
@@ -437,7 +452,8 @@ extension DemoContentTests {
   @Test func scenePageScrollsTheUuidListWithArrowKeys() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
     let renderer = HeadlessRenderer(size: demo.windowSize)
-    renderer.content = demo.body
+    let gallery = PerformanceDemoState(itemCount: 100)
+    renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
 
     func firstVisibleRow() -> Int? {
       renderer.render().commands.compactMap { command -> Int? in
@@ -446,11 +462,10 @@ extension DemoContentTests {
       }.min()
     }
 
-    // The list sits beside the shape canvas: vertical walking stays in the left column
-    // and ends at the status bar, so enter the list by clicking its header first.
+    // Pointer selection enters the list directly; keyboard movement reveals later rows.
     let header = try #require(
       renderer.render().commands.compactMap { command -> Point? in
-        if case .text(let point, let text, _, _) = command, text.hasSuffix("UUIDs / SCROLL TEST") {
+        if case .text(let point, let text, _, _) = command, text == "UUID 1" {
           return point
         }
         return nil
@@ -475,7 +490,8 @@ extension DemoContentTests {
   @Test func scenePageStepsOutOfTheUuidListAndBackToTheRememberedRow() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
     let renderer = HeadlessRenderer(size: demo.windowSize)
-    renderer.content = demo.body
+    let gallery = PerformanceDemoState(itemCount: 100)
+    renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
     let parked = InputState(pointerPosition: Point(x: 5000, y: 5000))
 
     func firstVisibleRow() -> Int? {
@@ -509,10 +525,10 @@ extension DemoContentTests {
       return uuidTextOrigins().contains { origin in tints.contains { $0.contains(origin) } }
     }
 
-    // Enter the list by clicking its header, then walk until focus is deep enough to scroll.
+    // Select the first row, then walk far enough to require scrolling.
     let header = try #require(
       renderer.render().commands.compactMap { command -> Point? in
-        if case .text(let point, let text, _, _) = command, text.hasSuffix("UUIDs / SCROLL TEST") {
+        if case .text(let point, let text, _, _) = command, text == "UUID 1" {
           return point
         }
         return nil

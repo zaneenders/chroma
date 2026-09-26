@@ -187,6 +187,7 @@ struct ScrollViewTests {
     }
 
     frame()
+    frame(InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
     frame(InputState(commands: [.navigation(.down)]))
     #expect(interaction.scrollOffset(for: scrollID) == 0)
 
@@ -203,7 +204,8 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(id: scrollID, data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller) { index in
+        LazyVStack(id: scrollID, data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller)
+        { index in
           Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
             RowContent(height: 10, color: .white)
           }
@@ -261,9 +263,11 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
     let heights: [Float] = [8, 18, 6, 15, 9]
     let rows = heights.enumerated().map { index, height in
-      LazyVStack.Row(id: index, content: Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
-        RowContent(height: height, color: .white)
-      })
+      LazyVStack.Row(
+        id: index,
+        content: Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
+          RowContent(height: height, color: .white)
+        })
     }
 
     func frame(_ input: InputState = InputState()) {
@@ -335,6 +339,7 @@ struct ScrollViewTests {
     }
 
     frame()
+    frame(InputState(commands: [.navigation(.down), .navigation(.stepIn), .navigation(.stepIn)]))
     frame(InputState(commands: [.navigation(.down)]))
     frame(InputState(commands: [.navigation(.down)]))
     #expect(interaction.selectedLeafID == WidgetID("row-2"))

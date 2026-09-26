@@ -1,5 +1,6 @@
 public struct ScrollView: PrimitiveBlock {
   var id: WidgetID?
+  public var name: String? = nil
   public var showsIndicator: Bool
   public var sticksToBottom: Bool
   public var controller: ScrollViewController?
@@ -20,6 +21,7 @@ public struct ScrollView: PrimitiveBlock {
   }
 
   public init(
+    _ name: String? = nil,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
     controller: ScrollViewController? = nil,
@@ -27,6 +29,7 @@ public struct ScrollView: PrimitiveBlock {
   ) {
     self.init(
       id: nil, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
+    self.name = name
   }
 
   public var focusRule: FocusRule { .container }
@@ -99,6 +102,7 @@ public struct ScrollView: PrimitiveBlock {
 
     offset = min(max(0, offset), maximumOffset)
     horizontalOffset = min(max(0, horizontalOffset), maximumHorizontalOffset)
+    controller?.offset = offset
     interaction.setScrollOffset(offset, for: id)
     interaction.setHorizontalScrollOffset(horizontalOffset, for: id)
     interaction.setScrollLimit(maximumOffset, for: id)
@@ -106,7 +110,7 @@ public struct ScrollView: PrimitiveBlock {
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
-    interaction.beginGroup(rect: rect, scrollID: id)
+    interaction.beginGroup(rect: rect, scrollID: id, navigationID: id, navigationName: name)
     BlockEngine.draw(
       content,
       into: &drawList,
