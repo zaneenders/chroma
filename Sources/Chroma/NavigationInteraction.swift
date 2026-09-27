@@ -133,6 +133,7 @@ extension Interaction {
         let selected = navigation.node(at: navigationPath)
       else { return }
       guard selected.isGroup else {
+        enterTextPending = true
         activatePending = true
         return
       }

@@ -373,7 +373,9 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 
   // Esc resolves to the edit-exit event while a field is being edited.
   renderer.render(input: InputState(textEvents: [.endEditing]))
-  // Navigation resumes: walk down until the grid takes focus, then activate.
+  // Leave the text level before navigating the surrounding controls.
+  press(.navigation(.stepOut))
+  // Walk down until the grid takes focus, then activate.
   for _ in 0..<50 {
     press(.navigation(.down))
     if focusedGlyphCell(renderer) != nil { break }

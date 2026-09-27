@@ -44,14 +44,17 @@ The default demo is a local conversation workspace. Switch sessions, leave draft
 enter messages to save or quote them, and return without losing your place.
 The **Render gallery** tab keeps the graphics, font, and virtualized-list examples.
 
-- **MOVE:** `d` left, `f` up, `j` down, `k` right (arrow keys also work).
-- **`l`:** enter the selected group, activate a button, or begin editing a field.
-- **`s`:** select the containing group. **Escape:** leave EDIT mode for MOVE.
+- **MOVE:** `d` left, `f` up, `j` down, `k` right. Arrow keys have no default bindings.
+- **`l`:** enter the selected group or text, or activate a button.
+- **`s`:** select the containing group. **Enter:** start INPUT in editable text.
+  **Escape:** return from INPUT to MOVE inside the text.
 - Plain movement stays inside the current group. **Shift+d/f/j/k** searches
   outside that group for a neighboring section without descending into it.
   Groups remember their selected child.
-- Enter selectable text with `l`: arrows move the caret, Shift+arrows select,
-  Command+C / Ctrl+C copies, and Escape returns to MOVE. Paste into an editable field.
+- Enter text with `l`: `dfjk` moves the caret, Shift+`dfjk` selects,
+  Command+C / Ctrl+C copies, and `s` leaves the text level.
+  Enter starts INPUT without discarding the caret or selection; typing/pasting
+  replaces the selection. Read-only text never enters INPUT.
 - History does not follow new messages automatically. **Latest** explicitly moves
   to the bottom; switching sessions preserves drafts and scroll positions.
 

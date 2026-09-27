@@ -43,6 +43,8 @@ package final class Interaction {
   public package(set) var mode: InteractionMode = .movement
   package var isTextEditing: Bool { mode == .editing }
 
+  @ObservationIgnored var enterTextPending = false
+  @ObservationIgnored var movementTextEvents: [TextEditEvent] = []
   @ObservationIgnored var activatePending = false
   @ObservationIgnored private var redrawRequested = false
   @ObservationIgnored package var onRedrawRequested: (() -> Void)?
@@ -88,7 +90,7 @@ package final class Interaction {
   @ObservationIgnored package var onSelectAll: (() -> Bool)?
 
   package func editableSelectionText() -> String? {
-    guard isTextEditing, let range = textSelectionRange, let editingText else { return nil }
+    guard editingLeaf != nil, let range = textSelectionRange, let editingText else { return nil }
     let characters = Array(editingText)
     guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
     return String(characters[range])
@@ -101,6 +103,11 @@ package final class Interaction {
   }
 
   package func selectAll(at point: Point) {
+    if editingLeaf != nil, let editingText {
+      caretOffset = editingText.count
+      textSelectionRange = editingText.isEmpty ? nil : 0..<editingText.count
+      return
+    }
     if onSelectAll?() == true { return }
     textSelection.selectAll(at: point)
   }
@@ -237,11 +244,22 @@ package final class Interaction {
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
     textSelection.clear()
+    editingReadOnly = false
     editingSessionGeneration &+= 1
     editingLeaf = id
     self.caretOffset = caretOffset
     textSelectionRange = nil
     mode = .editing
+  }
+
+  func startInput() {
+    if !isTextEditing { editingSessionGeneration &+= 1 }
+    mode = .editing
+  }
+
+  func stopInput() {
+    if isTextEditing { editingSessionGeneration &+= 1 }
+    mode = .movement
   }
 
   func endEditing() {
@@ -276,6 +294,8 @@ package final class Interaction {
       textSelection.layoutRegistry.clear()
       activatedLeaf = nil
       activatePending = false
+      enterTextPending = false
+      movementTextEvents = []
       buildingActionRoles = []
       let root = FocusNode(kind: .group, rect: .zero)
       builderRoot = root
@@ -290,6 +310,8 @@ package final class Interaction {
     }
     self.input = input
     activatePending = false
+    enterTextPending = false
+    movementTextEvents = []
     pendingCommands = input.commands
     handledCommandIndices = []
     routePendingCommands()
@@ -411,6 +433,8 @@ package final class Interaction {
     builderRoot = nil
     builderStack = []
     activatePending = false
+    enterTextPending = false
+    movementTextEvents = []
   }
 
 }
@@ -519,6 +543,11 @@ extension Interaction {
     for (index, command) in pendingCommands.enumerated() where !handledCommandIndices.contains(index) {
       // Leaving text input outranks cancel actions and the scoped handlers registered for them.
       if mode == .editing, command == .action(.cancel) || command == .action(.dismiss) {
+        stopInput()
+        handledCommandIndices.insert(index)
+        continue
+      }
+      if editingLeaf != nil, command == .action(.cancel) || command == .action(.dismiss) {
         endEditing()
         handledCommandIndices.insert(index)
         continue
@@ -562,6 +591,21 @@ extension Interaction {
       return
     case .navigation(let command):
       guard mode == .movement else { return }
+      if editingLeaf != nil {
+        switch command {
+        case .left: movementTextEvents.append(.moveCaretLeft)
+        case .right: movementTextEvents.append(.moveCaretRight)
+        case .up: movementTextEvents.append(.moveCaretUp)
+        case .down: movementTextEvents.append(.moveCaretDown)
+        case .sectionLeft: movementTextEvents.append(.selectCaretLeft)
+        case .sectionRight: movementTextEvents.append(.selectCaretRight)
+        case .sectionUp: movementTextEvents.append(.selectCaretUp)
+        case .sectionDown: movementTextEvents.append(.selectCaretDown)
+        case .stepOut: endEditing()
+        case .stepIn: break
+        }
+        return
+      }
       moveNavigation(command)
     case .action(.activate):
       guard let tree, let selection, tree.node(at: selection)?.isLeaf == true else { return }

@@ -85,7 +85,7 @@ struct FocusVisibilityTests {
 
     render(content, input: InputState(commands: [.action(.cancel)]))
     #expect(interaction.mode == .movement)
-    #expect(interaction.editingLeaf == nil)
+    #expect(interaction.editingLeaf != nil)
     #expect(cancelCalls == 0)
   }
 }

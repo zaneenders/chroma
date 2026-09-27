@@ -74,6 +74,7 @@ package final class FrameProducer {
     interaction.animationFrame = AnimationFrame(timestamp: clock())
     if interaction.tree == nil {
       let editingLeaf = interaction.editingLeaf
+      let wasEditing = interaction.isTextEditing
       let caret = interaction.caretOffset
       let selection = interaction.textSelectionRange
       interaction.beginFrame(input: InputState())
@@ -88,6 +89,7 @@ package final class FrameProducer {
       if let editingLeaf, interaction.tree?.findLeaf(editingLeaf) != nil {
         interaction.beginEditing(editingLeaf, caretOffset: caret)
         interaction.textSelectionRange = selection
+        if !wasEditing { interaction.stopInput() }
       }
     }
     // Refresh targets before dispatching input to previous-frame registrations.

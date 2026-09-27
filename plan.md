@@ -5,12 +5,14 @@
 - ScrollView and standalone LazyVStack define scrolling boundaries.
 - `d/f/j/k` move among peers and stop at the current group's edges.
 - `Shift+d/f/j/k` search outward from the current group and select a neighboring
-  section without entering it. Shift+letters remain text in EDIT/SELECT mode.
-- `l` enters a group, restores its remembered child, or activates a leaf.
-- `s` selects the containing group; Escape leaves EDIT/SELECT for MOVE.
+  section without entering it. Inside text these keys extend selection; in INPUT they type uppercase letters.
+- `l` enters a group or text, restores a group's remembered child, or activates a button.
+- `s` leaves the text level or selects the containing group. Enter starts INPUT;
+  Escape returns to MOVE inside text, preserving caret and selection.
 - Hover does not change keyboard selection. Pointer clicks select their target.
 - `.navigationIgnored()` excludes decoration; hover styling changes appearance only.
-- Selectable text supports read-only caret movement, range selection and copying.
+- Text handles MOVE as caret movement and selection. Only editable text permits
+  INPUT. Arrow keys are unbound by default.
 - Scroll controllers retain position while absent, reset on identity changes, and
   reveal keyboard-selected content only as needed. Following new messages is opt-in.
 

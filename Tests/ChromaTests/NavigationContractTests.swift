@@ -123,7 +123,7 @@ struct NavigationContractTests {
     #expect(h.context.interaction.copyText() == copied)
     #expect(!h.context.interaction.acceptsTextInsertion)
     h.render(content, text: [.endEditing])
-    h.render(content, [.navigation(.down), .navigation(.stepIn)])
+    h.render(content, [.navigation(.stepOut), .navigation(.down), .action(.activate)])
     #expect(h.context.interaction.acceptsTextInsertion)
     h.render(content, text: [.insert(copied)])
     #expect(draft == copied)
@@ -142,5 +142,87 @@ struct NavigationContractTests {
     h.render(content)
     #expect(h.context.interaction.textSelectionRange == nil)
     #expect(h.context.interaction.caretOffset == 0)
+  }
+}
+
+extension NavigationContractTests {
+  @Test func textIsAnotherMovementLevelAndInputPreservesSelection() {
+    let h = Harness()
+    var value = "abcd"
+    let field = FocusTarget()
+    let content = Group("Composer") {
+      HStack {
+        TextField(text: { value }, onChange: { value = $0 }).focusTarget(field)
+        Button("Send") {}
+      }
+    }
+    func press(_ key: Character, shift: Bool = false) {
+      let input = KeyboardInput(
+        chord: KeyChord(key, modifiers: shift ? .shift : []),
+        text: shift ? String(key).uppercased() : String(key))
+      guard let resolved = h.context.interaction.resolve(input, appBindings: .vimNavigation) else {
+        Issue.record("Key was not resolved")
+        return
+      }
+      switch resolved {
+      case .command(let command): h.render(content, [command])
+      case .text(let event): h.render(content, text: [event])
+      }
+    }
+    h.render(content)
+    field.focus()
+    h.render(content)
+    press("l")
+    #expect(h.context.interaction.mode == .movement)
+    #expect(h.context.isSelectingText)
+    #expect(!field.isEditing)
+    #expect(h.context.interaction.caretOffset == 4)
+    press("d")
+    press("d", shift: true)
+    #expect(h.context.interaction.copyText() == "c")
+    h.render(content, [.action(.activate)])
+    #expect(field.isEditing)
+    #expect(h.context.interaction.textSelectionRange == 2..<3)
+    press("k", shift: true)
+    #expect(value == "abKd")
+    h.render(content, text: [.endEditing])
+    #expect(h.context.interaction.mode == .movement)
+    #expect(h.context.isSelectingText)
+    #expect(h.context.interaction.caretOffset == 3)
+    press("d")
+    #expect(h.context.interaction.caretOffset == 2)
+    press("s")
+    #expect(!h.context.isSelectingText)
+    #expect(field.isFocused)
+    press("s")
+    #expect(h.context.navigationBreadcrumb == ["Window", "Composer"])
+  }
+
+  @Test func readOnlyTextCannotEnterInputAndMovesAcrossLines() {
+    let h = Harness()
+    let content = Text("ab\ncd").selectable()
+    h.render(content)
+    h.render(content, [.navigation(.down), .navigation(.stepIn)])
+    h.render(content, [.navigation(.right)])
+    h.render(content, [.navigation(.sectionDown)])
+    #expect(h.context.interaction.copyText() == "b\nc")
+    h.render(content, [.action(.activate)])
+    #expect(h.context.interaction.mode == .movement)
+    #expect(!h.context.interaction.acceptsTextInsertion)
+    h.render(content, [.navigation(.stepOut)])
+    #expect(h.context.interaction.editingLeaf == nil)
+    #expect(h.context.interaction.selectedLeafID != nil)
+  }
+
+  @Test func arrowKeysHaveNoDefaultBindingsInEitherMode() {
+    for key: Key in [.leftArrow, .rightArrow, .upArrow, .downArrow] {
+      for modifiers: KeyModifiers in [[], .shift] {
+        for editing in [false, true] {
+          #expect(
+            KeyBindings.vimNavigation.resolve(
+              KeyboardInput(chord: KeyChord(key, modifiers: modifiers)), isTextEditing: editing) == nil)
+        }
+      }
+    }
   }
 }

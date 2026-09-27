@@ -18,6 +18,8 @@ extension Interaction {
 
     if selected && activatePending {
       activatePending = false
+      let enterInMovement = enterTextPending || readOnly
+      enterTextPending = false
       if editingLeaf != id {
         let clickedOffset: Int?
         if input.pointerReleased, let origin = dragOrigin, rect.contains(origin) {
@@ -27,6 +29,11 @@ extension Interaction {
         }
         beginEditing(id, caretOffset: max(0, min(text.count, clickedOffset ?? (readOnly ? 0 : text.count))))
       }
+      if enterInMovement {
+        stopInput()
+      } else {
+        startInput()
+      }
     }
 
     if selected, editingLeaf != id, isProcessingDrag, let origin = dragOrigin, rect.contains(origin) {
@@ -34,11 +41,14 @@ extension Interaction {
       beginEditing(id, caretOffset: max(0, min(text.count, offset)))
     }
 
-    if editingLeaf == id { editingReadOnly = readOnly }
-    var editing = editingLeaf == id
+    if editingLeaf == id {
+      editingReadOnly = readOnly
+      if readOnly { stopInput() }
+    }
+    let editing = editingLeaf == id
     if editing {
       editingText = text
-      if input.textEvents.isEmpty && !isProcessingDrag {
+      if input.textEvents.isEmpty && movementTextEvents.isEmpty && !isProcessingDrag {
         if inputLengthText != text {
           inputLengthText = text
           inputLength = text.count
@@ -50,7 +60,7 @@ extension Interaction {
           textSelectionRange = lower == upper ? nil : lower..<upper
         }
         return TextInputState(
-          hovered: hovered, focused: selected, held: held, editing: true,
+          hovered: hovered, focused: selected, held: held, editing: isTextEditing,
           caretOffset: caretOffset, selectionRange: textSelectionRange)
       }
       var characters = Array(text)
@@ -79,14 +89,14 @@ extension Interaction {
       }
 
       var changed = false
-      eventLoop: for event in input.textEvents {
-        if readOnly {
+      eventLoop: for event in movementTextEvents + input.textEvents {
+        if readOnly || mode == .movement {
           switch event {
           case .insert, .backspace, .deleteForward, .cut, .paste, .submit: continue
           default: break
           }
         }
-        if let replacement = onTextEvent?(event, String(characters)) {
+        if mode == .editing, let replacement = onTextEvent?(event, String(characters)) {
           characters = Array(replacement)
           caretOffset = characters.count
           textSelectionRange = nil
@@ -177,14 +187,12 @@ extension Interaction {
             }
             onSubmit(String(characters))
           } else {
-            endEditing()
-            editing = false
+            stopInput()
             break eventLoop
           }
         case .endEditing:
           if onEndEditing?() != .handled {
-            endEditing()
-            editing = false
+            stopInput()
             break eventLoop
           }
         }
@@ -196,7 +204,7 @@ extension Interaction {
       }
     }
     return TextInputState(
-      hovered: hovered, focused: selected, held: held, editing: editing,
+      hovered: hovered, focused: selected, held: held, editing: editing && isTextEditing,
       caretOffset: editing ? caretOffset : nil,
       selectionRange: editing ? textSelectionRange : nil)
   }
@@ -247,7 +255,7 @@ extension Interaction {
     return TextInputState(
       hovered: hoveredLeafID == id, focused: selectedLeafID == id,
       held: pressedLeaf == id && input.pointerDown,
-      editing: editing, caretOffset: editing ? caretOffset : nil,
+      editing: editing && isTextEditing, caretOffset: editing ? caretOffset : nil,
       selectionRange: editing ? textSelectionRange : nil)
   }
 }

@@ -407,7 +407,7 @@ struct TextInputTests {
     enterInsertMode(ctx, text: &text)
     let state = frame(ctx, input: InputState(textEvents: [.endEditing]), text: &text)
     #expect(!state.editing)
-    #expect(state.caretOffset == nil)
+    #expect(state.caretOffset == 3)
     #expect(!ctx.isTextEditing)
     #expect(ctx.mode == .movement)
     #expect(text == "abc")

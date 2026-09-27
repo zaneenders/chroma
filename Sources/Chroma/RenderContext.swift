@@ -69,7 +69,7 @@ public struct RenderContext {
     interaction.navigation?.node(at: interaction.navigationPath)?.isGroup ?? true
   }
 
-  public var isSelectingText: Bool { interaction.isTextEditing && interaction.editingReadOnly }
+  public var isSelectingText: Bool { interaction.editingLeaf != nil && !interaction.isTextEditing }
 
   public var interactionMode: InteractionMode { interaction.mode }
 

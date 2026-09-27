@@ -428,14 +428,14 @@ struct FocusAndCommandRegressionTests {
 
     harness.render(content())
     #expect(rows[0].isFocused)
-    for _ in 0..<15 { press(KeyboardInput(chord: KeyChord(.downArrow))) }
+    for _ in 0..<15 { press(KeyboardInput(chord: KeyChord("j"))) }
     #expect(rows[15].isFocused)
     #expect(harness.context.interaction.scrollOffset(for: listID) > 0)
-    for _ in 0..<15 { press(KeyboardInput(chord: KeyChord(.upArrow))) }
+    for _ in 0..<15 { press(KeyboardInput(chord: KeyChord("f"))) }
     #expect(rows[0].isFocused)
     #expect(harness.context.interaction.scrollOffset(for: listID) == 0)
 
-    for _ in 0..<40 { press(KeyboardInput(chord: KeyChord(.downArrow))) }
+    for _ in 0..<40 { press(KeyboardInput(chord: KeyChord("j"))) }
     #expect(field.isFocused)
     press(KeyboardInput(chord: KeyChord(.enter)))
     #expect(field.isEditing)

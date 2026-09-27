@@ -56,9 +56,9 @@ final class WorkspaceState {
         "Welcome to Chroma. This is a GUI you can explore like a tree.",
         "MOVE: d left, f up, j down, k right. l goes in. s comes out.",
         "Plain movement stays inside a section. Shift + d / f / j / k changes sections without diving into them.",
-        "Try the composer below. Select the input and press l to EDIT. Escape returns to MOVE; your draft stays put.",
+        "Try the composer below. Select the input and press Enter for INPUT. Escape returns to MOVE; your draft stays put.",
         "Now press Shift+d to select Sessions. Enter, open Field notes, then return here. Groups remember where you left off.",
-        "Messages are groups too. Enter one, then enter its text. Shift+arrows selects a passage; Cmd/Ctrl+C copies it. Escape returns to MOVE.",
+        "Messages are groups too. Enter one, then enter its text. Shift+dfjk selects a passage; Cmd/Ctrl+C copies it. s leaves the text.",
         "Scrolling follows your selection only when needed. Sending a message will not drag you away from what you are reading.",
         "Use Latest when you want the bottom. There is no automatic follow mode in this workspace.",
       ]),
@@ -186,7 +186,7 @@ private struct ConversationPanel: Block {
   @MainActor private var composer: some Block {
     Group("Composer") {
       VStack(spacing: 10) {
-        Text("COMPOSE / l to edit / Escape to move").fontScale(0.38)
+        Text("COMPOSE / l to enter / Enter to type / Escape to move").fontScale(0.38)
           .foregroundColor(WorkspacePalette.accent).navigationIgnored()
         HStack(spacing: 10) {
           TextField(
@@ -279,14 +279,14 @@ private struct NavigationGuide: PrimitiveBlock {
 
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
     let editing = context.interactionMode == .editing
-    let mode = context.isSelectingText ? "SELECT" : editing ? "EDIT" : "MOVE"
+    let mode = editing ? "INPUT" : "MOVE"
     let location = context.navigationBreadcrumb.joined(separator: " / ")
     let hint =
       context.isSelectingText
-      ? "Arrows  caret   Shift+arrows  select   Cmd/Ctrl+C  copy   Escape  MOVE"
+      ? "dfjk caret   Shift+dfjk select   s out   Enter input   Cmd/Ctrl+C copy"
       : editing
-        ? "Escape  return to MOVE     Enter  send     Your draft stays here."
-        : "dfjk move   Shift+dfjk section     s out     l \(context.navigationSelectionIsGroup ? "enter" : "use / edit")"
+        ? "Escape  MOVE inside text     Enter  send     Your draft stays here."
+        : "dfjk move   Shift+dfjk section     s out     l \(context.navigationSelectionIsGroup ? "enter" : "enter / use")"
     drawList.fillRoundedRect(rect, radius: 8, color: WorkspacePalette.card)
     drawList.pushClip(rect)
     drawList.text(
