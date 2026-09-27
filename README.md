@@ -12,7 +12,7 @@ swift run --package-path Example ChromaDemo
 
 ## Inspired by
 
-- Imdidate mode UI
+- Immediate mode UI
 - Interaction medium, Ryan Fluery
 - SwiftUI
 - Vim
