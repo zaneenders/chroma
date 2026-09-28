@@ -12,7 +12,7 @@ swiftly run swift test --package-path Benchmarks -c release
 ```
 
 Applications run in-process. The framework and demo have no external Swift package
-dependencies; the benchmark package has optional profiling dependencies.
+dependencies; the benchmark package depends only on Chroma.
 
 Benchmarks: `Benchmarks/Scripts/run.sh Benchmarks/results/baseline`.
 
@@ -26,7 +26,7 @@ Clipboard shortcuts are Ctrl+A/C/X/V or Super+A/C/X/V (Omarchy) on Linux,
 and Command+A/C/X/V on macOS.
 Click a text field before pasting; drag across selectable text to select it.
 Scene captures use self-contained version-3 JSON with shared image resources.
-Version-2 JSON remains readable; older wire-format captures must be regenerated.
+Older capture formats must be regenerated.
 
 Benchmarks use `--stage cull` (CPU, either platform) or `--stage metal`
 (culling plus Metal/GPU timings, macOS). For example:
@@ -35,5 +35,5 @@ Benchmarks use `--stage cull` (CPU, either platform) or `--stage metal`
 swift run --package-path Benchmarks -c release RenderBenchmark --scene text --stage cull
 ```
 
-Benchmark reports use schema version 4; regenerate baselines rather than comparing
+Benchmark reports use schema version 5; regenerate baselines rather than comparing
 against former wire/pipeline results.

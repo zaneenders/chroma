@@ -48,8 +48,6 @@ public struct RenderContext {
     interaction.onSelectAll = handler
   }
 
-  public var interactionMode: InteractionMode { interaction.mode }
-
   var activeTextInput: WidgetID? {
     interaction.isTextEditing ? interaction.editingLeaf : nil
   }
@@ -82,12 +80,6 @@ public struct RenderContext {
   public func withTheme(_ theme: ChromaTheme) -> RenderContext {
     var copy = self
     copy.theme = theme
-    return copy
-  }
-
-  public func withTextScale(_ scale: Float) -> RenderContext {
-    var copy = self
-    copy.textScale = scale
     return copy
   }
 

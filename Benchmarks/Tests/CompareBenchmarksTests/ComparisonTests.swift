@@ -21,7 +21,6 @@ struct ComparisonTests {
         var report: [String: Any] = Dictionary(uniqueKeysWithValues: BenchmarkRuns.configKeys.map { ($0, 1) })
         report["frames"] = frames + trial
         report["minimumSeconds"] = seconds
-        report["profilingEnabled"] = false
         report["timings"] = ["cull": ["p50MS": 1.0, "p95MS": p95]]
         try JSONSerialization.data(withJSONObject: report).write(to: path.appendingPathComponent("text-cull.json"))
       }

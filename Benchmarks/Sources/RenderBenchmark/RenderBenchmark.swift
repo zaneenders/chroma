@@ -1,7 +1,5 @@
 import Chroma
 import Foundation
-import Logging
-import ProfileRecorderServer
 import RenderFixtures
 
 enum BenchmarkError: Error { case failed(String) }
@@ -34,7 +32,6 @@ struct Report: Codable {
   let minimumFrames: Int
   let minimumSeconds: Double
   let warmup: Int
-  let profilingEnabled: Bool
   let coldMS: [String: Double]
   let timings: [String: Distribution]
 }
@@ -69,18 +66,6 @@ struct RenderBenchmark {
       let warmup = Int(options["--warmup"] ?? "30"), (0...100_000).contains(warmup),
       let seconds = Double(options["--seconds"] ?? "0"), seconds.isFinite, (0...3600).contains(seconds)
     else { throw BenchmarkError.failed("Invalid benchmark configuration; see --help") }
-    let environment = ProcessInfo.processInfo.environment
-    let profiling =
-      environment["PROFILE_RECORDER_SERVER_URL_PATTERN"] != nil
-      || environment["PROFILE_RECORDER_SERVER_URL"] != nil
-    let profiler = Task {
-      if profiling {
-        let configuration = try await ProfileRecorderServerConfiguration.parseFromEnvironment()
-        await ProfileRecorderServer(configuration: configuration)
-          .runIgnoringFailures(logger: Logger(label: "chroma.benchmark.profiler"))
-      }
-    }
-    defer { profiler.cancel() }
     let sequence: [DrawList]
     let viewport: Size
     let rasterScale: Point
@@ -145,14 +130,13 @@ struct RenderBenchmark {
       await Task.yield()
     } while measured < frames || now() - measurementStart < seconds
     let report = Report(
-      schemaVersion: 4, fixtureVersion: RenderFixture.version,
+      schemaVersion: 5, fixtureVersion: RenderFixture.version,
       sequenceFrames: sequence.count,
       commandCountMin: sequence.map { $0.commands.count }.min()!,
       commandCountMax: sequence.map { $0.commands.count }.max()!,
       os: ProcessInfo.processInfo.operatingSystemVersionString,
       processors: ProcessInfo.processInfo.activeProcessorCount, scene: scene, stage: stage,
       count: count, frames: measured, minimumFrames: frames, minimumSeconds: seconds, warmup: warmup,
-      profilingEnabled: profiling,
       coldMS: cold,
       timings: samples.mapValues(Distribution.init))
     let encoder = JSONEncoder()
