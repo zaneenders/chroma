@@ -14,7 +14,7 @@ import Testing
   }
 
   @Test @MainActor func scopedThemeReachesDescendants() {
-    let theme = ChromaTheme.light
+    let theme = ChromaTheme.dark.accentColor(Color(r: 1, g: 0, b: 0, a: 1))
     let context = BlockContext()
     let themed = context.withTheme(theme)
 

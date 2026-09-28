@@ -84,7 +84,7 @@ struct RenderingCommandTests {
     metrics.cellAdvance = 8
     metrics.lineAdvance = 16
     interaction.fontMetrics = metrics
-    let context = BlockContext(interaction: interaction, theme: .light)
+    let context = BlockContext(interaction: interaction, theme: .dark)
     let rect = Rect(x: 10, y: 5, width: 32, height: 16)
     let id = WidgetID("render-selection")
     let textColor = Color(r: 1, g: 0, b: 0, a: 1)
@@ -106,11 +106,11 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
         .text(position: Point(x: 10, y: 5), text: "ABCD", color: textColor, scale: 1),
-        .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
         .pushClip(Rect(x: 18, y: 5, width: 16, height: 16)),
-        .text(position: Point(x: 10, y: 5), text: "ABCD", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .text(position: Point(x: 10, y: 5), text: "ABCD", color: ChromaTheme.dark.focus.selectionForeground, scale: 1),
         .popClip,
       ])
   }
@@ -122,7 +122,7 @@ struct RenderingCommandTests {
     metrics.cellAdvance = 6
     metrics.lineAdvance = 16
     interaction.fontMetrics = metrics
-    let context = BlockContext(interaction: interaction, theme: .light)
+    let context = BlockContext(interaction: interaction, theme: .dark)
     let id = WidgetID("text-selection")
     let text = Text("ABC").selectable(id)
     let rect = Rect(x: 4, y: 5, width: 36, height: 16)
@@ -147,11 +147,11 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
         .text(position: Point(x: 4, y: 5), text: "ABC", color: .white, scale: 1),
-        .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
         .pushClip(Rect(x: 10, y: 5, width: 6, height: 16)),
-        .text(position: Point(x: 4, y: 5), text: "ABC", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .text(position: Point(x: 4, y: 5), text: "ABC", color: ChromaTheme.dark.focus.selectionForeground, scale: 1),
         .popClip,
       ])
   }
@@ -273,7 +273,7 @@ struct RenderingCommandTests {
 
   @Test func scopedThemePropagatesThroughCompositeWidgets() {
     let rect = Rect(x: 3, y: 4, width: 120, height: 28)
-    var theme = ChromaTheme.light
+    var theme = ChromaTheme.dark
     theme.button.idleBackground = Color(r: 0.1, g: 0.15, b: 0.2, a: 1)
     theme.button.foreground = Color(r: 0.9, g: 0.8, b: 0.7, a: 1)
     theme.button.border = Color(r: 0.4, g: 0.5, b: 0.6, a: 1)
