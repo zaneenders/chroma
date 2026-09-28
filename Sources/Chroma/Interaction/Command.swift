@@ -52,6 +52,8 @@ extension Command {
     case .navigation(.stepIn): "step-in"
     case .navigation(.stepOut): "step-out"
     case .editing(.insert): "insert"
+    case .editing(.move(let unit, let direction, let extend)): "move-\(unit)-\(direction)-\(extend)"
+    case .editing(.delete(let unit, let direction)): "delete-\(unit)-\(direction)"
     case .editing(.backspace): "backspace"
     case .editing(.deleteForward): "delete-forward"
     case .editing(.moveCaretLeft): "caret-left"

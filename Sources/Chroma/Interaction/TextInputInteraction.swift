@@ -93,7 +93,7 @@ extension Interaction {
         let event: TextEditEvent = incomingEvent == .submit && submitInsertsNewline ? .insert("\n") : incomingEvent
         if readOnly || mode == .movement {
           switch event {
-          case .insert, .backspace, .deleteForward, .cut, .paste, .submit: continue
+          case .insert, .delete, .backspace, .deleteForward, .cut, .paste, .submit: continue
           default: break
           }
         }
@@ -104,81 +104,45 @@ extension Interaction {
           changed = true
           continue
         }
+        if let (unit, direction, extend) = event.movement {
+          let anchor = textSelectionRange.map {
+            caretOffset == $0.lowerBound ? $0.upperBound : $0.lowerBound
+          } ?? caretOffset
+          if !extend, let selection = textSelectionRange,
+            unit != .document && unit != .vertical {
+            caretOffset = direction == .backward ? selection.lowerBound : selection.upperBound
+          } else {
+            caretOffset = TextEditingOperation.boundary(
+              in: characters, from: caretOffset, unit: unit, direction: direction,
+              verticalOffset: verticalOffset)
+          }
+          textSelectionRange = extend && anchor != caretOffset
+            ? min(anchor, caretOffset)..<max(anchor, caretOffset) : nil
+          continue
+        }
+        if let (unit, direction) = event.deletion {
+          let range = textSelectionRange ?? TextEditingOperation.deletionRange(
+            in: characters, from: caretOffset, unit: unit, direction: direction)
+          if !range.isEmpty {
+            characters.replaceSubrange(range, with: [] as [Character])
+            caretOffset = range.lowerBound
+            changed = true
+          }
+          textSelectionRange = nil
+          continue
+        }
         switch event {
         case .copy, .cut, .paste:
           continue
         case .insert(let inserted):
-          if let range = textSelectionRange {
-            characters.removeSubrange(range)
-            caretOffset = range.lowerBound
-            textSelectionRange = nil
-          }
+          let range = textSelectionRange ?? caretOffset..<caretOffset
           let graft = Array(inserted)
-          characters.insert(contentsOf: graft, at: caretOffset)
-          caretOffset += graft.count
-          changed = true
-        case .backspace:
-          if let range = textSelectionRange {
-            characters.removeSubrange(range)
-            caretOffset = range.lowerBound
-            textSelectionRange = nil
-            changed = true
-          } else if caretOffset > 0 {
-            characters.remove(at: caretOffset - 1)
-            caretOffset -= 1
-            changed = true
-          }
-        case .deleteForward:
-          if let range = textSelectionRange {
-            characters.removeSubrange(range)
-            caretOffset = range.lowerBound
-            textSelectionRange = nil
-            changed = true
-          } else if caretOffset < characters.count {
-            characters.remove(at: caretOffset)
-            changed = true
-          }
-        case .moveCaretLeft:
-          caretOffset = textSelectionRange?.lowerBound ?? max(0, caretOffset - 1)
+          characters.replaceSubrange(range, with: graft)
+          caretOffset = range.lowerBound + graft.count
           textSelectionRange = nil
-        case .moveCaretRight:
-          caretOffset = textSelectionRange?.upperBound ?? min(characters.count, caretOffset + 1)
-          textSelectionRange = nil
-        case .moveCaretUp:
-          let offset = verticalOffset?(caretOffset, -1) ?? 0
-          caretOffset = max(0, min(characters.count, offset))
-          textSelectionRange = nil
-        case .moveCaretDown:
-          let offset = verticalOffset?(caretOffset, 1) ?? characters.count
-          caretOffset = max(0, min(characters.count, offset))
-          textSelectionRange = nil
-        case .selectCaretLeft, .selectCaretRight, .selectCaretUp, .selectCaretDown:
-          let direction = event == .selectCaretUp || event == .selectCaretLeft ? -1 : 1
-          let anchor: Int
-          if let selection = textSelectionRange {
-            anchor = caretOffset == selection.lowerBound ? selection.upperBound : selection.lowerBound
-          } else {
-            anchor = caretOffset
-          }
-          let offset: Int
-          if event == .selectCaretLeft || event == .selectCaretRight {
-            offset = caretOffset + direction
-          } else {
-            offset = verticalOffset?(caretOffset, direction) ?? (direction < 0 ? 0 : characters.count)
-          }
-          caretOffset = max(0, min(characters.count, offset))
-          textSelectionRange =
-            anchor == caretOffset
-            ? nil
-            : min(anchor, caretOffset)..<max(anchor, caretOffset)
-        case .moveCaretToStart:
-          caretOffset = 0
-          textSelectionRange = nil
-        case .moveCaretToEnd:
-          caretOffset = characters.count
-          textSelectionRange = nil
+          if !range.isEmpty || !graft.isEmpty { changed = true }
         case .selectAll:
-          textSelectionRange = 0..<characters.count
+          textSelectionRange = characters.isEmpty ? nil : 0..<characters.count
           caretOffset = characters.count
         case .submit:
           if let onSubmit {
@@ -196,6 +160,8 @@ extension Interaction {
             stopInput()
             break eventLoop
           }
+        default:
+          break
         }
       }
       if changed {
@@ -259,5 +225,53 @@ extension Interaction {
       held: pressedLeaf == id && input.pointerDown,
       editing: editing && isTextEditing, caretOffset: editing ? caretOffset : nil,
       selectionRange: editing ? textSelectionRange : nil)
+  }
+}
+
+
+private enum TextEditingOperation {
+  private enum Kind: Equatable { case space, word, punctuation }
+
+  private static func kind(_ character: Character) -> Kind {
+    if character.isWhitespace { return .space }
+    if character.isLetter || character.isNumber || character == "_" { return .word }
+    return .punctuation
+  }
+
+  static func boundary(
+    in text: [Character], from offset: Int, unit: TextMovementUnit,
+    direction: TextDirection, verticalOffset: ((Int, Int) -> Int)? = nil
+  ) -> Int {
+    let backward = direction == .backward
+    switch unit {
+    case .character: return max(0, min(text.count, offset + (backward ? -1 : 1)))
+    case .document: return backward ? 0 : text.count
+    case .vertical:
+      return max(0, min(text.count,
+        verticalOffset?(offset, backward ? -1 : 1) ?? (backward ? 0 : text.count)))
+    case .word:
+      var position = offset
+      if backward {
+        while position > 0 && kind(text[position - 1]) == .space { position -= 1 }
+        if position > 0 {
+          let group = kind(text[position - 1])
+          while position > 0 && kind(text[position - 1]) == group { position -= 1 }
+        }
+      } else {
+        if position < text.count && kind(text[position]) != .space {
+          let group = kind(text[position])
+          while position < text.count && kind(text[position]) == group { position += 1 }
+        }
+        while position < text.count && kind(text[position]) == .space { position += 1 }
+      }
+      return position
+    }
+  }
+
+  static func deletionRange(
+    in text: [Character], from offset: Int, unit: TextMovementUnit, direction: TextDirection
+  ) -> Range<Int> {
+    let target = boundary(in: text, from: offset, unit: unit, direction: direction)
+    return min(offset, target)..<max(offset, target)
   }
 }
