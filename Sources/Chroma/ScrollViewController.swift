@@ -11,6 +11,22 @@ enum ScrollRequest: Equatable, Sendable {
 @Observable
 @MainActor
 public final class ScrollViewController {
+  @ObservationIgnored public internal(set) var offset: Float = 0
+  @ObservationIgnored public internal(set) var horizontalOffset: Float = 0
+  @ObservationIgnored private var identity: WidgetID?
+
+  func restore(id: WidgetID, interaction: Interaction) {
+    if let identity, identity != id {
+      offset = 0
+      horizontalOffset = 0
+    }
+    identity = id
+    if interaction.scrollOffsets[id] == nil {
+      interaction.setScrollOffset(offset, for: id)
+      interaction.setHorizontalScrollOffset(horizontalOffset, for: id)
+    }
+  }
+
   var request: ScrollRequest?
   @ObservationIgnored var lazyStackCache = LazyStackCache()
 

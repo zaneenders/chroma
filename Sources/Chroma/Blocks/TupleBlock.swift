@@ -9,6 +9,8 @@ public struct TupleBlock: PrimitiveBlock {
     self.scopedChildren = children
   }
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool {
     scopedChildren.contains { BlockEngine.expandsHorizontally($0) }
   }

@@ -1,7 +1,10 @@
 # Chroma
 
-Swift UI library for macOS 27+ (Metal) and Linux (Wayland/EGL/OpenGL ES).
-Requires Swift 6.4+; toolchain pinned in `.swift-version`.
+⚠️ Work in progress
+
+UI framework where keyboard interactions are first class. Supports macOS 27+ (Metal) and Linux (Wayland/EGL/OpenGL ES). Requires Swift 6.4+; toolchain pinned in `.swift-version`.
+
+## Demo
 
 ```sh
 swiftly install
@@ -11,13 +14,7 @@ swiftly run swift test --package-path Example
 swiftly run swift test --package-path Benchmarks -c release
 ```
 
-Applications run in-process. The framework and demo have no external Swift package
-dependencies; the benchmark package depends only on Chroma.
-
-Benchmarks: `Benchmarks/Scripts/run.sh Benchmarks/results/baseline`.
-
-Bundled font: Noto Sans Mono (SIL OFL 1.1). Distribute the ChromaFont resource bundle,
-including [OFL.txt](Sources/ChromaFont/Resources/OFL.txt).
+Applications run in-process. The framework and demo have no external Swift package dependencies; the benchmark package depends only on Chroma.
 
 The demo uses `MetalApp` on macOS or `WaylandApp` on Linux.
 Save a scene with Ctrl+Shift+G (defaults to `Example/`), or pass
@@ -28,7 +25,11 @@ Click a text field before pasting; drag across selectable text to select it.
 Scene captures use self-contained version-3 JSON with shared image resources.
 Older capture formats must be regenerated.
 
-Benchmarks use `--stage cull` (CPU, either platform) or `--stage metal`
+## Benchmarks
+
+Benchmarks: `Benchmarks/Scripts/run.sh Benchmarks/results/baseline`.
+
+Use `--stage cull` (CPU, either platform) or `--stage metal`
 (culling plus Metal/GPU timings, macOS). For example:
 
 ```sh
@@ -37,3 +38,13 @@ swift run --package-path Benchmarks -c release RenderBenchmark --scene text --st
 
 Benchmark reports use schema version 5; regenerate baselines rather than comparing
 against former wire/pipeline results.
+
+Bundled font: Noto Sans Mono (SIL OFL 1.1). Distribute the ChromaFont resource bundle,
+including [OFL.txt](Sources/ChromaFont/Resources/OFL.txt).
+
+## Inspired by
+
+- Immediate mode UI
+- Interaction medium, Ryan Fleury
+- SwiftUI
+- Vim

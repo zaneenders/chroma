@@ -1,6 +1,8 @@
 public struct ClipBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 

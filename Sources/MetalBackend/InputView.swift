@@ -3,7 +3,7 @@ import Chroma
 import MetalKit
 
 final class ChromaInputView: MTKView {
-  var onKey: ((KeyChord?, String?) -> Void)?
+  var onKey: ((KeyboardInput) -> Void)?
   var onInputAvailable: (() -> Void)?
   private var pointerPosition = Point(x: -1, y: -1)
   private var pointerPressPosition = Point(x: -1, y: -1)
@@ -89,7 +89,7 @@ final class ChromaInputView: MTKView {
     if let onKey {
       let text: String?
       if case .insert(let value) = Self.textInsertionEvent(for: event) { text = value } else { text = nil }
-      onKey(Self.keyChord(for: event), text)
+      onKey(KeyboardInput(chord: Self.keyChord(for: event), text: text))
       return
     }
     super.keyDown(with: event)

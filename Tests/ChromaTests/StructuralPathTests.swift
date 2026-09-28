@@ -13,6 +13,8 @@ struct StructuralPathTests {
     let name: String
     let recorder: Recorder
 
+    var focusRule: FocusRule { .standard }
+
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
       recorder.measured[name] = context.structuralPath
       return Size(width: 10, height: 10)
@@ -124,6 +126,8 @@ struct StructuralPathTests {
 
   private struct Pair: PrimitiveBlock {
     let recorder: Recorder
+
+    var focusRule: FocusRule { .container }
 
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
       _ = BlockEngine.measure(

@@ -11,9 +11,11 @@ struct StructuralInteractionTests {
     let producer = FrameProducer()
 
     func render(_ content: any Block, input: InputState = InputState()) {
+      let isInitialFrame = context.interaction.tree == nil
       _ = producer.render(
         content: content, viewport: Size(width: 200, height: 100),
         input: input, context: context, onChange: {})
+      if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     }
 
     var press: InputState {
@@ -430,7 +432,7 @@ struct StructuralInteractionTests {
     #expect(context.interaction.buildingFocusTargets.isEmpty)
   }
 
-  @Test func removedScrollAndSelectionStateDoNotReturn() {
+  @Test func retainedControllerRestoresOffsetButNotTextSelection() {
     let harness = Harness()
     let controller = ScrollViewController()
     func content() -> ScrollView {
@@ -445,7 +447,7 @@ struct StructuralInteractionTests {
     #expect(harness.context.interaction.scrollOffsets.isEmpty)
     #expect(harness.context.selection.selectedText() == nil)
     harness.render(content())
-    #expect(harness.context.interaction.scrollOffsets.values.allSatisfy { $0 == 0 })
+    #expect(harness.context.interaction.scrollOffsets.values.contains(30))
     #expect(harness.context.selection.selectedText() == nil)
   }
 

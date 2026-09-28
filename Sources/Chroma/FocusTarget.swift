@@ -29,6 +29,8 @@ public struct FocusTargetBlock: PrimitiveBlock, IdentityTransparentBlock {
   var content: any Block
   let target: FocusTarget
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 

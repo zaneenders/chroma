@@ -1,6 +1,8 @@
 public struct Spacer: PrimitiveBlock {
   public init() {}
 
+  public var focusRule: FocusRule { .decorative }
+
   public var expandsHorizontally: Bool { true }
   public var expandsVertically: Bool { true }
 

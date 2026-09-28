@@ -5,6 +5,8 @@ import Testing
 private struct NamedBlock: PrimitiveBlock {
   let name: String
 
+  var focusRule: FocusRule { .standard }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     Size(width: 10, height: 10)
   }

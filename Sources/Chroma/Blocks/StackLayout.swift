@@ -63,14 +63,15 @@ struct StackLayout {
     }
     let sizes = layout(children, originals: originals, proposal: rect.size, context: context)
     let interaction = context.interaction
-    interaction.beginGroup(rect: rect)
+    interaction.beginGroup(
+      rect: rect, axis: axis == .horizontal ? .horizontal : .vertical)
     var cursor = axis == .horizontal ? rect.minX : rect.minY
     if reversed { cursor += rect.size[keyPath: axis.main] }
     for (child, size) in zip(children, sizes) {
       let extent = size[keyPath: axis.main]
       if reversed { cursor -= extent }
       let origin = axis == .horizontal ? Point(x: cursor, y: rect.minY) : Point(x: rect.minX, y: cursor)
-      child.primitive.draw(into: &drawList, in: Rect(origin: origin, size: size), context: child.context)
+      BlockEngine.drawResolved(child.primitive, into: &drawList, in: Rect(origin: origin, size: size), context: child.context)
       cursor += reversed ? -spacing : extent + spacing
     }
     interaction.endGroup()

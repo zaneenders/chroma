@@ -49,7 +49,7 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
     view.delegate = self
     // Process each input event before the next one (including clipboard operations).
     view.onInputAvailable = { [weak self] in self?.view.draw() }
-    view.onKey = { [weak self] chord, text in self?.handleKey(chord, text: text) }
+    view.onKey = { [weak self] input in self?.handleKey(input) }
     interaction.onRedrawRequested = { [weak self] in self?.view.needsDisplay = true }
   }
 
@@ -106,31 +106,31 @@ public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowD
   private var pendingCommands: [Command] = []
   private var pendingTextEvents: [TextEditEvent] = []
 
-  func handleKey(_ chord: KeyChord?, text: String?) {
-    if keyBindings.prefersTextInsertion(chord: chord, text: text, isTextEditing: interaction.isTextEditing) {
-      if let text { pendingTextEvents.append(.insert(text)) }
-    } else if let chord, let resolution = keyBindings.command(for: chord), let command = resolution {
-      if case .editing(let event) = command {
-        switch event {
-        case .copy:
-          if let text = interaction.copyText() { _ = copy(text) }
-        case .cut:
-          if let text = interaction.editableSelectionText(), !text.isEmpty, copy(text) {
-            pendingTextEvents.append(.deleteForward)
-          }
-        case .paste:
-          if interaction.isTextEditing, let text = NSPasteboard.general.string(forType: .string) {
-            pendingTextEvents.append(.insert(text))
-          }
-        case .selectAll where !interaction.isTextEditing:
-          interaction.selectAll(at: interaction.input.pointerPosition)
-        default: pendingTextEvents.append(event)
-        }
-      } else {
-        pendingCommands.append(command)
-      }
+  func handleKey(_ input: KeyboardInput) {
+    guard let resolved = interaction.resolve(input, appBindings: keyBindings) else { return }
+    switch resolved {
+    case .command(let command): pendingCommands.append(command)
+    case .text(let event): applyTextEvent(event)
     }
     view.draw()
+  }
+
+  private func applyTextEvent(_ event: TextEditEvent) {
+    switch event {
+    case .copy:
+      if let text = interaction.copyText() { _ = copy(text) }
+    case .cut:
+      if interaction.acceptsTextInsertion, let text = interaction.editableSelectionText(), !text.isEmpty, copy(text) {
+        pendingTextEvents.append(.deleteForward)
+      }
+    case .paste:
+      if interaction.acceptsTextInsertion, let text = NSPasteboard.general.string(forType: .string) {
+        pendingTextEvents.append(.insert(text))
+      }
+    case .selectAll where !interaction.isTextEditing:
+      interaction.selectAll(at: interaction.input.pointerPosition)
+    default: pendingTextEvents.append(event)
+    }
   }
 
   private func copy(_ text: String) -> Bool {

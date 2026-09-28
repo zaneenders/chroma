@@ -68,9 +68,11 @@ final class WaylandKeyboard {
     if repeatRate == 0 { cancelRepeat() }
   }
 
-  func keyPressed(_ key: UInt32, editing: Bool, editingSession: Int, now: Double) {
+  func keyPressed(
+    _ key: UInt32, interaction: Interaction, editing: Bool, editingSession: Int, now: Double
+  ) {
     cancelRepeat()
-    dispatchKey(key, editing: editing, editingSession: editingSession)
+    dispatchKey(key, interaction: interaction, editing: editing, editingSession: editingSession)
     guard repeatRate > 0, let keyboard,
       chroma_xkb_keyboard_key_repeats(keyboard, key) != 0
     else { return }
@@ -87,13 +89,15 @@ final class WaylandKeyboard {
     chroma_xkb_keyboard_reset_compose(keyboard)
   }
 
-  func dispatchRepeats(editing: Bool, editingSession: Int, now: Double) -> Bool {
+  func dispatchRepeats(
+    interaction: Interaction, editing: Bool, editingSession: Int, now: Double
+  ) -> Bool {
     guard let key = repeatingKey, var deadline = nextRepeatTime, repeatRate > 0,
       now >= deadline
     else { return false }
     let interval = 1 / Double(repeatRate)
     repeat {
-      dispatchKey(key, editing: editing, editingSession: editingSession)
+      dispatchKey(key, interaction: interaction, editing: editing, editingSession: editingSession)
       deadline += interval
     } while now >= deadline
     nextRepeatTime = deadline
@@ -102,38 +106,19 @@ final class WaylandKeyboard {
 
   var repeatDeadline: Double? { nextRepeatTime }
 
-  private func dispatchKey(_ key: UInt32, editing: Bool, editingSession: Int) {
+  private func dispatchKey(
+    _ key: UInt32, interaction: Interaction, editing: Bool, editingSession: Int
+  ) {
     guard let keyboard else { return }
-    let symbol = chroma_xkb_keyboard_keysym(keyboard, key)
-    guard let chord = keyChord(symbol: symbol, keyboard: keyboard) else {
-      if editing, let text = text(for: key, keyboard: keyboard) {
-        pendingTextEvents.append(.event(.insert(text), session: editingSession))
-      }
-      return
-    }
-
-    let resolution = bindings.command(for: chord)
-    if editing {
-      if case .some(.some(let command)) = resolution, case .editing(let event) = command {
-        if event == .selectAll {
-          pendingTextEvents.append(.event(event, session: editingSession))
-        } else {
-          applyEditingEvent(event, session: editingSession)
-        }
-        return
-      }
-      if case .some(.none) = resolution { return }
-      if let text = text(for: key, keyboard: keyboard) {
-        pendingTextEvents.append(.event(.insert(text), session: editingSession))
-        return
-      }
-    }
-    if let resolution, let command = resolution {
-      if case .editing(let event) = command {
-        applyEditingEvent(event, session: editingSession)
-      } else {
-        pendingCommands.append(command)
-      }
+    let input = KeyboardInput(
+      chord: keyChord(symbol: chroma_xkb_keyboard_keysym(keyboard, key), keyboard: keyboard),
+      text: text(for: key, keyboard: keyboard))
+    guard let resolved = interaction.resolve(input, appBindings: bindings) else { return }
+    switch resolved {
+    case .command(let command): pendingCommands.append(command)
+    case .text(let event) where editing && event == .selectAll:
+      pendingTextEvents.append(.event(event, session: editingSession))
+    case .text(let event): applyEditingEvent(event, session: editingSession)
     }
   }
 

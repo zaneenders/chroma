@@ -1,6 +1,7 @@
 import Chroma
 import Metal
 import Testing
+
 @testable import MetalBackend
 
 @Suite @MainActor

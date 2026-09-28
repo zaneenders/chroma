@@ -199,7 +199,7 @@ public final class WaylandRenderer: Renderer {
     keyboardRepeatTimer?.cancel()
     keyboardRepeatTimer = nil
     let repeated = keyboard.dispatchRepeats(
-      editing: interaction.mode == .editing,
+      interaction: interaction, editing: interaction.mode == .editing,
       editingSession: interaction.editingSessionGeneration,
       now: ProcessInfo.processInfo.systemUptime)
     if repeated { requestFrame() }
@@ -406,6 +406,7 @@ public final class WaylandRenderer: Renderer {
         if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
           renderer.keyboard.keyPressed(
             key,
+            interaction: renderer.interaction,
             editing: renderer.interaction.mode == .editing,
             editingSession: renderer.interaction.editingSessionGeneration,
             now: ProcessInfo.processInfo.systemUptime

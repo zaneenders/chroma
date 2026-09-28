@@ -7,6 +7,8 @@ private struct CommandProbe: PrimitiveBlock {
   var size = Size(width: 10, height: 10)
   var color = Color.white
 
+  var focusRule: FocusRule { .standard }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { size }
 
   func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
@@ -104,14 +106,12 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(
-          rect: Rect(x: 18, y: 5, width: 16, height: 16),
-          color: ChromaTheme.light.focus.selectionBackground),
-        .text(position: Point(x: 10, y: 5), text: "A", color: textColor, scale: 1),
-        .text(
-          position: Point(x: 18, y: 5), text: "BC",
-          color: ChromaTheme.light.focus.selectionForeground, scale: 1),
-        .text(position: Point(x: 34, y: 5), text: "D", color: textColor, scale: 1),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .text(position: Point(x: 10, y: 5), text: "ABCD", color: textColor, scale: 1),
+        .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .pushClip(Rect(x: 18, y: 5, width: 16, height: 16)),
+        .text(position: Point(x: 10, y: 5), text: "ABCD", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .popClip,
       ])
   }
 
@@ -147,16 +147,12 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(
-          rect: Rect(x: 10, y: 5, width: 6, height: 16),
-          color: ChromaTheme.light.focus.selectionBackground),
-        .text(
-          position: Point(x: 4, y: 5), text: "A", color: .white, scale: 1),
-        .text(
-          position: Point(x: 10, y: 5), text: "B",
-          color: ChromaTheme.light.focus.selectionForeground, scale: 1),
-        .text(
-          position: Point(x: 16, y: 5), text: "C", color: .white, scale: 1),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .text(position: Point(x: 4, y: 5), text: "ABC", color: .white, scale: 1),
+        .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .pushClip(Rect(x: 10, y: 5, width: 6, height: 16)),
+        .text(position: Point(x: 4, y: 5), text: "ABC", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .popClip,
       ])
   }
 
@@ -244,10 +240,10 @@ struct RenderingCommandTests {
   @Test func zeroRadiusBorderUsesRectangularCommand() {
     let rect = Rect(x: 2, y: 3, width: 40, height: 24)
     let content = CommandProbe(name: "square")
-    let context = RenderContext()
-    let square = render(content.border(.yellow, width: 2), in: rect, context: context)
+    let square = render(
+      content.border(.yellow, width: 2), in: rect, context: RenderContext())
     let rounded = render(
-      content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: context)
+      content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: RenderContext())
     #expect(rounded.commands == square.commands)
   }
 

@@ -41,6 +41,8 @@ private struct StatefulApp: App {
 private struct AppContent: PrimitiveBlock {
   let identifier: UUID
 
+  var focusRule: FocusRule { .standard }
+
   func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
     proposal
   }

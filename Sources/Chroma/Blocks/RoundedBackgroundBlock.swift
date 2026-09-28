@@ -3,6 +3,8 @@ public struct RoundedBackgroundBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var color: Color
   public var radii: CornerRadii
 
+  public var focusRule: FocusRule { .container }
+
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 

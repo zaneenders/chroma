@@ -5,6 +5,18 @@ public enum ActionCommand: Hashable, Sendable {
   case dismiss
 }
 
+public enum NavigationCommand: Hashable, Sendable {
+  case up
+  case down
+  case left
+  case right
+  case sectionUp, sectionDown, sectionLeft, sectionRight
+  /// Enters the selected group or activates the selected control.
+  case stepIn
+  /// Selects the containing group.
+  case stepOut
+}
+
 public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
@@ -14,6 +26,7 @@ public struct CommandID: Hashable, Sendable, ExpressibleByStringLiteral {
 
 public enum Command: Hashable, Sendable {
   case action(ActionCommand)
+  case navigation(NavigationCommand)
   case editing(TextEditEvent)
   case application(CommandID)
 }
@@ -25,6 +38,16 @@ extension Command {
     case .action(.submit): "submit"
     case .action(.cancel): "cancel"
     case .action(.dismiss): "dismiss"
+    case .navigation(.up): "up"
+    case .navigation(.down): "down"
+    case .navigation(.left): "left"
+    case .navigation(.right): "right"
+    case .navigation(.sectionUp): "section-up"
+    case .navigation(.sectionDown): "section-down"
+    case .navigation(.sectionLeft): "section-left"
+    case .navigation(.sectionRight): "section-right"
+    case .navigation(.stepIn): "step-in"
+    case .navigation(.stepOut): "step-out"
     case .editing(.insert): "insert"
     case .editing(.backspace): "backspace"
     case .editing(.deleteForward): "delete-forward"
@@ -32,6 +55,8 @@ extension Command {
     case .editing(.moveCaretRight): "caret-right"
     case .editing(.moveCaretUp): "caret-up"
     case .editing(.moveCaretDown): "caret-down"
+    case .editing(.selectCaretLeft): "select-caret-left"
+    case .editing(.selectCaretRight): "select-caret-right"
     case .editing(.selectCaretUp): "select-caret-up"
     case .editing(.selectCaretDown): "select-caret-down"
     case .editing(.moveCaretToStart): "caret-start"

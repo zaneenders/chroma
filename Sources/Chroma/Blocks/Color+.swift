@@ -1,4 +1,5 @@
 extension Color: PrimitiveBlock {
+  public var focusRule: FocusRule { .standard }
   public var expandsHorizontally: Bool { true }
   public var expandsVertically: Bool { true }
 

@@ -159,22 +159,24 @@ private struct PerformanceScene: Block {
         .border(theme.border)
 
         HStack(spacing: 10) {
-          VStack(spacing: 10) {
-            VStack(spacing: 6) {
-              Text("MANDELBROT / 640 × 400 RGBA")
-                .fontScale(demoSmallText)
-                .foregroundColor(theme.accent)
-              Image(state.image, scaling: .contain)
-                .sizing(x: .grow, y: .fixed(160))
-                .background(theme.background)
-            }
-            .padding(10)
-            .background(theme.surface)
-            .border(theme.border)
+          Group {
+            VStack(spacing: 10) {
+              VStack(spacing: 6) {
+                Text("MANDELBROT / 640 × 400 RGBA")
+                  .fontScale(demoSmallText)
+                  .foregroundColor(theme.accent)
+                Image(state.image, scaling: .contain)
+                  .sizing(x: .grow, y: .fixed(160))
+                  .background(theme.background)
+              }
+              .padding(10)
+              .background(theme.surface)
+              .border(theme.border)
 
-            ShapeCanvas(state: state)
-              .sizing(x: .grow, y: .grow)
-              .clipped()
+              ShapeCanvas(state: state)
+                .sizing(x: .grow, y: .grow)
+                .clipped()
+            }
           }
           .sizing(x: .grow, y: .grow)
 
@@ -253,6 +255,8 @@ private struct UUIDList: Block {
 
 private struct ShapeCanvas: PrimitiveBlock {
   let state: PerformanceDemoState
+
+  var focusRule: FocusRule { .standard }
 
   var expandsHorizontally: Bool { true }
   var expandsVertically: Bool { true }
@@ -347,6 +351,9 @@ struct PerformanceDemo: Block {
           state.page = .font
         }
         Spacer()
+        Text("f/j/d/k or arrows navigate • s steps out, l steps in • Enter select • Esc exits input")
+          .fontScale(demoSmallText)
+          .hover(.none)
       }
       if state.page == .clipboard {
         VStack(spacing: 16) {
@@ -362,7 +369,7 @@ struct PerformanceDemo: Block {
           Text("Copy / cut / paste / select all: platform shortcut modifier + C / X / V / A. Escape ends editing.")
             .fontScale(0.55)
           Spacer()
-        }.padding(20)
+        }.padding(20).hover(.none)
       } else if state.page == .font {
         FontDemo(state: state)
       } else {

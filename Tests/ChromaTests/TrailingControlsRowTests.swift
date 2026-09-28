@@ -1,4 +1,5 @@
 import Testing
+
 @testable import Chroma
 
 @MainActor
@@ -6,6 +7,7 @@ struct TrailingControlsRowTests {
   private final class Recorder { var rects: [Rect] = [] }
   private struct Wrapping: PrimitiveBlock {
     let recorder: Recorder
+    var focusRule: FocusRule { .standard }
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
       Size(width: proposal.width, height: proposal.width < 80 ? 40 : 20)
     }

@@ -23,6 +23,8 @@ struct ReviewRegressionTests {
     let model: Model
     let capture: Capture
 
+    var focusRule: FocusRule { .control }
+
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
     func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
@@ -35,6 +37,8 @@ struct ReviewRegressionTests {
   struct Row: PrimitiveBlock {
     let model: Model
     let capture: Capture
+
+    var focusRule: FocusRule { .standard }
 
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
       capture.measurements += 1
@@ -53,7 +57,7 @@ struct ReviewRegressionTests {
     let renderer = HeadlessRenderer()
     renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
     renderer.render()
-    renderer.render(input: InputState(commands: [.action(.activate)]))
+    renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     renderer.render(input: InputState(textEvents: [.selectAll]))
     model.text = "a"
     renderer.render()
@@ -67,7 +71,7 @@ struct ReviewRegressionTests {
     let renderer = HeadlessRenderer()
     renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
     renderer.render()
-    renderer.render(input: InputState(commands: [.action(.activate)]))
+    renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     model.text = "a"
     renderer.render(input: InputState(textEvents: [.insert("!")]))
     #expect(model.text == "a!")
@@ -82,7 +86,7 @@ struct ReviewRegressionTests {
     }
     renderer.content = DeferredBlock { field(model.text) }
     renderer.render()
-    renderer.render(input: InputState(commands: [.action(.activate)]))
+    renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     renderer.render(input: InputState(textEvents: [.selectAll]))
     model.text = "a"
     renderer.render()
@@ -125,6 +129,8 @@ struct ReviewRegressionTests {
   struct InputProbe: PrimitiveBlock {
     let capture: InputCapture
 
+    var focusRule: FocusRule { .control }
+
     func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
 
     func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
@@ -141,7 +147,7 @@ struct ReviewRegressionTests {
     defer { renderer.close() }
     renderer.content = InputProbe(capture: capture)
     renderer.render()
-    renderer.render(input: InputState(commands: [.action(.activate)]))
+    renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     #expect(capture.clicks == 1)
     capture.inputs = []
     let textInput = InputState(textEvents: [.insert("x")])
