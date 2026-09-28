@@ -106,12 +106,12 @@ struct GlyphExplorer: PrimitiveBlock {
 
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     let columns = max(1, Int(proposal.width / cell))
     return Size(width: proposal.width, height: Float((Self.glyphs.count + columns - 1) / columns) * cell)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let columns = max(1, Int(rect.size.width / cell))
     let rows = (Self.glyphs.count + columns - 1) / columns
     context.withFocusGroup(in: rect, axis: .vertical) {
@@ -145,11 +145,11 @@ struct GlyphInspection: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: 200, height: 240)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let origin = Point(x: rect.minX + 16, y: rect.minY + 8)
     for column in 0...20 {
       drawList.fillRect(
@@ -174,11 +174,11 @@ struct TerminalSpecimen: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: 360, height: 84)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     for (row, text) in Self.rows.enumerated() {
       drawList.text(
         text, at: Point(x: rect.minX, y: rect.minY + Float(row) * 28),

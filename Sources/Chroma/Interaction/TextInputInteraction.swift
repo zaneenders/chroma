@@ -231,7 +231,7 @@ extension Interaction {
       FocusNode(
         kind: .leaf(id), rect: rect, hitRect: clippedRect(rect),
         canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
-    buildingInputHandlers[id] = { [weak self] in
+    building.inputHandlers[id] = { [weak self] in
       guard let self else { return }
       _ = self.updateTextInput(
         id: id, rect: rect, text: text(), onChange: onChange, onSubmit: onSubmit,

@@ -143,14 +143,14 @@ struct DefaultFocusTests {
   @Test func lazyRowsClaimTheirTextContent() {
     let controller = ScrollViewController()
     let content = ScrollView(
-      id: WidgetID("claim-list"), data: 0..<3, rowHeight: 20, spacing: 0,
+      data: 0..<3, rowHeight: 20, spacing: 0,
       showsIndicator: false, controller: controller
     ) { index in
       VStack(spacing: 2) {
         Text("label \(index)")
         Text("value \(index)")
       }
-    }
+    }.id(WidgetID("claim-list"))
 
     render(content, input: parked)
     #expect(leafRects().count == 3, "each row is one focus stop, not one per text")

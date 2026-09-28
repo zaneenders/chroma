@@ -1,1 +1,0 @@
-public typealias HeadlessRenderer = HeadlessHost

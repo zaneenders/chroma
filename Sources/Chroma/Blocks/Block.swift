@@ -7,3 +7,7 @@ public protocol Block {
 extension Never: Block {
   public var body: Never { fatalError("Never") }
 }
+
+extension String: Block {
+  public var body: Text { Text(self) }
+}

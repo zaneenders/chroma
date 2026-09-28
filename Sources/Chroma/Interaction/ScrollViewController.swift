@@ -21,9 +21,8 @@ public final class ScrollViewController {
       horizontalOffset = 0
     }
     identity = id
-    if interaction.scrollOffsets[id] == nil {
-      interaction.setScrollOffset(offset, for: id)
-      interaction.setHorizontalScrollOffset(horizontalOffset, for: id)
+    if interaction.scrollStates[id] == nil {
+      interaction.scrollStates[id] = Interaction.ScrollState(offset: Point(x: horizontalOffset, y: offset))
     }
   }
 

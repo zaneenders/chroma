@@ -101,8 +101,9 @@ struct ReviewRegressionTests {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
     renderer.content = ScrollView(
-      id: WidgetID("stack"), controller: controller,
-      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
+      controller: controller,
+      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+    ).id(WidgetID("stack"))
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -185,8 +186,9 @@ struct ReviewRegressionTests {
     let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = ScrollView(
-      id: WidgetID("stack"), controller: controller,
-      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
+      controller: controller,
+      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+    ).id(WidgetID("stack"))
     renderer.render()
     for height: Float in [50, 80, 30] {
       model.height = height
@@ -207,9 +209,9 @@ struct ReviewRegressionTests {
     let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = ScrollView(
-      id: WidgetID("stack"), controller: controller,
+      controller: controller,
       rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-    ).onCommand(.application("resize")) {
+    ).id(WidgetID("stack")).onCommand(.application("resize")) {
       model.height = 80
       return .handled
     }

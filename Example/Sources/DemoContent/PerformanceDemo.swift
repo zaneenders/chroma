@@ -266,9 +266,9 @@ private struct ShapeCanvas: PrimitiveBlock {
   var expandsHorizontally: Bool { true }
   var expandsVertically: Bool { true }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: Color(r: 0.025, g: 0.035, b: 0.065, a: 1))
 
     let area = Rect(

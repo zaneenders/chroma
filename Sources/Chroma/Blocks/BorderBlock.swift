@@ -22,5 +22,3 @@ public struct BorderBlock: PrimitiveBlock, IdentityTransparentBlock {
     }
   }
 }
-
-public typealias RoundedBorderBlock = BorderBlock

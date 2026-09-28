@@ -59,19 +59,18 @@ extension Interaction {
         target.interaction == nil || target.interaction === self,
         "FocusTarget cannot be bound to multiple interaction instances")
       let key = ObjectIdentifier(target)
-      precondition(buildingFocusTargets[key] == nil, "FocusTarget must bind to exactly one control")
-      buildingFocusTargets[key] = (target, id)
+      precondition(building.focusTargets[key] == nil, "FocusTarget must bind to exactly one control")
+      building.focusTargets[key] = (target, id)
     }
   }
 
   func resolveFocusTargets() {
-    for (key, binding) in focusTargets where buildingFocusTargets[key] == nil {
+    for (key, binding) in registrations.focusTargets where building.focusTargets[key] == nil {
       binding.target.boundID = nil
       binding.target.interaction = nil
       binding.target.pendingEditing = nil
     }
-    focusTargets = buildingFocusTargets
-    for binding in focusTargets.values {
+    for binding in building.focusTargets.values {
       binding.target.boundID = binding.id
       if binding.target.interaction !== self { binding.target.interaction = self }
       if let editing = binding.target.pendingEditing {

@@ -88,13 +88,13 @@ struct StructuralInteractionTests {
     harness.context.selection.selectAll(at: Point(x: 1, y: 1))
     controller.scroll(to: 30)
     harness.render(content(1))
-    #expect(harness.context.interaction.scrollOffsets.values.contains(30))
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
     #expect(harness.context.selection.selectedText() != nil)
     harness.render(content(2))
-    #expect(harness.context.interaction.scrollOffsets.values.allSatisfy { $0 == 0 })
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.allSatisfy { $0 == 0 })
     #expect(harness.context.selection.selectedText() == nil)
     harness.render(content(1))
-    #expect(harness.context.interaction.scrollOffsets.values.allSatisfy { $0 == 0 })
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.allSatisfy { $0 == 0 })
     #expect(harness.context.selection.selectedText() == nil)
   }
 
@@ -154,7 +154,7 @@ struct StructuralInteractionTests {
     default: content = ZStack(content: { return TupleBlock(children: children) })
     }
     harness.render(content)
-    #expect(harness.context.interaction.buttonActions.count == 2)
+    #expect(harness.context.interaction.registrations.buttonActions.count == 2)
     harness.render(content, input: InputState(commands: [.action(.activate)]))
     #expect(calls == ["A"])
   }
@@ -173,7 +173,7 @@ struct StructuralInteractionTests {
     harness.render(styled, input: harness.release)
     #expect(activations == 1)
     #expect(harness.context.interaction.selectedLeafID == id)
-    #expect(harness.context.interaction.buttonActions.count == 4)
+    #expect(harness.context.interaction.registrations.buttonActions.count == 4)
   }
 
   @Test func collectionModifiersPreserveEditingAcrossReordering() {
@@ -328,11 +328,11 @@ struct StructuralInteractionTests {
       input: InputState(
         pointerPosition: Point(x: 5, y: 5),
         scrollDelta: Point(x: 0, y: -30)))
-    let offsets = harness.context.interaction.scrollOffsets
+    let offsets = harness.context.interaction.scrollStates.mapValues { $0.offset.y }
     #expect(offsets.count == 2)
     #expect(offsets.values.sorted() == [0, 30])
     harness.render(content())
-    #expect(harness.context.interaction.scrollOffsets == offsets)
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y } == offsets)
   }
 
   @Test func implicitLazyStackAndInteractiveRegisterIndependently() {
@@ -347,8 +347,8 @@ struct StructuralInteractionTests {
     harness.render(content(), input: harness.press)
     harness.render(content(), input: harness.release)
     #expect(activations == 1)
-    #expect(harness.context.interaction.buttonActions.count == 2)
-    #expect(harness.context.interaction.scrollOffsets.count == 1)
+    #expect(harness.context.interaction.registrations.buttonActions.count == 2)
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.count == 1)
   }
 
   @Test func selectableTextUsesIdentityRatherThanCoordinates() {
@@ -429,7 +429,7 @@ struct StructuralInteractionTests {
       proposal: Size(width: 100, height: 100), context: context)
     #expect(target.interaction == nil)
     #expect(target.pendingEditing == false)
-    #expect(context.interaction.buildingFocusTargets.isEmpty)
+    #expect(context.interaction.building.focusTargets.isEmpty)
   }
 
   @Test func retainedControllerRestoresOffsetButNotTextSelection() {
@@ -442,12 +442,12 @@ struct StructuralInteractionTests {
     harness.context.selection.selectAll(at: Point(x: 1, y: 1))
     controller.scroll(to: 30)
     harness.render(content())
-    #expect(harness.context.interaction.scrollOffsets.values.contains(30))
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
     harness.render(EmptyBlock())
-    #expect(harness.context.interaction.scrollOffsets.isEmpty)
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.isEmpty)
     #expect(harness.context.selection.selectedText() == nil)
     harness.render(content())
-    #expect(harness.context.interaction.scrollOffsets.values.contains(30))
+    #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
     #expect(harness.context.selection.selectedText() == nil)
   }
 

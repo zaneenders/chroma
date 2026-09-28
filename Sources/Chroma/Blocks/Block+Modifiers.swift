@@ -29,14 +29,14 @@ extension Block {
 
   public func roundedBorder(
     _ color: Color, radius: Float, width: Float = 1
-  ) -> RoundedBorderBlock {
-    RoundedBorderBlock(content: self, color: color, radii: CornerRadii(radius), width: width)
+  ) -> BorderBlock {
+    BorderBlock(content: self, color: color, radii: CornerRadii(radius), width: width)
   }
 
   public func roundedBorder(
     _ color: Color, radii: CornerRadii, width: Float = 1
-  ) -> RoundedBorderBlock {
-    RoundedBorderBlock(content: self, color: color, radii: radii, width: width)
+  ) -> BorderBlock {
+    BorderBlock(content: self, color: color, radii: radii, width: width)
   }
 
   public func clipped() -> ClipBlock {

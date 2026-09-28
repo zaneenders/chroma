@@ -22,7 +22,6 @@ final class FocusNode {
   /// True when a scroll container above this node scrolls the node into view on focus.
   let navigationIgnored: Bool
   let canBeRevealed: Bool
-  var commandHandlers: [Command: @MainActor () -> CommandResult] = [:]
   var children: [FocusNode] = []
 
   init(

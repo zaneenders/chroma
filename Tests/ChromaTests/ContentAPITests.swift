@@ -147,4 +147,92 @@ struct ContentAPITests {
     render([0, 5, 1, 2, 3, 4, 6, 7, 8, 9])
     #expect(controller.offset == 20)
   }
+
+  @Test func stringsComposeWithLoopsAndModifiers() {
+    let content = ScrollView("Messages") {
+      "Header".padding(2)
+      for index in 0..<3 {
+        "Message \(index)"
+      }
+      if true { "Footer" }
+    }
+    let context = BlockContext()
+    let list = FrameProducer().render(
+      content: content, viewport: Size(width: 200, height: 200), input: InputState(),
+      context: context, onChange: {})
+    let strings = list.commands.compactMap { command -> String? in
+      if case .text(_, let text, _, _) = command { return text }
+      return nil
+    }
+    #expect(strings == ["Header", "Message 0", "Message 1", "Message 2", "Footer"])
+    #expect(context.interaction.navigation?.children.first?.name == "Messages")
+  }
+
+  @Test func namedVirtualizedScrollUsesCurrentConfiguration() {
+    let controller = ScrollViewController()
+    controller.scrollToBottom()
+    var view = ScrollView("History", data: 0..<100, rowHeight: 20, controller: controller) {
+      "Row \($0)"
+    }
+    view.showsIndicator = false
+    let context = BlockContext()
+    let producer = FrameProducer()
+    let list = producer.render(
+      content: view, viewport: Size(width: 200, height: 40), input: InputState(), context: context, onChange: {})
+    #expect(view.controller === controller)
+    #expect(controller.offset == 1960)
+    #expect(context.interaction.navigation?.children.first?.name == "History")
+    let strings = list.commands.compactMap { command -> String? in
+      if case .text(_, let text, _, _) = command { return text }
+      return nil
+    }
+    #expect(strings.contains("Row 99"))
+    #expect(strings.count <= 3)
+    _ = producer.render(
+      content: EmptyBlock(), viewport: Size(width: 200, height: 40), input: InputState(),
+      context: context, onChange: {})
+    #expect(context.interaction.scrollStates.isEmpty)
+  }
+
+  @Test func measuredRowsKeepControllerWhenCopied() {
+    let controller = ScrollViewController()
+    let view = ScrollView(
+      controller: controller,
+      rows: (0..<20).map {
+        ScrollView.Row(id: $0, content: Text("Row \($0)").sizing(y: .fixed(20)))
+      })
+    var copy = view
+    copy.name = "Copied"
+    copy.showsIndicator = false
+    controller.scrollToBottom()
+    let context = BlockContext()
+    _ = FrameProducer().render(
+      content: copy, viewport: Size(width: 200, height: 40), input: InputState(),
+      context: context, onChange: {})
+    #expect(copy.controller === controller)
+    #expect(view.controller === controller)
+    #expect(controller.offset == 360)
+    #expect(context.interaction.navigation?.children.first?.name == "Copied")
+  }
+
+  @Test func switchingToVerticalRowsClearsHorizontalOffset() {
+    let controller = ScrollViewController()
+    let producer = FrameProducer()
+    let context = BlockContext()
+    let viewport = Size(width: 100, height: 40)
+    let wide = ScrollView(controller: controller) {
+      Color.white.sizing(x: .fixed(300), y: .fixed(100))
+    }
+    _ = producer.render(content: wide, viewport: viewport, input: InputState(), context: context, onChange: {})
+    _ = producer.render(
+      content: wide, viewport: viewport,
+      input: InputState(pointerPosition: Point(x: 20, y: 20), scrollDelta: Point(x: -50, y: 0)),
+      context: context, onChange: {})
+    #expect(controller.horizontalOffset == 50)
+    let rows = ScrollView(data: 0..<20, rowHeight: 20, controller: controller) { "Row \($0)" }
+    _ = producer.render(content: rows, viewport: viewport, input: InputState(), context: context, onChange: {})
+    #expect(controller.horizontalOffset == 0)
+    #expect(context.interaction.scrollStates.values.allSatisfy { $0.offset.x == 0 && $0.limit.x == 0 })
+  }
+
 }

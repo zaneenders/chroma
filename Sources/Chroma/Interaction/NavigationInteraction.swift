@@ -141,12 +141,12 @@ extension Interaction {
       if let rememberedID, let childIndex = selected.children.firstIndex(where: { $0.id == rememberedID }) {
         setNavigationSelection(navigationPath + [childIndex])
       } else if let groupID = selected.id, let rememberedID,
-        let rowKey = scrollRowKeys[groupID]?[rememberedID],
-        scrollLayouts[groupID]?.rowKeys.contains(rowKey) == true,
-        let contentRect = scrollRows[groupID]?[rememberedID]
+        let rowKey = scrollStates[groupID]?.rowKeys[rememberedID],
+        scrollStates[groupID]?.layout?.rowKeys.contains(rowKey) == true,
+        let contentRect = scrollStates[groupID]?.rows[rememberedID]
       {
-        let offset = scrollOffset(for: groupID)
-        pendingScrollReveals[groupID] = Rect(
+        let offset = scrollStates[groupID]?.offset.y ?? 0
+        scrollStates[groupID, default: ScrollState()].pendingReveal = Rect(
           x: contentRect.minX, y: contentRect.minY - offset,
           width: contentRect.size.width, height: contentRect.size.height)
         pendingFocus = PendingFocus(leaf: rememberedID, scrollID: groupID)

@@ -1,6 +1,6 @@
 package struct WidgetID: Hashable, Sendable {
   package let rawValue: UInt64
-  private var structuralPath: StructuralPath?
+  let structuralPath: StructuralPath?
 
   init(path: StructuralPath) {
     rawValue = 0
@@ -8,6 +8,7 @@ package struct WidgetID: Hashable, Sendable {
   }
 
   package init(rawValue: UInt64) {
+    structuralPath = nil
     self.rawValue = rawValue
   }
 

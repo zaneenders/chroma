@@ -64,9 +64,9 @@ struct FrameUpdateTests {
   func externalScrollRequestInvalidatesObservedFrame() async {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
-    renderer.content = ScrollView(id: WidgetID("scroll"), controller: controller) {
+    renderer.content = ScrollView(controller: controller) {
       Text("hello")
-    }
+    }.id(WidgetID("scroll"))
     var requests = 0
     renderer.onRedrawRequested = { requests += 1 }
     renderer.render()

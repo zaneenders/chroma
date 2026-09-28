@@ -7,9 +7,10 @@ extension Interaction {
     let limit = Point(
       x: horizontal ? max(0, contentSize.width - viewport.size.width) : 0,
       y: max(0, contentSize.height - viewport.size.height))
-    let previousLimit = scrollLimit(for: id)
+    var state = scrollStates[id, default: ScrollState()]
+    let previousLimit = state.limit.y
     var offset = Point(
-      x: min(horizontalScrollOffset(for: id), limit.x), y: min(scrollOffset(for: id), limit.y))
+      x: min(state.offset.x, limit.x), y: min(state.offset.y, limit.y))
     let wasAtBottom = abs(offset.y - previousLimit) <= 1
 
     func reveal(_ target: Rect) {
@@ -27,7 +28,8 @@ extension Interaction {
       }
     }
 
-    let pendingReveal = pendingScrollReveals.removeValue(forKey: id)
+    let pendingReveal = state.pendingReveal
+    state.pendingReveal = nil
     if !refreshingRegistrations, let request = controller?.request {
       if scrollDelta(in: viewport, horizontal: horizontal) != .zero, case .visible = request {
         controller?.request = nil
@@ -38,7 +40,9 @@ extension Interaction {
         case .offset(let requested): offset.y = requested
         case .visible(let target): reveal(target)
         case .row(let key):
-          if let layout = scrollLayouts[id], let index = layout.rowKeys.firstIndex(of: key) {
+          if let layout = scrollStates[id]?.layout,
+            let index = layout.rowKeys.firstIndex(of: key)
+          {
             offset.y = layout.rowHeights.prefix(index).reduce(0, +) + Float(index) * layout.spacing
           }
         }
@@ -48,16 +52,12 @@ extension Interaction {
       offset.y = limit.y
     }
     if let pendingReveal { reveal(pendingReveal) }
-    offset.x = min(max(0, offset.x), limit.x)
-    offset.y = min(max(0, offset.y), limit.y)
-    controller?.offset = offset.y
-    setScrollOffset(offset.y, for: id)
-    setScrollLimit(limit.y, for: id)
-    if horizontal {
-      controller?.horizontalOffset = offset.x
-      setHorizontalScrollOffset(offset.x, for: id)
-      setHorizontalScrollLimit(limit.x, for: id)
-    }
-    return offset
+    state.offset = offset
+    state.limit = limit
+    state.clampOffset()
+    scrollStates[id] = state
+    controller?.offset = state.offset.y
+    controller?.horizontalOffset = state.offset.x
+    return state.offset
   }
 }

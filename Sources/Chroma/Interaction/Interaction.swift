@@ -55,21 +55,15 @@ package final class Interaction {
     var command: Command
     var action: @MainActor () -> CommandResult
   }
-  @ObservationIgnored var commandHandlers: [ScopedCommandHandler] = []
-  @ObservationIgnored var buildingCommandHandlers: [ScopedCommandHandler] = []
   struct ScopedKeyBindings {
     var path: [Int]
     var bindings: KeyBindings
   }
-  @ObservationIgnored var keyBindingScopes: [ScopedKeyBindings] = []
-  @ObservationIgnored var buildingKeyBindingScopes: [ScopedKeyBindings] = []
   struct ScopedActionRole {
     var path: [Int]
     var role: ActionRole
     var action: @MainActor () -> Void
   }
-  @ObservationIgnored var actionRoles: [ScopedActionRole] = []
-  @ObservationIgnored var buildingActionRoles: [ScopedActionRole] = []
 
   @ObservationIgnored var lastPointerPosition = Point(x: -1, y: -1)
 
@@ -112,13 +106,6 @@ package final class Interaction {
     textSelection.selectAll(at: point)
   }
 
-  // Offsets change during frame processing; pruning them must not invalidate sibling scroll views.
-  @ObservationIgnored var scrollOffsets: [WidgetID: Float] = [:]
-  @ObservationIgnored var horizontalScrollOffsets: [WidgetID: Float] = [:]
-  @ObservationIgnored var scrollLimits: [WidgetID: Float] = [:]
-  @ObservationIgnored var horizontalScrollLimits: [WidgetID: Float] = [:]
-  @ObservationIgnored var pendingScrollReveals: [WidgetID: Rect] = [:]
-
   struct PendingFocus: Equatable {
     var leaf: WidgetID
     var scrollID: WidgetID
@@ -128,11 +115,22 @@ package final class Interaction {
   /// was asked to reveal it, and focus lands as soon as the leaf is drawn.
   @ObservationIgnored var pendingFocus: PendingFocus?
 
-  /// Content-relative rects of the leaves each scroll container last drew, keyed by scope then
-  /// leaf. Lets `stepIn` reveal a remembered row that virtualization has discarded.
-  @ObservationIgnored var scrollRows: [WidgetID: [WidgetID: Rect]] = [:]
-  @ObservationIgnored var scrollRowKeys: [WidgetID: [WidgetID: StructuralKey]] = [:]
-  @ObservationIgnored var scrollLayouts: [WidgetID: ScrollLayout] = [:]
+  struct ScrollState {
+    var offset = Point.zero
+    var limit = Point.zero
+    var pendingReveal: Rect?
+    var rows: [WidgetID: Rect] = [:]
+    var rowKeys: [WidgetID: StructuralKey] = [:]
+    var layout: ScrollLayout?
+
+    mutating func clampOffset() {
+      offset.x = min(max(0, offset.x), limit.x)
+      offset.y = min(max(0, offset.y), limit.y)
+    }
+  }
+
+  // Pruning render-derived offsets must not invalidate sibling scroll views.
+  @ObservationIgnored var scrollStates: [WidgetID: ScrollState] = [:]
 
   struct ScrollLayout: Equatable {
     var width: Float
@@ -191,36 +189,35 @@ package final class Interaction {
   @ObservationIgnored var builderStack: [FocusNode] = []
   @ObservationIgnored var builderPath: [Int] = []
 
-  @ObservationIgnored var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
-  @ObservationIgnored var buildingInputHandlers: [WidgetID: @MainActor () -> Void] = [:]
-  @ObservationIgnored var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
-  @ObservationIgnored var buildingButtonActions: [WidgetID: @MainActor () -> Void] = [:]
   @ObservationIgnored var activatedLeaf: WidgetID?
 
-  @ObservationIgnored var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
-  @ObservationIgnored var buildingFocusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
+  struct FrameRegistrations {
+    var commandHandlers: [ScopedCommandHandler] = []
+    var keyBindingScopes: [ScopedKeyBindings] = []
+    var actionRoles: [ScopedActionRole] = []
+    var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
+    var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
+    var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
+  }
+
+  @ObservationIgnored var registrations = FrameRegistrations()
+  @ObservationIgnored var building = FrameRegistrations()
 
   package init() {}
 
   func resetRegistrations() {
-    for binding in focusTargets.values {
+    for binding in registrations.focusTargets.values {
       binding.target.boundID = nil
       binding.target.interaction = nil
       binding.target.pendingEditing = nil
     }
-    focusTargets = [:]
-    buildingFocusTargets = [:]
+
+    registrations = FrameRegistrations()
+    building = FrameRegistrations()
     textSelection.clear()
     textSelection.layoutRegistry.clear()
-    scrollOffsets = [:]
-    horizontalScrollOffsets = [:]
-    scrollLimits = [:]
-    horizontalScrollLimits = [:]
-    pendingScrollReveals = [:]
     pendingFocus = nil
-    scrollRows = [:]
-    scrollRowKeys = [:]
-    scrollLayouts = [:]
+    scrollStates = [:]
     nextAnimationDeadline = nil
     tree = nil
     navigation = nil
@@ -229,16 +226,7 @@ package final class Interaction {
     selection = nil
     selectedLeafID = nil
     pressedLeaf = nil
-    inputHandlers = [:]
-    buildingInputHandlers = [:]
-    buttonActions = [:]
-    buildingButtonActions = [:]
-    commandHandlers = []
-    buildingCommandHandlers = []
-    keyBindingScopes = []
-    buildingKeyBindingScopes = []
-    actionRoles = []
-    buildingActionRoles = []
+
     caretClock.setActive(false)
   }
 
@@ -287,7 +275,8 @@ package final class Interaction {
   @ObservationIgnored var refreshingRegistrations = false
 
   package func beginFrame(input: InputState) {
-    buildingFocusTargets = [:]
+    building = FrameRegistrations()
+
     if refreshingRegistrations {
       // Registration draws must not replay the previous frame's input or activation.
       self.input = input
@@ -296,16 +285,13 @@ package final class Interaction {
       activatePending = false
       enterTextPending = false
       movementTextEvents = []
-      buildingActionRoles = []
+
       let root = FocusNode(kind: .group, rect: .zero)
       builderRoot = root
       builderStack = [root]
       builderPath = []
       clipStack = []
-      buildingInputHandlers = [:]
-      buildingButtonActions = [:]
-      buildingCommandHandlers = []
-      buildingKeyBindingScopes = []
+
       return
     }
     self.input = input
@@ -316,11 +302,7 @@ package final class Interaction {
     handledCommandIndices = []
     routePendingCommands()
     pendingCommands = []
-    buildingCommandHandlers = []
-    buildingKeyBindingScopes = []
-    buildingActionRoles = []
-    buildingInputHandlers = [:]
-    buildingButtonActions = [:]
+
     activatedLeaf = nil
 
     let root = FocusNode(kind: .group, rect: .zero)
@@ -348,11 +330,11 @@ package final class Interaction {
         endEditing()
       }
       lastPointerPosition = input.pointerPosition
-      for handler in inputHandlers.values { handler() }
+      for handler in registrations.inputHandlers.values { handler() }
       if activatePending, let id = selectedLeafID {
         activatePending = false
         activatedLeaf = id
-        buttonActions[id]?()
+        registrations.buttonActions[id]?()
       }
     }
 
@@ -393,13 +375,7 @@ package final class Interaction {
 
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil { endEditing() }
     if let pressedLeaf, newTree.findLeaf(pressedLeaf) == nil { self.pressedLeaf = nil }
-    scrollOffsets = scrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
-    horizontalScrollOffsets = horizontalScrollOffsets.filter { buildingInputHandlers[$0.key] != nil }
-    scrollLimits = scrollLimits.filter { buildingInputHandlers[$0.key] != nil }
-    horizontalScrollLimits = horizontalScrollLimits.filter { buildingInputHandlers[$0.key] != nil }
-    scrollRows = scrollRows.filter { buildingInputHandlers[$0.key] != nil }
-    scrollRowKeys = scrollRowKeys.filter { buildingInputHandlers[$0.key] != nil }
-    scrollLayouts = scrollLayouts.filter { buildingInputHandlers[$0.key] != nil }
+    scrollStates = scrollStates.filter { building.inputHandlers[$0.key] != nil }
     textSelection.reconcile()
     tree = newTree
     reconcileNavigation(in: newTree)
@@ -417,7 +393,7 @@ package final class Interaction {
           self.navigationPath = navigationPath
           if let navigation { rememberNavigation(navigationPath, in: navigation) }
         }
-      } else if pendingScrollReveals[pending.scrollID] == nil {
+      } else if scrollStates[pending.scrollID]?.pendingReveal == nil {
         pendingFocus = nil
       }
     }
@@ -425,11 +401,7 @@ package final class Interaction {
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
     caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
-    commandHandlers = buildingCommandHandlers
-    keyBindingScopes = buildingKeyBindingScopes
-    actionRoles = buildingActionRoles
-    inputHandlers = buildingInputHandlers
-    buttonActions = buildingButtonActions
+    registrations = building
     builderRoot = nil
     builderStack = []
     activatePending = false
@@ -496,7 +468,7 @@ extension Interaction {
     for depth in 0...path.count {
       let ancestorPath = Array(path.prefix(depth))
       guard let scrollID = tree.node(at: ancestorPath)?.scrollID else { continue }
-      pendingScrollReveals[scrollID] = target
+      scrollStates[scrollID, default: ScrollState()].pendingReveal = target
     }
   }
 
@@ -511,13 +483,13 @@ extension Interaction {
   }
 
   func updateScrollLayout(id: WidgetID, layout: ScrollLayout) {
-    if let previous = scrollLayouts[id], previous != layout {
-      scrollRows[id] = nil
-      scrollRowKeys[id] = nil
-      pendingScrollReveals[id] = nil
+    if let previous = scrollStates[id]?.layout, previous != layout {
+      scrollStates[id, default: ScrollState()].rows = [:]
+      scrollStates[id, default: ScrollState()].rowKeys = [:]
+      scrollStates[id, default: ScrollState()].pendingReveal = nil
       if pendingFocus?.scrollID == id { pendingFocus = nil }
     }
-    scrollLayouts[id] = layout
+    scrollStates[id, default: ScrollState()].layout = layout
   }
 
   package func resolve(_ input: KeyboardInput, appBindings: KeyBindings) -> ResolvedKeyboardInput? {
@@ -530,7 +502,7 @@ extension Interaction {
     for chord: KeyChord, isTextEditing: Bool, appBindings: KeyBindings
   ) -> Command?? {
     for scope
-      in keyBindingScopes
+      in registrations.keyBindingScopes
       .filter({ isPrefix($0.path, of: activeCommandPath) })
       .sorted(by: { $0.path.count > $1.path.count })
     {
@@ -553,7 +525,7 @@ extension Interaction {
         continue
       }
       let handlers =
-        commandHandlers
+        registrations.commandHandlers
         .filter { $0.command == command && isPrefix($0.path, of: activeCommandPath) }
         .sorted { $0.path.count > $1.path.count }
       if handlers.contains(where: { $0.action() == .handled }) {
@@ -576,7 +548,7 @@ extension Interaction {
   }
 
   func actionRole(_ role: ActionRole) -> (@MainActor () -> Void)? {
-    actionRoles
+    registrations.actionRoles
       .filter { $0.role == role && isPrefix($0.path, of: activeCommandPath) }
       .max { $0.path.count < $1.path.count }?
       .action
@@ -642,13 +614,13 @@ extension Interaction {
         kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role,
         canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
     if role != .normal, let action {
-      buildingActionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
+      building.actionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
     }
 
     let focused = selectedLeafID == id
     let hovered = hoveredLeafID == id
     let held = pressedLeaf == id && input.pointerDown
-    if let action { buildingButtonActions[id] = action }
+    if let action { building.buttonActions[id] = action }
     return ButtonState(hovered: hovered, focused: focused, held: held, clicked: activatedLeaf == id)
   }
 

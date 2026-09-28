@@ -176,17 +176,17 @@ struct ImageRenderingTests {
     var list = DrawList()
 
     BlockEngine.draw(
-      ScrollView(id: WidgetID("image-scroll"), showsIndicator: false) {
+      ScrollView(showsIndicator: false) {
         Image(resource)
-      },
+      }.id(WidgetID("image-scroll")),
       into: &list,
       in: viewport,
       context: context
     )
     interaction.endFrame()
 
-    #expect(interaction.scrollLimit(for: WidgetID("image-scroll")) == 20)
-    #expect(interaction.horizontalScrollLimit(for: WidgetID("image-scroll")) == 0)
+    #expect(interaction.scrollState(for: WidgetID("image-scroll")).limit.y == 20)
+    #expect(interaction.scrollState(for: WidgetID("image-scroll")).limit.x == 0)
     #expect(
       list.commands == [
         .pushClip(viewport),

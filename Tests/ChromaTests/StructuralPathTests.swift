@@ -290,18 +290,19 @@ struct StructuralPathTests {
     func draw(_ ids: [Int]) -> [String: StructuralPath] {
       recorder.measured = [:]
       recorder.drawn = [:]
-      let stack: ScrollView
+      let stack: any Block
       if uniform {
         stack = ScrollView(
-          id: WidgetID("list"), data: ids.map { Item(id: $0) },
+          data: ids.map { Item(id: $0) },
           rowHeight: 10, controller: controller
         ) { item in
           Probe(name: String(item.id), recorder: recorder)
-        }
+        }.id(WidgetID("list"))
       } else {
         stack = ScrollView(
-          id: WidgetID("list"), controller: controller,
-          rows: ids.map { .init(id: WidgetID(String($0)), content: Probe(name: String($0), recorder: recorder)) })
+          controller: controller,
+          rows: ids.map { .init(id: WidgetID(String($0)), content: Probe(name: String($0), recorder: recorder)) }
+        ).id(WidgetID("list"))
       }
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()

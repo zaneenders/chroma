@@ -12,19 +12,20 @@ struct LayoutCacheAndCommandRegressionTests {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       let stack = ScrollView(
-        id: id, controller: controller,
+        controller: controller,
         rows: [
           .init(id: WidgetID("stable-row"), content: Color.white.sizing(y: .fixed(height)))
-        ])
+        ]
+      ).id(id)
       BlockEngine.draw(
         stack, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
         context: BlockContext(interaction: interaction))
       interaction.endFrame()
     }
     frame(height: 40)
-    #expect(interaction.scrollLimit(for: id) == 20)
+    #expect(interaction.scrollState(for: id).limit.y == 20)
     frame(height: 100)
-    #expect(interaction.scrollLimit(for: id) == 80)
+    #expect(interaction.scrollState(for: id).limit.y == 80)
   }
 
   @Test func handledApplicationCommandDoesNotScroll() {
@@ -34,9 +35,9 @@ struct LayoutCacheAndCommandRegressionTests {
     func frame(_ input: InputState = InputState()) {
       interaction.beginFrame(input: input)
       var list = DrawList()
-      let view = ScrollView(id: id) {
+      let view = ScrollView {
         Color.white.sizing(y: .fixed(100))
-      }.onCommand(.application("resize")) {
+      }.id(id).onCommand(.application("resize")) {
         handled += 1
         return .handled
       }
@@ -48,7 +49,7 @@ struct LayoutCacheAndCommandRegressionTests {
     frame()
     frame(InputState(commands: [.application("resize")]))
     #expect(handled == 1)
-    #expect(interaction.scrollOffset(for: id) == 0)
+    #expect(interaction.scrollState(for: id).offset.y == 0)
   }
 
   @Test func retainedRowContentMutationInvalidatesCache() {
@@ -61,7 +62,7 @@ struct LayoutCacheAndCommandRegressionTests {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       BlockEngine.draw(
-        ScrollView(id: id, controller: controller, rows: [row]),
+        ScrollView(controller: controller, rows: [row]).id(id),
         into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
         context: BlockContext(interaction: interaction))
       interaction.endFrame()
@@ -69,7 +70,7 @@ struct LayoutCacheAndCommandRegressionTests {
     frame()
     row.content = Color.white.sizing(y: .fixed(100))
     frame()
-    #expect(interaction.scrollLimit(for: id) == 80)
+    #expect(interaction.scrollState(for: id).limit.y == 80)
   }
 
   @Test func retainedRowUsesCurrentTextScaleAndFontMetrics() {
@@ -81,18 +82,18 @@ struct LayoutCacheAndCommandRegressionTests {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       BlockEngine.draw(
-        ScrollView(id: id, controller: controller, rows: rows),
+        ScrollView(controller: controller, rows: rows).id(id),
         into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
         context: BlockContext(interaction: interaction, textScale: scale))
       interaction.endFrame()
     }
     frame(scale: 1)
-    #expect(interaction.scrollLimit(for: id) == 8)
+    #expect(interaction.scrollState(for: id).limit.y == 8)
     frame(scale: 2)
-    #expect(interaction.scrollLimit(for: id) == 36)
+    #expect(interaction.scrollState(for: id).limit.y == 36)
     interaction.fontMetrics.glyphHeight = 40
     frame(scale: 2)
-    #expect(interaction.scrollLimit(for: id) == 60)
+    #expect(interaction.scrollState(for: id).limit.y == 60)
   }
 
   @Test func commandConsumptionResetsBetweenFrames() {
@@ -102,9 +103,9 @@ struct LayoutCacheAndCommandRegressionTests {
     func frame(_ input: InputState = InputState()) {
       interaction.beginFrame(input: input)
       var list = DrawList()
-      let view = ScrollView(id: id) {
+      let view = ScrollView {
         Color.white.sizing(y: .fixed(100))
-      }.onCommand(.application("resize")) {
+      }.id(id).onCommand(.application("resize")) {
         consumes ? .handled : .ignored
       }
       BlockEngine.draw(
@@ -114,11 +115,11 @@ struct LayoutCacheAndCommandRegressionTests {
     }
     frame()
     frame(InputState(commands: [.application("resize")]))
-    #expect(interaction.scrollOffset(for: id) == 0)
+    #expect(interaction.scrollState(for: id).offset.y == 0)
     #expect(interaction.handledCommandIndices == [0])
     consumes = false
     frame(InputState(commands: [.application("resize")]))
-    #expect(interaction.scrollOffset(for: id) == 0)
+    #expect(interaction.scrollState(for: id).offset.y == 0)
     #expect(interaction.handledCommandIndices.isEmpty)
   }
 

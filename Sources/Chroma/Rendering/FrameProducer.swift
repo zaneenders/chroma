@@ -78,15 +78,7 @@ package final class FrameProducer {
       let wasEditing = interaction.isTextEditing
       let caret = interaction.caretOffset
       let selection = interaction.textSelectionRange
-      interaction.beginFrame(input: InputState())
-      // Initialize input normally, but defer scroll requests until the real draw.
-      interaction.refreshingRegistrations = true
-      var bootstrap = DrawList()
-      if let content {
-        BlockEngine.draw(content, into: &bootstrap, in: Rect(origin: .zero, size: viewport), context: context)
-      }
-      interaction.endFrame()
-      interaction.refreshingRegistrations = false
+      refreshRegistrations(content, viewport: viewport, context: context)
       if let editingLeaf, interaction.tree?.findLeaf(editingLeaf) != nil {
         interaction.beginEditing(editingLeaf, caretOffset: caret)
         interaction.textSelectionRange = selection
@@ -97,14 +89,7 @@ package final class FrameProducer {
     if !input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed || input.pointerReleased
       || input.scrollDelta != .zero
     {
-      interaction.refreshingRegistrations = true
-      interaction.beginFrame(input: InputState(commands: input.commands))
-      var registrations = DrawList()
-      if let content {
-        BlockEngine.draw(content, into: &registrations, in: Rect(origin: .zero, size: viewport), context: context)
-      }
-      interaction.endFrame()
-      interaction.refreshingRegistrations = false
+      refreshRegistrations(content, viewport: viewport, context: context, commands: input.commands)
     }
     interaction.nextAnimationDeadline = nil
     interaction.beginFrame(input: input)
@@ -133,4 +118,21 @@ package final class FrameProducer {
     nextAnimationDeadline = interaction.nextAnimationDeadline
     return result
   }
+
+  private func refreshRegistrations(
+    _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = []
+  ) {
+    let interaction = context.interaction
+    // Bootstrap initializes input normally; both passes defer scroll requests until painting.
+    interaction.refreshingRegistrations = interaction.tree != nil
+    interaction.beginFrame(input: InputState(commands: commands))
+    interaction.refreshingRegistrations = true
+    defer { interaction.refreshingRegistrations = false }
+    var discarded = DrawList()
+    if let content {
+      BlockEngine.draw(content, into: &discarded, in: Rect(origin: .zero, size: viewport), context: context)
+    }
+    interaction.endFrame()
+  }
+
 }

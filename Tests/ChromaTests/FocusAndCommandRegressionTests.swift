@@ -234,9 +234,9 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let controller = ScrollViewController()
     let listID = WidgetID("plain-row-list")
-    let content = ScrollView(id: listID, data: 0..<20, rowHeight: 25, controller: controller) { index in
+    let content = ScrollView(data: 0..<20, rowHeight: 25, controller: controller) { index in
       Text("Row \(index)")
-    }
+    }.id(listID)
 
     harness.render(content)
     let firstRow = harness.context.interaction.selectedLeafID
@@ -245,14 +245,14 @@ struct FocusAndCommandRegressionTests {
     for _ in 0..<4 {
       harness.render(content, input: InputState(commands: [.navigation(.down)]))
     }
-    #expect(harness.context.interaction.scrollOffset(for: listID) == 25)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y == 25)
     #expect(harness.context.interaction.selectedLeafID != firstRow)
 
     for _ in 0..<4 {
       harness.render(content, input: InputState(commands: [.navigation(.up)]))
     }
     #expect(harness.context.interaction.selectedLeafID == firstRow)
-    #expect(harness.context.interaction.scrollOffset(for: listID) == 0)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y == 0)
   }
 
   @Test func editingBlocksStructuralNavigation() {
@@ -384,7 +384,7 @@ struct FocusAndCommandRegressionTests {
 
     func content() -> any Block {
       VStack {
-        ScrollView(id: listID, data: 0...40, rowHeight: 20, controller: controller) { index in
+        ScrollView(data: 0...40, rowHeight: 20, controller: controller) { index in
           if index < rows.count {
             Button("Row \(index)") {}.focusTarget(rows[index])
           } else if fieldIsPresent {
@@ -392,7 +392,7 @@ struct FocusAndCommandRegressionTests {
           } else {
             Button("Fallback") {}.focusTarget(fallback)
           }
-        }
+        }.id(listID)
         if panelIsOpen { Button("Panel") {}.focusTarget(panel) }
       }
       .onCommand(.application("custom")) {
@@ -430,10 +430,10 @@ struct FocusAndCommandRegressionTests {
     #expect(rows[0].isFocused)
     for _ in 0..<15 { press(KeyboardInput(chord: KeyChord("j"))) }
     #expect(rows[15].isFocused)
-    #expect(harness.context.interaction.scrollOffset(for: listID) > 0)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y > 0)
     for _ in 0..<15 { press(KeyboardInput(chord: KeyChord("f"))) }
     #expect(rows[0].isFocused)
-    #expect(harness.context.interaction.scrollOffset(for: listID) == 0)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y == 0)
 
     for _ in 0..<40 { press(KeyboardInput(chord: KeyChord("j"))) }
     #expect(field.isFocused)

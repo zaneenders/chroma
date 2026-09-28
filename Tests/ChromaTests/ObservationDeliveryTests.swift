@@ -12,12 +12,13 @@ struct ObservationDeliveryTests {
     let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = ScrollView(
-      id: WidgetID("stack"), controller: ScrollViewController(),
+      controller: ScrollViewController(),
       rows: [
         .init(
           id: WidgetID("row"),
           content: ReviewRegressionTests.Row(model: model, capture: capture))
-      ])
+      ]
+    ).id(WidgetID("stack"))
     let (redraws, continuation) = AsyncStream<Void>.makeStream()
     defer { continuation.finish() }
     renderer.onRedrawRequested = { continuation.yield(()) }

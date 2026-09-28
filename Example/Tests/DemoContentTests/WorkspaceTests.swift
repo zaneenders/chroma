@@ -8,7 +8,7 @@ import Testing
 struct WorkspaceTests {
   @MainActor private final class Harness {
     let state = WorkspaceState()
-    let renderer = HeadlessRenderer(size: Size(width: 1200, height: 820))
+    let renderer = HeadlessHost(size: Size(width: 1200, height: 820))
     init() {
       let state = state
       let gallery = PerformanceDemoState(itemCount: 100)

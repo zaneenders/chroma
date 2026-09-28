@@ -31,18 +31,18 @@ public struct CommandHandlerBlock: PrimitiveBlock, IdentityTransparentBlock {
       }
     if isRoot {
       BlockEngine.draw(content, into: &drawList, in: rect, context: context)
-      interaction.buildingCommandHandlers.append(
+      interaction.building.commandHandlers.append(
         Interaction.ScopedCommandHandler(path: [], command: command, action: action))
       return
     }
-    let handlerStart = interaction.buildingCommandHandlers.count
+    let handlerStart = interaction.building.commandHandlers.count
     interaction.beginGroup(rect: rect)
-    interaction.buildingCommandHandlers.append(
+    interaction.building.commandHandlers.append(
       Interaction.ScopedCommandHandler(
         path: interaction.builderPath, command: command, action: action))
     BlockEngine.draw(content, into: &drawList, in: rect, context: context)
     if !interaction.endGroup() {
-      interaction.buildingCommandHandlers.removeSubrange(handlerStart...)
+      interaction.building.commandHandlers.removeSubrange(handlerStart...)
     }
   }
 }

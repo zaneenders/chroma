@@ -245,11 +245,11 @@ private struct NavigationGuide: PrimitiveBlock {
   var focusRule: FocusRule { .decorative }
   var expandsHorizontally: Bool { true }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: proposal.width, height: 64)
   }
 
-  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let editing = context.interactionMode == .editing
     let mode = editing ? "INPUT" : "MOVE"
     let location = context.navigationBreadcrumb.joined(separator: " / ")

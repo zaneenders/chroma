@@ -18,13 +18,13 @@ public struct KeyBindingsBlock: PrimitiveBlock, IdentityTransparentBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let interaction = context.interaction
-    let bindingStart = interaction.buildingKeyBindingScopes.count
+    let bindingStart = interaction.building.keyBindingScopes.count
     interaction.beginGroup(rect: rect)
-    interaction.buildingKeyBindingScopes.append(
+    interaction.building.keyBindingScopes.append(
       Interaction.ScopedKeyBindings(path: interaction.builderPath, bindings: bindings))
     BlockEngine.draw(content, into: &drawList, in: rect, context: context)
     if !interaction.endGroup() {
-      interaction.buildingKeyBindingScopes.removeSubrange(bindingStart...)
+      interaction.building.keyBindingScopes.removeSubrange(bindingStart...)
     }
   }
 }

@@ -89,7 +89,7 @@ struct DemoContentTests {
 }
 
 @MainActor
-private func clickFontTab(_ renderer: HeadlessRenderer) throws {
+private func clickFontTab(_ renderer: HeadlessHost) throws {
   let initial = renderer.render()
   let tab = try #require(
     initial.commands.compactMap { command -> Point? in
@@ -108,7 +108,7 @@ private func clickFontTab(_ renderer: HeadlessRenderer) throws {
 /// The glyph grid's focused cell draws a 40 x 40 tint; every other stop on the font page
 /// has a different size, so the tint identifies the grid without activating anything.
 @MainActor
-private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
+private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   let frame = renderer.render(input: InputState(pointerPosition: Point(x: 5000, y: 5000)))
   for command in frame.commands {
     if case .fillRect(let rect, let color) = command,
@@ -124,7 +124,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func fontTabOpensAndRendersSample() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
+  let renderer = HeadlessHost(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -144,7 +144,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 
 @MainActor
 @Test func terminalSpecimenUsesContiguousBundledFontCells() {
-  let renderer = HeadlessRenderer(size: Size(width: 500, height: 84))
+  let renderer = HeadlessHost(size: Size(width: 500, height: 84))
   renderer.content = TerminalSpecimen()
   let rows = renderer.render().commands.compactMap { command -> Point? in
     if case .text(let position, _, _, _) = command { return position }
@@ -157,7 +157,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func fontPageArrowKeysMoveTheGlyphHighlight() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
+  let renderer = HeadlessHost(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -209,7 +209,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func escapeLeavesTheFontPreviewField() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
+  let renderer = HeadlessHost(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -262,7 +262,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func glyphExplorerSelectionUpdatesInspectorState() {
   let state = PerformanceDemoState(itemCount: 100)
-  let renderer = HeadlessRenderer(size: Size(width: 400, height: 800))
+  let renderer = HeadlessHost(size: Size(width: 400, height: 800))
   renderer.content = GlyphExplorer(state: state)
   renderer.render()
   let point = Point(x: 20, y: 20)
@@ -286,7 +286,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func glyphExplorerCellsHighlightHoverAndFocus() {
   let state = PerformanceDemoState(itemCount: 100)
-  let renderer = HeadlessRenderer(size: Size(width: 400, height: 800))
+  let renderer = HeadlessHost(size: Size(width: 400, height: 800))
   renderer.content = GlyphExplorer(state: state)
   let tint = HoverStyle.standardTint(in: .dark)
   let pressedTint = HoverStyle.standardTint(in: .dark, pressed: true)
@@ -330,7 +330,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 extension DemoContentTests {
   @Test func scenePageScrollsTheUuidListWithArrowKeys() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-    let renderer = HeadlessRenderer(size: demo.windowSize)
+    let renderer = HeadlessHost(size: demo.windowSize)
     let gallery = PerformanceDemoState(itemCount: 100)
     renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
 
@@ -368,7 +368,7 @@ extension DemoContentTests {
 
   @Test func scenePageStepsOutOfTheUuidListAndBackToTheRememberedRow() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-    let renderer = HeadlessRenderer(size: demo.windowSize)
+    let renderer = HeadlessHost(size: demo.windowSize)
     let gallery = PerformanceDemoState(itemCount: 100)
     renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
     let parked = InputState(pointerPosition: Point(x: 5000, y: 5000))
@@ -463,7 +463,7 @@ extension DemoContentTests {
 
   @Test func animationRequestsFramesWithoutInputAndStopsWhenInactive() async throws {
     let state = PerformanceDemoState(itemCount: 100)
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { PerformanceDemo(state: state) }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
