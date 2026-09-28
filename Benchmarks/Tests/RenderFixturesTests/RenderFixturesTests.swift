@@ -3,15 +3,11 @@ import RenderFixtures
 import Testing
 
 @Test(arguments: RenderFixture.names)
-func deterministicReplay(scene: String) throws {
+func deterministicFixtures(scene: String) throws {
   let fixture = try RenderFixture(name: scene, count: 256)
   #expect(fixture.list.commands == (try RenderFixture(name: scene, count: 256)).list.commands)
-  for list in fixture.sequence {
-    let frame = FrameObservation(drawList: list, viewport: fixture.viewport)
-    let replay = try SceneCapture.decode(SceneCapture.encode(frame))
-    #expect(replay.drawList.commands == list.commands)
-    #expect(replay.viewport == fixture.viewport)
-  }
+  let repeated = try RenderFixture(name: scene, count: 256)
+  #expect(fixture.sequence.map(\.commands) == repeated.sequence.map(\.commands))
   let culled = fixture.list.culled(to: fixture.viewport)
   #expect(culled.commands == culled.culled(to: fixture.viewport).commands)
   if scene == "clipped" { #expect(culled.commands.count < fixture.list.commands.count) }

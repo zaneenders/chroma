@@ -17,7 +17,7 @@ final class MetalReplay {
     guard width.isFinite, height.isFinite, width >= 1, height >= 1,
       width <= 8192, height <= 8192
     else {
-      throw BenchmarkError.failed("Unsupported capture raster dimensions (maximum 8192 per axis)")
+      throw BenchmarkError.failed("Unsupported raster dimensions (maximum 8192 per axis)")
     }
     guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
       throw BenchmarkError.failed("Metal device/queue unavailable")
