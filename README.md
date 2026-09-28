@@ -17,13 +17,9 @@ swiftly run swift test --package-path Benchmarks -c release
 Applications run in-process. The framework and demo have no external Swift package dependencies; the benchmark package depends only on Chroma.
 
 The demo uses `MacOSApp` on macOS or `WaylandApp` on Linux.
-Save a scene with Ctrl+Shift+G (defaults to `Example/`), or pass
-`--capture-directory EXISTING_WRITABLE_DIRECTORY`.
 Clipboard shortcuts are Ctrl+A/C/X/V or Super+A/C/X/V (Omarchy) on Linux,
 and Command+A/C/X/V on macOS.
 Click a text field before pasting; drag across selectable text to select it.
-Scene captures use self-contained version-3 JSON with shared image resources.
-Older capture formats must be regenerated.
 
 ## Benchmarks
 

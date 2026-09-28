@@ -2,7 +2,6 @@ import Chroma
 
 @MainActor
 public struct DemoApplication: App {
-  private let capture: DemoSceneCapture?
   private let workspace = WorkspaceState()
   private let state: PerformanceDemoState
   private let shortcutModifier: KeyModifiers
@@ -16,20 +15,14 @@ public struct DemoApplication: App {
   }
 
   public init(
-    itemCount: Int = 2_000, shortcutModifier: KeyModifiers, captureConfiguration: DemoCaptureConfiguration? = nil
+    itemCount: Int = 2_000, shortcutModifier: KeyModifiers
   ) {
-    capture = captureConfiguration.map { DemoSceneCapture(configuration: $0) }
     state = PerformanceDemoState(itemCount: itemCount)
     self.shortcutModifier = shortcutModifier
   }
 
   public var title: String { "Chroma — Move through the interface" }
   public var windowSize: Size { Size(width: 1200, height: 820) }
-
-  public var frameObserver: FrameObserver? {
-    guard let capture else { return nil }
-    return { [capture] frame in capture.observe(frame) }
-  }
 
   public var keyBindings: KeyBindings {
     var bindings = KeyBindings.vimNavigation.overlay {
@@ -55,30 +48,12 @@ public struct DemoApplication: App {
       }
     }
     #endif
-    guard capture != nil else { return bindings }
-    return bindings.overlay {
-      bind("g", modifiers: [.control, .shift], to: .application("demo.capture"))
-    }
+    return bindings
   }
 
   public var body: some Block {
-    VStack(spacing: 0) {
-      WorkspaceDemo(state: workspace, gallery: state).sizing(x: .grow, y: .grow)
-      if let capture { CaptureStatus(capture: capture) }
-    }
-    .chromaTheme(.dark)
-    .onCommand(.application("demo.capture")) {
-      guard let capture else { return .ignored }
-      capture.request()
-      return .handled
-    }
-  }
-
-}
-
-private struct CaptureStatus: Block {
-  let capture: DemoSceneCapture
-  @MainActor var body: some Block {
-    Text(capture.status).fontScale(0.45).padding(4)
+    WorkspaceDemo(state: workspace, gallery: state)
+      .sizing(x: .grow, y: .grow)
+      .chromaTheme(.dark)
   }
 }
