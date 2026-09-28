@@ -186,6 +186,26 @@ extension KeyBindingsTests {
 }
 
 extension KeyBindingsTests {
+  @Test func changingContextUpdatesRegistrationAndOverlays() {
+    var binding = bind("x", to: .application("action"))
+    binding.context = .editing
+    let bindings = KeyBindings { binding }
+    for candidate in [bindings, KeyBindings().overlay { binding }, KeyBindings().overlay(bindings)] {
+      #expect(candidate.command(for: KeyChord("x"), isTextEditing: false) == nil)
+      #expect(
+        candidate.command(for: KeyChord("x"), isTextEditing: true)
+          == .some(.some(.application("action"))))
+    }
+  }
+
+  @Test func changingDisableContextNarrowsItsScope() {
+    var binding = disable("x")
+    binding.context = .editing
+    let bindings = KeyBindings { binding }
+    #expect(bindings.command(for: KeyChord("x"), isTextEditing: false) == nil)
+    #expect(bindings.command(for: KeyChord("x"), isTextEditing: true) == .some(nil))
+  }
+
   @Test func disableWithoutContextSuppressesAllContexts() {
     let bindings = KeyBindings.vimNavigation.overlay {
       disable(.upArrow)

@@ -49,7 +49,9 @@ public enum KeyBindingContext: Hashable, Sendable {
 
 public struct KeyBinding: Hashable, Sendable {
   public var chord: KeyChord
-  public var context: KeyBindingContext
+  public var context: KeyBindingContext {
+    didSet { contexts = [context] }
+  }
   public var command: Command?
   fileprivate var contexts: Set<KeyBindingContext>
 

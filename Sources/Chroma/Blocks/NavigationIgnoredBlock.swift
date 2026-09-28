@@ -16,6 +16,13 @@ public struct NavigationIgnoredBlock: PrimitiveBlock, IdentityTransparentBlock {
   }
 }
 
+extension Button {
+  @available(*, unavailable, message: "Buttons must remain navigable.")
+  public func navigationIgnored() -> NavigationIgnoredBlock {
+    NavigationIgnoredBlock(content: self)
+  }
+}
+
 extension Block {
   public func navigationIgnored() -> NavigationIgnoredBlock {
     NavigationIgnoredBlock(content: self)
