@@ -41,9 +41,9 @@ extension Interaction {
         case .visible(let target): reveal(target)
         case .row(let key):
           if let layout = scrollStates[id]?.layout,
-            let index = layout.rowKeys.firstIndex(of: key)
+            let index = layout.index(of: key)
           {
-            offset.y = layout.rowHeights.prefix(index).reduce(0, +) + Float(index) * layout.spacing
+            offset.y = layout.position(of: index)
           }
         }
         controller?.request = nil

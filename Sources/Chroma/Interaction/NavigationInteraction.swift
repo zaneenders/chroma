@@ -165,7 +165,7 @@ extension Interaction {
         setNavigationSelection(navigationPath + [childIndex])
       } else if let groupID = selected.id, let rememberedID,
         let rowKey = scrollStates[groupID]?.rowKeys[rememberedID],
-        scrollStates[groupID]?.layout?.rowKeys.contains(rowKey) == true,
+        scrollStates[groupID]?.layout?.index(of: rowKey) != nil,
         let contentRect = scrollStates[groupID]?.rows[rememberedID]
       {
         let offset = scrollStates[groupID]?.offset.y ?? 0
@@ -309,7 +309,7 @@ extension Interaction {
     for (groupID, registration) in buildingLogicalSelections {
       guard let groupPath = navigation.path(to: groupID),
         let key = registration.selectedKey(),
-        scrollStates[groupID]?.layout?.rowKeys.contains(key) == true
+        scrollStates[groupID]?.layout?.index(of: key) != nil
       else { continue }
       if let leafID = scrollStates[groupID]?.rowKeys.first(where: { $0.value == key })?.key,
         let path = tree.findLeaf(leafID), tree.node(at: path)?.acceptsFocus == true,

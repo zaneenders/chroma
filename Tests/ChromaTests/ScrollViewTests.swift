@@ -258,6 +258,37 @@ struct ScrollViewTests {
     #expect(log.phases[2] == log.phases[1], "pointer hover and keyboard focus share one UI state")
   }
 
+  @Test func variableRowsUseCachedPositionsAtDistantOffsets() {
+    let context = BlockContext()
+    let controller = ScrollViewController()
+    let counter = DrawCounter()
+    let rows = (0..<1_000).map { index in
+      ScrollView.Row(id: index, content: CountedRow(index: index, height: Float(index % 3 + 1), counter: counter))
+    }
+    let positions = Interaction.VariableScrollRows(
+      keys: [], heights: rows.indices.map { Float($0 % 3 + 1) }, spacing: 2)
+    let target = 900
+    let viewport = Rect(x: 0, y: 0, width: 100, height: 3)
+    let view = ScrollView(spacing: 2, showsIndicator: false, controller: controller, rows: rows)
+
+    func frame() {
+      context.interaction.beginFrame(input: InputState())
+      var list = DrawList()
+      BlockEngine.draw(view, into: &list, in: viewport, context: context)
+      context.interaction.endFrame()
+    }
+
+    frame()
+    #expect(counter.measured.count == rows.count)
+    counter.measured = []
+    counter.drawn = []
+    controller.scroll(to: positions.starts[target])
+    frame()
+    #expect(counter.measured.isEmpty)
+    #expect(counter.drawn == [target, target + 1])
+    #expect(controller.lazyStackCache.layout?.position(of: target) == positions.starts[target])
+  }
+
   @Test func keyboardNavigationReachesVariableHeightRowsInBothDirections() {
     let interaction = Interaction()
     let context = BlockContext(interaction: interaction)

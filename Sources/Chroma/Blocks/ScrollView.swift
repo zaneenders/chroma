@@ -160,22 +160,25 @@ public struct ScrollView: PrimitiveBlock {
     case .rows(let rows, let controller):
       horizontal = false
       updateCache(rows: rows, controller: controller, width: rect.size.width, context: context)
-      let heights = controller.lazyStackCache.rowSizes.map(\.height)
-      interaction.updateScrollLayout(
-        id: id,
-        layout: Interaction.ScrollLayout(
-          width: rect.size.width, spacing: spacing, rowKeys: controller.lazyStackCache.rowKeys, rowHeights: heights))
-      contentSize = Size(
-        width: rect.size.width,
-        height: heights.reduce(0, +) + spacing * Float(max(0, rows.count - 1)))
+      var cache = controller.lazyStackCache
+      if cache.layout?.spacing != spacing || cache.layout?.width != rect.size.width {
+        let heights = cache.measurements.map { $0.size.height }
+        cache.layout = Interaction.ScrollLayout(
+          width: rect.size.width, spacing: spacing,
+          rows: .variable(Interaction.VariableScrollRows(keys: cache.rowKeys, heights: heights, spacing: spacing)))
+      }
+      controller.lazyStackCache = cache
+      let layout = cache.layout!
+      interaction.updateScrollLayout(id: id, layout: layout)
+      guard case .variable(let positions) = layout.rows else { preconditionFailure("Expected variable rows") }
+      contentSize = Size(width: rect.size.width, height: positions.height)
     case .uniform(let rows, _):
       horizontal = false
       interaction.updateScrollLayout(
         id: id,
         layout: Interaction.ScrollLayout(
           width: rect.size.width, spacing: spacing,
-          rowKeys: rows.keys ?? (0..<rows.count).map { StructuralKey($0) },
-          rowHeights: Array(repeating: rows.height, count: rows.count)))
+          rows: .uniform(count: rows.count, height: rows.height, keys: rows.keys)))
       contentSize = Size(
         width: rect.size.width,
         height: Float(rows.count) * rows.height + spacing * Float(max(0, rows.count - 1)))
@@ -277,35 +280,21 @@ public struct ScrollView: PrimitiveBlock {
         }
       }
     case .rows(let rows, let controller):
-      var y: Float = 0
-      var visibleFirst: Int?
-      var visibleLast: Int?
-      for index in rows.indices {
-        let height = controller.lazyStackCache.measurements[index].size.height
-        let bottom = y + height
-        if bottom >= visibleTop && y <= visibleBottom {
-          visibleFirst = visibleFirst ?? index
-          visibleLast = index
-        }
-        y = bottom + spacing
+      guard case .variable(let positions) = controller.lazyStackCache.layout?.rows else {
+        preconditionFailure("Expected variable rows")
       }
-      if let visibleFirst, let visibleLast {
-        let first = max(0, visibleFirst - before)
-        let end = min(rows.count, visibleLast + 1 + after)
-        y = 0
-        for index in rows.indices {
-          let height = controller.lazyStackCache.measurements[index].size.height
-          if index >= first && index < end {
-            drawRow(
-              rows[index].content,
-              into: &drawList,
-              in: Rect(
-                x: rect.minX, y: rect.minY + y - offset,
-                width: rect.size.width, height: height),
-              context: context.scoped([.key(rows[index].key)]),
-              interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key)
-          }
-          y += height + spacing
+      let first = max(0, positions.firstRow(endingAtOrAfter: visibleTop) - before)
+      let end = min(rows.count, positions.firstRow(startingAfter: visibleBottom) + after)
+      if rect.size.height > 0 && first < end {
+        for index in first..<end {
+          drawRow(
+            rows[index].content,
+            into: &drawList,
+            in: Rect(
+              x: rect.minX, y: rect.minY + positions.starts[index] - offset,
+              width: rect.size.width, height: positions.heights[index]),
+            context: context.scoped([.key(rows[index].key)]),
+            interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key)
         }
       }
     }

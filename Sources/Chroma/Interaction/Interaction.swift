@@ -143,10 +143,80 @@ package final class Interaction {
   @ObservationIgnored var scrollStates: [WidgetID: ScrollState] = [:]
 
   struct ScrollLayout: Equatable {
+    enum Rows: Equatable {
+      case uniform(count: Int, height: Float, keys: [StructuralKey]?)
+      case variable(VariableScrollRows)
+
+      static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case let (.uniform(a, h, k), .uniform(b, j, l)): a == b && h == j && k == l
+        case let (.variable(a), .variable(b)): a === b
+        default: false
+        }
+      }
+    }
+
     var width: Float
     var spacing: Float
-    var rowKeys: [StructuralKey]
-    var rowHeights: [Float]
+    var rows: Rows
+
+    func index(of key: StructuralKey) -> Int? {
+      switch rows {
+      case .uniform(let count, _, let keys):
+        if let keys { return keys.firstIndex(of: key) }
+        guard let index = key.value as? Int, index >= 0, index < count else { return nil }
+        return index
+      case .variable(let rows): return rows.keys.firstIndex(of: key)
+      }
+    }
+
+    func position(of index: Int) -> Float {
+      switch rows {
+      case .uniform(_, let height, _): Float(index) * (height + spacing)
+      case .variable(let rows): rows.starts[index]
+      }
+    }
+  }
+
+  final class VariableScrollRows {
+    let keys: [StructuralKey]
+    let starts: [Float]
+    let heights: [Float]
+    let height: Float
+
+    init(keys: [StructuralKey], heights: [Float], spacing: Float) {
+      self.keys = keys
+      self.heights = heights
+      var starts: [Float] = []
+      starts.reserveCapacity(heights.count)
+      var y: Float = 0
+      for height in heights {
+        starts.append(y)
+        y += height + spacing
+      }
+      self.starts = starts
+      self.height = heights.isEmpty ? 0 : y - spacing
+    }
+
+    func firstRow(endingAtOrAfter top: Float) -> Int {
+      var low = 0
+      var high = starts.count
+      while low < high {
+        let mid = low + (high - low) / 2
+        if starts[mid] + heights[mid] < top { low = mid + 1 } else { high = mid }
+      }
+      return low
+    }
+
+    func firstRow(startingAfter bottom: Float) -> Int {
+      var low = 0
+      var high = starts.count
+      while low < high {
+        let mid = low + (high - low) / 2
+        if starts[mid] <= bottom { low = mid + 1 } else { high = mid }
+      }
+      return low
+    }
   }
 
   /// True when the currently focused leaf lies inside the scroll container with `id`. Read during

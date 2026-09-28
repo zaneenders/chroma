@@ -16,7 +16,9 @@ struct LazyStackCache {
   var rowKeys: [StructuralKey] = []
   var identities: [LazyRowIdentity] = []
   var measurements: [LazyRowMeasurement] = []
+  var layout: Interaction.ScrollLayout?
   @MainActor var rowSizes: [Size] { measurements.map(\.size) }
+
 }
 
 private final class LazyMeasurementValidity: Sendable {
