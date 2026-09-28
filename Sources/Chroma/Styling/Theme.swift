@@ -184,66 +184,6 @@ public struct ChromaTheme: Equatable, Sendable {
       selectionBackground: Color(r: 0.467, g: 0.867, b: 0.467, a: 0.5),
       selectionForeground: .white)
   )
-
-  public static let light = ChromaTheme(
-    background: Color(r: 0.94, g: 0.95, b: 0.97, a: 1),
-    surface: .white,
-    elevatedSurface: Color(r: 0.88, g: 0.90, b: 0.94, a: 1),
-    foreground: Color(r: 0.08, g: 0.10, b: 0.14, a: 1),
-    secondaryForeground: Color(r: 0.35, g: 0.39, b: 0.46, a: 1),
-    border: Color(r: 0.68, g: 0.71, b: 0.77, a: 1),
-    accent: Color(r: 0.11, g: 0.37, b: 0.13, a: 1),
-    positive: Color(r: 0.05, g: 0.52, b: 0.19, a: 1),
-    negative: Color(r: 0.75, g: 0.10, b: 0.12, a: 1),
-    warning: Color(r: 0.72, g: 0.45, b: 0.02, a: 1),
-    button: ButtonStyle(
-      idleBackground: Color(r: 0.88, g: 0.90, b: 0.94, a: 1),
-      pressedBackground: Color(r: 0.467, g: 0.867, b: 0.467, a: 1),
-      foreground: Color(r: 0.08, g: 0.10, b: 0.14, a: 1),
-      border: Color(r: 0.68, g: 0.71, b: 0.77, a: 1)),
-    textField: TextFieldStyle(
-      idleBackground: .white,
-      editingBackground: .white,
-      foreground: Color(r: 0.08, g: 0.10, b: 0.14, a: 1),
-      placeholder: Color(r: 0.45, g: 0.48, b: 0.54, a: 1),
-      caret: .black,
-      border: Color(r: 0.68, g: 0.71, b: 0.77, a: 1),
-      editingBorder: Color(r: 0.11, g: 0.37, b: 0.13, a: 1)),
-    scrollView: ScrollViewStyle(indicator: Color(r: 0, g: 0, b: 0, a: 0.45)),
-    focus: FocusStyle(
-      ring: Color(r: 0.11, g: 0.37, b: 0.13, a: 1),
-      highlight: Color(r: 0.467, g: 0.867, b: 0.467, a: 1),
-      pressedHighlight: Color(r: 0.11, g: 0.37, b: 0.13, a: 1),
-      selectionBackground: Color(r: 0.11, g: 0.37, b: 0.13, a: 0.45),
-      selectionForeground: .black)
-  )
-
-  public static let highContrast = ChromaTheme(
-    background: .black,
-    surface: .black,
-    elevatedSurface: Color(r: 0.08, g: 0.08, b: 0.08, a: 1),
-    foreground: .white,
-    secondaryForeground: .white,
-    border: .white,
-    accent: .yellow,
-    positive: Color(r: 0, g: 1, b: 0, a: 1),
-    negative: Color(r: 1, g: 0.2, b: 0.2, a: 1),
-    warning: .yellow,
-    button: ButtonStyle(
-      idleBackground: .black,
-      pressedBackground: .yellow, foreground: .white, border: .white),
-    textField: TextFieldStyle(
-      idleBackground: .black,
-      editingBackground: .black, foreground: .white, placeholder: .white, caret: .yellow,
-      border: .white, editingBorder: .yellow),
-    scrollView: ScrollViewStyle(indicator: .white, indicatorThickness: 4),
-    focus: FocusStyle(
-      ring: .yellow,
-      highlight: Color(r: 0.467, g: 0.867, b: 0.467, a: 1),
-      pressedHighlight: Color(r: 0.11, g: 0.37, b: 0.13, a: 1),
-      selectionBackground: .yellow,
-      selectionForeground: .black)
-  )
 }
 
 public struct ThemeReader<Content: Block>: PrimitiveBlock {
