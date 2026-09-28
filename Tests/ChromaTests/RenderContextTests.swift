@@ -120,7 +120,7 @@ private struct ContextRecordingBlock: PrimitiveBlock {
 }
 
 @MainActor
-private final class FakeRenderer: Renderer {
+private final class FakeRenderer: Host {
   let name = "Fake"
   var content: (any Block)?
   var frameObserver: FrameObserver?

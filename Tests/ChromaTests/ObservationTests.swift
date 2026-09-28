@@ -21,7 +21,7 @@ struct ObservationTests {
 
   @Test func removingScrollViewDoesNotInvalidateItsSibling() async {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = DeferredBlock {
       HStack {
@@ -40,7 +40,7 @@ struct ObservationTests {
 
   @Test func tracksOnlyReadPropertiesAndRearmsAfterRendering() async {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { model.first }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
@@ -65,7 +65,7 @@ struct ObservationTests {
 
   @Test func conditionalDependenciesAreReplaced() async {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock {
       if model.primary { model.first } else { model.second }
     }
@@ -86,7 +86,7 @@ struct ObservationTests {
 
   @Test func nonObservableConditionRefreshesDependenciesWithoutModelMutation() async {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     @MainActor final class Condition {
       var primary = true
     }
@@ -112,7 +112,7 @@ struct ObservationTests {
 
   @Test func newerFrameAndContentReplacementDiscardQueuedCallbacks() async {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { model.first }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
@@ -129,7 +129,7 @@ struct ObservationTests {
 
   @Test func closeDiscardsQueuedCallbacks() async {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { model.first }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
@@ -142,7 +142,7 @@ struct ObservationTests {
 
   @Test func observerReadsAreNotDependenciesAndWritesInvalidateAfterFrame() async {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { model.first }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
@@ -186,9 +186,9 @@ struct ObservationTests {
 
   @Test func observationDoesNotRetainRenderer() async {
     let model = Model()
-    weak var releasedRenderer: HeadlessRenderer?
+    weak var releasedRenderer: HeadlessHost?
     do {
-      let renderer = HeadlessRenderer()
+      let renderer = HeadlessHost()
       releasedRenderer = renderer
       renderer.content = DeferredBlock { model.first }
       renderer.render()
@@ -206,7 +206,7 @@ struct ObservationTests {
       init(model: Model) { self.model = model }
       var body: some Block { model.first }
     }
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     try TestApp(model: model).run(on: renderer)

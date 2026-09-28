@@ -51,7 +51,7 @@ private struct AppContent: PrimitiveBlock {
 }
 
 @MainActor
-private final class FailingAppRenderer: Renderer {
+private final class FailingAppRenderer: Chroma.Host {
   let name = "Test"
   var content: (any Block)?
   var frameObserver: FrameObserver?
@@ -69,7 +69,7 @@ private final class FailingAppRenderer: Renderer {
 }
 
 @MainActor
-private final class AppRenderer: Renderer {
+private final class AppRenderer: Chroma.Host {
   let name = "Test"
   var content: (any Block)?
   var frameObserver: FrameObserver?

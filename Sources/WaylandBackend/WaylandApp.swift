@@ -6,7 +6,7 @@ extension WaylandApp {
   @MainActor
   public static func main() throws {
     let app = Self()
-    try app.run(on: WaylandRenderer(size: app.windowSize))
+    try app.run(on: WaylandHost(size: app.windowSize))
 
   }
 }

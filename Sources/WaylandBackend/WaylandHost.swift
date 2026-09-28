@@ -14,7 +14,7 @@ import Glibc
     "Wayland/EGL handles and listener storage are managed by setup/cleanup on the main actor; C interop annotations are being migrated."
 )
 @MainActor
-public final class WaylandRenderer: Renderer {
+public final class WaylandHost: Chroma.Host {
   public let name = "Wayland"
   private let frameProducer = FrameProducer()
   public var content: (any Block)? {
@@ -234,7 +234,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         if let callback { unsafe wl_callback_destroy(callback) }
         if renderer.frameCallback == callback { renderer.frameCallback = nil }
         renderer.framePending = false
@@ -295,7 +295,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let registry = registry
       MainActor.assumeIsolated {
         guard let data, let registry, let interface else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         switch unsafe String(cString: interface) {
         case "wl_compositor":
           renderer.compositor = unsafe OpaquePointer(
@@ -340,7 +340,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let seat = seat
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         let hasPointer = (capabilities & WL_SEAT_CAPABILITY_POINTER.rawValue) != 0
         if hasPointer, renderer.pointer == nil, let seat {
           renderer.pointer = unsafe wl_seat_get_pointer(seat)
@@ -377,7 +377,7 @@ public final class WaylandRenderer: Renderer {
           if fd >= 0 { close(fd) }
           return
         }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.keyboard.installKeymap(fd: fd, size: size)
       }
     },
@@ -385,7 +385,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.clipboard.latestInputSerial = serial
       }
     },
@@ -393,7 +393,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.keyboard.focusLost()
       }
     },
@@ -401,7 +401,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.clipboard.latestInputSerial = serial
         if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
           renderer.keyboard.keyPressed(
@@ -421,7 +421,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.keyboard.updateModifiers(
           depressed: depressed, latched: latched, locked: locked, group: group)
       }
@@ -430,7 +430,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.keyboard.updateRepeatInfo(rate: rate, delay: delay)
       }
     }
@@ -444,7 +444,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let pointer = pointer
       MainActor.assumeIsolated {
         guard let data, let eventSurface else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard eventSurface == renderer.surface else { return }
         if let pointer { renderer.cursor.apply(pointer: pointer, serial: serial) }
         renderer.input.pointerEntered(
@@ -460,7 +460,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let eventSurface = eventSurface
       MainActor.assumeIsolated {
         guard let data, let eventSurface else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard eventSurface == renderer.surface else { return }
         renderer.input.pointerLeft()
         renderer.requestFrame()
@@ -473,7 +473,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.input.pointerMoved(
           x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
         renderer.requestFrame()
@@ -486,7 +486,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data, button == btnLeft else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.clipboard.latestInputSerial = serial
         switch state {
         case WL_POINTER_BUTTON_STATE_PRESSED.rawValue:
@@ -505,7 +505,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         let delta = -fixedToFloat(value)
         switch axis {
         case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
@@ -529,7 +529,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.input.scrollSource(isFinger: source == WL_POINTER_AXIS_SOURCE_FINGER.rawValue)
       }
     },
@@ -537,7 +537,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.input.stopScroll(
           horizontal: axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue, time: time)
         renderer.requestFrame()
@@ -557,7 +557,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let surface = surface
       MainActor.assumeIsolated {
         guard let data, let surface, factor > 0 else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard factor != renderer.bufferScale else { return }
         renderer.bufferScale = factor
         unsafe wl_surface_set_buffer_scale(surface, factor)
@@ -575,7 +575,7 @@ public final class WaylandRenderer: Renderer {
       MainActor.assumeIsolated {
         unsafe xdg_surface_ack_configure(xdgSurface, serial)
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.configured = true
         renderer.requestFrame()
       }
@@ -588,7 +588,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data, width > 0, height > 0 else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.width = width
         renderer.height = height
         renderer.resizeEGLWindow()
@@ -608,7 +608,7 @@ public final class WaylandRenderer: Renderer {
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
-        let renderer = unsafe Unmanaged<WaylandRenderer>.fromOpaque(data).takeUnretainedValue()
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard renderer.running else { return }
         renderer.onClose?()
         renderer.stopEventLoop()

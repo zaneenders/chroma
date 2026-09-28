@@ -54,7 +54,7 @@ struct ReviewRegressionTests {
   @Test func capturedTextSelectionIsClampedToCurrentText() {
     let model = Model()
     let capture = Capture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
@@ -68,7 +68,7 @@ struct ReviewRegressionTests {
   @Test func editsUseCurrentCapturedText() {
     let model = Model()
     let capture = Capture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
@@ -80,7 +80,7 @@ struct ReviewRegressionTests {
 
   @Test func builtInTextFieldHandlesShrinkingCapturedText() {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     func field(_ text: String) -> TextField {
       TextField(id: WidgetID("editor"), text: { text }, onChange: { model.text = $0 })
     }
@@ -99,7 +99,7 @@ struct ReviewRegressionTests {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = LazyVStack(
       id: WidgetID("stack"), controller: controller,
       rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
@@ -143,7 +143,7 @@ struct ReviewRegressionTests {
 
   @Test func registrationRefreshDoesNotReplayClickOrInput() {
     let capture = InputCapture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = InputProbe(capture: capture)
     renderer.render()
@@ -164,7 +164,7 @@ struct ReviewRegressionTests {
 
   @Test func registrationRefreshDoesNotReplayPointerOrScrollEdges() {
     let capture = InputCapture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = InputProbe(capture: capture)
     renderer.render()
@@ -182,7 +182,7 @@ struct ReviewRegressionTests {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = LazyVStack(
       id: WidgetID("stack"), controller: controller,
@@ -204,7 +204,7 @@ struct ReviewRegressionTests {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = LazyVStack(
       id: WidgetID("stack"), controller: controller,

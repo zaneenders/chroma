@@ -9,7 +9,7 @@ struct ObservationDeliveryTests {
   func lazyMeasurementsRequestRedrawUsingMainActorTasks() async throws {
     let model = ReviewRegressionTests.Model()
     let capture = ReviewRegressionTests.Capture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = LazyVStack(
       id: WidgetID("stack"), controller: ScrollViewController(),

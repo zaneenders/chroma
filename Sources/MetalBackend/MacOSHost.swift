@@ -2,18 +2,18 @@ import AppKit
 import Chroma
 import MetalKit
 
-public protocol MetalApp: App {}
+public protocol MacOSApp: App {}
 
-extension MetalApp {
+extension MacOSApp {
   @MainActor
   public static func main() throws {
     let app = Self()
-    try app.run(on: MetalRenderer(size: app.windowSize))
+    try app.run(on: MacOSHost(size: app.windowSize))
   }
 }
 
 @MainActor
-public final class MetalRenderer: NSObject, Renderer, MTKViewDelegate, NSWindowDelegate {
+public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDelegate {
   public let name = "Metal"
   public var content: (any Block)? {
     didSet {

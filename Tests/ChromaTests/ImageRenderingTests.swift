@@ -199,7 +199,7 @@ struct ImageRenderingTests {
 
   @Test func imageBlockEmitsDeterministicHeadlessCommand() throws {
     let image = try resource()
-    let renderer = HeadlessRenderer(size: Size(width: 120, height: 80))
+    let renderer = HeadlessHost(size: Size(width: 120, height: 80))
     renderer.content = Image(image, scaling: .cover, alignment: .top)
       .sizing(x: .grow, y: .grow)
 

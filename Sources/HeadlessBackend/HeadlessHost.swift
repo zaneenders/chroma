@@ -11,7 +11,7 @@ public struct HeadlessFrame: Equatable, Sendable {
 }
 
 @MainActor
-public final class HeadlessRenderer: Renderer {
+public final class HeadlessHost: Host {
   public let name = "Headless"
 
   public var content: (any Block)? {

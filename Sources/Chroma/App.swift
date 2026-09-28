@@ -25,11 +25,11 @@ extension App {
   public var frameObserver: FrameObserver? { nil }
 
   @MainActor
-  package func run(on renderer: any Renderer) throws {
-    renderer.setMinimumRefreshRate(minimumRefreshRate)
-    renderer.setKeyBindings(keyBindings)
-    renderer.frameObserver = frameObserver
-    renderer.content = DeferredBlock { self.body }
-    try renderer.run(title: "\(title) — \(renderer.name)")
+  package func run(on host: any Host) throws {
+    host.setMinimumRefreshRate(minimumRefreshRate)
+    host.setKeyBindings(keyBindings)
+    host.frameObserver = frameObserver
+    host.content = DeferredBlock { self.body }
+    try host.run(title: "\(title) — \(host.name)")
   }
 }

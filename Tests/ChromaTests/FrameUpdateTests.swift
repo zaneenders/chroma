@@ -13,7 +13,7 @@ struct FrameUpdateTests {
 
   @Test func actionUpdatesEarlierSiblingInTheSameFrame() {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock {
       VStack {
         Text(model.text)
@@ -39,7 +39,7 @@ struct FrameUpdateTests {
 
   @Test func textEditingUpdatesEarlierSiblingBeforeDrawing() {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock {
       VStack {
         Text(model.text)
@@ -63,7 +63,7 @@ struct FrameUpdateTests {
   @Test(ControlledObservationDelivery())
   func externalScrollRequestInvalidatesObservedFrame() async {
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = ScrollView(id: WidgetID("scroll"), controller: controller) {
       Text("hello")
     }

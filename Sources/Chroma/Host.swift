@@ -1,5 +1,5 @@
 @MainActor
-package protocol Renderer: AnyObject {
+package protocol Host: AnyObject {
   var name: String { get }
 
   var content: (any Block)? { get set }
@@ -17,7 +17,7 @@ package protocol Renderer: AnyObject {
   func run(title: String) throws
 }
 
-extension Renderer {
+extension Host {
   package func setKeyBindings(_ bindings: KeyBindings) {}
   package func setMinimumRefreshRate(_ refreshRate: Double) {}
 }

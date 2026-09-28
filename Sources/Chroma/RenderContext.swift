@@ -218,7 +218,7 @@ public struct RenderContext {
   }
 }
 
-extension Renderer {
+extension Host {
   package var context: RenderContext { RenderContext(interaction: interaction) }
 }
 
