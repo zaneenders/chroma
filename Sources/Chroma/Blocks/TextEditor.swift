@@ -76,11 +76,7 @@ public struct TextEditor: PrimitiveBlock {
       verticalOffset: { layout.verticalOffset($0, direction: $1) },
       submitInsertsNewline: onSubmit == nil)
     let style = style ?? context.theme.textField
-    drawList.fillRoundedRect(
-      rect, radius: style.cornerRadius, color: state.editing ? style.editingBackground : style.idleBackground)
-    drawList.strokeRoundedRect(
-      rect, radius: style.cornerRadius, width: style.borderWidth,
-      color: state.editing ? style.editingBorder : style.border)
+    drawList.textInputBackground(in: rect, style: style, editing: state.editing)
     drawList.pushClip(inner)
     defer { drawList.popClip() }
     if text.isEmpty && !state.editing {
@@ -91,21 +87,19 @@ public struct TextEditor: PrimitiveBlock {
     for index in first..<min(layout.lines.count, first + visibleCount) {
       let line = layout.lines[index]
       let origin = Point(x: inner.minX, y: inner.minY + Float(index - first) * lineHeight)
-      drawList.text(line.text, at: origin, color: style.foreground, scale: scale)
-      if let selection = state.selectionRange {
+      let selection = state.selectionRange.flatMap { selection -> Rect? in
         let lower = max(line.range.lowerBound, selection.lowerBound)
         let upper = min(line.range.upperBound, selection.upperBound)
-        if lower < upper {
-          let highlight = Rect(
-            x: origin.x + Float(lower - line.range.lowerBound) * cellWidth, y: origin.y,
-            width: Float(upper - lower) * cellWidth, height: lineHeight)
-          drawList.fillRect(highlight, color: context.theme.focus.selectionBackground)
-          drawList.pushClip(highlight)
-          drawList.text(line.text, at: origin, color: context.theme.focus.selectionForeground, scale: scale)
-          drawList.popClip()
-        }
+        guard lower < upper else { return nil }
+        return Rect(
+          x: origin.x + Float(lower - line.range.lowerBound) * cellWidth, y: origin.y,
+          width: Float(upper - lower) * cellWidth, height: lineHeight)
       }
+      drawList.textInputLine(
+        line.text, at: origin, scale: scale, foreground: style.foreground,
+        selection: selection, theme: context.theme.focus)
     }
+
     if let caret = state.caretOffset, state.selectionRange == nil, context.caretVisible {
       let row = layout.row(containing: caret)
       drawList.fillRect(

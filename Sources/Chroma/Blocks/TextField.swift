@@ -93,19 +93,9 @@ public struct TextField: PrimitiveBlock {
             .rounded(.toNearestOrAwayFromZero))
       })
 
-    drawList.fillRoundedRect(
-      rect,
-      radius: style.cornerRadius,
-      color: state.editing ? style.editingBackground : style.idleBackground)
-    if !state.editing, state.phase == .hovered {
-      drawList.fillRoundedRect(
-        rect, radius: style.cornerRadius, color: HoverStyle.standardTint(in: context.theme))
-    }
-    drawList.strokeRoundedRect(
-      rect,
-      radius: style.cornerRadius,
-      width: style.borderWidth,
-      color: state.editing ? style.editingBorder : style.border)
+    drawList.textInputBackground(
+      in: rect, style: style, editing: state.editing,
+      hover: state.phase == .hovered ? HoverStyle.standardTint(in: context.theme) : nil)
 
     let inner = Rect(
       x: rect.minX + padding,
@@ -119,36 +109,16 @@ public struct TextField: PrimitiveBlock {
     let text = getText()
     if text.isEmpty && !state.editing {
       drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: scale)
-    } else if state.editing, let selection = state.selectionRange {
-      let selectionRect = Rect(
-        x: inner.minX + textOffset + Float(selection.lowerBound) * cellWidth,
-        y: inner.minY,
-        width: Float(selection.count) * cellWidth,
-        height: inner.size.height)
-      drawList.fillRect(selectionRect, color: context.theme.focus.selectionBackground)
-      drawList.text(
-        text,
-        at: Point(x: inner.minX + textOffset, y: inner.minY),
-        color: style.foreground,
-        scale: scale)
-      let characters = Array(text)
-      let safeSelection = selection.clamped(to: 0..<characters.count)
-      let selected = String(characters[safeSelection])
-      drawList.pushClip(selectionRect)
-      drawList.text(
-        selected,
-        at: Point(
-          x: inner.minX + textOffset + Float(selection.lowerBound) * cellWidth,
-          y: inner.minY),
-        color: context.theme.focus.selectionForeground,
-        scale: scale)
-      drawList.popClip()
     } else {
-      drawList.text(
-        text,
-        at: Point(x: inner.minX + textOffset, y: inner.minY),
-        color: style.foreground,
-        scale: scale)
+      let selection = state.editing ? state.selectionRange : nil
+      drawList.textInputLine(
+        text, at: Point(x: inner.minX + textOffset, y: inner.minY), scale: scale,
+        foreground: style.foreground,
+        selection: selection.map {
+          Rect(
+            x: inner.minX + textOffset + Float($0.lowerBound) * cellWidth,
+            y: inner.minY, width: Float($0.count) * cellWidth, height: inner.size.height)
+        }, theme: context.theme.focus)
     }
     if let caret = state.caretOffset, state.selectionRange == nil,
       context.caretVisible

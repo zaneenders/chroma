@@ -277,31 +277,16 @@ package final class Interaction {
   package func beginFrame(input: InputState) {
     building = FrameRegistrations()
 
-    if refreshingRegistrations {
-      // Registration draws must not replay the previous frame's input or activation.
-      self.input = input
-      textSelection.layoutRegistry.clear()
-      activatedLeaf = nil
-      activatePending = false
-      enterTextPending = false
-      movementTextEvents = []
-
-      let root = FocusNode(kind: .group, rect: .zero)
-      builderRoot = root
-      builderStack = [root]
-      builderPath = []
-      clipStack = []
-
-      return
-    }
     self.input = input
     activatePending = false
     enterTextPending = false
     movementTextEvents = []
-    pendingCommands = input.commands
-    handledCommandIndices = []
-    routePendingCommands()
-    pendingCommands = []
+    if !refreshingRegistrations {
+      pendingCommands = input.commands
+      handledCommandIndices = []
+      routePendingCommands()
+      pendingCommands = []
+    }
 
     activatedLeaf = nil
 
@@ -310,6 +295,11 @@ package final class Interaction {
     builderStack = [root]
     builderPath = []
     clipStack = []
+
+    if refreshingRegistrations {
+      textSelection.layoutRegistry.clear()
+      return
+    }
 
     if input.pointerPressed {
       dragOrigin = input.pointerPressPosition
