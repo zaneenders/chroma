@@ -213,28 +213,6 @@ public struct ChromaTheme: Equatable, Sendable {
       selectionBackground: Color(r: 0.20, g: 0.52, b: 0.95, a: 0.45),
       selectionForeground: .black)
   )
-
-  public static let highContrast = ChromaTheme(
-    background: .black,
-    surface: .black,
-    elevatedSurface: Color(r: 0.08, g: 0.08, b: 0.08, a: 1),
-    foreground: .white,
-    secondaryForeground: .white,
-    border: .white,
-    accent: .yellow,
-    positive: Color(r: 0, g: 1, b: 0, a: 1),
-    negative: Color(r: 1, g: 0.2, b: 0.2, a: 1),
-    warning: .yellow,
-    button: ButtonStyle(
-      idleBackground: .black, hoveredBackground: Color(r: 0.2, g: 0.2, b: 0.2, a: 1),
-      pressedBackground: .yellow, foreground: .white, border: .white),
-    textField: TextFieldStyle(
-      idleBackground: .black, hoveredBackground: Color(r: 0.12, g: 0.12, b: 0.12, a: 1),
-      editingBackground: .black, foreground: .white, placeholder: .white, caret: .yellow,
-      border: .white, editingBorder: .yellow),
-    scrollView: ScrollViewStyle(indicator: .white, indicatorThickness: 4),
-    focus: FocusStyle(ring: .yellow, selectionBackground: .yellow, selectionForeground: .black)
-  )
 }
 
 public struct ThemeReader<Content: Block>: PrimitiveBlock {

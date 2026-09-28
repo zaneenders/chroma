@@ -7,18 +7,13 @@ public enum SceneCaptureError: Error, Equatable, Sendable {
 }
 
 /// A self-contained local snapshot, independent of any rendering backend.
-/// Version 3 stores shared images once. Version-2 JSON remains readable;
-/// the former remote-wire capture format is not supported.
+/// Version 3 stores shared images once; older formats are not supported.
 public enum SceneCapture {
   public static let version = 3
   public static let maximumBytes = 64 * 1024 * 1024
 
   private struct Header: Decodable {
     let version: Int
-  }
-
-  private struct LegacyDocument: Decodable {
-    let frame: FrameObservation
   }
 
   private enum StoredCommand: Codable {
@@ -95,8 +90,6 @@ public enum SceneCapture {
     let header = try decoder.decode(Header.self, from: data)
     let frame: FrameObservation
     switch header.version {
-    case 2:
-      frame = try decoder.decode(LegacyDocument.self, from: data).frame
     case version:
       let document = try decoder.decode(Document.self, from: data)
       let commands = try document.commands.map { stored -> DrawCommand in
