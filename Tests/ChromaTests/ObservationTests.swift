@@ -165,8 +165,8 @@ struct ObservationTests {
     struct MutatingBlock: PrimitiveBlock {
       let model: Model
       var focusRule: FocusRule { .standard }
-      func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
-      func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+      func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+      func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
         drawList.fillRect(rect, color: model.first)
         model.first = .yellow
         context.requestRedraw()
@@ -178,7 +178,7 @@ struct ObservationTests {
     interaction.onRedrawRequested = { requests += 1 }
     _ = producer.render(
       content: MutatingBlock(model: model), viewport: Size(width: 20, height: 20),
-      input: InputState(), context: RenderContext(interaction: interaction), onChange: {})
+      input: InputState(), context: BlockContext(interaction: interaction), onChange: {})
     #expect(requests == 1)
     #expect(interaction.consumeRedrawRequest())
     #expect(model.first == .yellow)

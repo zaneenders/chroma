@@ -38,6 +38,8 @@ public final class HeadlessHost: Host {
     self.viewport = size
   }
 
+  package func setMinimumRefreshRate(_ refreshRate: Double) {}
+
   public func run(title: String) {
     self.title = title
     _ = render()

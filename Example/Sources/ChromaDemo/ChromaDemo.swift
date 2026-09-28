@@ -8,7 +8,7 @@ import WaylandBackend
 #endif
 
 #if os(macOS)
-private protocol DemoApp: MetalApp {}
+private protocol DemoApp: MacOSApp {}
 #elseif os(Linux)
 private protocol DemoApp: WaylandApp {}
 #else

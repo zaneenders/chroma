@@ -36,12 +36,12 @@ public struct Text: PrimitiveBlock {
     return copy
   }
 
-  public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     context.interaction.fontMetrics.measure(
       content, scale: scale * context.textScale)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let effectiveScale = scale * context.textScale
     if isSelectable {
       let id = selectionID ?? context.widgetID
@@ -99,7 +99,7 @@ public struct Text: PrimitiveBlock {
     drawText(into: &drawList, at: rect.origin, color: color, scale: effectiveScale, context: context)
   }
   @MainActor private func drawText(
-    into drawList: inout DrawList, at origin: Point, color: Color, scale: Float, context: RenderContext
+    into drawList: inout DrawList, at origin: Point, color: Color, scale: Float, context: BlockContext
   ) {
     for (row, line) in content.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
       drawList.text(

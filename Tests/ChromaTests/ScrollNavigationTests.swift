@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct ScrollNavigationTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     func render(_ content: any Block, _ commands: [NavigationCommand] = []) {
       _ = producer.render(

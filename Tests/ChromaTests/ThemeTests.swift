@@ -15,7 +15,7 @@ import Testing
 
   @Test @MainActor func scopedThemeReachesDescendants() {
     let theme = ChromaTheme.light
-    let context = RenderContext()
+    let context = BlockContext()
     let themed = context.withTheme(theme)
 
     #expect(themed.theme == theme)

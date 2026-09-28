@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct FocusAndCommandRegressionTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
 
     func render(_ content: any Block, input: InputState = InputState()) {
@@ -509,11 +509,11 @@ private struct GridProbe: PrimitiveBlock {
 
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: Float(columns) * cell, height: Float(rows) * cell)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     context.withFocusGroup(in: rect, axis: .vertical) {
       for row in 0..<rows {
         let rowRect = Rect(

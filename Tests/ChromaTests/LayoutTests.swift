@@ -105,7 +105,7 @@ struct LayoutTests {
 
   @Test func readyLayoutPinsBottomChromeBelowTranscript() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     BlockEngine.draw(Host(showQueue: true), into: &list, in: viewport, context: context)
@@ -130,7 +130,7 @@ struct LayoutTests {
 
   @Test func computedPropertyBottomChromeStillStacksChildren() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     BlockEngine.draw(LegacyHost(showQueue: true), into: &list, in: viewport, context: context)
@@ -151,7 +151,7 @@ struct LayoutTests {
 
   @Test func sizingResolvesEachAxisIndependently() {
     let proposal = Size(width: 400, height: 300)
-    let context = RenderContext()
+    let context = BlockContext()
     let fitted = Text("fit").sizing()
     let fixed = Text("fixed").sizing(x: .fixed(120), y: .fixed(48))
     let horizontalGrow = Text("grow").sizing(x: .grow)
@@ -175,7 +175,7 @@ struct LayoutTests {
 
   @Test func reverseLayoutFlipsStackChildOrder() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
     interaction.beginFrame(input: InputState())
 
@@ -231,7 +231,7 @@ struct LayoutTests {
       Text("bottom")
     }
     let proposal = Size(width: 400, height: 300)
-    let context = RenderContext()
+    let context = BlockContext()
 
     #expect(BlockEngine.expandsHorizontally(horizontal))
     #expect(!BlockEngine.expandsVertically(horizontal))

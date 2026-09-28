@@ -15,8 +15,8 @@ struct StackLayout {
   var spacing: Float
 
   private func layout(
-    _ children: [(primitive: any PrimitiveBlock, context: RenderContext)], originals: [any Block], proposal: Size,
-    context: RenderContext
+    _ children: [(primitive: any PrimitiveBlock, context: BlockContext)], originals: [any Block], proposal: Size,
+    context: BlockContext
   ) -> [Size] {
     var sizes = children.map { $0.primitive.sizeThatFits(proposal, context: $0.context) }
     for index in sizes.indices where BlockEngine.isSpacer(originals[index]) {
@@ -42,7 +42,7 @@ struct StackLayout {
     return sizes
   }
 
-  func measure(_ children: [any Block], proposal: Size, context: RenderContext) -> Size {
+  func measure(_ children: [any Block], proposal: Size, context: BlockContext) -> Size {
     guard !children.isEmpty else { return .zero }
     let sizes = layout(
       children.enumerated().map { index, child in
@@ -56,7 +56,7 @@ struct StackLayout {
 
   func draw(
     _ originals: [any Block], reversed: Bool, into drawList: inout DrawList,
-    in rect: Rect, context: RenderContext
+    in rect: Rect, context: BlockContext
   ) {
     let children = originals.enumerated().map { index, child in
       BlockEngine.resolve(child, context: context.childContext(for: child, at: index))

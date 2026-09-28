@@ -20,7 +20,7 @@ struct StackEvaluationTests {
   @Test func engineResolvesCompositeOncePerOperation() {
     let counter = Counter()
     let block = Composite(counter: counter)
-    let context = RenderContext()
+    let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 40)
     #expect(BlockEngine.expandsHorizontally(block))
     #expect(counter.bodies == 1)
@@ -43,7 +43,7 @@ struct StackEvaluationTests {
     let counter = Counter()
     let child = Composite(counter: counter)
     let stack: any Block = horizontal ? HStack { child } : VStack { child }
-    let context = RenderContext(interaction: Interaction())
+    let context = BlockContext(interaction: Interaction())
     let rect = Rect(x: 0, y: 0, width: 400, height: 300)
     _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)

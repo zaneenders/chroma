@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct HierarchicalNavigationTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = []) {
       _ = producer.render(

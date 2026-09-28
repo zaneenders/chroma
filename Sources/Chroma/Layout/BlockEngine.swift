@@ -7,8 +7,8 @@ public enum BlockEngine {
   }
 
   static func resolve(
-    _ block: any Block, context: RenderContext
-  ) -> (primitive: any PrimitiveBlock, context: RenderContext) {
+    _ block: any Block, context: BlockContext
+  ) -> (primitive: any PrimitiveBlock, context: BlockContext) {
     if let scoped = block as? ScopedBlock {
       return resolve(scoped.content, context: context.scoped(scoped.path))
     }
@@ -27,7 +27,7 @@ public enum BlockEngine {
   public static func measure(
     _ block: any Block,
     proposal: Size,
-    context: RenderContext
+    context: BlockContext
   ) -> Size {
     let resolved = resolve(block, context: context)
     return resolved.primitive.sizeThatFits(proposal, context: resolved.context)
@@ -37,7 +37,7 @@ public enum BlockEngine {
     _ block: any Block,
     into drawList: inout DrawList,
     in rect: Rect,
-    context: RenderContext
+    context: BlockContext
   ) {
     let resolved = resolve(block, context: context)
     drawResolved(resolved.primitive, into: &drawList, in: rect, context: resolved.context)
@@ -55,7 +55,7 @@ public enum BlockEngine {
     _ primitive: any PrimitiveBlock,
     into drawList: inout DrawList,
     in rect: Rect,
-    context: RenderContext
+    context: BlockContext
   ) {
     let parent = context.interaction.builderStack.last
     let registered = parent?.children.count
@@ -78,7 +78,7 @@ public enum BlockEngine {
     for id: WidgetID,
     into drawList: inout DrawList,
     in rect: Rect,
-    context: RenderContext
+    context: BlockContext
   ) {
     let leafState = context.interaction.untrackedLeafState
     let pressed = leafState.pressed == id && context.interaction.input.pointerDown

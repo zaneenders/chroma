@@ -7,7 +7,7 @@ struct IdentityDiagnosticsTests {
     let id: Int
   }
 
-  @MainActor private static func draw(_ block: any Block, context: RenderContext = RenderContext()) {
+  @MainActor private static func draw(_ block: any Block, context: BlockContext = BlockContext()) {
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     BlockEngine.draw(block, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
@@ -96,8 +96,8 @@ struct IdentityDiagnosticsTests {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
         let target = FocusTarget()
-        let first = RenderContext()
-        let second = RenderContext()
+        let first = BlockContext()
+        let second = BlockContext()
         Self.draw(Button("First") {}.focusTarget(target), context: first)
         Self.draw(Button("Second") {}.focusTarget(target), context: second)
         withExtendedLifetime(first) {}

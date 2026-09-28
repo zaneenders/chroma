@@ -18,9 +18,9 @@ public enum FocusRule: Sendable {
 public protocol PrimitiveBlock: Block where Body == Never {
   var focusRule: FocusRule { get }
 
-  @MainActor func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size
 
-  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext)
+  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext)
 
   @MainActor var expandsHorizontally: Bool { get }
 

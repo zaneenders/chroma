@@ -22,7 +22,7 @@ struct StackPlacementTests {
       }
       stack = reversed ? value.reverseLayout() : value
     }
-    let context = RenderContext()
+    let context = BlockContext()
     let rect = Rect(x: 10, y: 15, width: 200, height: 150)
     let measured = BlockEngine.measure(stack, proposal: rect.size, context: context)
     #expect(measured == (horizontal ? Size(width: 65, height: 50) : Size(width: 40, height: 85)))

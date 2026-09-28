@@ -43,7 +43,7 @@ struct NavigationTreeTests {
 @MainActor
 struct GroupRegistrationTests {
   @Test func rootStartsUnselectedAndGroupsRequireEntry() {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     let first = FocusTarget()
     let inside = FocusTarget()
@@ -74,7 +74,7 @@ struct GroupRegistrationTests {
   }
 
   @Test func clickingInsideAGroupEntersItsAncestorChain() {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     let target = FocusTarget()
     let content = HStack {
@@ -98,7 +98,7 @@ struct GroupRegistrationTests {
   }
 
   @Test func groupRegistersOneBoundaryWithoutChangingLeafPaths() {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     let content = VStack {
       Button("Before") {}

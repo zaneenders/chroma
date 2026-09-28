@@ -5,8 +5,8 @@ import Testing
 private struct FixedContent: PrimitiveBlock {
   var size: Size
   var focusRule: FocusRule { .standard }
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { size }
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: .white)
   }
 }
@@ -16,9 +16,9 @@ private struct ClippedScrollContent: PrimitiveBlock {
 
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     context.withInteractionClip(Rect(x: 0, y: 0, width: 20, height: 20)) {
       BlockEngine.draw(content, into: &drawList, in: rect, context: context)
     }
@@ -41,12 +41,12 @@ private struct CountedRow: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     counter.measured.append(index)
     return Size(width: proposal.width, height: height)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     counter.drawn.append(index)
   }
 }
@@ -57,11 +57,11 @@ private struct RowContent: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: proposal.width, height: height)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: color)
   }
 }
@@ -78,7 +78,7 @@ struct ScrollViewTests {
     controller: ScrollViewController? = nil,
     sticksToBottom: Bool = false
   ) -> DrawList {
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     interaction.beginFrame(input: input)
     var list = DrawList()
     let view = ScrollView(
@@ -109,7 +109,7 @@ struct ScrollViewTests {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) -> DrawList {
-      let context = RenderContext(interaction: interaction)
+      let context = BlockContext(interaction: interaction)
       interaction.beginFrame(input: input)
       var list = DrawList()
       let view = ScrollView(id: scrollID, showsIndicator: true) {
@@ -142,7 +142,7 @@ struct ScrollViewTests {
     let secondViewport = Rect(x: 0, y: 30, width: 100, height: 20)
 
     func frame(_ input: InputState = InputState()) {
-      let context = RenderContext(interaction: interaction)
+      let context = BlockContext(interaction: interaction)
       interaction.beginFrame(input: input)
       var list = DrawList()
       BlockEngine.draw(
@@ -166,7 +166,7 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationRevealsFocusedScrollContent() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
 
     func frame(_ input: InputState = InputState()) {
       interaction.beginFrame(input: input)
@@ -197,7 +197,7 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationReachesSpacedVirtualizedRows() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
@@ -226,7 +226,7 @@ struct ScrollViewTests {
 
   @Test func keyboardFocusedRowsShowHoverPhase() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let controller = ScrollViewController()
     let listRect = Rect(x: 0, y: 0, width: 100, height: 40)
     let log = PhaseLog()
@@ -261,7 +261,7 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationReachesVariableHeightRowsInBothDirections() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let controller = ScrollViewController()
     let heights: [Float] = [8, 18, 6, 15, 9]
     let rows = heights.enumerated().map { index, height in
@@ -294,7 +294,7 @@ struct ScrollViewTests {
   }
 
   @Test func keyboardNavigationHandlesMultipleVirtualizedMovementsInOneFrame() {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
     let view = LazyVStack(
@@ -319,7 +319,7 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationRevealsNestedScrollContent() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let outerID = WidgetID("outer-scroll")
     let innerID = WidgetID("inner-scroll")
 
@@ -353,7 +353,7 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationRevealsVirtualizedRows() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
@@ -392,7 +392,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame() {
-      let context = RenderContext(interaction: interaction)
+      let context = BlockContext(interaction: interaction)
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       let view = ScrollView(id: scrollID, controller: controller) {
@@ -413,7 +413,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      let context = RenderContext(interaction: interaction)
+      let context = BlockContext(interaction: interaction)
       interaction.beginFrame(input: input)
       var list = DrawList()
       let view = ScrollView(id: scrollID, controller: controller) {
@@ -435,7 +435,7 @@ struct ScrollViewTests {
   @Test(arguments: [(false, false), (false, true), (true, false)], ["first", "normal", "reset"])
   func frameProducerWheelCancelsPendingRevealRequest(configuration: (Bool, Bool), frameState: String) {
     let (lazy, horizontal) = configuration
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
     let view: any Block =
@@ -469,7 +469,7 @@ struct ScrollViewTests {
 
   @Test(arguments: [false, true], ["first", "normal", "reset"])
   func frameProducerAppliesExplicitScrollRequestAfterWheel(lazy: Bool, frameState: String) {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
     let view: any Block =
@@ -495,7 +495,7 @@ struct ScrollViewTests {
 
   @Test(arguments: [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)])
   func lazyRevealSurvivesUnrelatedWheelInput(delta: Point) {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
     let view = LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
@@ -518,7 +518,7 @@ struct ScrollViewTests {
   func clippedRevealRespectsWheelHitTesting(lazy: Bool, frameState: String) {
     for pointer in [Point(x: 10, y: 10), Point(x: 10, y: 50), Point(x: 50, y: 10)] {
       for delta in [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)] {
-        let context = RenderContext()
+        let context = BlockContext()
         let producer = FrameProducer()
         let controller = ScrollViewController()
         let scroll: any Block =
@@ -556,7 +556,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      let context = RenderContext(interaction: interaction)
+      let context = BlockContext(interaction: interaction)
       interaction.beginFrame(input: input)
       var list = DrawList()
       let view = ScrollView(id: scrollID, controller: controller) {
@@ -598,7 +598,7 @@ struct ScrollViewTests {
 
   @Test func loopRowsStackAndCreateScrollableContent() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     let colors = [
@@ -633,7 +633,7 @@ struct ScrollViewTests {
     }
 
     func frame() {
-      let context = RenderContext(interaction: interaction)
+      let context = BlockContext(interaction: interaction)
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       let view = LazyVStack(
@@ -687,7 +687,7 @@ struct ScrollViewTests {
       #expect(built.isEmpty)
       BlockEngine.draw(
         stack, into: &list, in: Rect(x: 0, y: 0, width: width, height: 20),
-        context: RenderContext(interaction: interaction))
+        context: BlockContext(interaction: interaction))
       interaction.endFrame()
       #expect(counter.measured.isEmpty)
       #expect(built == counter.drawn)
@@ -735,7 +735,7 @@ struct ScrollViewTests {
       BlockEngine.draw(
         LazyVStack(id: scrollID, controller: controller, rows: rows),
         into: &list, in: Rect(x: 0, y: 0, width: width, height: 100),
-        context: RenderContext(interaction: interaction))
+        context: BlockContext(interaction: interaction))
       interaction.endFrame()
     }
 
@@ -759,7 +759,7 @@ struct ScrollViewTests {
   }
 
   @Test func lazyStackCachePreservesDistinctKeyTypesAcrossReordering() {
-    let context = RenderContext()
+    let context = BlockContext()
     let controller = ScrollViewController()
     let counter = DrawCounter()
     let first = LazyVStack.Row(

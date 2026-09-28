@@ -7,7 +7,7 @@ import Testing
 @MainActor
 struct StructuralInteractionTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
 
     func render(_ content: any Block, input: InputState = InputState()) {
@@ -268,7 +268,7 @@ struct StructuralInteractionTests {
   }
 
   @Test func explicitAndStructuralIDsCannotAlias() {
-    let context = RenderContext()
+    let context = BlockContext()
     #expect(context.widgetID != WidgetID(rawValue: 0))
     #expect(context.widgetID == context.widgetID)
     #expect(context.childScope(0).widgetID != context.childScope(1).widgetID)
@@ -423,7 +423,7 @@ struct StructuralInteractionTests {
   @Test func measurementDoesNotBindOrConsumeFocusRequest() {
     let target = FocusTarget()
     target.focus()
-    let context = RenderContext()
+    let context = BlockContext()
     _ = BlockEngine.measure(
       Button("Button") {}.focusTarget(target),
       proposal: Size(width: 100, height: 100), context: context)

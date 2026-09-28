@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct NavigationContractTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     @discardableResult func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = [])
       -> DrawList

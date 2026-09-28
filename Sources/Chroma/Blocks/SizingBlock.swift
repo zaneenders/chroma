@@ -8,7 +8,7 @@ public struct SizingBlock: PrimitiveBlock, IdentityTransparentBlock {
   @MainActor public var expandsHorizontally: Bool { x == .grow }
   @MainActor public var expandsVertically: Bool { y == .grow }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(
@@ -23,7 +23,7 @@ public struct SizingBlock: PrimitiveBlock, IdentityTransparentBlock {
     )
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     BlockEngine.draw(content, into: &drawList, in: rect, context: context)
   }
 

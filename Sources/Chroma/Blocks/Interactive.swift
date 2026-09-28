@@ -38,11 +38,11 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
     BlockEngine.expandsVertically(content(.idle))
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     BlockEngine.measure(content(.idle), proposal: proposal, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let id = id ?? context.widgetID
     let state = context.buttonState(id: id, in: rect, action: action)
     var context = context

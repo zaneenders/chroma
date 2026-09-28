@@ -15,12 +15,12 @@ struct StructuralPathTests {
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       recorder.measured[name] = context.structuralPath
       return Size(width: 10, height: 10)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       recorder.drawn[name] = context.structuralPath
     }
   }
@@ -32,7 +32,7 @@ struct StructuralPathTests {
   }
 
   private func render(_ block: any Block, recorder: Recorder) -> [String: StructuralPath] {
-    let context = RenderContext()
+    let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
     recorder.measured = [:]
     recorder.drawn = [:]
@@ -62,7 +62,7 @@ struct StructuralPathTests {
     #expect(first["row1"] != first["row2"])
     #expect(first["row1"] != first["sibling"])
     let size = BlockEngine.measure(
-      content(1), proposal: Size(width: 100, height: 100), context: RenderContext())
+      content(1), proposal: Size(width: 100, height: 100), context: BlockContext())
     #expect(size.height == 30)
   }
 
@@ -129,14 +129,14 @@ struct StructuralPathTests {
 
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       _ = BlockEngine.measure(
         Probe(name: "first", recorder: recorder), proposal: proposal, context: context.childScope(0))
       return BlockEngine.measure(
         Probe(name: "second", recorder: recorder), proposal: proposal, context: context.childScope(1))
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       BlockEngine.draw(
         Probe(name: "second", recorder: recorder), into: &drawList, in: rect, context: context.childScope(1))
       BlockEngine.draw(
@@ -171,7 +171,7 @@ struct StructuralPathTests {
     let expected = render(probe, recorder: recorder)["content"]
     let layered = probe.background(Probe(name: "inner", recorder: recorder))
       .background(Probe(name: "outer", recorder: recorder))
-    let context = RenderContext()
+    let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
     func draw() -> [String: StructuralPath] {
       recorder.drawn = [:]
@@ -212,7 +212,7 @@ struct StructuralPathTests {
     #expect(
       BlockEngine.measure(
         content([1, 2]), proposal: Size(width: 100, height: 100),
-        context: RenderContext()) == Size(width: 10, height: 36))
+        context: BlockContext()) == Size(width: 10, height: 36))
   }
 
   @Test(arguments: ["vertical", "horizontal", "overlay"])
@@ -251,8 +251,8 @@ struct StructuralPathTests {
     let paths = render(plain, recorder: recorder)
     #expect(render(styled, recorder: recorder) == paths)
     #expect(
-      BlockEngine.measure(plain, proposal: proposal, context: RenderContext())
-        == BlockEngine.measure(styled, proposal: proposal, context: RenderContext()))
+      BlockEngine.measure(plain, proposal: proposal, context: BlockContext())
+        == BlockEngine.measure(styled, proposal: proposal, context: BlockContext()))
     let reordered = render(content(true, ids: [2, 3, 1]), recorder: recorder)
     for (name, path) in paths { #expect(reordered[name] == path) }
     #expect(render(content(true, ids: []), recorder: recorder)["sibling"] == paths["sibling"])
@@ -266,7 +266,7 @@ struct StructuralPathTests {
       }.padding(2)
     }
     #expect(
-      BlockEngine.measure(block, proposal: Size(width: 100, height: 100), context: RenderContext())
+      BlockEngine.measure(block, proposal: Size(width: 100, height: 100), context: BlockContext())
         == Size(width: 14, height: 31))
   }
 
@@ -286,7 +286,7 @@ struct StructuralPathTests {
   func lazyRowsFollowKeysAcrossReordering(uniform: Bool) {
     let recorder = Recorder()
     let controller = ScrollViewController()
-    let context = RenderContext()
+    let context = BlockContext()
     func draw(_ ids: [Int]) -> [String: StructuralPath] {
       recorder.measured = [:]
       recorder.drawn = [:]

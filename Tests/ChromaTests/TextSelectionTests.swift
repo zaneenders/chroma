@@ -24,7 +24,7 @@ struct TextSelectionTests {
   }
 
   @Test func selectingPlainTextEndsEditableSelection() {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     var value = "editable"
     let content = VStack {
@@ -230,14 +230,14 @@ struct TextSelectionTests {
   }
 
   @Test func renderContextCanInstallCustomCopyProvider() {
-    let ctx = RenderContext()
+    let ctx = BlockContext()
     ctx.setCopyTextProvider { "custom copy" }
 
     #expect(ctx.interaction.copyText() == "custom copy")
   }
 
   @Test func customSelectAllHandlerPrecedesBuiltInSelection() {
-    let ctx = RenderContext()
+    let ctx = BlockContext()
     var handled = false
     ctx.setSelectAllHandler {
       handled = true

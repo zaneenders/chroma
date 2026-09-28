@@ -16,7 +16,7 @@ swiftly run swift test --package-path Benchmarks -c release
 
 Applications run in-process. The framework and demo have no external Swift package dependencies; the benchmark package depends only on Chroma.
 
-The demo uses `MetalApp` on macOS or `WaylandApp` on Linux.
+The demo uses `MacOSApp` on macOS or `WaylandApp` on Linux.
 Save a scene with Ctrl+Shift+G (defaults to `Example/`), or pass
 `--capture-directory EXISTING_WRITABLE_DIRECTORY`.
 Clipboard shortcuts are Ctrl+A/C/X/V or Super+A/C/X/V (Omarchy) on Linux,

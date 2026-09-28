@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct FocusVisibilityTests {
   private let viewport = Size(width: 200, height: 200)
-  private let context = RenderContext()
+  private let context = BlockContext()
 
   private func render(_ content: any Block, input: InputState = InputState()) {
     let isInitialFrame = context.interaction.tree == nil
@@ -94,9 +94,9 @@ struct FocusVisibilityTests {
 private struct ClippedColumn: PrimitiveBlock {
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     context.withInteractionClip(Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 60)) {
       BlockEngine.draw(
         VStack(spacing: 0) {

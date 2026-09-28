@@ -6,7 +6,7 @@ import Testing
 struct DefaultFocusTests {
   private let viewport = Rect(x: 0, y: 0, width: 100, height: 40)
   private let parked = InputState(pointerPosition: Point(x: 500, y: 500))
-  private let context = RenderContext()
+  private let context = BlockContext()
 
   private var standardHighlight: Color {
     HoverStyle.standardTint(in: context.theme)
@@ -174,11 +174,11 @@ struct DefaultFocusTests {
 
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       Size(width: proposal.width, height: 40)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       context.withFocusGroup(in: rect, axis: .horizontal) {
         for column in 0..<2 {
           let box = Rect(

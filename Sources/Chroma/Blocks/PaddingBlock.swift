@@ -7,7 +7,7 @@ public struct PaddingBlock: PrimitiveBlock, IdentityTransparentBlock {
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     let childSize = BlockEngine.measure(
       content,
       proposal: Size(
@@ -20,7 +20,7 @@ public struct PaddingBlock: PrimitiveBlock, IdentityTransparentBlock {
     )
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     BlockEngine.draw(
       content,
       into: &drawList,

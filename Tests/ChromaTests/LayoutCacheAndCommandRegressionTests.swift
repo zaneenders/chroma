@@ -18,7 +18,7 @@ struct LayoutCacheAndCommandRegressionTests {
         ])
       BlockEngine.draw(
         stack, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: RenderContext(interaction: interaction))
+        context: BlockContext(interaction: interaction))
       interaction.endFrame()
     }
     frame(height: 40)
@@ -42,7 +42,7 @@ struct LayoutCacheAndCommandRegressionTests {
       }
       BlockEngine.draw(
         view, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: RenderContext(interaction: interaction))
+        context: BlockContext(interaction: interaction))
       interaction.endFrame()
     }
     frame()
@@ -63,7 +63,7 @@ struct LayoutCacheAndCommandRegressionTests {
       BlockEngine.draw(
         LazyVStack(id: id, controller: controller, rows: [row]),
         into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: RenderContext(interaction: interaction))
+        context: BlockContext(interaction: interaction))
       interaction.endFrame()
     }
     frame()
@@ -83,7 +83,7 @@ struct LayoutCacheAndCommandRegressionTests {
       BlockEngine.draw(
         LazyVStack(id: id, controller: controller, rows: rows),
         into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: RenderContext(interaction: interaction, textScale: scale))
+        context: BlockContext(interaction: interaction, textScale: scale))
       interaction.endFrame()
     }
     frame(scale: 1)
@@ -109,7 +109,7 @@ struct LayoutCacheAndCommandRegressionTests {
       }
       BlockEngine.draw(
         view, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: RenderContext(interaction: interaction))
+        context: BlockContext(interaction: interaction))
       interaction.endFrame()
     }
     frame()

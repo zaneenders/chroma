@@ -19,7 +19,7 @@ public struct ZStack: PrimitiveBlock {
     scopedChildren.contains { BlockEngine.expandsVertically($0) }
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     var result = Size.zero
     for (index, child) in scopedChildren.enumerated() {
       let context = context.childContext(for: child, at: index)
@@ -30,7 +30,7 @@ public struct ZStack: PrimitiveBlock {
     return result
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let interaction = context.interaction
     interaction.beginGroup(rect: rect)
     for (index, child) in scopedChildren.enumerated() {

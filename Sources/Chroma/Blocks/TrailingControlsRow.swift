@@ -17,14 +17,14 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: PrimitiveBlock
 
   @MainActor public var expandsHorizontally: Bool { true }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     let sizes = measuredSizes(for: proposal, context: context)
     return Size(
       width: proposal.width,
       height: max(sizes.input.height, sizes.controls.height))
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let sizes = measuredSizes(for: rect.size, context: context)
     let inputRect = Rect(
       x: rect.minX,
@@ -44,7 +44,7 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: PrimitiveBlock
   }
 
   @MainActor private func measuredSizes(
-    for proposal: Size, context: RenderContext
+    for proposal: Size, context: BlockContext
   ) -> (input: Size, controls: Size) {
     let controlsSize = BlockEngine.measure(controls, proposal: proposal, context: context.childScope(1))
     let inputWidth = max(0, proposal.width - controlsSize.width - spacing)

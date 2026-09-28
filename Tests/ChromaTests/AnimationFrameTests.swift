@@ -14,8 +14,8 @@ struct AnimationFrameTests {
     let samples: Samples
     var active = true
     var focusRule: FocusRule { .standard }
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
-    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       samples.timestamps.append(context.animationFrame(active: active).timestamp)
     }
   }
@@ -26,7 +26,7 @@ struct AnimationFrameTests {
       clock.clockReads += 1
       return clock.now
     })
-    let context = RenderContext()
+    let context = BlockContext()
     let samples = Samples()
     func render(_ content: any Block) {
       _ = producer.render(

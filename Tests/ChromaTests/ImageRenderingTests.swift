@@ -112,7 +112,7 @@ struct ImageRenderingTests {
   @Test func imageUsesIntrinsicSizeWithoutImplicitExpansion() throws {
     let image = Image(try resource(width: 80, height: 40))
     let proposal = Size(width: 300, height: 200)
-    let context = RenderContext()
+    let context = BlockContext()
 
     #expect(BlockEngine.measure(image, proposal: proposal, context: context) == image.resource.size)
     #expect(BlockEngine.measure(image.sizing(), proposal: proposal, context: context) == image.resource.size)
@@ -123,7 +123,7 @@ struct ImageRenderingTests {
   @Test func imageCanOptIntoExpansionIndependentlyOnEachAxis() throws {
     let image = Image(try resource(width: 80, height: 40))
     let proposal = Size(width: 300, height: 200)
-    let context = RenderContext()
+    let context = BlockContext()
     let horizontal = image.sizing(x: .grow)
     let vertical = image.sizing(y: .grow)
 
@@ -141,7 +141,7 @@ struct ImageRenderingTests {
       Image(image)
       Image(image)
     }
-    let context = RenderContext()
+    let context = BlockContext()
 
     #expect(
       BlockEngine.measure(
@@ -152,7 +152,7 @@ struct ImageRenderingTests {
   @Test func imageInFixedFrameUsesAssignedRectForEveryScalingMode() throws {
     let resource = try resource(width: 80, height: 40)
     let frame = Rect(x: 0, y: 0, width: 100, height: 100)
-    let context = RenderContext()
+    let context = BlockContext()
 
     for scaling in [ImageScaling.contain, .cover, .stretch] {
       let image = Image(resource, scaling: scaling).sizing(
@@ -170,7 +170,7 @@ struct ImageRenderingTests {
   @Test func imageInScrollViewUsesIntrinsicContentSize() throws {
     let resource = try resource(width: 80, height: 40)
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let viewport = Rect(x: 0, y: 0, width: 100, height: 20)
     interaction.beginFrame(input: InputState())
     var list = DrawList()

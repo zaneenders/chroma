@@ -43,11 +43,11 @@ private struct AppContent: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     proposal
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {}
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
 }
 
 @MainActor
@@ -57,6 +57,7 @@ private final class FailingAppRenderer: Chroma.Host {
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
+  func setMinimumRefreshRate(_ refreshRate: Double) {}
   let error: BackendError
 
   init(error: BackendError) {

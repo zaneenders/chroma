@@ -11,7 +11,7 @@ package final class WindowRuntime {
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
   package var needsAnimationFrame: Bool { producer.needsAnimationFrame }
-  package var context: RenderContext { RenderContext(interaction: interaction) }
+  package var context: BlockContext { BlockContext(interaction: interaction) }
 
   package func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
     interaction.resolve(input, appBindings: keyBindings)

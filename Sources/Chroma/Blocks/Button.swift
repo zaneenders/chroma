@@ -38,14 +38,14 @@ public struct Button: PrimitiveBlock {
     self.init(label, id: nil, role: role, fontScale: fontScale, style: style, padding: padding, action: action)
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     let textSize = context.fontMetrics.measure(label, scale: fontScale * context.textScale)
     return Size(
       width: textSize.width + padding.leading + padding.trailing,
       height: textSize.height + padding.top + padding.bottom)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let style = style ?? context.theme.button
     let state = context.buttonState(id: id ?? context.widgetID, in: rect, role: role) { action() }
 

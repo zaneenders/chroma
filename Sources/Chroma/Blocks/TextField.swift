@@ -46,7 +46,7 @@ public struct TextField: PrimitiveBlock {
 
   @MainActor public var expandsHorizontally: Bool { true }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     let metrics = context.fontMetrics
     let scale = fontScale * context.textScale
     return Size(
@@ -55,7 +55,7 @@ public struct TextField: PrimitiveBlock {
     )
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let id = id ?? context.widgetID
     let metrics = context.fontMetrics
     let scale = fontScale * context.textScale

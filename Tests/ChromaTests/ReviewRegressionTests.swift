@@ -25,9 +25,9 @@ struct ReviewRegressionTests {
 
     var focusRule: FocusRule { .control }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       let state = context.textInputState(
         id: WidgetID("editor"), in: rect, text: { text }, onChange: { model.text = $0 })
       capture.range = state.selectionRange
@@ -40,12 +40,12 @@ struct ReviewRegressionTests {
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       capture.measurements += 1
       return Size(width: proposal.width, height: model.height)
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.drawnHeight = rect.size.height
       list.fillRect(rect, color: .white)
     }
@@ -131,9 +131,9 @@ struct ReviewRegressionTests {
 
     var focusRule: FocusRule { .control }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.inputs.append(context.input)
       if context.buttonState(id: WidgetID("probe"), in: rect).clicked {
         capture.clicks += 1

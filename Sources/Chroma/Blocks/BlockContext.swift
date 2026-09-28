@@ -1,5 +1,5 @@
 @MainActor
-public struct RenderContext {
+public struct BlockContext {
   var structuralPath = StructuralPath()
   var widgetID: WidgetID { WidgetID(path: structuralPath) }
   var backgroundDepth = 0
@@ -15,31 +15,31 @@ public struct RenderContext {
 
   /// Use distinct, stable slots for custom-container children in both measurement and drawing.
   /// Slots describe source structure, not visible-child indices or draw order.
-  public func childScope(_ slot: Int) -> RenderContext {
+  public func childScope(_ slot: Int) -> BlockContext {
     scoped([.slot(slot)])
   }
 
-  var backgroundContentContext: RenderContext {
+  var backgroundContentContext: BlockContext {
     var copy = self
     copy.backgroundDepth += 1
     return copy
   }
 
-  var backgroundContext: RenderContext {
+  var backgroundContext: BlockContext {
     var copy = scoped([.background(backgroundDepth)])
     copy.focusTargets = []
     copy.focusLeafClaimed = true
     return copy
   }
 
-  func scoped(_ segments: [StructuralPath.Segment]) -> RenderContext {
+  func scoped(_ segments: [StructuralPath.Segment]) -> BlockContext {
     var copy = self
     copy.structuralPath.segments += segments
     copy.backgroundDepth = 0
     return copy
   }
 
-  func childContext(for child: any Block, at index: Int) -> RenderContext {
+  func childContext(for child: any Block, at index: Int) -> BlockContext {
     child is ScopedBlock ? self : scoped([.slot(index)])
   }
 
@@ -102,7 +102,7 @@ public struct RenderContext {
     self.textScale = textScale
   }
 
-  public func withTheme(_ theme: ChromaTheme) -> RenderContext {
+  public func withTheme(_ theme: ChromaTheme) -> BlockContext {
     var copy = self
     copy.theme = theme
     return copy
@@ -219,9 +219,9 @@ public struct RenderContext {
 }
 
 extension Host {
-  package var context: RenderContext { runtime.context }
+  package var context: BlockContext { runtime.context }
 }
 
-extension RenderContext {
+extension BlockContext {
   public var caretVisible: Bool { interaction.caretClock.visible }
 }

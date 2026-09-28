@@ -6,7 +6,7 @@ import Testing
 struct TextEventInterceptionTests {
   @Test func replacementPreservesOrderingAndFallback() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let id = WidgetID("history")
     let rect = Rect(x: 0, y: 0, width: 100, height: 40)
     var text = ""

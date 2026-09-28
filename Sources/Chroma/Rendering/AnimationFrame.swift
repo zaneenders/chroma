@@ -6,7 +6,7 @@ public struct AnimationFrame: Equatable, Sendable {
   }
 }
 
-extension RenderContext {
+extension BlockContext {
   public func animationFrame(active: Bool = true) -> AnimationFrame {
     if active { interaction.animationRequested = true }
     return interaction.animationFrame

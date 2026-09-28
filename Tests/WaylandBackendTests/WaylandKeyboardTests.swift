@@ -24,10 +24,10 @@ struct WaylandKeyboardTests {
     let keyboard = WaylandKeyboard()
     keyboard.installKeymap(fd: fd, size: UInt32(keymap.utf8.count))
     let bindings = KeyBindings {
-        bind("a", modifiers: .control, to: .editing(.selectAll))
-        bind("c", modifiers: .control, to: .editing(.copy))
-        bind("v", modifiers: .control, to: .editing(.paste))
-      }
+      bind("a", modifiers: .control, to: .editing(.selectAll))
+      bind("c", modifiers: .control, to: .editing(.copy))
+      bind("v", modifiers: .control, to: .editing(.paste))
+    }
     keyboard.resolve = { bindings.resolve($0, isTextEditing: $1) }
     keyboard.updateModifiers(depressed: 4, latched: 0, locked: 0, group: 0)
     return keyboard
@@ -37,8 +37,8 @@ struct WaylandKeyboardTests {
     let keyboard = try keyboard()
     defer { keyboard.cleanup() }
     let bindings = KeyBindings {
-        bind("a", modifiers: .superKey, to: .editing(.selectAll))
-      }
+      bind("a", modifiers: .superKey, to: .editing(.selectAll))
+    }
     keyboard.resolve = { bindings.resolve($0, isTextEditing: $1) }
     keyboard.updateModifiers(depressed: 64, latched: 0, locked: 0, group: 0)
     keyboard.keyPressed(30, editing: true, editingSession: 1, now: 0)

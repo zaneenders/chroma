@@ -63,7 +63,7 @@ package final class FrameProducer {
     content: (any Block)?,
     viewport: Size,
     input: InputState,
-    context: RenderContext,
+    context: BlockContext,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     resetTracking()

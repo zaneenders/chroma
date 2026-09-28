@@ -12,11 +12,11 @@ public struct KeyBindingsBlock: PrimitiveBlock, IdentityTransparentBlock {
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
   @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     BlockEngine.measure(content, proposal: proposal, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let interaction = context.interaction
     let bindingStart = interaction.buildingKeyBindingScopes.count
     interaction.beginGroup(rect: rect)

@@ -132,9 +132,9 @@ public struct LazyVStack: PrimitiveBlock {
 
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let id = id ?? context.widgetID
     let interaction = context.interaction
     controller.restore(id: id, interaction: interaction)
@@ -290,7 +290,7 @@ public struct LazyVStack: PrimitiveBlock {
   /// in the row still register themselves.
   @MainActor private func drawRow(
     _ content: any Block, into drawList: inout DrawList, in rect: Rect,
-    context rowContext: RenderContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
+    context rowContext: BlockContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
     rowKey: StructuralKey
   ) {
     guard let group = interaction.builderStack.last else {
@@ -344,7 +344,7 @@ public struct LazyVStack: PrimitiveBlock {
     return (before, after)
   }
 
-  @MainActor private func updateCache(width: Float, context: RenderContext) {
+  @MainActor private func updateCache(width: Float, context: BlockContext) {
     precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
     let cache = controller.lazyStackCache
     let environment = LazyMeasurementEnvironment(

@@ -17,5 +17,4 @@ package protocol Host: AnyObject {
 
 extension Host {
   package var interaction: Interaction { runtime.interaction }
-  package func setMinimumRefreshRate(_ refreshRate: Double) {}
 }

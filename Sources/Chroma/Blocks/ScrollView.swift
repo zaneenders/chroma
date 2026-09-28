@@ -37,9 +37,9 @@ public struct ScrollView: PrimitiveBlock {
   @MainActor public var expandsHorizontally: Bool { true }
   @MainActor public var expandsVertically: Bool { true }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let id = id ?? context.widgetID
     let interaction = context.interaction
     controller?.restore(id: id, interaction: interaction)

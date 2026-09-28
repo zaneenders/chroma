@@ -15,14 +15,14 @@ public struct Image: PrimitiveBlock {
 
   public var focusRule: FocusRule { .standard }
 
-  public func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     resource.size
   }
 
   public var expandsHorizontally: Bool { false }
   public var expandsVertically: Bool { false }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.image(resource, in: rect, scaling: scaling, alignment: alignment)
   }
 }
