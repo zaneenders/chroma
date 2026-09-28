@@ -21,10 +21,17 @@ public struct ScrollView: PrimitiveBlock {
     case uniform(UniformRows, ScrollViewController)
   }
 
+  private struct LogicalSelection {
+    let selectedKey: @MainActor () -> StructuralKey?
+    let select: @MainActor (StructuralKey) -> Void
+    let move: @MainActor (Int) -> StructuralKey?
+  }
+
   private struct UniformRows {
     let count: Int
     let height: Float
     let keys: [StructuralKey]?
+    let selection: LogicalSelection?
     let content: @MainActor (Int) -> any Block
   }
 
@@ -78,7 +85,7 @@ public struct ScrollView: PrimitiveBlock {
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) {
     self.init(
-      data: data, keys: nil, rowHeight: rowHeight, spacing: spacing,
+      data: data, keys: nil, selection: nil, rowHeight: rowHeight, spacing: spacing,
       showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
     self.name = name
   }
@@ -90,13 +97,35 @@ public struct ScrollView: PrimitiveBlock {
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
     self.init(
-      data: data, keys: data.map { StructuralKey($0.id) }, rowHeight: rowHeight, spacing: spacing,
+      data: data, keys: data.map { StructuralKey($0.id) }, selection: nil, rowHeight: rowHeight, spacing: spacing,
       showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
     self.name = name
   }
 
+  @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
+    _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
+    showsIndicator: Bool = true, sticksToBottom: Bool = false,
+    controller: ScrollViewController, selection: ScrollSelection<Data.Element.ID>,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
+  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    let ids = data.map(\.id)
+    self.init(
+      data: data, keys: ids.map { StructuralKey($0) },
+      selection: LogicalSelection(
+        selectedKey: { selection.selectedID.map { StructuralKey($0) } },
+        select: { key in
+          if let id = ids.first(where: { StructuralKey($0) == key }) { selection.selectedID = id }
+        },
+        move: { direction in
+          selection.move(in: ids, by: direction).map { StructuralKey($0) }
+        }),
+      rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
+      sticksToBottom: sticksToBottom, controller: controller, content: content)
+    self.name = name
+  }
+
   @MainActor private init<Data: RandomAccessCollection, RowContent: Block>(
-    data: Data, keys: [StructuralKey]?, rowHeight: Float, spacing: Float,
+    data: Data, keys: [StructuralKey]?, selection: LogicalSelection?, rowHeight: Float, spacing: Float,
     showsIndicator: Bool, sticksToBottom: Bool, controller: ScrollViewController,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) {
@@ -106,7 +135,7 @@ public struct ScrollView: PrimitiveBlock {
     self.init(
       spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom,
       content: .uniform(
-        UniformRows(count: data.count, height: rowHeight, keys: keys) { offset in
+        UniformRows(count: data.count, height: rowHeight, keys: keys, selection: selection) { offset in
           content(data[data.index(data.startIndex, offsetBy: offset)])
         }, controller))
   }
@@ -152,6 +181,11 @@ public struct ScrollView: PrimitiveBlock {
         height: Float(rows.count) * rows.height + spacing * Float(max(0, rows.count - 1)))
     }
     interaction.registerScrollInput(id: id, rect: rect, horizontal: horizontal)
+    if case .uniform(let rows, let controller) = content, let selection = rows.selection {
+      interaction.registerLogicalSelection(
+        scrollID: id, selectedKey: selection.selectedKey, select: selection.select,
+        move: selection.move, reveal: { controller.scrollToRowKey($0) })
+    }
     let offsets = interaction.resolveScroll(
       id: id, viewport: rect, contentSize: contentSize, controller: controller,
       sticksToBottom: sticksToBottom, horizontal: horizontal)
@@ -314,7 +348,6 @@ public struct ScrollView: PrimitiveBlock {
           rowKey: rowKey, interaction: interaction)
         continue
       }
-      guard leafID == interaction.selectedLeafID else { continue }
       interaction.recordScrollRow(
         id: scrollID, leafID: leafID, rowKey: rowKey,
         rect: Rect(

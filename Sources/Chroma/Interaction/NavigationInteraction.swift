@@ -86,6 +86,11 @@ extension Interaction {
       }
       selection = renderPath
       selectedLeafID = leafID
+      if let groupID = navigation.node(at: Array(path.dropLast()))?.id,
+        let key = scrollStates[groupID]?.rowKeys[leafID]
+      {
+        logicalSelections[groupID]?.select(key)
+      }
       pendingFocus = nil
       reveal(renderPath, in: tree)
     } else {
@@ -258,5 +263,66 @@ extension Interaction {
 
   private func center(of rect: Rect) -> Point {
     Point(x: rect.minX + rect.size.width / 2, y: rect.minY + rect.size.height / 2)
+  }
+}
+
+@MainActor
+extension Interaction {
+  func registerLogicalSelection(
+    scrollID: WidgetID, selectedKey: @escaping @MainActor () -> StructuralKey?,
+    select: @escaping @MainActor (StructuralKey) -> Void,
+    move: @escaping @MainActor (Int) -> StructuralKey?,
+    reveal: @escaping @MainActor (StructuralKey) -> Void
+  ) {
+    buildingLogicalSelections[scrollID] = LogicalSelectionRegistration(
+      scrollID: scrollID, selectedKey: selectedKey, select: select, move: move, reveal: reveal)
+  }
+
+  func moveLogicalSelection(_ command: NavigationCommand) -> Bool {
+    let distance: Int
+    switch command {
+    case .down: distance = 1
+    case .up: distance = -1
+    default: return false
+    }
+    guard let navigation, let node = navigation.node(at: navigationPath) else { return false }
+    let groupID = node.isGroup ? node.id : navigation.node(at: Array(navigationPath.dropLast()))?.id
+    guard let groupID, let registration = logicalSelections[groupID] else { return false }
+    guard let key = registration.move(distance) else {
+      selection = nil
+      selectedLeafID = nil
+      return true
+    }
+    registration.reveal(key)
+    if let leafID = scrollStates[groupID]?.rowKeys.first(where: { $0.value == key })?.key {
+      selectNavigationLeaf(leafID)
+    } else {
+      navigationPath = navigation.path(to: groupID) ?? navigationPath
+      selection = nil
+      selectedLeafID = nil
+    }
+    return true
+  }
+
+  func reconcileLogicalSelection(in tree: FocusNode) {
+    guard let navigation else { return }
+    for (groupID, registration) in buildingLogicalSelections {
+      guard let groupPath = navigation.path(to: groupID),
+        let key = registration.selectedKey(),
+        scrollStates[groupID]?.layout?.rowKeys.contains(key) == true
+      else { continue }
+      if let leafID = scrollStates[groupID]?.rowKeys.first(where: { $0.value == key })?.key,
+        let path = tree.findLeaf(leafID), tree.node(at: path)?.acceptsFocus == true,
+        let leafPath = navigation.path(to: leafID)
+      {
+        navigationPath = leafPath
+        selection = path
+        selectedLeafID = leafID
+      } else if navigationPath.starts(with: groupPath) {
+        navigationPath = groupPath
+        selection = nil
+        selectedLeafID = nil
+      }
+    }
   }
 }

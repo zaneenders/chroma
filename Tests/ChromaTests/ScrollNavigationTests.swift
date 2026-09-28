@@ -39,6 +39,40 @@ struct ScrollNavigationTests {
     #expect(controller.offset > 0)
   }
 
+  @Test func logicalRowSelectionSurvivesVirtualizationAndDownRevealsSuccessor() {
+    let h = Harness()
+    let controller = ScrollViewController()
+    let selection = ScrollSelection<Int>()
+    let targets = (0..<100).map { _ in FocusTarget() }
+    struct Item: Identifiable { let id: Int }
+    let content = ScrollView(
+      data: (0..<100).map { Item(id: $0) }, rowHeight: 20, controller: controller, selection: selection
+    ) { index in
+      Button("Row \(index.id)") {}.focusTarget(targets[index.id])
+    }
+    h.render(content)
+    h.render(content, [.down, .stepIn, .down])
+    #expect(selection.selectedID == 1)
+    #expect(targets[1].isFocused)
+
+    controller.scroll(to: 1200)
+    h.render(content)
+    #expect(selection.selectedID == 1)
+    #expect(!targets[1].isFocused)
+    h.render(content, [.down])
+    #expect(selection.selectedID == 2)
+    h.render(content)
+    #expect(targets[2].isFocused)
+    #expect(controller.offset < 1200)
+  }
+
+  @Test func logicalSelectionHasExplicitMissingItemPolicy() {
+    let selection = ScrollSelection(2)
+    #expect(selection.move(in: [1, 3], by: 1) == nil)
+    selection.selectedID = 2
+    #expect(selection.move(in: [1, 3], by: 1, ifMissing: .first) == 1)
+  }
+
   @Test func removedRememberedRowFallsBackWithoutActivatingAnother() {
     let h = Harness()
     let controller = ScrollViewController()

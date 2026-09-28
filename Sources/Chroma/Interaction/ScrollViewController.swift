@@ -30,6 +30,7 @@ public final class ScrollViewController {
   @ObservationIgnored var lazyStackCache = LazyStackCache()
 
   public init() {}
+  func scrollToRowKey(_ key: StructuralKey) { request = .row(key) }
   public func scrollToRow(_ id: some Hashable & Sendable) { request = .row(StructuralKey(id)) }
 
   public func scrollToTop() { request = .top }

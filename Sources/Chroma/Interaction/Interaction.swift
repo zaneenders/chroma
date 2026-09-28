@@ -26,6 +26,16 @@ package final class Interaction {
   @ObservationIgnored var navigation: NavigationNode?
   @ObservationIgnored var navigationPath: [Int] = []
   @ObservationIgnored var rememberedNavigation: [WidgetID: WidgetID] = [:]
+  struct LogicalSelectionRegistration {
+    let scrollID: WidgetID
+    let selectedKey: @MainActor () -> StructuralKey?
+    let select: @MainActor (StructuralKey) -> Void
+    let move: @MainActor (Int) -> StructuralKey?
+    let reveal: @MainActor (StructuralKey) -> Void
+  }
+  @ObservationIgnored var logicalSelections: [WidgetID: LogicalSelectionRegistration] = [:]
+  @ObservationIgnored var buildingLogicalSelections: [WidgetID: LogicalSelectionRegistration] = [:]
+
   @ObservationIgnored var viewport: Rect = .zero
 
   @ObservationIgnored var tree: FocusNode?
@@ -223,6 +233,8 @@ package final class Interaction {
     navigation = nil
     navigationPath = []
     rememberedNavigation = [:]
+    logicalSelections = [:]
+    buildingLogicalSelections = [:]
     selection = nil
     selectedLeafID = nil
     pressedLeaf = nil
@@ -276,6 +288,7 @@ package final class Interaction {
 
   package func beginFrame(input: InputState) {
     building = FrameRegistrations()
+    buildingLogicalSelections = [:]
 
     self.input = input
     activatePending = false
@@ -369,6 +382,7 @@ package final class Interaction {
     textSelection.reconcile()
     tree = newTree
     reconcileNavigation(in: newTree)
+    reconcileLogicalSelection(in: newTree)
     resolveFocusTargets()
     hoveredLeafID = newTree.hitTest(input.pointerPosition).flatMap { newTree.node(at: $0)?.leafID }
 
@@ -392,6 +406,7 @@ package final class Interaction {
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
     caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
     registrations = building
+    logicalSelections = buildingLogicalSelections
     builderRoot = nil
     builderStack = []
     activatePending = false
@@ -519,6 +534,12 @@ extension Interaction {
         .filter { $0.command == command && isPrefix($0.path, of: activeCommandPath) }
         .sorted { $0.path.count > $1.path.count }
       if handlers.contains(where: { $0.action() == .handled }) {
+        handledCommandIndices.insert(index)
+        continue
+      }
+      if case .navigation(let direction) = command,
+        moveLogicalSelection(direction)
+      {
         handledCommandIndices.insert(index)
         continue
       }
