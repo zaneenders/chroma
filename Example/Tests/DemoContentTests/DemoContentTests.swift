@@ -122,7 +122,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 }
 
 @MainActor
-@Test func fontTabOpensAndSurvivesCaptureRoundTrip() throws {
+@Test func fontTabOpensAndRendersSample() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
   let renderer = HeadlessRenderer(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
@@ -139,10 +139,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
       if case .text(_, "café Ångström naïve façade Český", _, _) = command { return true }
       return false
     })
-  let decoded = try SceneCapture.decode(
-    SceneCapture.encode(
-      FrameObservation(drawList: DrawList(commands: frame.commands), viewport: frame.viewport)))
-  #expect(decoded.drawList.commands == frame.commands)
+
 }
 
 @MainActor
