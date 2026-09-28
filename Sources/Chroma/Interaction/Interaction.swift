@@ -552,6 +552,11 @@ extension Interaction {
     case .editing:
       return
     case .navigation(let command):
+      if command == .nextFocus || command == .previousFocus {
+        if isTextEditing { endEditing() }
+        moveNavigation(command)
+        return
+      }
       guard mode == .movement else { return }
       if editingLeaf != nil {
         switch command {
@@ -564,7 +569,7 @@ extension Interaction {
         case .sectionUp: movementTextEvents.append(.selectCaretUp)
         case .sectionDown: movementTextEvents.append(.selectCaretDown)
         case .stepOut: endEditing()
-        case .stepIn: break
+        case .stepIn, .nextFocus, .previousFocus: break
         }
         return
       }

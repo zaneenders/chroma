@@ -16,6 +16,35 @@ struct NavigationContractTests {
     }
   }
 
+  @Test func tabTraversesLeavesAcrossGroupsAndLeavesEditing() {
+    let h = Harness()
+    let first = FocusTarget()
+    let field = FocusTarget()
+    let last = FocusTarget()
+    let content = VStack {
+      Group("First") { Button("One") {}.focusTarget(first) }
+      Group("Second") {
+        TextField(text: { "" }, onChange: { _ in }).focusTarget(field)
+        Button("Three") {}.focusTarget(last)
+      }
+    }
+    h.render(content)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(first.isFocused)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(field.isFocused)
+    field.focus(editing: true)
+    h.render(content)
+    #expect(field.isEditing)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(last.isFocused)
+    #expect(!field.isEditing)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(first.isFocused)
+    h.render(content, [.navigation(.previousFocus)])
+    #expect(last.isFocused)
+  }
+
   @Test func plainMovementStopsAtBoundaryAndShiftSkipsLocalPeers() {
     let h = Harness()
     let input = FocusTarget()

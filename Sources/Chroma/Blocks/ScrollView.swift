@@ -331,7 +331,8 @@ public struct ScrollView: PrimitiveBlock {
       switch navigation {
       case .up: before += 1
       case .down: after += 1
-      case .left, .right, .stepIn, .stepOut, .sectionLeft, .sectionRight, .sectionUp, .sectionDown: break
+      case .left, .right, .stepIn, .stepOut, .nextFocus, .previousFocus,
+        .sectionLeft, .sectionRight, .sectionUp, .sectionDown: break
       }
     }
     return (before, after)

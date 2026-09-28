@@ -10,6 +10,7 @@ public enum NavigationCommand: Hashable, Sendable {
   case down
   case left
   case right
+  case nextFocus, previousFocus
   case sectionUp, sectionDown, sectionLeft, sectionRight
   /// Enters the selected group or activates the selected control.
   case stepIn
@@ -42,6 +43,8 @@ extension Command {
     case .navigation(.down): "down"
     case .navigation(.left): "left"
     case .navigation(.right): "right"
+    case .navigation(.nextFocus): "next-focus"
+    case .navigation(.previousFocus): "previous-focus"
     case .navigation(.sectionUp): "section-up"
     case .navigation(.sectionDown): "section-down"
     case .navigation(.sectionLeft): "section-left"

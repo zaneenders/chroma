@@ -25,7 +25,7 @@ public struct DemoApplication: App {
   public var windowSize: Size { Size(width: 1200, height: 820) }
 
   public var keyBindings: KeyBindings {
-    var bindings = KeyBindings.vimNavigation.overlay {
+    var bindings = KeyBindings.modalNavigation.overlay {
       bind("c", modifiers: shortcutModifier, to: .editing(.copy))
       bind("x", modifiers: shortcutModifier, to: .editing(.cut))
       bind("v", modifiers: shortcutModifier, to: .editing(.paste))

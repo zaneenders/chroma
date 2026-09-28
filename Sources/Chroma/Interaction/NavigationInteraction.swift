@@ -125,6 +125,24 @@ extension Interaction {
     guard let activeGroup = navigation.node(at: activePath) else { return }
 
     switch command {
+    case .nextFocus, .previousFocus:
+      var leaves: [[Int]] = []
+      func collect(_ node: NavigationNode, path: [Int]) {
+        if !node.isGroup { leaves.append(path) }
+        for (index, child) in node.children.enumerated() {
+          collect(child, path: path + [index])
+        }
+      }
+      collect(navigation, path: [])
+      guard !leaves.isEmpty else { return }
+      let current = leaves.firstIndex(of: navigationPath)
+      let next: Int
+      if command == .nextFocus {
+        next = current.map { ($0 + 1) % leaves.count } ?? 0
+      } else {
+        next = current.map { ($0 + leaves.count - 1) % leaves.count } ?? leaves.count - 1
+      }
+      setNavigationSelection(leaves[next])
     case .stepOut:
       guard !navigationPath.isEmpty, !activePath.isEmpty else { return }
       setNavigationSelection(activePath)
@@ -196,7 +214,7 @@ extension Interaction {
     case .down, .sectionDown:
       direction = 1
       primaryAxis = .vertical
-    case .stepIn, .stepOut: return nil
+    case .stepIn, .stepOut, .nextFocus, .previousFocus: return nil
     }
 
     let currentPrefix = Array(currentPath.dropLast())

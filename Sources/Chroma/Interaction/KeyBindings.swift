@@ -185,7 +185,30 @@ public struct KeyBindings: Sendable {
 }
 
 extension KeyBindings {
-  public static let vimNavigation = KeyBindings {
+  public static let desktopNavigation = KeyBindings {
+    bind(.upArrow, to: .navigation(.up))
+    bind(.downArrow, to: .navigation(.down))
+    bind(.leftArrow, to: .navigation(.left))
+    bind(.rightArrow, to: .navigation(.right))
+    bind(.tab, in: .shared, to: .navigation(.nextFocus))
+    bind(.tab, modifiers: .shift, in: .shared, to: .navigation(.previousFocus))
+    bind(.leftArrow, in: .editing, to: .editing(.moveCaretLeft))
+    bind(.rightArrow, in: .editing, to: .editing(.moveCaretRight))
+    bind(.upArrow, in: .editing, to: .editing(.moveCaretUp))
+    bind(.downArrow, in: .editing, to: .editing(.moveCaretDown))
+    bind(.leftArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretLeft))
+    bind(.rightArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretRight))
+    bind(.upArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretUp))
+    bind(.downArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretDown))
+    bind(.home, in: .editing, to: .editing(.moveCaretToStart))
+    bind(.end, in: .editing, to: .editing(.moveCaretToEnd))
+    bind(.enter, in: .movement, to: .action(.activate))
+    bind(.space, in: .movement, to: .action(.activate))
+    bind(.escape, in: .shared, to: .action(.cancel))
+    bind(.escape, in: .editing, to: .editing(.endEditing))
+  }
+
+  public static let modalNavigation = KeyBindings {
     bind("f", to: .navigation(.up))
     bind("j", to: .navigation(.down))
     bind("d", to: .navigation(.left))
@@ -203,4 +226,6 @@ extension KeyBindings {
     bind(.space, in: .movement, to: .action(.activate))
     bind(.escape, to: .action(.cancel))
   }
+
+  public static let vimNavigation = modalNavigation
 }
