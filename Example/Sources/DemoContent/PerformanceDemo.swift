@@ -122,6 +122,7 @@ private struct PerformanceScene: Block {
             .fontScale(demoTitleText)
             .foregroundColor(theme.accent)
           Spacer()
+          ProgressIndicator(color: theme.accent, diameter: 16, isActive: !state.isPaused)
           Text(state.isPaused ? "● PAUSED" : "● LIVE")
             .fontScale(demoSmallText)
             .foregroundColor(state.isPaused ? .yellow : Color(r: 0.25, g: 0.95, b: 0.55, a: 1))
@@ -186,9 +187,10 @@ private struct PerformanceScene: Block {
         .padding(10)
 
         HStack(spacing: 12) {
-          Text(state.lastAction)
-            .fontScale(demoSmallText)
-            .foregroundColor(theme.foreground)
+          MarqueeText(
+            state.lastAction + " — Pause stops the canvas, progress indicator, and scrolling text.",
+            color: theme.foreground, fontScale: demoSmallText, isActive: !state.isPaused
+          ).sizing(x: .grow)
           Spacer()
           Text("\(state.itemCount) shapes  •  \(state.palette.rawValue)  •  \(state.shape.rawValue)")
             .fontScale(demoSmallText)
@@ -221,6 +223,9 @@ private struct UUIDList: Block {
           }
           Button("Top", fontScale: demoSmallText) {
             state.uuidScrollController.scrollToTop()
+          }
+          Button("Middle", fontScale: demoSmallText) {
+            state.uuidScrollController.scrollToRow(state.identifiers.count / 2)
           }
           Button("Bottom", fontScale: demoSmallText) {
             state.uuidScrollController.scrollToBottom()
@@ -276,7 +281,7 @@ private struct ShapeCanvas: PrimitiveBlock {
     let rows = max(1, (count + columns - 1) / columns)
     let cellWidth = area.size.width / Float(columns)
     let cellHeight = area.size.height / Float(rows)
-    let frame = context.animationFrame(active: !state.isPaused)
+    let frame = context.animationFrame(active: !state.isPaused, updatesPerSecond: 60)
     let elapsed = state.elapsedTime(at: frame.timestamp)
     let burstPhase = Float(state.burst) * 1.731
 

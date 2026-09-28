@@ -562,6 +562,29 @@ extension DemoContentTests {
     #expect(focusCoversARow())
   }
 
+  @Test func middleButtonRevealsVirtualizedRow() throws {
+    let state = PerformanceDemoState(itemCount: 100)
+    state.togglePaused()
+    let host = HeadlessHost(size: Size(width: 1200, height: 820))
+    host.content = DeferredBlock { PerformanceDemo(state: state) }
+    let position = try #require(
+      host.render().commands.compactMap { command -> Point? in
+        if case .text(let position, let text, _, _) = command, text == "Middle" { return position }
+        return nil
+      }.first)
+    let click = Point(x: position.x + 2, y: position.y + 2)
+    host.render(input: InputState(pointerPosition: click, pointerDown: true, pointerPressed: true))
+    host.render(input: InputState(pointerPosition: click, pointerReleased: true))
+    let frame = host.render()
+    #expect(state.uuidScrollController.offset == Float(state.identifiers.count / 2) * 53)
+    #expect(
+      frame.commands.contains {
+        if case .text(_, let text, _, _) = $0 { return text == "UUID 5001" }
+        return false
+      })
+    #expect(host.nextAnimationDeadline == nil)
+  }
+
   @Test func animationRequestsFramesWithoutInputAndStopsWhenInactive() async throws {
     let state = PerformanceDemoState(itemCount: 100)
     let renderer = HeadlessRenderer()
