@@ -58,6 +58,7 @@ public final class WaylandHost: Chroma.Host {
   private var minimumRefreshRate: Double = 0
   private var displayReadSource: DispatchSourceRead?
   private var displayWriteSource: DispatchSourceWrite?
+  private var animationTimer: DispatchSourceTimer?
   private var refreshTimer: DispatchSourceTimer?
   private var keyboardRepeatTimer: DispatchSourceTimer?
   private var frameCallback: OpaquePointer?
@@ -180,6 +181,19 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated { self?.requestFrame() }
     }
     refreshTimer = timer
+    timer.resume()
+  }
+
+  private func updateAnimationTimer() {
+    animationTimer?.cancel()
+    animationTimer = nil
+    guard running, let deadline = runtime.nextAnimationDeadline else { return }
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.schedule(deadline: .now() + max(0, deadline - ProcessInfo.processInfo.systemUptime))
+    timer.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.requestFrame() }
+    }
+    animationTimer = timer
     timer.resume()
   }
 
@@ -676,7 +690,8 @@ public final class WaylandHost: Chroma.Host {
     _ = interaction.consumeRedrawRequest()
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
-    if runtime.needsAnimationFrame || input.hasScrollMomentum { dirty = true }
+    updateAnimationTimer()
+    if input.hasScrollMomentum { dirty = true }
   }
 
   private func updateFrameRate() {
@@ -696,6 +711,8 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private func cleanup() {
+    animationTimer?.cancel()
+    animationTimer = nil
     runtime.reset()
     interaction.onRedrawRequested = nil
     refreshTimer?.cancel()

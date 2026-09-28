@@ -33,6 +33,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   private let displayRenderer: MetalDisplayListRenderer
   private var window: NSWindow?
   private var minimumRefreshRate: Double = 0
+  private var animationTimer: Timer?
   private var lastFrameTime: Double = 0
 
   public init(size: Size = Size(width: 800, height: 600)) throws {
@@ -61,9 +62,17 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   }
 
   private func updateFrameScheduling() {
-    let rate = max(minimumRefreshRate, runtime.needsAnimationFrame ? 60 : 0)
-    view.preferredFramesPerSecond = max(1, Int(rate))
-    view.isPaused = rate == 0
+    animationTimer?.invalidate()
+    animationTimer = nil
+    view.preferredFramesPerSecond = max(1, Int(minimumRefreshRate))
+    view.isPaused = minimumRefreshRate == 0
+    guard let deadline = runtime.nextAnimationDeadline else { return }
+    let timer = Timer(timeInterval: max(0, deadline - ProcessInfo.processInfo.systemUptime), repeats: false) {
+      [weak self] _ in
+      MainActor.assumeIsolated { self?.view.needsDisplay = true }
+    }
+    animationTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
   }
 
   @diagnose(UnnecessaryUnsafe, as: warning, reason: "SDK compatibility")
@@ -85,12 +94,16 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     view.needsDisplay = true
     app.activate()
     app.run()
+    animationTimer?.invalidate()
+    animationTimer = nil
     runtime.reset()
     self.window = nil
   }
 
   public func windowWillClose(_ notification: Notification) {
     view.isPaused = true
+    animationTimer?.invalidate()
+    animationTimer = nil
     runtime.reset()
     onClose?()
     NSApplication.shared.stop(nil)

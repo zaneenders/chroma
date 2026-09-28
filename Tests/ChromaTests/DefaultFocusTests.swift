@@ -142,7 +142,7 @@ struct DefaultFocusTests {
 
   @Test func lazyRowsClaimTheirTextContent() {
     let controller = ScrollViewController()
-    let content = LazyVStack(
+    let content = ScrollView(
       id: WidgetID("claim-list"), data: 0..<3, rowHeight: 20, spacing: 0,
       showsIndicator: false, controller: controller
     ) { index in

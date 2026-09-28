@@ -10,7 +10,7 @@ extension Interaction {
     onTextEvent: ((TextEditEvent, String) -> String?)? = nil,
     pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil,
-    readOnly: Bool = false
+    readOnly: Bool = false, submitInsertsNewline: Bool = false
   ) -> TextInputState {
     let selected = selectedLeafID == id
     let hovered = hoveredLeafID == id
@@ -89,7 +89,8 @@ extension Interaction {
       }
 
       var changed = false
-      eventLoop: for event in movementTextEvents + input.textEvents {
+      eventLoop: for incomingEvent in movementTextEvents + input.textEvents {
+        let event: TextEditEvent = incomingEvent == .submit && submitInsertsNewline ? .insert("\n") : incomingEvent
         if readOnly || mode == .movement {
           switch event {
           case .insert, .backspace, .deleteForward, .cut, .paste, .submit: continue
@@ -221,7 +222,7 @@ extension Interaction {
     onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
     pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
     verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
-    navigationIgnored: Bool = false, readOnly: Bool = false
+    navigationIgnored: Bool = false, readOnly: Bool = false, submitInsertsNewline: Bool = false
   ) -> TextInputState {
     guard let parent = builderStack.last else {
       preconditionFailure("registerTextInput outside of a frame")
@@ -235,7 +236,8 @@ extension Interaction {
       _ = self.updateTextInput(
         id: id, rect: rect, text: text(), onChange: onChange, onSubmit: onSubmit,
         onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-        pointerOffset: pointerOffset, verticalOffset: verticalOffset, readOnly: readOnly)
+        pointerOffset: pointerOffset, verticalOffset: verticalOffset, readOnly: readOnly,
+        submitInsertsNewline: submitInsertsNewline)
     }
     let editing = editingLeaf == id
     if editing {

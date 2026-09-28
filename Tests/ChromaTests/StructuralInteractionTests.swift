@@ -339,8 +339,8 @@ struct StructuralInteractionTests {
     let harness = Harness()
     var activations = 0
     let controller = ScrollViewController()
-    func content() -> LazyVStack {
-      LazyVStack(data: [Item(id: 1), Item(id: 2)], rowHeight: 40, controller: controller) { item in
+    func content() -> ScrollView {
+      ScrollView(data: [Item(id: 1), Item(id: 2)], rowHeight: 40, controller: controller) { item in
         Interactive(action: { activations += item.id }) { _ in Text(String(item.id)) }
       }
     }
@@ -455,8 +455,8 @@ struct StructuralInteractionTests {
     let harness = Harness()
     let controller = ScrollViewController()
     var activations = 0
-    func content() -> LazyVStack {
-      LazyVStack(data: (0..<20).map { Item(id: $0) }, rowHeight: 40, controller: controller) { item in
+    func content() -> ScrollView {
+      ScrollView(data: (0..<20).map { Item(id: $0) }, rowHeight: 40, controller: controller) { item in
         Button(String(item.id)) { activations += 1 }
       }
     }

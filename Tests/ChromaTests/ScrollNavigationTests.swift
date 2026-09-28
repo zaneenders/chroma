@@ -18,7 +18,7 @@ struct ScrollNavigationTests {
     let h = Harness()
     let controller = ScrollViewController()
     let rows = (0..<40).map { _ in FocusTarget() }
-    let content = LazyVStack(data: rows.indices, rowHeight: 20, controller: controller) { index in
+    let content = ScrollView(data: rows.indices, rowHeight: 20, controller: controller) { index in
       Button("Row \(index)") {}.focusTarget(rows[index])
     }
     h.render(content)
@@ -46,7 +46,7 @@ struct ScrollNavigationTests {
     let rows = Rows()
     var calls = 0
     let content = DeferredBlock {
-      LazyVStack(data: rows.ids, rowHeight: 20, controller: controller) { index in
+      ScrollView(data: rows.ids, rowHeight: 20, controller: controller) { index in
         Button("Row \(index)") { calls += 1 }
       }
     }

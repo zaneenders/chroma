@@ -4,6 +4,8 @@ public struct TextField: PrimitiveBlock {
   public var getText: @MainActor () -> String
   public var onChange: @MainActor (String) -> Void
   public var onSubmit: (@MainActor (String) -> Void)?
+  public var onEndEditing: (@MainActor () -> CommandResult)?
+  public var onTextEvent: (@MainActor (TextEditEvent, String) -> String?)?
   public var fontScale: Float
   public var padding: Float
   public var style: TextFieldStyle?
@@ -16,13 +18,17 @@ public struct TextField: PrimitiveBlock {
     style: TextFieldStyle? = nil,
     text getText: @escaping @MainActor () -> String,
     onChange: @escaping @MainActor (String) -> Void,
-    onSubmit: (@MainActor (String) -> Void)? = nil
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil
   ) {
     self.id = id
     self.placeholder = placeholder
     self.getText = getText
     self.onChange = onChange
     self.onSubmit = onSubmit
+    self.onEndEditing = onEndEditing
+    self.onTextEvent = onTextEvent
     self.fontScale = fontScale
     self.padding = padding
     self.style = style
@@ -35,11 +41,13 @@ public struct TextField: PrimitiveBlock {
     style: TextFieldStyle? = nil,
     text getText: @escaping @MainActor () -> String,
     onChange: @escaping @MainActor (String) -> Void,
-    onSubmit: (@MainActor (String) -> Void)? = nil
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil
   ) {
     self.init(
       placeholder, id: nil, fontScale: fontScale, padding: padding, style: style, text: getText, onChange: onChange,
-      onSubmit: onSubmit)
+      onSubmit: onSubmit, onEndEditing: onEndEditing, onTextEvent: onTextEvent)
   }
 
   public var focusRule: FocusRule { .control }
@@ -77,6 +85,7 @@ public struct TextField: PrimitiveBlock {
     }
     let state = context.textInputState(
       id: id, in: rect, text: getText, onChange: onChange, onSubmit: onSubmit,
+      onEndEditing: onEndEditing, onTextEvent: onTextEvent,
       pointerOffset: { point, viewportCaret in
         guard cellWidth > 0, cellWidth.isFinite else { return 0 }
         return Int(

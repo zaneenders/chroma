@@ -100,7 +100,7 @@ struct ReviewRegressionTests {
     let capture = Capture()
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
-    renderer.content = LazyVStack(
+    renderer.content = ScrollView(
       id: WidgetID("stack"), controller: controller,
       rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
     var redraws = 0
@@ -184,7 +184,7 @@ struct ReviewRegressionTests {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = LazyVStack(
+    renderer.content = ScrollView(
       id: WidgetID("stack"), controller: controller,
       rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
     renderer.render()
@@ -206,7 +206,7 @@ struct ReviewRegressionTests {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = LazyVStack(
+    renderer.content = ScrollView(
       id: WidgetID("stack"), controller: controller,
       rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
     ).onCommand(.application("resize")) {

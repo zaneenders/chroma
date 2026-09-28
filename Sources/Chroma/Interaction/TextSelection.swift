@@ -7,28 +7,27 @@ struct PlainTextLayout: Equatable {
   var lineHeight: Float
   var scale: Float
 
+  var columns: Int? = nil
+  var layout: TextLayout { TextLayout(text, columns: columns) }
+
   func hitTest(point: Point) -> Int? {
     guard rect.contains(point), cellWidth > 0, cellWidth.isFinite else { return nil }
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-    let row = max(0, min(lines.count - 1, Int((point.y - rect.minY) / max(1, lineHeight))))
-    let column = max(0, Int(((point.x - rect.minX) / cellWidth).rounded(.toNearestOrAwayFromZero)))
-    return lines.prefix(row).reduce(0) { $0 + $1.count + 1 } + min(column, lines[row].count)
+    return layout.offset(
+      row: Int((point.y - rect.minY) / max(1, lineHeight)),
+      column: Int(((point.x - rect.minX) / cellWidth).rounded(.toNearestOrAwayFromZero)))
   }
 
   func position(at offset: Int) -> Point {
-    let prefix = text.prefix(max(0, min(offset, text.count)))
-    let lines = prefix.split(separator: "\n", omittingEmptySubsequences: false)
+    let layout = layout
+    let offset = max(0, min(offset, layout.characterCount))
+    let row = layout.row(containing: offset)
     return Point(
-      x: rect.minX + Float(lines.last?.count ?? 0) * cellWidth,
-      y: rect.minY + Float(lines.count - 1) * lineHeight)
+      x: rect.minX + Float(offset - layout.lines[row].range.lowerBound) * cellWidth,
+      y: rect.minY + Float(row) * lineHeight)
   }
 
   func verticalOffset(_ offset: Int, direction: Int) -> Int {
-    let point = position(at: offset)
-    let y = point.y + Float(direction) * lineHeight
-    if y < rect.minY { return 0 }
-    if y >= rect.maxY { return text.count }
-    return hitTest(point: Point(x: min(point.x, rect.maxX - 0.01), y: y)) ?? offset
+    layout.verticalOffset(offset, direction: direction)
   }
 
   func textInRange(from: Int, to: Int) -> String {

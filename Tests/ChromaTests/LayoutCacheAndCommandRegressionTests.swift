@@ -11,7 +11,7 @@ struct LayoutCacheAndCommandRegressionTests {
     func frame(height: Float) {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
-      let stack = LazyVStack(
+      let stack = ScrollView(
         id: id, controller: controller,
         rows: [
           .init(id: WidgetID("stable-row"), content: Color.white.sizing(y: .fixed(height)))
@@ -55,13 +55,13 @@ struct LayoutCacheAndCommandRegressionTests {
     let interaction = Interaction()
     let controller = ScrollViewController()
     let id = WidgetID("scroll")
-    var row = LazyVStack.Row(
+    var row = ScrollView.Row(
       id: WidgetID("row"), content: Color.white.sizing(y: .fixed(40)))
     func frame() {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(id: id, controller: controller, rows: [row]),
+        ScrollView(id: id, controller: controller, rows: [row]),
         into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
         context: BlockContext(interaction: interaction))
       interaction.endFrame()
@@ -76,12 +76,12 @@ struct LayoutCacheAndCommandRegressionTests {
     let interaction = Interaction()
     let controller = ScrollViewController()
     let id = WidgetID("scroll")
-    let rows = [LazyVStack.Row(id: WidgetID("row"), content: Text("row"))]
+    let rows = [ScrollView.Row(id: WidgetID("row"), content: Text("row"))]
     func frame(scale: Float) {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(id: id, controller: controller, rows: rows),
+        ScrollView(id: id, controller: controller, rows: rows),
         into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
         context: BlockContext(interaction: interaction, textScale: scale))
       interaction.endFrame()

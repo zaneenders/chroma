@@ -226,7 +226,7 @@ private struct UUIDList: Block {
             state.uuidScrollController.scrollToBottom()
           }
         }
-        LazyVStack(
+        ScrollView(
           data: state.identifiers.indices, rowHeight: 48, spacing: 5,
           controller: state.uuidScrollController
         ) { index in

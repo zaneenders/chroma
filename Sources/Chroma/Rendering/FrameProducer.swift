@@ -38,14 +38,15 @@ package final class FrameProducer {
   private weak var interaction: Interaction?
 
   private let clock: @MainActor () -> Double
-  package private(set) var needsAnimationFrame = false
+  package private(set) var nextAnimationDeadline: Double?
+  package var needsAnimationFrame: Bool { nextAnimationDeadline != nil }
 
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
     self.clock = clock
   }
 
   package func reset() {
-    needsAnimationFrame = false
+    nextAnimationDeadline = nil
     interaction?.resetRegistrations()
     interaction = nil
     resetTracking()
@@ -105,7 +106,7 @@ package final class FrameProducer {
       interaction.endFrame()
       interaction.refreshingRegistrations = false
     }
-    interaction.animationRequested = false
+    interaction.nextAnimationDeadline = nil
     interaction.beginFrame(input: input)
     let subscription = FrameTrackingSubscription(onChange)
     self.subscription = subscription
@@ -129,7 +130,7 @@ package final class FrameProducer {
     interaction.endFrame()
     var result = drawList
     interaction.paintNavigation(into: &result, theme: context.theme)
-    needsAnimationFrame = interaction.animationRequested
+    nextAnimationDeadline = interaction.nextAnimationDeadline
     return result
   }
 }

@@ -1,4 +1,22 @@
 public struct ScrollView: PrimitiveBlock {
+  public struct Row: Identifiable {
+    public let id: AnyHashable
+    public var content: any Block {
+      didSet { measurementIdentity = LazyRowIdentity() }
+    }
+    // Copies retain measurements; replacing content or constructing a row invalidates them.
+    var measurementIdentity = LazyRowIdentity()
+    let key: StructuralKey
+
+    public init(id: some Hashable & Sendable, content: any Block) {
+      self.id = AnyHashable(id)
+      self.key = StructuralKey(id)
+      self.content = content
+    }
+  }
+
+  private var virtualRows: VirtualRows?
+
   var id: WidgetID?
   public var name: String? = nil
   public var showsIndicator: Bool
@@ -32,6 +50,119 @@ public struct ScrollView: PrimitiveBlock {
     self.name = name
   }
 
+  init(
+    id: WidgetID?,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    rows: [Row]
+  ) {
+    self.id = id
+    self.showsIndicator = showsIndicator
+    self.sticksToBottom = sticksToBottom
+    self.controller = controller
+    self.content = EmptyBlock()
+    self.virtualRows = VirtualRows(
+      id: id, spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller,
+      rows: rows)
+  }
+
+  public init(
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    rows: [Row]
+  ) {
+    self.id = nil
+    self.showsIndicator = showsIndicator
+    self.sticksToBottom = sticksToBottom
+    self.controller = controller
+    self.content = EmptyBlock()
+    self.virtualRows = VirtualRows(
+      spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller,
+      rows: rows)
+  }
+
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
+    id: WidgetID?,
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) {
+    self.id = id
+    self.showsIndicator = showsIndicator
+    self.sticksToBottom = sticksToBottom
+    self.controller = controller
+    self.content = EmptyBlock()
+    self.virtualRows = VirtualRows(
+      id: id, data: data, rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
+      sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
+  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) {
+    self.id = nil
+    self.showsIndicator = showsIndicator
+    self.sticksToBottom = sticksToBottom
+    self.controller = controller
+    self.content = EmptyBlock()
+    self.virtualRows = VirtualRows(
+      data: data, rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
+      sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
+    id: WidgetID?,
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    self.id = id
+    self.showsIndicator = showsIndicator
+    self.sticksToBottom = sticksToBottom
+    self.controller = controller
+    self.content = EmptyBlock()
+    self.virtualRows = VirtualRows(
+      id: id, data: data, rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
+      sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
+  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
+    data: Data,
+    rowHeight: Float,
+    spacing: Float = 0,
+    showsIndicator: Bool = true,
+    sticksToBottom: Bool = false,
+    controller: ScrollViewController,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    self.id = nil
+    self.showsIndicator = showsIndicator
+    self.sticksToBottom = sticksToBottom
+    self.controller = controller
+    self.content = EmptyBlock()
+    self.virtualRows = VirtualRows(
+      data: data, rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
+      sticksToBottom: sticksToBottom, controller: controller, content: content)
+  }
+
   public var focusRule: FocusRule { .container }
 
   @MainActor public var expandsHorizontally: Bool { true }
@@ -40,6 +171,14 @@ public struct ScrollView: PrimitiveBlock {
   @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    if var rows = virtualRows {
+      rows.id = id
+      rows.showsIndicator = showsIndicator
+      rows.sticksToBottom = sticksToBottom
+      if let controller { rows.controller = controller }
+      rows.draw(into: &drawList, in: rect, context: context)
+      return
+    }
     let id = id ?? context.widgetID
     let interaction = context.interaction
     controller?.restore(id: id, interaction: interaction)
@@ -50,65 +189,13 @@ public struct ScrollView: PrimitiveBlock {
         width: rect.size.width,
         height: Float.greatestFiniteMagnitude
       ), context: context)
+    let offsets = interaction.resolveScroll(
+      id: id, viewport: rect, contentSize: contentSize, controller: controller,
+      sticksToBottom: sticksToBottom, horizontal: true)
+    let offset = offsets.y
+    let horizontalOffset = offsets.x
     let maximumOffset = max(0, contentSize.height - rect.size.height)
     let maximumHorizontalOffset = max(0, contentSize.width - rect.size.width)
-    let previousLimit = interaction.scrollLimit(for: id)
-    var offset = min(interaction.scrollOffset(for: id), maximumOffset)
-    var horizontalOffset = min(
-      interaction.horizontalScrollOffset(for: id), maximumHorizontalOffset)
-    let wasAtBottom = abs(offset - previousLimit) <= 1
-
-    let reveal = interaction.pendingScrollReveals.removeValue(forKey: id)
-    if !interaction.refreshingRegistrations, let request = controller?.request {
-      if interaction.scrollDelta(in: rect, horizontal: true) != .zero, case .visible = request {
-        controller?.request = nil
-      } else {
-        switch request {
-        case .top: offset = 0
-        case .bottom: offset = maximumOffset
-        case .offset(let requested): offset = requested
-        case .visible(let target):
-          if target.minY < rect.minY {
-            offset -= rect.minY - target.minY
-          } else if target.maxY > rect.maxY {
-            offset += target.maxY - rect.maxY
-          }
-          if target.size.width <= rect.size.width {
-            if target.minX < rect.minX {
-              horizontalOffset -= rect.minX - target.minX
-            } else if target.maxX > rect.maxX {
-              horizontalOffset += target.maxX - rect.maxX
-            }
-          }
-        }
-        controller?.request = nil
-      }
-    } else if sticksToBottom && wasAtBottom && maximumOffset > previousLimit {
-      offset = maximumOffset
-    }
-    if let reveal {
-      if reveal.minY < rect.minY {
-        offset -= rect.minY - reveal.minY
-      } else if reveal.maxY > rect.maxY {
-        offset += reveal.maxY - rect.maxY
-      }
-      if reveal.size.width <= rect.size.width {
-        if reveal.minX < rect.minX {
-          horizontalOffset -= rect.minX - reveal.minX
-        } else if reveal.maxX > rect.maxX {
-          horizontalOffset += reveal.maxX - rect.maxX
-        }
-      }
-    }
-
-    offset = min(max(0, offset), maximumOffset)
-    horizontalOffset = min(max(0, horizontalOffset), maximumHorizontalOffset)
-    controller?.offset = offset
-    controller?.horizontalOffset = horizontalOffset
-    interaction.setScrollOffset(offset, for: id)
-    interaction.setHorizontalScrollOffset(horizontalOffset, for: id)
-    interaction.setScrollLimit(maximumOffset, for: id)
-    interaction.setHorizontalScrollLimit(maximumHorizontalOffset, for: id)
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)

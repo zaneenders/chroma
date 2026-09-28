@@ -12,7 +12,7 @@ package final class Interaction {
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
   @ObservationIgnored var animationFrame = AnimationFrame(timestamp: 0)
-  @ObservationIgnored var animationRequested = false
+  @ObservationIgnored var nextAnimationDeadline: Double?
 
   package let textSelection = TextSelectionManager()
 
@@ -221,7 +221,7 @@ package final class Interaction {
     scrollRows = [:]
     scrollRowKeys = [:]
     scrollLayouts = [:]
-    animationRequested = false
+    nextAnimationDeadline = nil
     tree = nil
     navigation = nil
     navigationPath = []

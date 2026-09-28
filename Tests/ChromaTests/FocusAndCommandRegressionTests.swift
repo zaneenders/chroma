@@ -234,7 +234,7 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let controller = ScrollViewController()
     let listID = WidgetID("plain-row-list")
-    let content = LazyVStack(id: listID, data: 0..<20, rowHeight: 25, controller: controller) { index in
+    let content = ScrollView(id: listID, data: 0..<20, rowHeight: 25, controller: controller) { index in
       Text("Row \(index)")
     }
 
@@ -384,7 +384,7 @@ struct FocusAndCommandRegressionTests {
 
     func content() -> any Block {
       VStack {
-        LazyVStack(id: listID, data: 0...40, rowHeight: 20, controller: controller) { index in
+        ScrollView(id: listID, data: 0...40, rowHeight: 20, controller: controller) { index in
           if index < rows.count {
             Button("Row \(index)") {}.focusTarget(rows[index])
           } else if fieldIsPresent {

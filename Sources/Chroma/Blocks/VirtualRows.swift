@@ -1,26 +1,11 @@
-public struct LazyVStack: PrimitiveBlock {
-  public struct Row: Identifiable {
-    public let id: AnyHashable
-    public var content: any Block {
-      didSet { measurementIdentity = LazyRowIdentity() }
-    }
-    // Copies retain measurements; replacing content or constructing a row invalidates them.
-    var measurementIdentity = LazyRowIdentity()
-    let key: StructuralKey
-
-    public init(id: some Hashable & Sendable, content: any Block) {
-      self.id = AnyHashable(id)
-      self.key = StructuralKey(id)
-      self.content = content
-    }
-  }
+struct VirtualRows: PrimitiveBlock {
 
   var id: WidgetID?
-  public var spacing: Float
-  public var showsIndicator: Bool
-  public var sticksToBottom: Bool
-  public var controller: ScrollViewController
-  public var rows: [Row]
+  var spacing: Float
+  var showsIndicator: Bool
+  var sticksToBottom: Bool
+  var controller: ScrollViewController
+  var rows: [ScrollView.Row]
   private var uniformRows: UniformRows?
 
   private struct UniformRows {
@@ -36,7 +21,7 @@ public struct LazyVStack: PrimitiveBlock {
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
     controller: ScrollViewController,
-    rows: [Row]
+    rows: [ScrollView.Row]
   ) {
     self.id = id
     self.spacing = spacing
@@ -46,12 +31,12 @@ public struct LazyVStack: PrimitiveBlock {
     self.rows = rows
   }
 
-  public init(
+  init(
     spacing: Float = 0,
     showsIndicator: Bool = true,
     sticksToBottom: Bool = false,
     controller: ScrollViewController,
-    rows: [Row]
+    rows: [ScrollView.Row]
   ) {
     self.init(
       id: nil, spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller,
@@ -78,7 +63,7 @@ public struct LazyVStack: PrimitiveBlock {
     }
   }
 
-  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
     data: Data,
     rowHeight: Float,
     spacing: Float = 0,
@@ -114,7 +99,7 @@ public struct LazyVStack: PrimitiveBlock {
     }
   }
 
-  @MainActor public init<Data: RandomAccessCollection, Content: Block>(
+  @MainActor init<Data: RandomAccessCollection, Content: Block>(
     data: Data,
     rowHeight: Float,
     spacing: Float = 0,
@@ -128,13 +113,13 @@ public struct LazyVStack: PrimitiveBlock {
       showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
   }
 
-  public var focusRule: FocusRule { .container }
+  var focusRule: FocusRule { .container }
 
-  @MainActor public var expandsHorizontally: Bool { true }
-  @MainActor public var expandsVertically: Bool { true }
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+  @MainActor var expandsHorizontally: Bool { true }
+  @MainActor var expandsVertically: Bool { true }
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let id = id ?? context.widgetID
     let interaction = context.interaction
     controller.restore(id: id, interaction: interaction)
@@ -162,44 +147,11 @@ public struct LazyVStack: PrimitiveBlock {
         controller.lazyStackCache.rowSizes.reduce(0) { $0 + $1.height }
         + spacing * Float(max(0, rows.count - 1))
     }
+    let offset = interaction.resolveScroll(
+      id: id, viewport: rect, contentSize: Size(width: rect.size.width, height: contentHeight),
+      controller: controller, sticksToBottom: sticksToBottom
+    ).y
     let maximumOffset = max(0, contentHeight - rect.size.height)
-    let previousLimit = interaction.scrollLimit(for: id)
-    var offset = min(interaction.scrollOffset(for: id), maximumOffset)
-    let wasAtBottom = abs(offset - previousLimit) <= 1
-
-    let reveal = interaction.pendingScrollReveals.removeValue(forKey: id)
-    if !interaction.refreshingRegistrations, let request = controller.request {
-      if interaction.scrollDelta(in: rect) != .zero, case .visible = request {
-        controller.request = nil
-      } else {
-        switch request {
-        case .top: offset = 0
-        case .bottom: offset = maximumOffset
-        case .offset(let requested): offset = requested
-        case .visible(let target):
-          if target.minY < rect.minY {
-            offset -= rect.minY - target.minY
-          } else if target.maxY > rect.maxY {
-            offset += target.maxY - rect.maxY
-          }
-        }
-        controller.request = nil
-      }
-    } else if sticksToBottom && wasAtBottom && maximumOffset > previousLimit {
-      offset = maximumOffset
-    }
-    if let reveal {
-      if reveal.minY < rect.minY {
-        offset -= rect.minY - reveal.minY
-      } else if reveal.maxY > rect.maxY {
-        offset += reveal.maxY - rect.maxY
-      }
-    }
-
-    offset = min(max(0, offset), maximumOffset)
-    controller.offset = offset
-    interaction.setScrollOffset(offset, for: id)
-    interaction.setScrollLimit(maximumOffset, for: id)
 
     drawList.pushClip(rect)
     interaction.pushClip(rect)
@@ -272,13 +224,14 @@ public struct LazyVStack: PrimitiveBlock {
     interaction.popClip()
 
     if showsIndicator && maximumOffset > 0 && rect.size.height > 0 {
-      let trackWidth: Float = 3
-      let thumbHeight = max(12, rect.size.height * rect.size.height / contentHeight)
+      let style = context.theme.scrollView
+      let trackWidth = style.indicatorThickness
+      let thumbHeight = max(style.minimumThumbLength, rect.size.height * rect.size.height / contentHeight)
       let travel = rect.size.height - thumbHeight
       let thumbY = rect.minY + travel * (offset / maximumOffset)
       drawList.fillRect(
         Rect(x: rect.maxX - trackWidth, y: thumbY, width: trackWidth, height: thumbHeight),
-        color: Color(r: 1, g: 1, b: 1, a: 0.45)
+        color: style.indicator
       )
     }
     drawList.popClip()

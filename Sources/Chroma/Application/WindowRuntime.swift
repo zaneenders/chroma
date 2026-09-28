@@ -10,6 +10,7 @@ package final class WindowRuntime {
   }
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
+  package var nextAnimationDeadline: Double? { producer.nextAnimationDeadline }
   package var needsAnimationFrame: Bool { producer.needsAnimationFrame }
   package var context: BlockContext { BlockContext(interaction: interaction) }
 

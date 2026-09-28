@@ -3,6 +3,7 @@ public struct Text: PrimitiveBlock {
   public var color: Color
   public var scale: Float
   public var isSelectable: Bool = false
+  public var wraps = false
   var selectionID: WidgetID?
 
   public var focusRule: FocusRule { .standard }
@@ -36,9 +37,26 @@ public struct Text: PrimitiveBlock {
     return copy
   }
 
+  public func wrapping(_ enabled: Bool = true) -> Text {
+    var copy = self
+    copy.wraps = enabled
+    return copy
+  }
+
+  @MainActor private func columns(width: Float, context: BlockContext) -> Int? {
+    let cell = context.fontMetrics.cellAdvance * scale * context.textScale
+    guard wraps, width.isFinite, cell.isFinite, cell > 0 else { return nil }
+    return Int(min(Float(Int32.max), max(1, width / cell)))
+  }
+
   public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    context.interaction.fontMetrics.measure(
-      content, scale: scale * context.textScale)
+    guard wraps else {
+      return context.fontMetrics.measure(content, scale: scale * context.textScale)
+    }
+    let layout = TextLayout(content, columns: columns(width: proposal.width, context: context))
+    return Size(
+      width: proposal.width,
+      height: Float(layout.lines.count) * context.fontMetrics.lineAdvance * scale * context.textScale)
   }
 
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
@@ -51,7 +69,7 @@ public struct Text: PrimitiveBlock {
       let lineHeight = metrics.lineAdvance * effectiveScale
       let layout = PlainTextLayout(
         text: content, rect: rect, cellWidth: cellWidth,
-        lineHeight: lineHeight, scale: effectiveScale)
+        lineHeight: lineHeight, scale: effectiveScale, columns: columns(width: rect.size.width, context: context))
       interaction.textSelection.layoutRegistry.register(id, layout: layout)
 
       var range: Range<Int>?
@@ -69,11 +87,11 @@ public struct Text: PrimitiveBlock {
       if range == nil, let selection = interaction.textSelection.selection(for: id) {
         range = selection.from..<selection.to
       }
-      drawText(into: &drawList, at: rect.origin, color: color, scale: effectiveScale, context: context)
+      drawText(into: &drawList, in: rect, color: color, scale: effectiveScale, context: context)
       if let range, !range.isEmpty {
-        var start = 0
-        for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
-          let end = start + line.count
+        for line in layout.layout.lines {
+          let start = line.range.lowerBound
+          let end = line.range.upperBound
           let lower = max(start, range.lowerBound)
           let upper = min(end, range.upperBound)
           if lower < upper {
@@ -84,11 +102,10 @@ public struct Text: PrimitiveBlock {
             drawList.fillRect(highlight, color: context.theme.focus.selectionBackground)
             drawList.pushClip(highlight)
             drawText(
-              into: &drawList, at: rect.origin, color: context.theme.focus.selectionForeground, scale: effectiveScale,
+              into: &drawList, in: rect, color: context.theme.focus.selectionForeground, scale: effectiveScale,
               context: context)
             drawList.popClip()
           }
-          start = end + 1
         }
       } else if let caret, context.caretVisible {
         let point = layout.position(at: caret)
@@ -96,17 +113,19 @@ public struct Text: PrimitiveBlock {
       }
       return
     }
-    drawText(into: &drawList, at: rect.origin, color: color, scale: effectiveScale, context: context)
+    drawText(into: &drawList, in: rect, color: color, scale: effectiveScale, context: context)
   }
   @MainActor private func drawText(
-    into drawList: inout DrawList, at origin: Point, color: Color, scale: Float, context: BlockContext
+    into drawList: inout DrawList, in rect: Rect, color: Color, scale: Float, context: BlockContext
   ) {
-    for (row, line) in content.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+    for (row, line) in TextLayout(content, columns: columns(width: rect.size.width, context: context)).lines
+      .enumerated()
+    {
       drawList.text(
-        String(line),
+        line.text,
         at: Point(
-          x: origin.x,
-          y: origin.y + Float(row) * context.fontMetrics.lineAdvance * scale), color: color, scale: scale)
+          x: rect.minX,
+          y: rect.minY + Float(row) * context.fontMetrics.lineAdvance * scale), color: color, scale: scale)
     }
   }
 

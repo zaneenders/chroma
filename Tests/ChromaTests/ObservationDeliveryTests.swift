@@ -11,7 +11,7 @@ struct ObservationDeliveryTests {
     let capture = ReviewRegressionTests.Capture()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = LazyVStack(
+    renderer.content = ScrollView(
       id: WidgetID("stack"), controller: ScrollViewController(),
       rows: [
         .init(

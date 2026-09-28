@@ -37,7 +37,7 @@ struct IdentityDiagnosticsTests {
   @Test func duplicateLazyDataKeysFail() async {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
-        _ = LazyVStack(
+        _ = ScrollView(
           data: [Item(id: 1), Item(id: 1)], rowHeight: 20,
           controller: ScrollViewController()
         ) { _ in Text("Row") }
@@ -51,7 +51,7 @@ struct IdentityDiagnosticsTests {
     await #expect(processExitsWith: .success) {
       await MainActor.run {
         Self.draw(
-          LazyVStack(
+          ScrollView(
             controller: ScrollViewController(),
             rows: [
               .init(id: Int(1), content: Text("Int")),
@@ -65,7 +65,7 @@ struct IdentityDiagnosticsTests {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
         Self.draw(
-          LazyVStack(
+          ScrollView(
             controller: ScrollViewController(),
             rows: [
               .init(id: 1, content: Text("First")),

@@ -290,16 +290,16 @@ struct StructuralPathTests {
     func draw(_ ids: [Int]) -> [String: StructuralPath] {
       recorder.measured = [:]
       recorder.drawn = [:]
-      let stack: LazyVStack
+      let stack: ScrollView
       if uniform {
-        stack = LazyVStack(
+        stack = ScrollView(
           id: WidgetID("list"), data: ids.map { Item(id: $0) },
           rowHeight: 10, controller: controller
         ) { item in
           Probe(name: String(item.id), recorder: recorder)
         }
       } else {
-        stack = LazyVStack(
+        stack = ScrollView(
           id: WidgetID("list"), controller: controller,
           rows: ids.map { .init(id: WidgetID(String($0)), content: Probe(name: String($0), recorder: recorder)) })
       }

@@ -156,13 +156,15 @@ public struct BlockContext {
     onEndEditing: (@MainActor () -> CommandResult)? = nil,
     onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
     pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
-    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
+    submitInsertsNewline: Bool = false
   ) -> TextInputState {
     interaction.registerFocusTargets(focusTargets, id: id)
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored)
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored,
+      submitInsertsNewline: submitInsertsNewline)
   }
 
   public func textInputState(
@@ -173,14 +175,16 @@ public struct BlockContext {
     onEndEditing: (@MainActor () -> CommandResult)? = nil,
     onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
     pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
-    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
+    submitInsertsNewline: Bool = false
   ) -> TextInputState {
     let id = widgetID
     interaction.registerFocusTargets(focusTargets, id: id)
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored)
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored,
+      submitInsertsNewline: submitInsertsNewline)
   }
 
   ///

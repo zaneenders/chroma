@@ -204,7 +204,7 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(id: scrollID, data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller)
+        ScrollView(id: scrollID, data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller)
         { index in
           Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
             RowContent(height: 10, color: .white)
@@ -235,7 +235,7 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(id: scrollID, data: 0..<4, rowHeight: 10, showsIndicator: false, controller: controller) { index in
+        ScrollView(id: scrollID, data: 0..<4, rowHeight: 10, showsIndicator: false, controller: controller) { index in
           Interactive(id: WidgetID("row-\(index)"), action: {}) { phase in
             log.phases[index] = phase
             return RowContent(height: 10, color: .white)
@@ -265,7 +265,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
     let heights: [Float] = [8, 18, 6, 15, 9]
     let rows = heights.enumerated().map { index, height in
-      LazyVStack.Row(
+      ScrollView.Row(
         id: index,
         content: Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
           RowContent(height: height, color: .white)
@@ -276,7 +276,7 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(id: scrollID, spacing: 7, showsIndicator: false, controller: controller, rows: rows),
+        ScrollView(id: scrollID, spacing: 7, showsIndicator: false, controller: controller, rows: rows),
         into: &list, in: viewport, context: context)
       interaction.endFrame()
     }
@@ -297,7 +297,7 @@ struct ScrollViewTests {
     let context = BlockContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
-    let view = LazyVStack(
+    let view = ScrollView(
       id: scrollID, data: 0..<10, rowHeight: 10, spacing: 5, showsIndicator: false, controller: controller
     ) { index in
       Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
@@ -360,7 +360,7 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(id: scrollID, data: 0..<10, rowHeight: 10, showsIndicator: false, controller: controller) { _ in
+        ScrollView(id: scrollID, data: 0..<10, rowHeight: 10, showsIndicator: false, controller: controller) { _ in
           Interactive(action: {}) { _ in
             RowContent(height: 10, color: .white)
           }
@@ -440,7 +440,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
     let view: any Block =
       lazy
-      ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+      ? ScrollView(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
         Text("Row")
       }
       : ScrollView(id: scrollID, controller: controller) {
@@ -474,7 +474,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
     let view: any Block =
       lazy
-      ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+      ? ScrollView(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
         Text("Row")
       }
       : ScrollView(id: scrollID, controller: controller) {
@@ -498,7 +498,7 @@ struct ScrollViewTests {
     let context = BlockContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
-    let view = LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+    let view = ScrollView(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
       Text("Row")
     }
     controller.scrollToVisible(Rect(x: 0, y: 500, width: 10, height: 10))
@@ -523,7 +523,7 @@ struct ScrollViewTests {
         let controller = ScrollViewController()
         let scroll: any Block =
           lazy
-          ? LazyVStack(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
+          ? ScrollView(id: scrollID, data: 0..<100, rowHeight: 10, controller: controller) { _ in
             Text("Row")
           }
           : ScrollView(id: scrollID, controller: controller) {
@@ -627,7 +627,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
     let counter = DrawCounter()
     let rows = (0..<10_000).map { index in
-      LazyVStack.Row(
+      ScrollView.Row(
         id: WidgetID("row-\(index)"),
         content: CountedRow(index: index, height: 10, counter: counter))
     }
@@ -636,7 +636,7 @@ struct ScrollViewTests {
       let context = BlockContext(interaction: interaction)
       interaction.beginFrame(input: InputState())
       var list = DrawList()
-      let view = LazyVStack(
+      let view = ScrollView(
         id: scrollID, controller: controller, rows: rows)
       BlockEngine.draw(view, into: &list, in: viewport, context: context)
       interaction.endFrame()
@@ -680,7 +680,7 @@ struct ScrollViewTests {
       counter.drawn = []
       interaction.beginFrame(input: InputState())
       var list = DrawList()
-      let stack = LazyVStack(
+      let stack = ScrollView(
         id: scrollID, data: data, rowHeight: 10, spacing: spacing,
         controller: controller
       ) { index in row(index) }
@@ -723,7 +723,7 @@ struct ScrollViewTests {
     let counter = DrawCounter()
 
     let retainedRows = (0..<5).map { index in
-      LazyVStack.Row(
+      ScrollView.Row(
         id: WidgetID("row-\(index)"),
         content: CountedRow(index: index, height: 10, counter: counter))
     }
@@ -733,7 +733,7 @@ struct ScrollViewTests {
       var list = DrawList()
       let rows = indices.map { retainedRows[$0] }
       BlockEngine.draw(
-        LazyVStack(id: scrollID, controller: controller, rows: rows),
+        ScrollView(id: scrollID, controller: controller, rows: rows),
         into: &list, in: Rect(x: 0, y: 0, width: width, height: 100),
         context: BlockContext(interaction: interaction))
       interaction.endFrame()
@@ -762,18 +762,18 @@ struct ScrollViewTests {
     let context = BlockContext()
     let controller = ScrollViewController()
     let counter = DrawCounter()
-    let first = LazyVStack.Row(
+    let first = ScrollView.Row(
       id: Int(1), content: CountedRow(index: 0, height: 10, counter: counter))
-    let second = LazyVStack.Row(
+    let second = ScrollView.Row(
       id: Int64(1), content: CountedRow(index: 1, height: 20, counter: counter))
 
-    func frame(_ rows: [LazyVStack.Row]) {
+    func frame(_ rows: [ScrollView.Row]) {
       counter.measured = []
       counter.drawn = []
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()
       BlockEngine.draw(
-        LazyVStack(controller: controller, rows: rows),
+        ScrollView(controller: controller, rows: rows),
         into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
       context.interaction.endFrame()
     }
