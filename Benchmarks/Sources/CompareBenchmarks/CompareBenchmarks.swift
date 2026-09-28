@@ -38,9 +38,8 @@ struct BenchmarkRuns {
       for path in reports {
         let name = path.lastPathComponent
         guard let report = try JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any],
-          let profiling = report["profilingEnabled"] as? Bool, !profiling,
           let timings = report["timings"] as? [String: [String: Double]], !timings.isEmpty
-        else { throw ComparisonError("Invalid or profiled report: \(name)") }
+        else { throw ComparisonError("Invalid report: \(name)") }
         var config: [String: Any] = [:]
         for key in Self.configKeys {
           guard let value = report[key] else { throw ComparisonError("Missing \(key): \(name)") }

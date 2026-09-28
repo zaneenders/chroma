@@ -112,7 +112,6 @@ public struct ImageAlignment: Equatable, Sendable, Codable {
 
   public static let topLeading = ImageAlignment(x: 0, y: 0)
   public static let top = ImageAlignment(x: 0.5, y: 0)
-  public static let topTrailing = ImageAlignment(x: 1, y: 0)
   public static let leading = ImageAlignment(x: 0, y: 0.5)
   public static let center = ImageAlignment(x: 0.5, y: 0.5)
   public static let trailing = ImageAlignment(x: 1, y: 0.5)

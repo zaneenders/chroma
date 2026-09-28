@@ -108,12 +108,6 @@ public struct RenderContext {
     return copy
   }
 
-  public func withTextScale(_ scale: Float) -> RenderContext {
-    var copy = self
-    copy.textScale = scale
-    return copy
-  }
-
   func buttonState(
     id: WidgetID, in rect: Rect, role: ActionRole = .normal,
     action: (@MainActor () -> Void)? = nil

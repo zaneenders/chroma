@@ -30,9 +30,6 @@ import Testing
   ] {
     let frame = FrameObservation(drawList: DrawList(commands: commands), viewport: Size(width: 40, height: 30))
     #expect(throws: SceneCaptureError.invalidFrame) { try SceneCapture.encode(frame) }
-    let data = try JSONEncoder().encode(frame)
-    let document = Data("{\"version\":2,\"frame\":".utf8) + data + Data("}".utf8)
-    #expect(throws: SceneCaptureError.invalidFrame) { try SceneCapture.decode(document) }
   }
   for frame in [
     FrameObservation(drawList: DrawList(), viewport: .zero),
@@ -46,6 +43,9 @@ import Testing
   let frame = FrameObservation(drawList: DrawList(), viewport: Size(width: 40, height: 30))
   let data = try SceneCapture.encode(frame)
   var document = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+  document["version"] = 2
+  let legacy = try JSONSerialization.data(withJSONObject: document)
+  #expect(throws: SceneCaptureError.unsupportedVersion(2)) { try SceneCapture.decode(legacy) }
   document["version"] = 999
   let unknown = try JSONSerialization.data(withJSONObject: document)
   #expect(throws: SceneCaptureError.unsupportedVersion(999)) { try SceneCapture.decode(unknown) }
@@ -125,17 +125,4 @@ import Testing
     let malformed = try JSONSerialization.data(withJSONObject: document)
     #expect(throws: SceneCaptureError.invalidFrame) { try SceneCapture.decode(malformed) }
   }
-}
-
-@Test func captureReadsVersionTwoJSON() throws {
-  let image = try ImageResource(id: ImageID("legacy"), width: 1, height: 1, rgba8: Data([1, 2, 3, 255]))
-  var list = DrawList()
-  list.image(image, in: Rect(x: 0, y: 0, width: 20, height: 20))
-  let frame = FrameObservation(
-    drawList: list, viewport: Size(width: 40, height: 30), rasterScale: Point(x: 2, y: 2))
-  let data = Data("{\"version\":2,\"frame\":".utf8) + (try JSONEncoder().encode(frame)) + Data("}".utf8)
-  let decoded = try SceneCapture.decode(data)
-  #expect(decoded.drawList.commands == list.commands)
-  #expect(decoded.viewport == frame.viewport)
-  #expect(decoded.rasterScale == frame.rasterScale)
 }
