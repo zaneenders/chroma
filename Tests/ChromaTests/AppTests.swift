@@ -56,7 +56,7 @@ private final class FailingAppRenderer: Chroma.Host {
   var content: (any Block)?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
-  let interaction = Interaction()
+  let runtime = WindowRuntime()
   let error: BackendError
 
   init(error: BackendError) {
@@ -74,7 +74,7 @@ private final class AppRenderer: Chroma.Host {
   var content: (any Block)?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
-  let interaction = Interaction()
+  let runtime = WindowRuntime()
   var title: String?
   var minimumRefreshRate: Double?
 

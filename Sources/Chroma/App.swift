@@ -27,7 +27,7 @@ extension App {
   @MainActor
   package func run(on host: any Host) throws {
     host.setMinimumRefreshRate(minimumRefreshRate)
-    host.setKeyBindings(keyBindings)
+    host.runtime.keyBindings = keyBindings
     host.frameObserver = frameObserver
     host.content = DeferredBlock { self.body }
     try host.run(title: "\(title) — \(host.name)")

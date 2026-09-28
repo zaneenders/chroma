@@ -125,6 +125,6 @@ private final class FakeRenderer: Host {
   var content: (any Block)?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
-  let interaction = Interaction()
+  let runtime = WindowRuntime()
   func run(title: String) {}
 }

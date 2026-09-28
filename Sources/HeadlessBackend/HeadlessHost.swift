@@ -15,21 +15,24 @@ public final class HeadlessHost: Host {
   public let name = "Headless"
 
   public var content: (any Block)? {
-    didSet { frameProducer.reset() }
+    get { runtime.content }
+    set {
+      runtime.content = newValue
+    }
   }
-  private let frameProducer = FrameProducer()
-
-  public var needsAnimationFrame: Bool { frameProducer.needsAnimationFrame }
-
+  public var frameObserver: FrameObserver? {
+    get { runtime.frameObserver }
+    set { runtime.frameObserver = newValue }
+  }
+  public var needsAnimationFrame: Bool { runtime.needsAnimationFrame }
   public var onRedrawRequested: (@MainActor () -> Void)?
-  public var frameObserver: FrameObserver?
   public var onClose: (() -> Void)?
   public var viewport: Size
 
   public private(set) var title: String?
   public private(set) var lastFrame: HeadlessFrame?
 
-  package let interaction = Interaction()
+  package let runtime = WindowRuntime()
 
   public init(size: Size = Size(width: 800, height: 600)) {
     self.viewport = size
@@ -42,11 +45,11 @@ public final class HeadlessHost: Host {
 
   @discardableResult
   public func render(input: InputState = InputState()) -> HeadlessFrame {
-    let drawList = frameProducer.render(
-      content: content, viewport: viewport, input: input, context: context,
+    let drawList = runtime.render(
+      viewport: viewport, input: input,
       onChange: { [weak self] in self?.onRedrawRequested?() })
     _ = interaction.consumeRedrawRequest()
-    frameObserver?(FrameObservation(drawList: drawList, viewport: viewport))
+    runtime.observe(drawList, viewport: viewport)
 
     let frame = HeadlessFrame(viewport: viewport, commands: drawList.commands)
     lastFrame = frame
@@ -54,7 +57,7 @@ public final class HeadlessHost: Host {
   }
 
   public func close() {
-    frameProducer.reset()
+    runtime.reset()
     onClose?()
   }
 }

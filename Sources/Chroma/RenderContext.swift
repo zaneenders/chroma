@@ -219,7 +219,7 @@ public struct RenderContext {
 }
 
 extension Host {
-  package var context: RenderContext { RenderContext(interaction: interaction) }
+  package var context: RenderContext { runtime.context }
 }
 
 extension RenderContext {

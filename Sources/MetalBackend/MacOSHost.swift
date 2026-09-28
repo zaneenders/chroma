@@ -16,20 +16,22 @@ extension MacOSApp {
 public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDelegate {
   public let name = "Metal"
   public var content: (any Block)? {
-    didSet {
-      producer.reset()
+    get { runtime.content }
+    set {
+      runtime.content = newValue
       view.needsDisplay = true
     }
   }
-  public var frameObserver: FrameObserver?
+  public var frameObserver: FrameObserver? {
+    get { runtime.frameObserver }
+    set { runtime.frameObserver = newValue }
+  }
   public var onClose: (() -> Void)?
-  package let interaction = Interaction()
-  private let producer = FrameProducer()
+  package let runtime = WindowRuntime()
   private let view: ChromaInputView
   private let queue: MTLCommandQueue
   private let displayRenderer: MetalDisplayListRenderer
   private var window: NSWindow?
-  private var keyBindings = KeyBindings()
   private var minimumRefreshRate: Double = 0
   private var lastFrameTime: Double = 0
 
@@ -53,15 +55,13 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     interaction.onRedrawRequested = { [weak self] in self?.view.needsDisplay = true }
   }
 
-  package func setKeyBindings(_ bindings: KeyBindings) { keyBindings = bindings }
-
   package func setMinimumRefreshRate(_ refreshRate: Double) {
     minimumRefreshRate = refreshRate.isFinite ? min(240, max(0, refreshRate)) : 0
     updateFrameScheduling()
   }
 
   private func updateFrameScheduling() {
-    let rate = max(minimumRefreshRate, producer.needsAnimationFrame ? 60 : 0)
+    let rate = max(minimumRefreshRate, runtime.needsAnimationFrame ? 60 : 0)
     view.preferredFramesPerSecond = max(1, Int(rate))
     view.isPaused = rate == 0
   }
@@ -85,13 +85,13 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     view.needsDisplay = true
     app.activate()
     app.run()
-    producer.reset()
+    runtime.reset()
     self.window = nil
   }
 
   public func windowWillClose(_ notification: Notification) {
     view.isPaused = true
-    producer.reset()
+    runtime.reset()
     onClose?()
     NSApplication.shared.stop(nil)
     // Wake the run loop so run() returns even when the window was its last event source.
@@ -107,7 +107,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   private var pendingTextEvents: [TextEditEvent] = []
 
   func handleKey(_ input: KeyboardInput) {
-    guard let resolved = interaction.resolve(input, appBindings: keyBindings) else { return }
+    guard let resolved = runtime.resolve(input) else { return }
     switch resolved {
     case .command(let command): pendingCommands.append(command)
     case .text(let event): applyTextEvent(event)
@@ -149,8 +149,8 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     let now = ProcessInfo.processInfo.systemUptime
     if lastFrameTime > 0, now > lastFrameTime { interaction.frameRate = 1 / (now - lastFrameTime) }
     lastFrameTime = now
-    let list = producer.render(
-      content: content, viewport: viewport, input: input, context: context,
+    let list = runtime.render(
+      viewport: viewport, input: input,
       onChange: { [weak self] in self?.view.needsDisplay = true })
     updateFrameScheduling()
     let redraw = interaction.consumeRedrawRequest()
@@ -162,7 +162,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     let scale = Point(
       x: Float(drawable.texture.width) / viewport.width,
       y: Float(drawable.texture.height) / viewport.height)
-    frameObserver?(FrameObservation(drawList: list, viewport: viewport, rasterScale: scale))
+    runtime.observe(list, viewport: viewport, rasterScale: scale)
     do {
       guard
         let frame = try displayRenderer.prepareFrame(

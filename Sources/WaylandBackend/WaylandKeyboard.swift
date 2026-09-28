@@ -7,7 +7,7 @@ import Chroma
 @MainActor
 final class WaylandKeyboard {
   private var keyboard: OpaquePointer?
-  private var bindings = KeyBindings()
+  var resolve: ((KeyboardInput, Bool) -> ResolvedKeyboardInput?)?
   private enum PendingTextEvent {
     case event(TextEditEvent, session: Int)
     case paste(Int32, session: Int)
@@ -35,10 +35,6 @@ final class WaylandKeyboard {
   var onSelectAll: (() -> Bool)?
   private var nextPasteID: Int32 = 0
   private var completedPastes: [Int32: PasteResult] = [:]
-
-  func setKeyBindings(_ bindings: KeyBindings) {
-    self.bindings = bindings
-  }
 
   func cleanup() {
     if let keyboard { chroma_xkb_keyboard_destroy(keyboard) }
@@ -69,10 +65,10 @@ final class WaylandKeyboard {
   }
 
   func keyPressed(
-    _ key: UInt32, interaction: Interaction, editing: Bool, editingSession: Int, now: Double
+    _ key: UInt32, editing: Bool, editingSession: Int, now: Double
   ) {
     cancelRepeat()
-    dispatchKey(key, interaction: interaction, editing: editing, editingSession: editingSession)
+    dispatchKey(key, editing: editing, editingSession: editingSession)
     guard repeatRate > 0, let keyboard,
       chroma_xkb_keyboard_key_repeats(keyboard, key) != 0
     else { return }
@@ -90,14 +86,14 @@ final class WaylandKeyboard {
   }
 
   func dispatchRepeats(
-    interaction: Interaction, editing: Bool, editingSession: Int, now: Double
+    editing: Bool, editingSession: Int, now: Double
   ) -> Bool {
     guard let key = repeatingKey, var deadline = nextRepeatTime, repeatRate > 0,
       now >= deadline
     else { return false }
     let interval = 1 / Double(repeatRate)
     repeat {
-      dispatchKey(key, interaction: interaction, editing: editing, editingSession: editingSession)
+      dispatchKey(key, editing: editing, editingSession: editingSession)
       deadline += interval
     } while now >= deadline
     nextRepeatTime = deadline
@@ -107,13 +103,13 @@ final class WaylandKeyboard {
   var repeatDeadline: Double? { nextRepeatTime }
 
   private func dispatchKey(
-    _ key: UInt32, interaction: Interaction, editing: Bool, editingSession: Int
+    _ key: UInt32, editing: Bool, editingSession: Int
   ) {
     guard let keyboard else { return }
     let input = KeyboardInput(
       chord: keyChord(symbol: chroma_xkb_keyboard_keysym(keyboard, key), keyboard: keyboard),
       text: text(for: key, keyboard: keyboard))
-    guard let resolved = interaction.resolve(input, appBindings: bindings) else { return }
+    guard let resolved = resolve?(input, editing) else { return }
     switch resolved {
     case .command(let command): pendingCommands.append(command)
     case .text(let event) where editing && event == .selectAll:

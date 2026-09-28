@@ -8,9 +8,7 @@ package protocol Host: AnyObject {
 
   var onClose: (() -> Void)? { get set }
 
-  var interaction: Interaction { get }
-
-  func setKeyBindings(_ bindings: KeyBindings)
+  var runtime: WindowRuntime { get }
 
   func setMinimumRefreshRate(_ refreshRate: Double)
 
@@ -18,6 +16,6 @@ package protocol Host: AnyObject {
 }
 
 extension Host {
-  package func setKeyBindings(_ bindings: KeyBindings) {}
+  package var interaction: Interaction { runtime.interaction }
   package func setMinimumRefreshRate(_ refreshRate: Double) {}
 }

@@ -16,14 +16,19 @@ import Glibc
 @MainActor
 public final class WaylandHost: Chroma.Host {
   public let name = "Wayland"
-  private let frameProducer = FrameProducer()
   public var content: (any Block)? {
-    didSet { frameProducer.reset() }
+    get { runtime.content }
+    set {
+      runtime.content = newValue
+    }
   }
-  public var frameObserver: FrameObserver?
+  public var frameObserver: FrameObserver? {
+    get { runtime.frameObserver }
+    set { runtime.frameObserver = newValue }
+  }
   public var onClose: (() -> Void)?
 
-  package let interaction = Interaction()
+  package let runtime = WindowRuntime()
 
   private var width: Int32
   private var height: Int32
@@ -76,6 +81,7 @@ public final class WaylandHost: Chroma.Host {
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
+    keyboard.resolve = { [weak self] input, _ in self?.runtime.resolve(input) }
     keyboard.onCopy = { [weak self] in self?.clipboard.copyToClipboard() }
     keyboard.onCut = { [weak self] in self?.clipboard.copyEditableSelectionToClipboard() ?? false }
     keyboard.onPaste = { [weak self] id in self?.clipboard.pasteFromClipboard(id: id) }
@@ -84,10 +90,6 @@ public final class WaylandHost: Chroma.Host {
 
   package func setMinimumRefreshRate(_ refreshRate: Double) {
     minimumRefreshRate = refreshRate.isFinite ? max(0, refreshRate) : 0
-  }
-
-  package func setKeyBindings(_ bindings: KeyBindings) {
-    keyboard.setKeyBindings(bindings)
   }
 
   public func run(title: String) throws {
@@ -199,7 +201,7 @@ public final class WaylandHost: Chroma.Host {
     keyboardRepeatTimer?.cancel()
     keyboardRepeatTimer = nil
     let repeated = keyboard.dispatchRepeats(
-      interaction: interaction, editing: interaction.mode == .editing,
+      editing: interaction.mode == .editing,
       editingSession: interaction.editingSessionGeneration,
       now: ProcessInfo.processInfo.systemUptime)
     if repeated { requestFrame() }
@@ -406,7 +408,6 @@ public final class WaylandHost: Chroma.Host {
         if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
           renderer.keyboard.keyPressed(
             key,
-            interaction: renderer.interaction,
             editing: renderer.interaction.mode == .editing,
             editingSession: renderer.interaction.editingSessionGeneration,
             now: ProcessInfo.processInfo.systemUptime
@@ -667,16 +668,15 @@ public final class WaylandHost: Chroma.Host {
     updateFrameRate()
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
     let viewport = Size(width: Float(width), height: Float(height))
-    let drawList = frameProducer.render(
-      content: content, viewport: viewport, input: input.frameInput(), context: context,
+    let drawList = runtime.render(
+      viewport: viewport, input: input.frameInput(),
       onChange: { [weak self] in self?.requestFrame() })
-    frameObserver?(
-      FrameObservation(
-        drawList: drawList, viewport: viewport, rasterScale: Point(x: Float(bufferScale), y: Float(bufferScale))))
+    runtime.observe(
+      drawList, viewport: viewport, rasterScale: Point(x: Float(bufferScale), y: Float(bufferScale)))
     _ = interaction.consumeRedrawRequest()
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
-    if frameProducer.needsAnimationFrame || input.hasScrollMomentum { dirty = true }
+    if runtime.needsAnimationFrame || input.hasScrollMomentum { dirty = true }
   }
 
   private func updateFrameRate() {
@@ -696,7 +696,7 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private func cleanup() {
-    frameProducer.reset()
+    runtime.reset()
     interaction.onRedrawRequested = nil
     refreshTimer?.cancel()
     keyboardRepeatTimer?.cancel()
