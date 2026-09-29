@@ -9,7 +9,7 @@ var targets: [Target] = [
   .testTarget(
     name: "DemoContentTests",
     dependencies: [
-      "DemoContent", .product(name: "HeadlessBackend", package: "chroma"),
+      "DemoContent", .product(name: "ChromaTesting", package: "chroma"),
     ]
   ),
   .target(

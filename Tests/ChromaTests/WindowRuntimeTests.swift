@@ -1,4 +1,4 @@
-import HeadlessBackend
+import ChromaTesting
 import Testing
 
 @testable import Chroma

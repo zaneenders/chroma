@@ -41,6 +41,10 @@ public final class HeadlessHost: Host {
 
   package func setMinimumRefreshRate(_ refreshRate: Double) {}
 
+  public func launch<A: App>(_ app: A) throws {
+    try app.run(on: self)
+  }
+
   public func run(title: String) {
     self.title = title
     _ = render()
@@ -57,6 +61,15 @@ public final class HeadlessHost: Host {
     let frame = HeadlessFrame(viewport: viewport, commands: drawList.commands)
     lastFrame = frame
     return frame
+  }
+
+  public func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
+    runtime.resolve(input)
+  }
+
+  public var keyBindings: KeyBindings {
+    get { runtime.keyBindings }
+    set { runtime.keyBindings = newValue }
   }
 
   public func close() {

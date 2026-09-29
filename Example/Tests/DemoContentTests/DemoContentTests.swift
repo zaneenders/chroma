@@ -1,6 +1,6 @@
 import Chroma
 import Foundation
-import HeadlessBackend
+import ChromaTesting
 import Synchronization
 import Testing
 
