@@ -1,4 +1,4 @@
-struct LayoutModifier: PrimitiveBlock, IdentityTransparentBlock {
+struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
   enum Operation {
     case padding(EdgeInsets)
     case sizing(x: Sizing, y: Sizing)

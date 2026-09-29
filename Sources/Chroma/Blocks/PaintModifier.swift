@@ -1,4 +1,4 @@
-struct PaintModifier: PrimitiveBlock, IdentityTransparentBlock {
+struct PaintModifier: PrimitiveBlock, CollectionDistributingBlock {
   enum Operation {
     case background(any Block)
     case roundedBackground(Color, CornerRadii)

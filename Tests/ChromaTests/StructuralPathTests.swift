@@ -188,6 +188,40 @@ struct StructuralPathTests {
     #expect(recorder.measured["content"] == expected)
   }
 
+  private struct TransparentScope: IdentityTransparentBlock {
+    var content: any Block
+    var focusRule: FocusRule { .container }
+
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+      BlockEngine.measure(content, proposal: proposal, context: context)
+    }
+
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    }
+  }
+
+  @Test func identityTransparencyDoesNotDistributeOverCollections() {
+    let recorder = Recorder()
+    let collection = ForEach([1, 2], id: \.self) { value in
+      Probe(name: String(value), recorder: recorder)
+    }
+    let grouped = VStack { TransparentScope(content: collection) }
+    let distributed = VStack { collection.padding(0) }
+    #expect(grouped.children.count == 1)
+    #expect(distributed.children.count == 2)
+    let paths = render(grouped, recorder: recorder)
+    #expect(paths["1"] != paths["2"])
+    let reordered = VStack {
+      TransparentScope(content: ForEach([2, 1], id: \.self) { value in
+        Probe(name: String(value), recorder: recorder)
+      })
+    }
+    #expect(render(reordered, recorder: recorder) == paths)
+    let probe = Probe(name: "single", recorder: recorder)
+    #expect(render(TransparentScope(content: probe), recorder: recorder) == render(probe, recorder: recorder))
+  }
+
   private struct Item: Identifiable {
     let id: Int
   }

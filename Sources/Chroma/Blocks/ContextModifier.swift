@@ -1,4 +1,4 @@
-struct ContextModifier: PrimitiveBlock, IdentityTransparentBlock {
+struct ContextModifier: PrimitiveBlock, CollectionDistributingBlock {
   enum Operation {
     case hover(HoverStyle)
     case navigationIgnored

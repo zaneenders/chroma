@@ -25,7 +25,7 @@ public final class FocusTarget {
   }
 }
 
-public struct FocusTargetBlock: PrimitiveBlock, IdentityTransparentBlock {
+public struct FocusTargetBlock: PrimitiveBlock, CollectionDistributingBlock {
   var content: any Block
   let target: FocusTarget
 

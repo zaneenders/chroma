@@ -39,7 +39,7 @@ public enum BlockBuilder {
     if let collection = component as? any KeyedBlockCollection {
       return scopedChildren(collection.keyedContent, prefix: prefix)
     }
-    guard let modifier = component as? any IdentityTransparentBlock,
+    guard let modifier = component as? any CollectionDistributingBlock,
       let children = collectionChildren(modifier.content, prefix: prefix)
     else { return nil }
     return children.map { scoped in

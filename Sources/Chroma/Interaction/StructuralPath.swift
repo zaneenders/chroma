@@ -17,7 +17,9 @@ struct ScopedBlock: Block {
   var body: Never { fatalError("ScopedBlock is resolved by BlockEngine") }
 }
 
-protocol IdentityTransparentBlock: PrimitiveBlock {
+protocol IdentityTransparentBlock: PrimitiveBlock {}
+
+protocol CollectionDistributingBlock: IdentityTransparentBlock {
   var content: any Block { get set }
 }
 

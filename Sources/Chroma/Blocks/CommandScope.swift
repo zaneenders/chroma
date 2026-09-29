@@ -1,4 +1,4 @@
-struct CommandScope: PrimitiveBlock, IdentityTransparentBlock {
+struct CommandScope: PrimitiveBlock, CollectionDistributingBlock {
   enum Operation {
     case keyBindings(KeyBindings)
     case handler(Command, @MainActor () -> CommandResult)
