@@ -9,28 +9,8 @@ public enum HoverStyle: Equatable, Sendable {
   }
 }
 
-struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
-  public var content: any Block
-  public var style: HoverStyle
-
-  public var focusRule: FocusRule { .container }
-
-  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
-
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    BlockEngine.measure(content, proposal: proposal, context: context)
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    var context = context
-    context.hoverStyle = style
-    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
-  }
-}
-
 extension Block {
   public func hover(_ style: HoverStyle) -> some Block {
-    HoverStyleBlock(content: self, style: style)
+    ContextModifier(content: self, operation: .hover(style))
   }
 }

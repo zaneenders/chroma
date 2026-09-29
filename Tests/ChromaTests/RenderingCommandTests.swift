@@ -57,6 +57,21 @@ struct RenderingCommandTests {
       ])
   }
 
+  @Test func modifierOrderChangesBackgroundGeometry() {
+    let rect = Rect(x: 0, y: 0, width: 30, height: 20)
+    let inset = Rect(x: 5, y: 5, width: 20, height: 10)
+    let color = Color.black
+    let context = BlockContext()
+
+    let outerBackground = render(
+      CommandProbe(name: "content").padding(5).background(color), in: rect, context: context)
+    let innerBackground = render(
+      CommandProbe(name: "content").background(color).padding(5), in: rect, context: context)
+
+    #expect(outerBackground.commands.first == .fillRect(rect: rect, color: color))
+    #expect(innerBackground.commands.first == .fillRect(rect: inset, color: color))
+  }
+
   @Test func nestedClipsAreBalancedAndPreserveTheirOwnGeometry() {
     let rect = Rect(x: 10, y: 20, width: 50, height: 40)
     let inner = Rect(x: 15, y: 25, width: 40, height: 30)

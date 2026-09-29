@@ -1,16 +1,16 @@
 extension Block {
   public func keyBindings(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> some Block {
-    KeyBindingsBlock(content: self, bindings: KeyBindings(content))
+    CommandScope(content: self, operation: .keyBindings(KeyBindings(content)))
   }
 
   public func keyBindings(_ bindings: KeyBindings) -> some Block {
-    KeyBindingsBlock(content: self, bindings: bindings)
+    CommandScope(content: self, operation: .keyBindings(bindings))
   }
 
   public func onCommand(
     _ command: Command,
     perform action: @escaping @MainActor () -> CommandResult
   ) -> some Block {
-    CommandHandlerBlock(content: self, command: command, action: action)
+    CommandScope(content: self, operation: .handler(command, action))
   }
 }
