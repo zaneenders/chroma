@@ -64,13 +64,27 @@ public struct TextEditor: PrimitiveBlock {
       guard let caret else { return 0 }
       return max(0, min(layout.lines.count - visibleCount, layout.row(containing: caret) - visibleCount + 1))
     }
+    let interaction = context.interaction
+    let viewportRow = interaction.textDragViewportRow ?? firstRow(interaction.editingLeaf == context.widgetID
+      ? interaction.caretOffset : nil)
+    if interaction.isDragging, interaction.textDragViewportRow != nil {
+      if interaction.dragCurrent.y >= inner.maxY {
+        interaction.textDragViewportRow = min(layout.lines.count - visibleCount, viewportRow + 1)
+      } else if interaction.dragCurrent.y < inner.minY {
+        interaction.textDragViewportRow = max(0, viewportRow - 1)
+      }
+    }
     let state = context.textInputState(
       in: rect, text: getText, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing,
       onTextEvent: onTextEvent,
       pointerOffset: { point, caret in
-        layout.offset(
-          row: firstRow(caret) + Int(((point.y - inner.minY) / lineHeight).rounded(.down)),
+        if context.interaction.isProcessingDrag && context.interaction.textDragViewportRow == nil {
+          context.interaction.textDragViewportRow = viewportRow
+        }
+        return layout.offset(
+          row: (context.interaction.textDragViewportRow ?? firstRow(caret))
+            + Int(((point.y - inner.minY) / lineHeight).rounded(.down)),
           column: Int(((point.x - inner.minX) / cellWidth).rounded(.toNearestOrAwayFromZero)))
       },
       verticalOffset: { layout.verticalOffset($0, direction: $1) },
@@ -83,7 +97,8 @@ public struct TextEditor: PrimitiveBlock {
       drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: scale)
       return
     }
-    let first = firstRow(state.caretOffset)
+    let first = context.interaction.isProcessingDrag
+      ? context.interaction.textDragViewportRow ?? viewportRow : firstRow(state.caretOffset)
     for index in first..<min(layout.lines.count, first + visibleCount) {
       let line = layout.lines[index]
       let origin = Point(x: inner.minX, y: inner.minY + Float(index - first) * lineHeight)

@@ -148,6 +148,73 @@ struct ContentAPITests {
     #expect(controller.offset == 20)
   }
 
+  @Test func rowRevealWaitsForMissingRow() {
+    let controller = ScrollViewController()
+    let producer = FrameProducer()
+    let context = BlockContext()
+    struct Item: Identifiable { let id: Int }
+    func render(_ ids: [Int]) {
+      _ = producer.render(
+        content: ScrollView(data: ids.map { Item(id: $0) }, rowHeight: 20, controller: controller) {
+          Text(String($0.id))
+        }, viewport: Size(width: 200, height: 40), input: InputState(), context: context, onChange: {})
+    }
+    controller.scrollToRow(5)
+    render([0, 1, 2, 3])
+    #expect(controller.offset == 0)
+    render([0, 1, 2, 3, 4, 5, 6])
+    #expect(controller.offset == 100)
+  }
+
+  @Test func editorDragKeepsVisibleLinesStable() {
+    let producer = FrameProducer()
+    let context = BlockContext()
+    let text = "a\nb\nc\nd\ne"
+    let editor = TextEditor(lineLimits: 2...2, text: { text }, onChange: { _ in })
+    let line = context.fontMetrics.lineAdvance
+    let height = 2 * line + 16
+    func render(_ input: InputState = InputState()) -> DrawList {
+      producer.render(
+        content: editor, viewport: Size(width: 200, height: height), input: input,
+        context: context, onChange: {})
+    }
+    _ = render()
+    let id = context.interaction.tree!.firstLeafPath().flatMap { context.interaction.tree?.node(at: $0)?.leafID }!
+    context.focus(id, editing: true)
+    context.interaction.caretOffset = text.count
+    _ = render()
+    let start = Point(x: 8, y: 8 + line / 2)
+    let end = Point(x: 8 + context.fontMetrics.cellAdvance, y: 8 + line * 1.5)
+    _ = render(InputState(pointerPosition: start, pointerDown: true, pointerPressed: true))
+    _ = render(InputState(pointerPosition: end, pointerDown: true))
+    #expect(context.interaction.textSelectionRange == 6..<9)
+    let held = render(InputState(pointerPosition: end, pointerDown: true))
+    #expect(context.interaction.textSelectionRange == 6..<9)
+    let lines = held.commands.compactMap { command -> String? in
+      if case .text(_, let text, _, _) = command { return text }
+      return nil
+    }
+    #expect(lines.contains("d") && lines.contains("e"))
+  }
+
+  @Test func editorDragScrollsBeyondVisibleLines() {
+    let producer = FrameProducer()
+    let context = BlockContext()
+    let text = "a\nb\nc\nd\ne"
+    let editor = TextEditor(lineLimits: 2...2, text: { text }, onChange: { _ in })
+    let line = context.fontMetrics.lineAdvance
+    let size = Size(width: 200, height: 2 * line + 16)
+    func render(_ input: InputState = InputState()) {
+      _ = producer.render(content: editor, viewport: size, input: input, context: context, onChange: {})
+    }
+    render()
+    let start = Point(x: 8, y: 8 + line / 2)
+    let below = Point(x: 8 + context.fontMetrics.cellAdvance, y: size.height + 1)
+    render(InputState(pointerPosition: start, pointerDown: true, pointerPressed: true))
+    for _ in 0..<4 { render(InputState(pointerPosition: below, pointerDown: true)) }
+    #expect(context.interaction.textSelectionRange == 0..<text.count)
+  }
+
   @Test func stringsComposeWithLoopsAndModifiers() {
     let content = ScrollView("Messages") {
       "Header".padding(2)

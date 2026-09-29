@@ -46,6 +46,7 @@ package final class Interaction {
   package internal(set) var caretOffset: Int = 0
   package internal(set) var textSelectionRange: Range<Int>?
   @ObservationIgnored var textDragAnchor: Int?
+  @ObservationIgnored var textDragViewportRow: Int?
   package internal(set) var editingText: String?
   package var editingReadOnly = false
   package var acceptsTextInsertion: Bool { isTextEditing && !editingReadOnly }
@@ -380,6 +381,7 @@ package final class Interaction {
       dragOrigin = input.pointerPressPosition
       dragCurrent = input.pointerPosition
       textDragAnchor = nil
+      textDragViewportRow = nil
       textSelection.clear()
     } else if input.pointerReleased {
       dragCurrent = input.pointerPosition
@@ -433,6 +435,7 @@ package final class Interaction {
       if input.pointerReleased {
         dragOrigin = nil
         textDragAnchor = nil
+        textDragViewportRow = nil
       }
     }
     if !refreshingRegistrations { routePendingCommands() }

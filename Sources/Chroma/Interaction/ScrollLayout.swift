@@ -34,19 +34,22 @@ extension Interaction {
       if scrollDelta(in: viewport, horizontal: horizontal) != .zero, case .visible = request {
         controller?.request = nil
       } else {
+        var resolved = true
         switch request {
         case .top: offset.y = 0
         case .bottom: offset.y = limit.y
         case .offset(let requested): offset.y = requested
         case .visible(let target): reveal(target)
         case .row(let key):
-          if let layout = scrollStates[id]?.layout,
+          guard let layout = scrollStates[id]?.layout,
             let index = layout.index(of: key)
-          {
-            offset.y = layout.position(of: index)
+          else {
+            resolved = false
+            break
           }
+          offset.y = layout.position(of: index)
         }
-        controller?.request = nil
+        if resolved { controller?.request = nil }
       }
     } else if sticksToBottom && wasAtBottom && limit.y > previousLimit {
       offset.y = limit.y
