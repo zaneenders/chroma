@@ -4,6 +4,35 @@ import Testing
 
 @MainActor
 struct StackPlacementTests {
+  private struct Wrapping: PrimitiveBlock {
+    var focusRule: FocusRule { .standard }
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+      Size(width: proposal.width, height: proposal.width < 80 ? 40 : 20)
+    }
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+      list.fillRect(rect, color: .white)
+    }
+  }
+
+  @Test func growRemeasuresAtRemainingWidthAndBottomAligns() {
+    let row = HStack(spacing: 8, alignment: .bottom) {
+      Wrapping().sizing(x: .grow)
+      Color.black.sizing(x: .fixed(30), y: .fixed(10))
+    }
+    let context = BlockContext()
+    #expect(row.sizeThatFits(Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
+    #expect(row.sizeThatFits(Size(width: 150, height: 200), context: context).height == 20)
+    var list = DrawList()
+    context.interaction.beginFrame(input: InputState())
+    row.draw(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60), context: context)
+    context.interaction.endFrame()
+    let rects = list.commands.compactMap { command -> Rect? in
+      if case .fillRect(let rect, _) = command { return rect }
+      return nil
+    }
+    #expect(rects == [Rect(x: 10, y: 40, width: 62, height: 40), Rect(x: 80, y: 70, width: 30, height: 10)])
+  }
+
   @Test(arguments: [false, true], [false, true])
   func placementPreservesAxisAndReversal(horizontal: Bool, reversed: Bool) {
     let first = Color.white.sizing(x: .fixed(20), y: .fixed(30))

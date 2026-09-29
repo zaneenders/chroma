@@ -13,6 +13,7 @@ struct StackLayout {
 
   var axis: Axis
   var spacing: Float
+  var bottomAligned = false
 
   private func layout(
     _ children: [(primitive: any PrimitiveBlock, context: BlockContext)], originals: [any Block], proposal: Size,
@@ -36,7 +37,11 @@ struct StackLayout {
       let spacingTotal = spacing * Float(max(0, children.count - 1))
       let share = max(0, proposal[keyPath: axis.main] - fixedTotal - spacingTotal) / Float(expanderCount)
       for index in sizes.indices where expands[index] {
+        var childProposal = proposal
+        childProposal[keyPath: axis.main] = share
+        sizes[index] = children[index].primitive.sizeThatFits(childProposal, context: children[index].context)
         sizes[index][keyPath: axis.main] = share
+        if BlockEngine.isSpacer(originals[index]) { sizes[index][keyPath: axis.cross] = 0 }
       }
     }
     return sizes
@@ -70,7 +75,9 @@ struct StackLayout {
     for (child, size) in zip(children, sizes) {
       let extent = size[keyPath: axis.main]
       if reversed { cursor -= extent }
-      let origin = axis == .horizontal ? Point(x: cursor, y: rect.minY) : Point(x: rect.minX, y: cursor)
+      let origin = axis == .horizontal
+        ? Point(x: cursor, y: bottomAligned ? rect.maxY - size.height : rect.minY)
+        : Point(x: rect.minX, y: cursor)
       BlockEngine.drawResolved(
         child.primitive, into: &drawList, in: Rect(origin: origin, size: size), context: child.context)
       cursor += reversed ? -spacing : extent + spacing
