@@ -7,6 +7,8 @@ struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
   var content: any Block
   var operation: Operation
 
+  var preservesContentIdentity: Bool { true }
+
   var focusRule: FocusRule { .container }
 
   @MainActor var expandsHorizontally: Bool {

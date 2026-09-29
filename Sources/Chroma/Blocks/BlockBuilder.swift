@@ -1,3 +1,7 @@
+protocol CollectionDistributingBlock: Block {
+  var content: any Block { get set }
+}
+
 @resultBuilder
 public enum BlockBuilder {
   public static func buildBlock(_ components: (any Block)...) -> TupleBlock {

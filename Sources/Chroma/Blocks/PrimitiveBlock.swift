@@ -7,6 +7,7 @@ public enum FocusRule: Sendable {
 
 public protocol PrimitiveBlock: Block where Body == Never {
   var focusRule: FocusRule { get }
+  var preservesContentIdentity: Bool { get }
 
   @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size
 
@@ -18,6 +19,7 @@ public protocol PrimitiveBlock: Block where Body == Never {
 }
 
 extension PrimitiveBlock {
+  public var preservesContentIdentity: Bool { false }
   public var body: Never { fatalError("\(Self.self) is a primitive block") }
   public var expandsHorizontally: Bool { false }
   public var expandsVertically: Bool { false }

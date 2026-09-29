@@ -70,7 +70,7 @@ public enum BlockEngine {
     if let scoped = block as? ScopedBlock {
       return resolve(scoped.content, context: context.scoped(scoped.path))
     }
-    let context = block is any IdentityTransparentBlock
+    let context = (block as? any PrimitiveBlock)?.preservesContentIdentity == true
       ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
     if let primitive = block as? any PrimitiveBlock {
       var content: (any Block)?

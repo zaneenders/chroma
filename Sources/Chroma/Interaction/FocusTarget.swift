@@ -29,6 +29,8 @@ public struct FocusTargetBlock: PrimitiveBlock, CollectionDistributingBlock {
   var content: any Block
   let target: FocusTarget
 
+  public var preservesContentIdentity: Bool { true }
+
   public var focusRule: FocusRule { .container }
 
   @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
