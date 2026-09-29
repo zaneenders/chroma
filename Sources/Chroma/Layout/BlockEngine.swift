@@ -1,21 +1,95 @@
 @MainActor
 public enum BlockEngine {
-  static func resolve(_ block: any Block) -> any PrimitiveBlock {
-    if let scoped = block as? ScopedBlock { return resolve(scoped.content) }
-    if let primitive = block as? any PrimitiveBlock { return primitive }
-    return resolve(block.body)
+  @MainActor final class Resolved {
+    init(primitive: any PrimitiveBlock, context: BlockContext, child: Resolved?) {
+      self.primitive = primitive
+      self.context = context
+      self.child = child
+    }
+    let primitive: any PrimitiveBlock
+    let context: BlockContext
+    let child: Resolved?
+
+    var expandsHorizontally: Bool {
+      if let layout = primitive as? LayoutModifier {
+        if case .sizing(let x, _) = layout.operation { return x == .grow }
+      }
+      if let child { return child.expandsHorizontally }
+      return primitive.expandsHorizontally
+    }
+
+    var expandsVertically: Bool {
+      if let layout = primitive as? LayoutModifier {
+        if case .sizing(_, let y) = layout.operation { return y == .grow }
+      }
+      if let child { return child.expandsVertically }
+      return primitive.expandsVertically
+    }
+
+    func sizeThatFits(_ proposal: Size) -> Size {
+      guard let child else { return primitive.sizeThatFits(proposal, context: context) }
+      if let layout = primitive as? LayoutModifier {
+        return layout.sizeThatFits(proposal, context: context) { proposal in child.sizeThatFits(proposal) }
+      }
+      return child.sizeThatFits(proposal)
+    }
+
+    func draw(into drawList: inout DrawList, in rect: Rect) {
+      guard let child else {
+        BlockEngine.drawResolved(primitive, into: &drawList, in: rect, context: context)
+        return
+      }
+      if let layout = primitive as? LayoutModifier {
+        layout.draw(into: &drawList, in: rect, context: context) { list, rect, _ in
+          child.draw(into: &list, in: rect)
+        }
+      } else if let paint = primitive as? PaintModifier {
+        paint.draw(into: &drawList, in: rect, context: context) { list, rect, _ in
+          child.draw(into: &list, in: rect)
+        }
+      } else if let modifier = primitive as? ContextModifier {
+        modifier.draw(into: &drawList, in: rect, context: context) { list, rect, modified in
+          child.withContext(modified).draw(into: &list, in: rect)
+        }
+      } else if let scope = primitive as? CommandScope {
+        scope.draw(into: &drawList, in: rect, context: context) { list, rect, _ in
+          child.draw(into: &list, in: rect)
+        }
+      }
+    }
+
+    func withContext(_ context: BlockContext) -> Resolved {
+      var updated = self.context
+      updated.hoverStyle = context.hoverStyle
+      updated.navigationIgnored = context.navigationIgnored
+      return Resolved(primitive: primitive, context: updated, child: child?.withContext(context))
+    }
   }
 
-  static func resolve(
-    _ block: any Block, context: BlockContext
-  ) -> (primitive: any PrimitiveBlock, context: BlockContext) {
+  static func resolve(_ block: any Block, context: BlockContext) -> Resolved {
     if let scoped = block as? ScopedBlock {
       return resolve(scoped.content, context: context.scoped(scoped.path))
     }
-    let context =
-      block is any IdentityTransparentBlock
+    let context = block is any IdentityTransparentBlock
       ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
-    if let primitive = block as? any PrimitiveBlock { return (primitive, context) }
+    if let primitive = block as? any PrimitiveBlock {
+      var content: (any Block)?
+      if let layout = primitive as? LayoutModifier { content = layout.content }
+      if let paint = primitive as? PaintModifier { content = paint.content }
+      if let modifier = primitive as? ContextModifier { content = modifier.content }
+      if let scope = primitive as? CommandScope { content = scope.content }
+      if let content {
+        let childContext: BlockContext
+        if let paint = primitive as? PaintModifier, case .background = paint.operation {
+          childContext = context.backgroundContentContext
+        } else {
+          childContext = context
+        }
+        return Resolved(primitive: primitive, context: context,
+                        child: resolve(content, context: childContext))
+      }
+      return Resolved(primitive: primitive, context: context, child: nil)
+    }
     return resolve(block.body, context: context)
   }
 
@@ -30,7 +104,7 @@ public enum BlockEngine {
     context: BlockContext
   ) -> Size {
     let resolved = resolve(block, context: context)
-    return resolved.primitive.sizeThatFits(proposal, context: resolved.context)
+    return resolved.sizeThatFits(proposal)
   }
 
   public static func draw(
@@ -40,7 +114,7 @@ public enum BlockEngine {
     context: BlockContext
   ) {
     let resolved = resolve(block, context: context)
-    drawResolved(resolved.primitive, into: &drawList, in: rect, context: resolved.context)
+    resolved.draw(into: &drawList, in: rect)
   }
 
   static func drawResolved(
@@ -91,10 +165,10 @@ public enum BlockEngine {
   }
 
   public static func expandsHorizontally(_ block: any Block) -> Bool {
-    resolve(block).expandsHorizontally
+    resolve(block, context: BlockContext()).expandsHorizontally
   }
 
   public static func expandsVertically(_ block: any Block) -> Bool {
-    resolve(block).expandsVertically
+    resolve(block, context: BlockContext()).expandsVertically
   }
 }

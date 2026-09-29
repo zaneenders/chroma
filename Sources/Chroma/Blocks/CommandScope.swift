@@ -17,6 +17,15 @@ struct CommandScope: PrimitiveBlock, IdentityTransparentBlock {
   }
 
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    draw(into: &drawList, in: rect, context: context) { list, rect, context in
+      BlockEngine.draw(content, into: &list, in: rect, context: context)
+    }
+  }
+
+  @MainActor func draw(
+    into drawList: inout DrawList, in rect: Rect, context: BlockContext,
+    drawContent: (inout DrawList, Rect, BlockContext) -> Void
+  ) {
     let interaction = context.interaction
     switch operation {
     case .keyBindings(let bindings):
@@ -24,7 +33,7 @@ struct CommandScope: PrimitiveBlock, IdentityTransparentBlock {
       interaction.beginGroup(rect: rect)
       interaction.building.keyBindingScopes.append(
         Interaction.ScopedKeyBindings(path: interaction.builderPath, bindings: bindings))
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+      drawContent(&drawList, rect, context)
       if !interaction.endGroup() {
         interaction.building.keyBindingScopes.removeSubrange(bindingStart...)
       }
@@ -38,7 +47,7 @@ struct CommandScope: PrimitiveBlock, IdentityTransparentBlock {
           }
         }
       if isRoot {
-        BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+        drawContent(&drawList, rect, context)
         interaction.building.commandHandlers.append(
           Interaction.ScopedCommandHandler(path: [], command: command, action: action))
         return
@@ -48,7 +57,7 @@ struct CommandScope: PrimitiveBlock, IdentityTransparentBlock {
       interaction.building.commandHandlers.append(
         Interaction.ScopedCommandHandler(
           path: interaction.builderPath, command: command, action: action))
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+      drawContent(&drawList, rect, context)
       if !interaction.endGroup() {
         interaction.building.commandHandlers.removeSubrange(handlerStart...)
       }

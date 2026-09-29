@@ -16,14 +16,14 @@ struct StackLayout {
   var bottomAligned = false
 
   private func layout(
-    _ children: [(primitive: any PrimitiveBlock, context: BlockContext)], originals: [any Block], proposal: Size,
+    _ children: [BlockEngine.Resolved], originals: [any Block], proposal: Size,
     context: BlockContext
   ) -> [Size] {
-    var sizes = children.map { $0.primitive.sizeThatFits(proposal, context: $0.context) }
+    var sizes = children.map { $0.sizeThatFits(proposal) }
     for index in sizes.indices where BlockEngine.isSpacer(originals[index]) {
       sizes[index][keyPath: axis.cross] = 0
     }
-    let expands = children.map { axis.expands($0.primitive) }
+    let expands = children.map { axis == .horizontal ? $0.expandsHorizontally : $0.expandsVertically }
     var fixedTotal: Float = 0
     var expanderCount = 0
     for (index, size) in sizes.enumerated() {
@@ -39,7 +39,7 @@ struct StackLayout {
       for index in sizes.indices where expands[index] {
         var childProposal = proposal
         childProposal[keyPath: axis.main] = share
-        sizes[index] = children[index].primitive.sizeThatFits(childProposal, context: children[index].context)
+        sizes[index] = children[index].sizeThatFits(childProposal)
         sizes[index][keyPath: axis.main] = share
         if BlockEngine.isSpacer(originals[index]) { sizes[index][keyPath: axis.cross] = 0 }
       }
@@ -78,8 +78,7 @@ struct StackLayout {
       let origin = axis == .horizontal
         ? Point(x: cursor, y: bottomAligned ? rect.maxY - size.height : rect.minY)
         : Point(x: rect.minX, y: cursor)
-      BlockEngine.drawResolved(
-        child.primitive, into: &drawList, in: Rect(origin: origin, size: size), context: child.context)
+      child.draw(into: &drawList, in: Rect(origin: origin, size: size))
       cursor += reversed ? -spacing : extent + spacing
     }
     interaction.endGroup()

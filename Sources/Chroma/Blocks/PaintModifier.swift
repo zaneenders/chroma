@@ -24,15 +24,24 @@ struct PaintModifier: PrimitiveBlock, IdentityTransparentBlock {
   }
 
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    draw(into: &drawList, in: rect, context: context) { list, rect, context in
+      BlockEngine.draw(content, into: &list, in: rect, context: context)
+    }
+  }
+
+  @MainActor func draw(
+    into drawList: inout DrawList, in rect: Rect, context: BlockContext,
+    drawContent: (inout DrawList, Rect, BlockContext) -> Void
+  ) {
     switch operation {
     case .background(let background):
       BlockEngine.draw(background, into: &drawList, in: rect, context: context.backgroundContext)
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context.backgroundContentContext)
+      drawContent(&drawList, rect, context.backgroundContentContext)
     case .roundedBackground(let color, let radii):
       drawList.fillRoundedRect(rect, radii: radii, color: color)
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+      drawContent(&drawList, rect, context)
     case .border(let color, let radii, let width):
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+      drawContent(&drawList, rect, context)
       if radii == .zero {
         drawList.strokeRect(rect, width: width, color: color)
       } else {
@@ -41,7 +50,7 @@ struct PaintModifier: PrimitiveBlock, IdentityTransparentBlock {
     case .clip:
       drawList.pushClip(rect)
       context.withInteractionClip(rect) {
-        BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+        drawContent(&drawList, rect, context)
       }
       drawList.popClip()
     }

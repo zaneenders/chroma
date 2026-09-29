@@ -17,11 +17,20 @@ struct ContextModifier: PrimitiveBlock, IdentityTransparentBlock {
   }
 
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    draw(into: &drawList, in: rect, context: context) { list, rect, context in
+      BlockEngine.draw(content, into: &list, in: rect, context: context)
+    }
+  }
+
+  @MainActor func draw(
+    into drawList: inout DrawList, in rect: Rect, context: BlockContext,
+    drawContent: (inout DrawList, Rect, BlockContext) -> Void
+  ) {
     var context = context
     switch operation {
     case .hover(let style): context.hoverStyle = style
     case .navigationIgnored: context.navigationIgnored = true
     }
-    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    drawContent(&drawList, rect, context)
   }
 }

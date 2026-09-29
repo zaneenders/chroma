@@ -24,25 +24,29 @@ struct LayoutModifier: PrimitiveBlock, IdentityTransparentBlock {
   }
 
   @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    sizeThatFits(proposal, context: context) { proposal in
+      BlockEngine.measure(content, proposal: proposal, context: context)
+    }
+  }
+
+  @MainActor func sizeThatFits(
+    _ proposal: Size, context: BlockContext, measure: (Size) -> Size
+  ) -> Size {
     switch operation {
     case .padding(let insets):
-      let childSize = BlockEngine.measure(
-        content,
-        proposal: Size(
-          width: max(0, proposal.width - insets.leading - insets.trailing),
-          height: max(0, proposal.height - insets.top - insets.bottom)
-        ), context: context)
+      let childSize = measure(Size(
+        width: max(0, proposal.width - insets.leading - insets.trailing),
+        height: max(0, proposal.height - insets.top - insets.bottom)
+      ))
       return Size(
         width: childSize.width + insets.leading + insets.trailing,
         height: childSize.height + insets.top + insets.bottom
       )
     case .sizing(let x, let y):
-      let childSize = BlockEngine.measure(
-        content,
-        proposal: Size(
-          width: proposedSize(for: x, available: proposal.width),
-          height: proposedSize(for: y, available: proposal.height)
-        ), context: context)
+      let childSize = measure(Size(
+        width: proposedSize(for: x, available: proposal.width),
+        height: proposedSize(for: y, available: proposal.height)
+      ))
       return Size(
         width: resolvedSize(for: x, available: proposal.width, fitted: childSize.width),
         height: resolvedSize(for: y, available: proposal.height, fitted: childSize.height)
@@ -51,18 +55,26 @@ struct LayoutModifier: PrimitiveBlock, IdentityTransparentBlock {
   }
 
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    draw(into: &drawList, in: rect, context: context) { list, rect, context in
+      BlockEngine.draw(content, into: &list, in: rect, context: context)
+    }
+  }
+
+  @MainActor func draw(
+    into drawList: inout DrawList, in rect: Rect, context: BlockContext,
+    drawContent: (inout DrawList, Rect, BlockContext) -> Void
+  ) {
     switch operation {
     case .padding(let insets):
-      BlockEngine.draw(
-        content, into: &drawList,
-        in: Rect(
+      drawContent(
+        &drawList, Rect(
           x: rect.minX + insets.leading,
           y: rect.minY + insets.top,
           width: rect.size.width - insets.leading - insets.trailing,
-          height: rect.size.height - insets.top - insets.bottom
-        ), context: context)
+        height: rect.size.height - insets.top - insets.bottom
+        ), context)
     case .sizing:
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+      drawContent(&drawList, rect, context)
     }
   }
 
