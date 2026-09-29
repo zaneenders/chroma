@@ -295,10 +295,10 @@ struct FocusAndCommandRegressionTests {
 
   @Test func cancelLeavesEditingWhenTheFocusedScopeHasNoCancelAction() {
     let harness = Harness()
-    harness.render(TextField(text: { "text" }, onChange: { _ in }))
+    harness.render(TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }))
     harness.context.interaction.beginEditing(harness.context.interaction.selectedLeafID!, caretOffset: 0)
 
-    harness.render(TextField(text: { "text" }, onChange: { _ in }), input: InputState(commands: [.action(.cancel)]))
+    harness.render(TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }), input: InputState(commands: [.action(.cancel)]))
 
     #expect(harness.context.interaction.mode == .movement)
   }
@@ -387,7 +387,7 @@ struct FocusAndCommandRegressionTests {
           if index < rows.count {
             Button("Row \(index)") {}.focusTarget(rows[index])
           } else if fieldIsPresent {
-            TextField(text: { text }, onChange: { text = $0 }).focusTarget(field)
+            TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(field)
           } else {
             Button("Fallback") {}.focusTarget(fallback)
           }
@@ -467,7 +467,7 @@ struct FocusAndCommandRegressionTests {
     ) -> ResolvedKeyboardInput? {
       let harness = Harness()
       let target = FocusTarget()
-      let field = TextField(text: { "" }, onChange: { _ in })
+      let field = TextEditor(singleLine: true, text: { "" }, onChange: { _ in })
         .focusTarget(target)
         .keyBindings(scoped)
       target.focus(editing: true)

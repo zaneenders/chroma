@@ -7,7 +7,7 @@ struct TextInputPaintingTests {
   @Test(arguments: [false, true])
   func backgroundKeepsEditingAndHoverStylesSeparate(editing: Bool) {
     let theme = ChromaTheme.dark
-    let style = theme.textField
+    let style = theme.textEditor
     let rect = Rect(x: 0, y: 0, width: 100, height: 40)
     var list = DrawList()
     list.textInputBackground(in: rect, style: style, editing: editing, hover: .white)
@@ -22,6 +22,36 @@ struct TextInputPaintingTests {
           rect: rect, radii: CornerRadii(style.cornerRadius), width: style.borderWidth,
           color: editing ? style.editingBorder : style.border))
     #expect(list.commands.count == (editing ? 2 : 3))
+  }
+
+  @Test(arguments: [false, true])
+  func focusedTextInputHasBorderWithoutFocusFill(multiline: Bool) throws {
+    let context = BlockContext()
+    let producer = FrameProducer()
+    let content: any Block = multiline
+      ? TextEditor(text: { "abcd" }, onChange: { _ in })
+      : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
+    let size = Size(width: 200, height: 40)
+    func render() -> DrawList {
+      producer.render(content: content, viewport: size, input: InputState(), context: context, onChange: {})
+    }
+    _ = render()
+    let tree = try #require(context.interaction.tree)
+    let id = try #require(tree.firstLeafPath().flatMap { tree.node(at: $0)?.leafID })
+    context.interaction.focus(id)
+    let focused = render()
+    #expect(focused.commands.contains {
+      if case .strokeRoundedRect(_, _, let width, let color) = $0 {
+        return width == 2 && color == context.theme.focus.ring
+      }
+      return false
+    })
+    #expect(!focused.commands.contains {
+      if case .fillRoundedRect(_, _, let color) = $0 {
+        return color == HoverStyle.standardTint(in: context.theme)
+      }
+      return false
+    })
   }
 
   @Test func selectionRepaintsWholeGraphemesThroughAClip() {
@@ -62,7 +92,7 @@ struct TextInputPaintingTests {
     let content: any Block =
       multiline
       ? TextEditor(text: { "ab\ncd" }, onChange: { _ in })
-      : TextField(text: { "abcd" }, onChange: { _ in })
+      : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
     func render() -> DrawList {
       producer.render(
         content: content, viewport: Size(width: 200, height: 100), input: InputState(),
@@ -77,14 +107,14 @@ struct TextInputPaintingTests {
     let caret = render()
     #expect(
       caret.commands.contains {
-        if case .fillRect(_, let color) = $0 { return color == context.theme.textField.caret }
+        if case .fillRect(_, let color) = $0 { return color == context.theme.textEditor.caret }
         return false
       })
     context.interaction.textSelectionRange = 1..<4
     let selected = render()
     #expect(
       !selected.commands.contains {
-        if case .fillRect(_, let color) = $0 { return color == context.theme.textField.caret }
+        if case .fillRect(_, let color) = $0 { return color == context.theme.textEditor.caret }
         return false
       })
     let highlights = selected.commands.filter {

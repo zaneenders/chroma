@@ -8,6 +8,10 @@ struct DefaultFocusTests {
   private let parked = InputState(pointerPosition: Point(x: 500, y: 500))
   private let context = BlockContext()
 
+  private func focusBorder(_ rect: Rect) -> DrawCommand {
+    .strokeRect(rect: rect, width: 2, color: context.theme.focus.ring)
+  }
+
   private var standardHighlight: Color {
     HoverStyle.standardTint(in: context.theme)
   }
@@ -58,7 +62,7 @@ struct DefaultFocusTests {
     #expect(context.interaction.tree?.node(at: second ?? [])?.rect == rects.last)
   }
 
-  @Test func keyboardFocusAndPointerHoverDrawTheSameHighlight() {
+  @Test func keyboardFocusUsesBorderWhilePointerHoverUsesTint() {
     let content = VStack(spacing: 10) {
       Text("alpha")
       Text("beta")
@@ -70,16 +74,16 @@ struct DefaultFocusTests {
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     let keyboard = render(content, input: parked)
     let focused = highlightCommands(in: keyboard, for: target)
-    #expect(!focused.isEmpty, "keyboard focus highlights the text")
+    #expect(keyboard.commands.contains(focusBorder(target)))
+    #expect(focused.isEmpty)
 
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.up)]))
     let hovered = render(
       content,
       input: InputState(pointerPosition: Point(x: target.minX + 1, y: target.minY + 1)))
     #expect(context.interaction.hoveredLeafID != nil)
-    #expect(
-      highlightCommands(in: hovered, for: target) == focused,
-      "pointer hover shows the same UI state as keyboard focus")
+    #expect(hovered.commands.contains(.fillRect(rect: target, color: standardHighlight)))
+    #expect(!hovered.commands.contains(focusBorder(target)))
   }
 
   @Test func pressingUsesThePressedTint() {
@@ -157,7 +161,7 @@ struct DefaultFocusTests {
 
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     let list = render(content, input: parked)
-    #expect(!highlightCommands(in: list, for: leafRects()[1]).isEmpty, "the whole row highlights")
+    #expect(list.commands.contains(focusBorder(leafRects()[1])))
   }
 
   @Test func backgroundsStayDecorative() {
@@ -196,7 +200,8 @@ struct DefaultFocusTests {
     #expect(rects == [Rect(x: 0, y: 0, width: 50, height: 40), Rect(x: 50, y: 0, width: 50, height: 40)])
 
     let focused = render(content, input: parked)
-    #expect(focused.commands.contains(.fillRect(rect: rects[0], color: standardHighlight)))
+    #expect(focused.commands.contains(focusBorder(rects[0])))
+    #expect(!focused.commands.contains(.fillRect(rect: rects[0], color: standardHighlight)))
 
     let hovered = render(content, input: InputState(pointerPosition: Point(x: 60, y: 10)))
     #expect(hovered.commands.contains(.fillRect(rect: rects[1], color: standardHighlight)))

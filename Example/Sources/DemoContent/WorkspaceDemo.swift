@@ -255,9 +255,9 @@ private struct NavigationGuide: PrimitiveBlock {
     let location = context.navigationBreadcrumb.joined(separator: " / ")
     let hint =
       context.isSelectingText
-      ? "dfjk caret   Shift+dfjk select   s out   Enter input   Cmd/Ctrl+C copy"
+      ? "d/f/j/k move insertion point   Shift+d/f/j/k select text   Enter type   Cmd/Ctrl+C copy"
       : editing
-        ? "Escape  MOVE inside text     Enter  newline     Select Send to post."
+        ? "Shift+arrows select text   Escape moves insertion point without typing"
         : "dfjk move   Shift+dfjk section     s out     l \(context.navigationSelectionIsGroup ? "enter" : "enter / use")"
     drawList.fillRoundedRect(rect, radius: 8, color: WorkspacePalette.card)
     drawList.pushClip(rect)

@@ -29,7 +29,7 @@ struct TextSelectionTests {
     var value = "editable"
     let content = VStack {
       Text("selectable").selectable()
-      TextField(text: { value }, onChange: { value = $0 })
+      TextEditor(singleLine: true, text: { value }, onChange: { value = $0 })
     }
     func render(_ input: InputState = InputState()) {
       _ = producer.render(

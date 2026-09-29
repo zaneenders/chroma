@@ -75,6 +75,11 @@ public enum BlockEngine {
     let leafState = context.interaction.untrackedLeafState
     let pressed = leafState.pressed == id && context.interaction.input.pointerDown
     guard leafState.selected == id || leafState.hovered == id || pressed else { return }
+    if context.hoverStyle == HoverStyle.none { return }
+    if leafState.selected == id && !pressed && context.hoverStyle == nil {
+      drawList.strokeRect(rect, width: 2, color: context.theme.focus.ring)
+      return
+    }
     switch context.hoverStyle ?? .standard {
     case .none:
       return

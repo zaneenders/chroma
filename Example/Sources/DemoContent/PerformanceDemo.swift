@@ -356,7 +356,7 @@ struct PerformanceDemo: Block {
           state.page = .font
         }
         Spacer()
-        Text("f/j/d/k or arrows navigate • s steps out, l steps in • Enter select • Esc exits input")
+        Text("d/f/j/k navigate • s steps out, l steps in • Enter select • Esc exits input")
           .fontScale(demoSmallText)
           .hover(.none)
       }
@@ -365,13 +365,13 @@ struct PerformanceDemo: Block {
           Text("CLIPBOARD")
           Text("Drag to select this text, then copy it to another app.")
             .fontScale(0.65).selectable()
-          TextField(
-            "Copy source", fontScale: 0.7,
+          TextEditor(
+            "Copy source", fontScale: 0.7, singleLine: true,
             text: { state.sourceText }, onChange: { state.sourceText = $0 })
-          TextField(
-            "Paste here…", fontScale: 0.7,
+          TextEditor(
+            "Paste here…", fontScale: 0.7, singleLine: true,
             text: { state.pastedText }, onChange: { state.pastedText = $0 })
-          Text("Copy / cut / paste / select all: platform shortcut modifier + C / X / V / A. Escape ends editing.")
+          Text("Click text, then Escape to move with d/f/j/k; Shift+d/f/j/k selects. Cmd/Ctrl+A selects all.")
             .fontScale(0.55)
           Spacer()
         }.padding(20).hover(.none)

@@ -24,7 +24,7 @@ struct NavigationContractTests {
     let content = VStack {
       Group("First") { Button("One") {}.focusTarget(first) }
       Group("Second") {
-        TextField(text: { "" }, onChange: { _ in }).focusTarget(field)
+        TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(field)
         Button("Three") {}.focusTarget(last)
       }
     }
@@ -53,7 +53,7 @@ struct NavigationContractTests {
       Group("Sessions") { Button("Session") {} }.sizing(x: .fixed(150), y: .grow)
       Group("Composer") {
         HStack {
-          TextField(text: { "" }, onChange: { _ in }).focusTarget(input)
+          TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(input)
           Button("Send") {}.focusTarget(send)
         }
       }.sizing(x: .grow, y: .grow)
@@ -135,7 +135,7 @@ struct NavigationContractTests {
     var draft = ""
     let content = VStack {
       Text("café\n👨‍👩‍👧‍👦 tea").selectable()
-      TextField(text: { draft }, onChange: { draft = $0 })
+      TextEditor(singleLine: true, text: { draft }, onChange: { draft = $0 })
     }
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn)])
@@ -185,7 +185,7 @@ extension NavigationContractTests {
     let field = FocusTarget()
     let content = Group("Composer") {
       HStack {
-        TextField(text: { value }, onChange: { value = $0 }).focusTarget(field)
+        TextEditor(singleLine: true, text: { value }, onChange: { value = $0 }).focusTarget(field)
         Button("Send") {}
       }
     }

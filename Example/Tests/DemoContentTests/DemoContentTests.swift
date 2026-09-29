@@ -80,7 +80,13 @@ struct DemoContentTests {
       #expect(apple.keyBindings.command(for: KeyChord(key), isTextEditing: true) == nil)
       #expect(linux.keyBindings.command(for: KeyChord(key), isTextEditing: true) == nil)
     }
-    for key: Key in [.pageUp, .pageDown] {
+    for (key, direction): (Character, NavigationCommand) in [
+      ("d", .left), ("f", .up), ("j", .down), ("k", .right),
+    ] {
+      #expect(apple.keyBindings.command(for: KeyChord(key), isTextEditing: false)! == .navigation(direction))
+      #expect(linux.keyBindings.command(for: KeyChord(key), isTextEditing: false)! == .navigation(direction))
+    }
+    for key: Key in [.leftArrow, .rightArrow, .upArrow, .downArrow, .pageUp, .pageDown] {
       #expect(apple.keyBindings.command(for: KeyChord(key)) == nil)
       #expect(linux.keyBindings.command(for: KeyChord(key)) == nil)
     }
@@ -152,7 +158,7 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
 }
 
 @MainActor
-@Test func fontPageArrowKeysMoveTheGlyphHighlight() throws {
+@Test func fontPageMovementCommandsMoveTheGlyphHighlight() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
   let renderer = HeadlessHost(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
@@ -285,7 +291,8 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
 
   func tintRects() -> [Rect] {
     renderer.render(input: parked).commands.compactMap { command -> Rect? in
-      if case .fillRect(let rect, let color) = command, color == tint { return rect }
+      if case .strokeRect(let rect, let width, let color) = command,
+        width == 2, color == ChromaTheme.dark.focus.ring { return rect }
       return nil
     }
   }
@@ -316,7 +323,7 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
 }
 
 extension DemoContentTests {
-  @Test func scenePageScrollsTheUuidListWithArrowKeys() throws {
+  @Test func scenePageScrollsTheUuidListWithMovementCommands() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
     let renderer = HeadlessHost(size: demo.windowSize)
     let gallery = PerformanceDemoState(itemCount: 100)
@@ -367,9 +374,8 @@ extension DemoContentTests {
 
     func tintRects() -> [Rect] {
       renderer.render(input: parked).commands.compactMap { command -> Rect? in
-        if case .fillRect(let rect, let color) = command, color == HoverStyle.standardTint(in: .dark) {
-          return rect
-        }
+        if case .strokeRect(let rect, let width, let color) = command,
+          width == 2, color == ChromaTheme.dark.focus.ring { return rect }
         return nil
       }
     }

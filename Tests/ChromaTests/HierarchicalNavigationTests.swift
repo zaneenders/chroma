@@ -30,7 +30,7 @@ struct HierarchicalNavigationTests {
           Group("History") { Button("Message") {} }.sizing(x: .grow, y: .grow)
           Group("Composer") {
             HStack {
-              TextField(text: { "" }, onChange: { _ in }).focusTarget(input)
+              TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(input)
               Button("Send") {}
             }
           }
@@ -83,7 +83,7 @@ struct HierarchicalNavigationTests {
     var activations = 0
     let content = Group {
       HStack {
-        TextField(text: { text }, onChange: { text = $0 }).focusTarget(input)
+        TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(input)
         Button("Send") { activations += 1 }.focusTarget(button)
       }
     }

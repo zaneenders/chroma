@@ -22,8 +22,8 @@ struct FontDemo: Block {
             VStack(spacing: 16) {
               VStack(spacing: 8) {
                 heading("LIVE PREVIEW", theme)
-                TextField(
-                  "Type a sample", fontScale: 0.65,
+                TextEditor(
+                  "Type a sample", fontScale: 0.65, singleLine: true,
                   text: { state.fontSample }, onChange: { state.fontSample = $0 })
                 Text(state.fontSample).fontScale(state.fontScale)
                   .selectable()

@@ -9,7 +9,7 @@ import Testing
 
     #expect(theme.accent == accent)
     #expect(theme.button.pressedBackground == accent)
-    #expect(theme.textField.editingBorder == accent)
+    #expect(theme.textEditor.editingBorder == accent)
     #expect(theme.focus.ring == accent)
   }
 

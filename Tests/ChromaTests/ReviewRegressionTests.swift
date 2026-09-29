@@ -78,11 +78,11 @@ struct ReviewRegressionTests {
     renderer.close()
   }
 
-  @Test func builtInTextFieldHandlesShrinkingCapturedText() {
+  @Test func builtInTextEditorHandlesShrinkingCapturedText() {
     let model = Model()
     let renderer = HeadlessHost()
-    func field(_ text: String) -> TextField {
-      TextField(id: WidgetID("editor"), text: { text }, onChange: { model.text = $0 })
+    func field(_ text: String) -> TextEditor {
+      TextEditor(singleLine: true, text: { text }, onChange: { model.text = $0 })
     }
     renderer.content = DeferredBlock { field(model.text) }
     renderer.render()

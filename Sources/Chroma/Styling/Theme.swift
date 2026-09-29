@@ -23,7 +23,7 @@ public struct ButtonStyle: Equatable, Sendable {
   }
 }
 
-public struct TextFieldStyle: Equatable, Sendable {
+public struct TextEditorStyle: Equatable, Sendable {
   public var idleBackground: Color
   public var editingBackground: Color
   public var foreground: Color
@@ -107,7 +107,7 @@ public struct ChromaTheme: Equatable, Sendable {
   public var negative: Color
   public var warning: Color
   public var button: ButtonStyle
-  public var textField: TextFieldStyle
+  public var textEditor: TextEditorStyle
   public var scrollView: ScrollViewStyle
   public var focus: FocusStyle
 
@@ -123,7 +123,7 @@ public struct ChromaTheme: Equatable, Sendable {
     negative: Color,
     warning: Color,
     button: ButtonStyle,
-    textField: TextFieldStyle,
+    textEditor: TextEditorStyle,
     scrollView: ScrollViewStyle,
     focus: FocusStyle
   ) {
@@ -138,7 +138,7 @@ public struct ChromaTheme: Equatable, Sendable {
     self.negative = negative
     self.warning = warning
     self.button = button
-    self.textField = textField
+    self.textEditor = textEditor
     self.scrollView = scrollView
     self.focus = focus
   }
@@ -147,7 +147,7 @@ public struct ChromaTheme: Equatable, Sendable {
     var copy = self
     copy.accent = color
     copy.button.pressedBackground = color
-    copy.textField.editingBorder = color
+    copy.textEditor.editingBorder = color
     copy.focus.ring = color
     return copy
   }
@@ -168,7 +168,7 @@ public struct ChromaTheme: Equatable, Sendable {
       pressedBackground: Color(r: 0.11, g: 0.37, b: 0.13, a: 1),
       foreground: .white,
       border: Color(r: 0.16, g: 0.19, b: 0.25, a: 1)),
-    textField: TextFieldStyle(
+    textEditor: TextEditorStyle(
       idleBackground: Color(r: 0.09, g: 0.11, b: 0.15, a: 1),
       editingBackground: Color(r: 0.055, g: 0.07, b: 0.11, a: 1),
       foreground: .white,

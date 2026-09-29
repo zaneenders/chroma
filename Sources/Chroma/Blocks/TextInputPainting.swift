@@ -1,6 +1,6 @@
 extension DrawList {
   mutating func textInputBackground(
-    in rect: Rect, style: TextFieldStyle, editing: Bool, hover: Color? = nil
+    in rect: Rect, style: TextEditorStyle, editing: Bool, hover: Color? = nil
   ) {
     fillRoundedRect(rect, radius: style.cornerRadius, color: editing ? style.editingBackground : style.idleBackground)
     if !editing, let hover { fillRoundedRect(rect, radius: style.cornerRadius, color: hover) }

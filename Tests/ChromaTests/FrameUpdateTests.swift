@@ -42,7 +42,7 @@ struct FrameUpdateTests {
     renderer.content = DeferredBlock {
       VStack {
         Text(model.text)
-        TextField(id: WidgetID("editor"), text: { model.text }, onChange: { model.text = $0 })
+        TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 })
       }
     }
     renderer.render()

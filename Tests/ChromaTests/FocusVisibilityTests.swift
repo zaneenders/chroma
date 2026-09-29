@@ -71,7 +71,7 @@ struct FocusVisibilityTests {
     var text = ""
     var cancelCalls = 0
     let content = VStack {
-      TextField(text: { text }, onChange: { text = $0 })
+      TextEditor(singleLine: true, text: { text }, onChange: { text = $0 })
         .onCommand(.action(.cancel)) {
           cancelCalls += 1
           return .handled

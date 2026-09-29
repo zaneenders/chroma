@@ -41,7 +41,7 @@ struct StructuralInteractionTests {
       VStack {
         ForEach(keys.map { Entry($0) }, id: \.key) { entry in
           if entry.key == 1 {
-            TextField(text: { "hello" }, onChange: { _ in }).focusTarget(target)
+            TextEditor(singleLine: true, text: { "hello" }, onChange: { _ in }).focusTarget(target)
           } else {
             Button("Other") {}
           }
@@ -61,7 +61,7 @@ struct StructuralInteractionTests {
     let harness = Harness()
     let target = FocusTarget()
     func content(_ key: Int) -> some Block {
-      TextField(text: { "hello" }, onChange: { _ in }).focusTarget(target).id(key)
+      TextEditor(singleLine: true, text: { "hello" }, onChange: { _ in }).focusTarget(target).id(key)
     }
     target.focus(editing: true)
     harness.render(content(1))
@@ -103,8 +103,8 @@ struct StructuralInteractionTests {
     let first = FocusTarget()
     let second = FocusTarget()
     let content = VStack {
-      TextField(text: { "hello" }, onChange: { _ in }).focusTarget(first)
-      TextField(text: { "other" }, onChange: { _ in }).focusTarget(second)
+      TextEditor(singleLine: true, text: { "hello" }, onChange: { _ in }).focusTarget(first)
+      TextEditor(singleLine: true, text: { "other" }, onChange: { _ in }).focusTarget(second)
     }
     let changed = Mutex(false)
     withObservationTracking {
@@ -184,7 +184,7 @@ struct StructuralInteractionTests {
     func content(_ ids: [Int], styled: Bool) -> VStack {
       let rows = ForEach(ids.map { Item(id: $0) }) { item in
         if item.id == 1 {
-          TextField(text: { text }, onChange: { text = $0 }).focusTarget(target)
+          TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(target)
         } else {
           Button("Other") {}
         }
@@ -296,11 +296,11 @@ struct StructuralInteractionTests {
     #expect(harness.context.interaction.selection == [0, 2])
   }
 
-  @Test func implicitTextFieldPreservesEditingAcrossRebuilds() {
+  @Test func implicitTextEditorPreservesEditingAcrossRebuilds() {
     let harness = Harness()
     var text = "hello"
-    func field(_ placeholder: String) -> TextField {
-      TextField(placeholder, text: { text }, onChange: { text = $0 })
+    func field(_ placeholder: String) -> TextEditor {
+      TextEditor(placeholder, singleLine: true, text: { text }, onChange: { text = $0 })
     }
     harness.render(field("Before"))
     harness.render(field("Before"), input: InputState(commands: [.action(.activate)]))
@@ -372,7 +372,7 @@ struct StructuralInteractionTests {
   @Test func focusRequestBeforeTraversalBindsWithoutChangingIdentity() {
     let harness = Harness()
     let target = FocusTarget()
-    let field = TextField(text: { "hello" }, onChange: { _ in })
+    let field = TextEditor(singleLine: true, text: { "hello" }, onChange: { _ in })
     let expected = BlockEngine.resolve(field, context: harness.context).context.widgetID
     target.focus(editing: true)
     harness.render(field.padding(4).focusTarget(target))
@@ -405,7 +405,7 @@ struct StructuralInteractionTests {
   @Test func focusBindingInvalidatesOnRemovalAndRebindsAfterMove() {
     let harness = Harness()
     let target = FocusTarget()
-    let field = TextField(text: { "hello" }, onChange: { _ in }).focusTarget(target)
+    let field = TextEditor(singleLine: true, text: { "hello" }, onChange: { _ in }).focusTarget(target)
     target.focus(editing: true)
     harness.render(field)
     let original = harness.context.interaction.editingLeaf
