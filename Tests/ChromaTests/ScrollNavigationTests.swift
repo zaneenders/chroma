@@ -93,6 +93,29 @@ struct ScrollNavigationTests {
     #expect(calls == 0)
   }
 
+  @Test func pendingRowRevealSurvivesLayoutWidthChange() {
+    let h = Harness()
+    let controller = ScrollViewController()
+    let content = ScrollView(data: 0..<20, rowHeight: 20, controller: controller) { index in
+      Button("Row \(index)") {}
+    }
+    h.render(content)
+    h.render(content, [.down, .stepIn])
+    let interaction = h.context.interaction
+    guard let scrollID = interaction.scrollStates.first(where: { $0.value.layout != nil })?.key else {
+      Issue.record("Missing scroll layout")
+      return
+    }
+    interaction.scrollStates[scrollID]?.pendingReveal = Rect(x: 0, y: 300, width: 200, height: 20)
+    let expectedFocus = Interaction.PendingFocus(leaf: WidgetID("row-15"), scrollID: scrollID)
+    interaction.pendingFocus = expectedFocus
+    _ = h.producer.render(
+      content: content, viewport: Size(width: 150, height: 100), input: InputState(),
+      context: h.context, onChange: {})
+    #expect(controller.offset > 0)
+    #expect(interaction.pendingFocus == expectedFocus)
+  }
+
   @Test func scrollControllerRestoresBothAxesAndResetsForNewIdentity() {
     let h = Harness()
     let controller = ScrollViewController()

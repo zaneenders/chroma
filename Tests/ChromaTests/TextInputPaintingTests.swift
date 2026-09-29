@@ -42,6 +42,19 @@ struct TextInputPaintingTests {
       ])
   }
 
+  @Test func draggingBelowShortEditorKeepsViewportAtFirstRow() {
+    let context = BlockContext()
+    let editor = TextEditor(text: { "short" }, onChange: { _ in })
+    context.interaction.beginFrame(input: InputState(
+      pointerPosition: Point(x: 20, y: 99), pointerPressPosition: Point(x: 20, y: 16),
+      pointerDown: true, pointerPressed: true))
+    context.interaction.textDragViewportRow = 0
+    #expect(context.interaction.isDragging)
+    var list = DrawList()
+    editor.draw(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100), context: context)
+    #expect(context.interaction.textDragViewportRow == 0)
+  }
+
   @Test(arguments: [false, true])
   func selectionSuppressesCaretAndPreservesBalancedClips(multiline: Bool) throws {
     let context = BlockContext()

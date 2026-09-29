@@ -72,7 +72,7 @@ public struct TextEditor: PrimitiveBlock {
           ? interaction.caretOffset : nil)
     if interaction.isDragging, interaction.textDragViewportRow != nil {
       if interaction.dragCurrent.y >= inner.maxY {
-        interaction.textDragViewportRow = min(layout.lines.count - visibleCount, viewportRow + 1)
+        interaction.textDragViewportRow = min(max(0, layout.lines.count - visibleCount), viewportRow + 1)
       } else if interaction.dragCurrent.y < inner.minY {
         interaction.textDragViewportRow = max(0, viewportRow - 1)
       }

@@ -556,8 +556,6 @@ extension Interaction {
     if let previous = scrollStates[id]?.layout, previous != layout {
       scrollStates[id, default: ScrollState()].rows = [:]
       scrollStates[id, default: ScrollState()].rowKeys = [:]
-      scrollStates[id, default: ScrollState()].pendingReveal = nil
-      if pendingFocus?.scrollID == id { pendingFocus = nil }
     }
     scrollStates[id, default: ScrollState()].layout = layout
   }
