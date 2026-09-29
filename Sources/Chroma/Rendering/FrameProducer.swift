@@ -85,7 +85,6 @@ package final class FrameProducer {
         if !wasEditing { interaction.stopInput() }
       }
     }
-    // Refresh targets before dispatching input to previous-frame registrations.
     if !input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed || input.pointerReleased
       || input.scrollDelta != .zero
     {
@@ -123,7 +122,6 @@ package final class FrameProducer {
     _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = []
   ) {
     let interaction = context.interaction
-    // Bootstrap initializes input normally; both passes defer scroll requests until painting.
     interaction.refreshingRegistrations = interaction.tree != nil
     interaction.beginFrame(input: InputState(commands: commands))
     interaction.refreshingRegistrations = true

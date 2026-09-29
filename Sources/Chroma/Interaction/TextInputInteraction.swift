@@ -228,7 +228,6 @@ extension Interaction {
   }
 }
 
-
 private enum TextEditingOperation {
   private enum Kind: Equatable { case space, word, punctuation }
 

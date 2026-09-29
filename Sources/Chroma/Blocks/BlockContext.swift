@@ -5,16 +5,11 @@ public struct BlockContext {
   var backgroundDepth = 0
   var focusTargets: [FocusTarget] = []
 
-  /// Set while drawing content that a registered leaf already owns — Interactive content,
-  /// decorative backgrounds — so it does not register default focus leaves of its own.
   var focusLeafClaimed = false
   var navigationIgnored = false
 
-  /// Overrides the highlight drawn for default focus leaves; `nil` uses the theme standard.
   public var hoverStyle: HoverStyle?
 
-  /// Use distinct, stable slots for custom-container children in both measurement and drawing.
-  /// Slots describe source structure, not visible-child indices or draw order.
   public func childScope(_ slot: Int) -> BlockContext {
     scoped([.slot(slot)])
   }
@@ -127,11 +122,6 @@ public struct BlockContext {
       id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
   }
 
-  /// Registers a focus leaf for content a custom primitive paints itself and draws the
-  /// standard highlight over it: keyboard focus, pointer hover, and press all tint the
-  /// leaf like default content. Call after drawing the leaf's content so the highlight
-  /// layers over it. `.navigationIgnored()` removes the leaves; `.hover(.tint)` recolors the
-  /// highlight. Controls that paint their own feedback use `buttonState` instead.
   @discardableResult
   public func focusable(
     in rect: Rect, into drawList: inout DrawList,
@@ -187,9 +177,6 @@ public struct BlockContext {
       submitInsertsNewline: submitInsertsNewline)
   }
 
-  ///
-  /// `axis` declares the direction siblings inside the closure are laid out in, so custom containers
-  /// navigate like the built-in stacks. Nested groups declare their own axis; `nil` inherits movement
   public func withFocusGroup<Result>(
     in rect: Rect,
     axis: FocusGroupAxis? = nil,

@@ -28,7 +28,6 @@ final class CaretClock {
       while !Task.isCancelled {
         let seconds = self?.visible == true ? 0.72 : 0.48
         do { try await sleep(.seconds(seconds)) } catch { return }
-        // Cancellation may arrive after the sleep finishes but before this task resumes.
         guard !Task.isCancelled, let self else { return }
         self.visible.toggle()
       }

@@ -12,9 +12,7 @@ public enum NavigationCommand: Hashable, Sendable {
   case right
   case nextFocus, previousFocus
   case sectionUp, sectionDown, sectionLeft, sectionRight
-  /// Enters the selected group or activates the selected control.
   case stepIn
-  /// Selects the containing group.
   case stepOut
 }
 

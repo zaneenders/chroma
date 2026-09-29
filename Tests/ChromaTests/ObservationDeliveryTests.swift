@@ -26,7 +26,6 @@ struct ObservationDeliveryTests {
     renderer.render()
     for height: Float in [50, 80] {
       model.height = height
-      // Await the real redraw, not elapsed time or an assumed executor order.
       let redraw: Void? = await iterator.next()
       try #require(redraw != nil)
       renderer.render()

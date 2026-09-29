@@ -90,7 +90,6 @@ struct FocusVisibilityTests {
   }
 }
 
-/// A column taller than the clip it is drawn in, with no scroll container to reveal it.
 private struct ClippedColumn: PrimitiveBlock {
   var focusRule: FocusRule { .container }
 

@@ -43,7 +43,6 @@ public enum BlockBuilder {
       let children = collectionChildren(modifier.content, prefix: prefix)
     else { return nil }
     return children.map { scoped in
-      // Keep collection scopes outside the modifier so backgrounds are row-scoped too.
       var copy = modifier
       copy.content = scoped.content
       return ScopedBlock(content: copy, path: scoped.path)

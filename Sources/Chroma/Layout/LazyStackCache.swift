@@ -34,7 +34,6 @@ final class LazyRowMeasurement {
   @ObservationIgnored private var subscription: FrameTrackingSubscription?
 
   var valid: Bool {
-    // Always track delivery, even when the synchronous dirty bit is already set.
     let delivered = invalidationDelivered
     return validity.valid.withLock { $0 } && !delivered
   }
@@ -50,8 +49,6 @@ final class LazyRowMeasurement {
       return measure()
     } onChange: { event in
       event.cancel()
-      // Observation can fire on any executor. Invalidate before a synchronous render
-      // can reuse the size; deliver observable redraw demand on the main actor.
       validity.valid.withLock { $0 = false }
       guard let invalidate = subscription.takeCallback() else { return }
       enqueue { invalidate() }

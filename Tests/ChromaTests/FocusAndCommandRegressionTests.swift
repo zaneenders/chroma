@@ -54,7 +54,6 @@ struct FocusAndCommandRegressionTests {
   @Test func keyedTupleChildHandlerDoesNotInterceptSibling() {
     let harness = Harness()
     var calls = 0
-    // The button is the first leaf, so the keyed child's handler must not intercept for it.
     let content = BlockBuilder.buildBlock(
       Button("Sibling") {},
       Text("No controls")
@@ -501,7 +500,6 @@ struct FocusAndCommandRegressionTests {
   }
 }
 
-/// Draws a `rows` x `columns` grid of controls using only public container APIs.
 private struct GridProbe: PrimitiveBlock {
   let rows: Int
   let columns: Int

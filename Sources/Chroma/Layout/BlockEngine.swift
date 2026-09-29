@@ -43,14 +43,6 @@ public enum BlockEngine {
     drawResolved(resolved.primitive, into: &drawList, in: rect, context: resolved.context)
   }
 
-  /// Draws a resolved primitive. A `.standard` primitive that draws without registering a
-  /// focus node becomes the default focus leaf itself: the engine registers its rect and
-  /// paints the standard highlight, so keyboard focus and pointer hover reach every
-  /// visible element — text, images, custom content — and both draw the same highlight.
-  /// `.control` primitives must register their own leaf while drawing; `.container`
-  /// primitives own their focus structure; `.decorative` primitives never join the tree.
-  /// Content a registered leaf already owns (`focusLeafClaimed`) and `.navigationIgnored()`
-  /// content never register a default leaf.
   static func drawResolved(
     _ primitive: any PrimitiveBlock,
     into drawList: inout DrawList,

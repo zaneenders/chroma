@@ -168,7 +168,6 @@ struct DefaultFocusTests {
     #expect(context.interaction.tree?.firstLeafPath() != nil)
   }
 
-  /// A custom primitive that paints cells the way immediate-mode content does.
   private struct CellGrid: PrimitiveBlock {
     let action: (@MainActor () -> Void)?
 
@@ -196,15 +195,12 @@ struct DefaultFocusTests {
     let rects = leafRects()
     #expect(rects == [Rect(x: 0, y: 0, width: 50, height: 40), Rect(x: 50, y: 0, width: 50, height: 40)])
 
-    // Keyboard focus paints the standard tint over the first cell.
     let focused = render(content, input: parked)
     #expect(focused.commands.contains(.fillRect(rect: rects[0], color: standardHighlight)))
 
-    // Pointer hover paints the same tint over the hovered cell.
     let hovered = render(content, input: InputState(pointerPosition: Point(x: 60, y: 10)))
     #expect(hovered.commands.contains(.fillRect(rect: rects[1], color: standardHighlight)))
 
-    // Pressing uses the pressed tint.
     let list = render(
       content,
       input: InputState(pointerPosition: Point(x: 60, y: 10), pointerDown: true, pointerPressed: true))

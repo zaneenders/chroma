@@ -50,7 +50,6 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     displayRenderer = try MetalDisplayListRenderer(device: device, pixelFormat: view.colorPixelFormat)
     super.init()
     view.delegate = self
-    // Process each input event before the next one (including clipboard operations).
     view.onInputAvailable = { [weak self] in self?.view.draw() }
     view.onKey = { [weak self] input in self?.handleKey(input) }
     interaction.onRedrawRequested = { [weak self] in self?.view.needsDisplay = true }
@@ -107,7 +106,6 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     runtime.reset()
     onClose?()
     NSApplication.shared.stop(nil)
-    // Wake the run loop so run() returns even when the window was its last event source.
     if let event = NSEvent.otherEvent(
       with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0,
       windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0)

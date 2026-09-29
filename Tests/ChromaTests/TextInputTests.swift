@@ -46,12 +46,12 @@ struct TextInputTests {
     }
     let left: TextEditEvent = .move(.word, .backward, extendSelection: false)
     let right: TextEditEvent = .move(.word, .forward, extendSelection: false)
-    #expect(edit(left).caretOffset == 9) // skip trailing whitespace, then emoji
-    #expect(edit(left).caretOffset == 7) // punctuation and preceding space
+    #expect(edit(left).caretOffset == 9)
+    #expect(edit(left).caretOffset == 7)
     #expect(edit(.move(.word, .backward, extendSelection: true)).selectionRange == 4..<7)
     #expect(edit(.move(.word, .forward, extendSelection: true)).selectionRange == nil)
     #expect(edit(.move(.word, .forward, extendSelection: true)).selectionRange == 7..<9)
-    #expect(edit(left).caretOffset == 7) // collapse without moving another word
+    #expect(edit(left).caretOffset == 7)
     #expect(edit(right).caretOffset == 9)
     #expect(text == "one two! 👨‍👩‍👧‍👦")
   }

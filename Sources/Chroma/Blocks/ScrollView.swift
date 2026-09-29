@@ -4,7 +4,6 @@ public struct ScrollView: PrimitiveBlock {
     public var content: any Block {
       didSet { measurementIdentity = LazyRowIdentity() }
     }
-    // Copies retain measurements; replacing content or constructing a row invalidates them.
     var measurementIdentity = LazyRowIdentity()
     let key: StructuralKey
 
@@ -300,10 +299,6 @@ public struct ScrollView: PrimitiveBlock {
     }
   }
 
-  /// Rows without controls of their own stay reachable: the row itself becomes a focus leaf, so arrow
-  /// keys step through the list and reveal the focused row. Row content is claimed by that leaf —
-  /// text inside a row is part of the row's selection rather than a stop of its own, while controls
-  /// in the row still register themselves.
   @MainActor private func drawRow(
     _ content: any Block, into drawList: inout DrawList, in rect: Rect,
     context rowContext: BlockContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
@@ -324,8 +319,6 @@ public struct ScrollView: PrimitiveBlock {
       rowKey: rowKey, interaction: interaction)
   }
 
-  /// Logs where the focused leaf of a drawn row sits in the list's content, so a remembered
-  /// row can be revealed even after virtualization discards it.
   @MainActor private func recordScrollRows(
     in nodes: ArraySlice<FocusNode>, offset: Float, scrollID: WidgetID,
     rowKey: StructuralKey, interaction: Interaction

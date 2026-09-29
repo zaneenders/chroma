@@ -87,7 +87,6 @@ struct RenderBenchmark {
       let cullStart = now()
       let replay = source.culled(to: viewport)
       durations["cull"] = now() - cullStart
-      // Keep the culling result observable even in the CPU-only benchmark.
       guard replay.commands.count <= source.commands.count else {
         throw BenchmarkError.failed("Culling increased command count")
       }

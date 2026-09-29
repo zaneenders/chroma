@@ -156,7 +156,6 @@ struct ReviewRegressionTests {
     #expect(capture.clicks == 1)
     #expect(capture.inputs == [InputState(), textInput])
 
-    // The refresh must still allow a new activation in the actual input pass.
     renderer.render(
       input: InputState(
         commands: [.action(.activate)], textEvents: [.insert("y")]))
@@ -196,7 +195,6 @@ struct ReviewRegressionTests {
       #expect(capture.drawnHeight == height)
     }
     #expect(capture.measurements == 4)
-    // Queued callbacks for replaced measurements must not invalidate the new cache.
     await drainObservationChanges()
     renderer.render()
     #expect(capture.measurements == 4)

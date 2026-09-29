@@ -20,7 +20,6 @@ public struct CommandHandlerBlock: PrimitiveBlock, IdentityTransparentBlock {
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let interaction = context.interaction
-    // Root handlers remain available even when the content has no focusable controls.
     let isRoot =
       interaction.builderPath.isEmpty
       && context.structuralPath.segments.allSatisfy {

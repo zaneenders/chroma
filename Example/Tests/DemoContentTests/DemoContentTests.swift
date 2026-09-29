@@ -71,7 +71,6 @@ struct DemoContentTests {
     #expect(apple.keyBindings.command(for: KeyChord("c", modifiers: .command))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .superKey))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .command)) == nil)
-    // Plain s/l step in and out of focus scopes; they stay free for text while editing.
     for (key, command) in [
       (Key.character("s"), NavigationCommand.stepOut),
       (Key.character("l"), NavigationCommand.stepIn),
@@ -105,8 +104,6 @@ private func clickFontTab(_ renderer: HeadlessHost) throws {
       pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
 }
 
-/// The glyph grid's focused cell draws a 40 x 40 tint; every other stop on the font page
-/// has a different size, so the tint identifies the grid without activating anything.
 @MainActor
 private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   let frame = renderer.render(input: InputState(pointerPosition: Point(x: 5000, y: 5000)))
@@ -162,7 +159,6 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
 
-  /// The glyph grid draws the inspected cell in the accent color; the page heading supplies that color.
   func highlightedCell() -> Point? {
     let frame = renderer.render()
     var accent: Color?
@@ -184,8 +180,6 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   renderer.render(input: InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
   let initialHighlight = try #require(highlightedCell())
   let cell: Float = 40
-  // Arrow keys stop on every focusable element — tabs, headings, the preview field —
-  // so walk down until the grid takes focus.
   for _ in 0..<50 {
     press(.navigation(.down))
     if focusedGlyphCell(renderer) != nil { break }
@@ -247,11 +241,8 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   press(.navigation(.down))
   #expect(activate() == before)
 
-  // Esc resolves to the edit-exit event while a field is being edited.
   renderer.render(input: InputState(textEvents: [.endEditing]))
-  // Leave the text level before navigating the surrounding controls.
   press(.navigation(.stepOut))
-  // Walk down until the grid takes focus, then activate.
   for _ in 0..<50 {
     press(.navigation(.down))
     if focusedGlyphCell(renderer) != nil { break }
@@ -299,12 +290,10 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
     }
   }
 
-  // Explicitly select the first cell from the window root.
   renderer.render(input: parked)
   renderer.render(input: InputState(commands: [.navigation(.down)]))
   #expect(tintRects() == [Rect(x: 0, y: 0, width: 40, height: 40)])
 
-  // Pointer hover paints the same tint over the hovered cell.
   let hovered = renderer.render(input: InputState(pointerPosition: Point(x: 45, y: 85)))
   #expect(
     hovered.commands.contains { command in
@@ -314,7 +303,6 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
       return false
     })
 
-  // Pressing swaps in the pressed tint.
   let pressed = renderer.render(
     input: InputState(
       pointerPosition: Point(x: 45, y: 85), pointerDown: true, pointerPressed: true))
@@ -341,7 +329,6 @@ extension DemoContentTests {
       }.min()
     }
 
-    // Pointer selection enters the list directly; keyboard movement reveals later rows.
     let header = try #require(
       renderer.render().commands.compactMap { command -> Point? in
         if case .text(let point, let text, _, _) = command, text == "UUID 1" {
@@ -357,8 +344,6 @@ extension DemoContentTests {
       input: InputState(pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
 
     #expect(firstVisibleRow() == 1)
-    // Arrow keys walk every focusable element on the way down the list; keep walking
-    // until the focused row must be revealed by scrolling.
     for _ in 0..<200 {
       renderer.render(input: InputState(commands: [.navigation(.down)]))
       if let row = firstVisibleRow(), row > 1 { break }
@@ -380,9 +365,6 @@ extension DemoContentTests {
       }.min()
     }
 
-    // Focused rows paint the standard tint over their content; a focused control outside
-    // the list (buttons paint rounded tints, text paints flat ones elsewhere) never
-    // covers a UUID row's text.
     func tintRects() -> [Rect] {
       renderer.render(input: parked).commands.compactMap { command -> Rect? in
         if case .fillRect(let rect, let color) = command, color == HoverStyle.standardTint(in: .dark) {
@@ -404,7 +386,6 @@ extension DemoContentTests {
       return uuidTextOrigins().contains { origin in tints.contains { $0.contains(origin) } }
     }
 
-    // Select the first row, then walk far enough to require scrolling.
     let header = try #require(
       renderer.render().commands.compactMap { command -> Point? in
         if case .text(let point, let text, _, _) = command, text == "UUID 1" {
@@ -428,11 +409,9 @@ extension DemoContentTests {
     #expect(deepRow > 1)
     #expect(focusCoversARow())
 
-    // A single step out leaves the row list, no matter how deep the scroll went.
     renderer.render(input: InputState(commands: [.navigation(.stepOut)]))
     #expect(!focusCoversARow())
 
-    // A single step back in returns to the remembered row, with no walking.
     renderer.render(input: InputState(commands: [.navigation(.stepIn)]))
     #expect(firstVisibleRow() == deepRow)
     #expect(focusCoversARow())

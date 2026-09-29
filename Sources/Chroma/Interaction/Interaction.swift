@@ -121,8 +121,6 @@ package final class Interaction {
     var scrollID: WidgetID
   }
 
-  /// A `stepIn` whose remembered leaf is not materialized yet: the scroll container
-  /// was asked to reveal it, and focus lands as soon as the leaf is drawn.
   @ObservationIgnored var pendingFocus: PendingFocus?
 
   struct ScrollState {
@@ -139,7 +137,6 @@ package final class Interaction {
     }
   }
 
-  // Pruning render-derived offsets must not invalidate sibling scroll views.
   @ObservationIgnored var scrollStates: [WidgetID: ScrollState] = [:]
 
   struct ScrollLayout: Equatable {
@@ -219,8 +216,6 @@ package final class Interaction {
     }
   }
 
-  /// True when the currently focused leaf lies inside the scroll container with `id`. Read during
-  /// drawing from the previous frame's tree, like other paint state.
   var activeCommandPath: [Int] {
     if let selection { return selection }
     if let selected = navigation?.node(at: navigationPath), selected.isGroup {
@@ -238,9 +233,6 @@ package final class Interaction {
 
   @ObservationIgnored var clipStack: [Rect] = []
 
-  /// Keyboard focus, pointer hover, and press are render-derived paint state. The framework
-  /// reads them through `untrackedLeafState` while drawing so focus and hover changes never
-  /// widen a frame's redraw graph; the computed properties still register reads for observers.
   package struct LeafState: Equatable, Sendable {
     var selected: WidgetID?
     var hovered: WidgetID?
@@ -588,7 +580,6 @@ extension Interaction {
 
   func routePendingCommands() {
     for (index, command) in pendingCommands.enumerated() where !handledCommandIndices.contains(index) {
-      // Leaving text input outranks cancel actions and the scoped handlers registered for them.
       if mode == .editing, command == .action(.cancel) || command == .action(.dismiss) {
         stopInput()
         handledCommandIndices.insert(index)

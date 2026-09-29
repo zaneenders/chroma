@@ -1,20 +1,14 @@
-/// The highlight drawn over content that is keyboard-focused or pointer-hovered.
 public enum HoverStyle: Equatable, Sendable {
-  /// Translucent `focus.highlight` tint (`focus.pressedHighlight` while pressed).
   case standard
-  /// Draws no hover tint. Navigation participation is unchanged.
   case none
-  /// A custom translucent tint; the color's own alpha is respected.
   case tint(Color)
 
-  /// The tint the standard style draws.
   public static func standardTint(in theme: ChromaTheme, pressed: Bool = false) -> Color {
     let base = pressed ? theme.focus.pressedHighlight : theme.focus.highlight
     return Color(r: base.r, g: base.g, b: base.b, a: base.a * 0.5)
   }
 }
 
-/// Keys the highlight override carried by `hover(_:)` through the structural tree.
 public struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var style: HoverStyle
@@ -36,7 +30,6 @@ public struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
 }
 
 extension Block {
-  /// Changes highlight appearance without changing navigation participation.
   public func hover(_ style: HoverStyle) -> HoverStyleBlock {
     HoverStyleBlock(content: self, style: style)
   }

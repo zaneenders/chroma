@@ -30,7 +30,6 @@ public enum TextEditEvent: Hashable, Sendable {
   case endEditing
 }
 
-
 extension TextEditEvent {
   var movement: (TextMovementUnit, TextDirection, Bool)? {
     switch self {
