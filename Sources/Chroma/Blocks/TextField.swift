@@ -1,11 +1,11 @@
 public struct TextField: PrimitiveBlock {
   var id: WidgetID?
   public var placeholder: String
-  public var getText: @MainActor () -> String
-  public var onChange: @MainActor (String) -> Void
-  public var onSubmit: (@MainActor (String) -> Void)?
-  public var onEndEditing: (@MainActor () -> CommandResult)?
-  public var onTextEvent: (@MainActor (TextEditEvent, String) -> String?)?
+  public let getText: @MainActor () -> String
+  public let onChange: @MainActor (String) -> Void
+  public let onSubmit: (@MainActor (String) -> Void)?
+  public let onEndEditing: (@MainActor () -> CommandResult)?
+  public let onTextEvent: (@MainActor (TextEditEvent, String) -> String?)?
   public var fontScale: Float
   public var padding: Float
   public var style: TextFieldStyle?

@@ -9,7 +9,7 @@ public enum HoverStyle: Equatable, Sendable {
   }
 }
 
-public struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
+struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var style: HoverStyle
 
@@ -30,7 +30,7 @@ public struct HoverStyleBlock: PrimitiveBlock, IdentityTransparentBlock {
 }
 
 extension Block {
-  public func hover(_ style: HoverStyle) -> HoverStyleBlock {
+  public func hover(_ style: HoverStyle) -> some Block {
     HoverStyleBlock(content: self, style: style)
   }
 }

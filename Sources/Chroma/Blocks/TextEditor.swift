@@ -4,11 +4,11 @@ public struct TextEditor: PrimitiveBlock {
   public var lineLimits: ClosedRange<Int>
   public var padding: Float
   public var style: TextFieldStyle?
-  public var getText: @MainActor () -> String
-  public var onChange: @MainActor (String) -> Void
-  public var onSubmit: (@MainActor (String) -> Void)?
-  public var onEndEditing: (@MainActor () -> CommandResult)?
-  public var onTextEvent: (@MainActor (TextEditEvent, String) -> String?)?
+  public let getText: @MainActor () -> String
+  public let onChange: @MainActor (String) -> Void
+  public let onSubmit: (@MainActor (String) -> Void)?
+  public let onEndEditing: (@MainActor () -> CommandResult)?
+  public let onTextEvent: (@MainActor (TextEditEvent, String) -> String?)?
 
   public init(
     _ placeholder: String = "", fontScale: Float = 1, lineLimits: ClosedRange<Int> = 1...6,

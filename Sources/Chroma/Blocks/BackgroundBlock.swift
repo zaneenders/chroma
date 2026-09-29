@@ -1,4 +1,4 @@
-public struct BackgroundBlock: PrimitiveBlock, IdentityTransparentBlock {
+struct BackgroundBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var background: any Block
 

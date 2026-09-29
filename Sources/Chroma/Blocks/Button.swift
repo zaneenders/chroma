@@ -1,7 +1,7 @@
 public struct Button: PrimitiveBlock {
   public var label: String
   var id: WidgetID?
-  public var action: @MainActor () -> Void
+  public let action: @MainActor () -> Void
   public var role: ActionRole
   public var fontScale: Float
   public var style: ButtonStyle?

@@ -1,4 +1,4 @@
-public struct NavigationIgnoredBlock: PrimitiveBlock, IdentityTransparentBlock {
+struct NavigationIgnoredBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
   public var focusRule: FocusRule { .container }
 
@@ -18,13 +18,13 @@ public struct NavigationIgnoredBlock: PrimitiveBlock, IdentityTransparentBlock {
 
 extension Button {
   @available(*, unavailable, message: "Buttons must remain navigable.")
-  public func navigationIgnored() -> NavigationIgnoredBlock {
+  public func navigationIgnored() -> some Block {
     NavigationIgnoredBlock(content: self)
   }
 }
 
 extension Block {
-  public func navigationIgnored() -> NavigationIgnoredBlock {
+  public func navigationIgnored() -> some Block {
     NavigationIgnoredBlock(content: self)
   }
 }

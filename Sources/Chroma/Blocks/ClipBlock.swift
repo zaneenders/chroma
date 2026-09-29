@@ -1,4 +1,4 @@
-public struct ClipBlock: PrimitiveBlock, IdentityTransparentBlock {
+struct ClipBlock: PrimitiveBlock, IdentityTransparentBlock {
   public var content: any Block
 
   public var focusRule: FocusRule { .container }
