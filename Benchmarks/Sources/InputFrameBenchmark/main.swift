@@ -25,7 +25,9 @@ func benchmark(count: Int, identified: Bool) {
       input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -1)),
       context: context, onChange: {})
     let duration = (ProcessInfo.processInfo.systemUptime - start) * 1000
-    print("\(count) \(identified ? "identified" : "unkeyed") \(iteration == 0 ? "cold" : "warm") \(duration) ms \(list.commands.count) commands")
+    print(
+      "\(count) \(identified ? "identified" : "unkeyed") \(iteration == 0 ? "cold" : "warm") \(duration) ms \(list.commands.count) commands"
+    )
   }
 }
 

@@ -13,7 +13,8 @@ var targets: [Target] = [
     dependencies: ["Chroma", "ChromaFont", "ChromaTesting"]
   ),
   .target(name: "Chroma", swiftSettings: [.strictMemorySafety()]),
-  .executableTarget(name: "InputFrameBenchmark", dependencies: ["Chroma"], path: "Benchmarks/Sources/InputFrameBenchmark"),
+  .executableTarget(
+    name: "InputFrameBenchmark", dependencies: ["Chroma"], path: "Benchmarks/Sources/InputFrameBenchmark"),
   .target(
     name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")],
     swiftSettings: [.strictMemorySafety()]),

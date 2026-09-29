@@ -65,8 +65,11 @@ public struct TextEditor: PrimitiveBlock {
       return max(0, min(layout.lines.count - visibleCount, layout.row(containing: caret) - visibleCount + 1))
     }
     let interaction = context.interaction
-    let viewportRow = interaction.textDragViewportRow ?? firstRow(interaction.editingLeaf == context.widgetID
-      ? interaction.caretOffset : nil)
+    let viewportRow =
+      interaction.textDragViewportRow
+      ?? firstRow(
+        interaction.editingLeaf == context.widgetID
+          ? interaction.caretOffset : nil)
     if interaction.isDragging, interaction.textDragViewportRow != nil {
       if interaction.dragCurrent.y >= inner.maxY {
         interaction.textDragViewportRow = min(layout.lines.count - visibleCount, viewportRow + 1)
@@ -97,7 +100,8 @@ public struct TextEditor: PrimitiveBlock {
       drawList.text(placeholder, at: inner.origin, color: style.placeholder, scale: scale)
       return
     }
-    let first = context.interaction.isProcessingDrag
+    let first =
+      context.interaction.isProcessingDrag
       ? context.interaction.textDragViewportRow ?? viewportRow : firstRow(state.caretOffset)
     for index in first..<min(layout.lines.count, first + visibleCount) {
       let line = layout.lines[index]

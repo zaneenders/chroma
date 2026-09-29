@@ -147,8 +147,8 @@ package final class Interaction {
 
       static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
-        case let (.uniform(a, h, k), .uniform(b, j, l)): a == b && h == j && k == l
-        case let (.variable(a), .variable(b)): a === b
+        case (.uniform(let a, let h, let k), .uniform(let b, let j, let l)): a == b && h == j && k == l
+        case (.variable(let a), .variable(let b)): a === b
         default: false
         }
       }

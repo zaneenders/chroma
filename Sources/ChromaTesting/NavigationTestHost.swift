@@ -47,11 +47,12 @@ public final class NavigationTestHost {
   public func press(_ keys: TestKey...) {
     for input in keys {
       let key = input.key
-      let text: String? = switch key {
-      case .character(let character): String(character)
-      case .space: " "
-      default: nil
-      }
+      let text: String? =
+        switch key {
+        case .character(let character): String(character)
+        case .space: " "
+        default: nil
+        }
       press(KeyboardInput(chord: KeyChord(key), text: text))
     }
   }

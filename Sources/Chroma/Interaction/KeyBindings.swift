@@ -202,8 +202,12 @@ extension KeyBindings {
     bind(.downArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretDown))
     bind(.leftArrow, modifiers: .option, in: .editing, to: .editing(.move(.word, .backward, extendSelection: false)))
     bind(.rightArrow, modifiers: .option, in: .editing, to: .editing(.move(.word, .forward, extendSelection: false)))
-    bind(.leftArrow, modifiers: [.option, .shift], in: .editing, to: .editing(.move(.word, .backward, extendSelection: true)))
-    bind(.rightArrow, modifiers: [.option, .shift], in: .editing, to: .editing(.move(.word, .forward, extendSelection: true)))
+    bind(
+      .leftArrow, modifiers: [.option, .shift], in: .editing,
+      to: .editing(.move(.word, .backward, extendSelection: true)))
+    bind(
+      .rightArrow, modifiers: [.option, .shift], in: .editing,
+      to: .editing(.move(.word, .forward, extendSelection: true)))
     bind(.backspace, modifiers: .option, in: .editing, to: .editing(.delete(.word, .backward)))
     bind(.delete, modifiers: .option, in: .editing, to: .editing(.delete(.word, .forward)))
     bind(.home, modifiers: .shift, in: .editing, to: .editing(.move(.document, .backward, extendSelection: true)))

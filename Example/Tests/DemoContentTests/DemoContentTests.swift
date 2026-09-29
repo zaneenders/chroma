@@ -1,6 +1,6 @@
 import Chroma
-import Foundation
 import ChromaTesting
+import Foundation
 import Synchronization
 import Testing
 

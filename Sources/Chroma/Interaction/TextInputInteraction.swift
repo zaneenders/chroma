@@ -105,24 +105,29 @@ extension Interaction {
           continue
         }
         if let (unit, direction, extend) = event.movement {
-          let anchor = textSelectionRange.map {
-            caretOffset == $0.lowerBound ? $0.upperBound : $0.lowerBound
-          } ?? caretOffset
+          let anchor =
+            textSelectionRange.map {
+              caretOffset == $0.lowerBound ? $0.upperBound : $0.lowerBound
+            } ?? caretOffset
           if !extend, let selection = textSelectionRange,
-            unit != .document && unit != .vertical {
+            unit != .document && unit != .vertical
+          {
             caretOffset = direction == .backward ? selection.lowerBound : selection.upperBound
           } else {
             caretOffset = TextEditingOperation.boundary(
               in: characters, from: caretOffset, unit: unit, direction: direction,
               verticalOffset: verticalOffset)
           }
-          textSelectionRange = extend && anchor != caretOffset
+          textSelectionRange =
+            extend && anchor != caretOffset
             ? min(anchor, caretOffset)..<max(anchor, caretOffset) : nil
           continue
         }
         if let (unit, direction) = event.deletion {
-          let range = textSelectionRange ?? TextEditingOperation.deletionRange(
-            in: characters, from: caretOffset, unit: unit, direction: direction)
+          let range =
+            textSelectionRange
+            ?? TextEditingOperation.deletionRange(
+              in: characters, from: caretOffset, unit: unit, direction: direction)
           if !range.isEmpty {
             characters.replaceSubrange(range, with: [] as [Character])
             caretOffset = range.lowerBound
@@ -246,8 +251,11 @@ private enum TextEditingOperation {
     case .character: return max(0, min(text.count, offset + (backward ? -1 : 1)))
     case .document: return backward ? 0 : text.count
     case .vertical:
-      return max(0, min(text.count,
-        verticalOffset?(offset, backward ? -1 : 1) ?? (backward ? 0 : text.count)))
+      return max(
+        0,
+        min(
+          text.count,
+          verticalOffset?(offset, backward ? -1 : 1) ?? (backward ? 0 : text.count)))
     case .word:
       var position = offset
       if backward {

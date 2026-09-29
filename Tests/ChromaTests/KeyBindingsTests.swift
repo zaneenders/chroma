@@ -7,14 +7,17 @@ struct KeyBindingsTests {
     let bindings = KeyBindings.desktopNavigation
     #expect(bindings.command(for: KeyChord(.downArrow), isTextEditing: false) == .some(.some(.navigation(.down))))
     #expect(bindings.command(for: KeyChord(.downArrow), isTextEditing: true) == .some(.some(.editing(.moveCaretDown))))
-    #expect(bindings.command(for: KeyChord(.leftArrow, modifiers: .shift), isTextEditing: true)
-      == .some(.some(.editing(.selectCaretLeft))))
+    #expect(
+      bindings.command(for: KeyChord(.leftArrow, modifiers: .shift), isTextEditing: true)
+        == .some(.some(.editing(.selectCaretLeft))))
     #expect(bindings.command(for: KeyChord(.tab), isTextEditing: true) == .some(.some(.navigation(.nextFocus))))
-    #expect(bindings.command(for: KeyChord(.tab, modifiers: .shift), isTextEditing: false)
-      == .some(.some(.navigation(.previousFocus))))
+    #expect(
+      bindings.command(for: KeyChord(.tab, modifiers: .shift), isTextEditing: false)
+        == .some(.some(.navigation(.previousFocus))))
     #expect(bindings.resolve(KeyboardInput(chord: KeyChord("j"), text: "j"), isTextEditing: false) == nil)
-    #expect(KeyBindings.vimNavigation.command(for: KeyChord("j"), isTextEditing: false)
-      == .some(.some(.navigation(.down))))
+    #expect(
+      KeyBindings.vimNavigation.command(for: KeyChord("j"), isTextEditing: false)
+        == .some(.some(.navigation(.down))))
   }
 
   @Test func physicalCommandAndSuperAreDistinct() {

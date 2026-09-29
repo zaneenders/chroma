@@ -13,7 +13,7 @@ let package = Package(
   name: "ChromaBenchmarks",
   platforms: [.macOS(.v27)],
   dependencies: [
-    .package(path: ".."),
+    .package(path: "..")
   ],
   targets: [
     .executableTarget(name: "CompareBenchmarks"),
