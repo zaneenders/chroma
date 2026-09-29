@@ -116,13 +116,17 @@ struct NavigationContractTests {
     #expect(save.isFocused)
   }
 
-  @Test func shiftedMovementBindingsPreserveUppercaseTyping() {
-    for (key, command): (Character, NavigationCommand) in [
-      ("d", .sectionLeft), ("f", .sectionUp), ("j", .sectionDown), ("k", .sectionRight),
+  @Test func shiftSelectsTextAndControlMovesSectionsWithoutPreventingUppercaseTyping() {
+    for (key, command, selection): (Character, NavigationCommand, TextEditEvent) in [
+      ("d", .sectionLeft, .selectCaretLeft), ("f", .sectionUp, .selectCaretUp),
+      ("j", .sectionDown, .selectCaretDown), ("k", .sectionRight, .selectCaretRight),
     ] {
-      let input = KeyboardInput(chord: KeyChord(key, modifiers: .shift), text: String(key).uppercased())
-      #expect(KeyBindings.vimNavigation.resolve(input, isTextEditing: false) == .command(.navigation(command)))
-      #expect(KeyBindings.vimNavigation.resolve(input, isTextEditing: true) == .text(.insert(String(key).uppercased())))
+      let shifted = KeyboardInput(chord: KeyChord(key, modifiers: .shift), text: String(key).uppercased())
+      let controlled = KeyboardInput(chord: KeyChord(key, modifiers: .control))
+      #expect(KeyBindings.vimNavigation.resolve(shifted, isTextEditing: false) == .text(selection))
+      #expect(KeyBindings.vimNavigation.resolve(shifted, isTextEditing: true) == .text(.insert(String(key).uppercased())))
+      #expect(KeyBindings.vimNavigation.resolve(controlled, isTextEditing: false) == .command(.navigation(command)))
+      #expect(KeyBindings.vimNavigation.resolve(controlled, isTextEditing: true) == .command(.navigation(command)))
     }
   }
 
@@ -233,8 +237,10 @@ extension NavigationContractTests {
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn)])
     h.render(content, [.navigation(.right)])
-    h.render(content, [.navigation(.sectionDown)])
+    h.render(content, text: [.selectCaretDown])
     #expect(h.context.interaction.copyText() == "b\nc")
+    h.render(content, [.navigation(.sectionDown)])
+    #expect(h.context.interaction.copyText() == nil)
     h.render(content, [.action(.activate)])
     #expect(h.context.interaction.mode == .movement)
     #expect(!h.context.interaction.acceptsTextInsertion)

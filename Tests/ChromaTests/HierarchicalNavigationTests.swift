@@ -103,6 +103,45 @@ struct HierarchicalNavigationTests {
     #expect(activations == 1)
   }
 
+  @Test func sectionMovementLeavesTextCaretAndSelectsNeighboringArea() {
+    let h = Harness()
+    let editor = FocusTarget()
+    let sessions = FocusTarget()
+    var text = "hello"
+    let content = HStack {
+      Group("Sessions") { Button("Session") {}.focusTarget(sessions) }
+        .sizing(x: .fixed(200), y: .grow)
+      Group("Conversation") {
+        TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(editor)
+      }.sizing(x: .grow, y: .grow)
+    }
+    h.render(content)
+    editor.focus(editing: true)
+    h.render(content)
+    h.render(content, text: [.endEditing])
+    #expect(!editor.isEditing && editor.isFocused)
+    #expect(h.context.interaction.editingLeaf != nil)
+    h.render(content, [.navigation(.sectionLeft)])
+    #expect(h.context.navigationBreadcrumb == ["Window", "Sessions"])
+    #expect(h.context.interaction.editingLeaf == nil)
+  }
+
+  @Test func shiftSelectsAndCopiesEditorTextInMovementMode() {
+    let h = Harness()
+    let editor = FocusTarget()
+    var text = "hello"
+    let content = TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(editor)
+    h.render(content)
+    editor.focus(editing: true)
+    h.render(content)
+    h.render(content, text: [.endEditing])
+    h.render(content, text: [.selectCaretLeft, .selectCaretLeft])
+    #expect(h.context.interactionMode == .movement)
+    #expect(h.context.interaction.copyText() == "lo")
+    h.render(content, [.navigation(.stepOut)])
+    #expect(h.context.interaction.copyText() == nil)
+  }
+
   @Test func selectingOffscreenMessageGroupRevealsItWithoutEntering() {
     let h = Harness()
     let controller = ScrollViewController()

@@ -145,6 +145,19 @@ extension KeyBindingsTests {
         KeyBindings.vimNavigation.prefersTextInsertion(
           chord: KeyChord(Character(character)), text: character, isTextEditing: true))
     }
+    for (key, direction, selection) in [
+      ("d", NavigationCommand.sectionLeft, TextEditEvent.selectCaretLeft),
+      ("f", .sectionUp, .selectCaretUp),
+      ("j", .sectionDown, .selectCaretDown),
+      ("k", .sectionRight, .selectCaretRight),
+    ] {
+      #expect(KeyBindings.vimNavigation.command(for: KeyChord(Character(key), modifiers: .control), isTextEditing: false)
+        == .some(.some(.navigation(direction))))
+      #expect(KeyBindings.vimNavigation.command(for: KeyChord(Character(key), modifiers: .shift), isTextEditing: false)
+        == .some(.some(.editing(selection))))
+      #expect(KeyBindings.vimNavigation.prefersTextInsertion(
+        chord: KeyChord(Character(key), modifiers: .shift), text: key.uppercased(), isTextEditing: true))
+    }
     #expect(
       KeyBindings.vimNavigation.command(for: KeyChord(.upArrow), isTextEditing: false) == nil
     )

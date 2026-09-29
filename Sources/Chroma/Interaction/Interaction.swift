@@ -642,16 +642,18 @@ extension Interaction {
       }
       guard mode == .movement else { return }
       if editingLeaf != nil {
+        if [.sectionLeft, .sectionRight, .sectionUp, .sectionDown].contains(command) {
+          endEditing()
+          moveNavigation(command)
+          return
+        }
         switch command {
         case .left: movementTextEvents.append(.moveCaretLeft)
         case .right: movementTextEvents.append(.moveCaretRight)
         case .up: movementTextEvents.append(.moveCaretUp)
         case .down: movementTextEvents.append(.moveCaretDown)
-        case .sectionLeft: movementTextEvents.append(.selectCaretLeft)
-        case .sectionRight: movementTextEvents.append(.selectCaretRight)
-        case .sectionUp: movementTextEvents.append(.selectCaretUp)
-        case .sectionDown: movementTextEvents.append(.selectCaretDown)
         case .stepOut: endEditing()
+        case .sectionLeft, .sectionRight, .sectionUp, .sectionDown: break
         case .stepIn, .nextFocus, .previousFocus: break
         }
         return
