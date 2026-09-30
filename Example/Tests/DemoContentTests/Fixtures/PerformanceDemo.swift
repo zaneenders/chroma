@@ -1,5 +1,4 @@
 import Chroma
-import DemoImages
 import Foundation
 import Observation
 

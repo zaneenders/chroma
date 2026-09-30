@@ -8,6 +8,23 @@
 swift run --package-path Example ChromaDemo
 ```
 
+- **Play:** falling blocks with a ghost piece, next-piece queue, scoring, and increasing speed.
+  Enter the board with l, then l/Enter to start. d/k move left/right, f rotates, j soft-drops,
+  Space drops, P or Escape pauses, and s pauses and leaves the board.
+  Switching to Chat pauses the game; returning keeps it paused until you resume.
+- **Chat:** local, scripted streaming replies, separate conversation drafts, selectable messages,
+  and a multiline composer. Enter adds a line; Cmd/Ctrl+Enter sends. Scroll up to read without
+  being pulled back; Latest returns to the live reply. Nothing is sent over the network.
+
+Navigate with d/f/j/k, enter groups or use controls with l, and leave with s.
+Cmd/Ctrl+1 and +2 switch screens; Keys shows additional shortcuts. Tab and arrows are unbound.
+Scores and conversations last for the current app session. The old rendering/font gallery is
+retained only as test fixtures.
+
+```sh
+swift test --package-path Example
+```
+
 ## Frame scheduling
 
 Chroma owns frame timing. Configure `App.minimumRefreshRate` (default **30 Hz**) and

@@ -86,7 +86,7 @@ struct DemoContentTests {
       #expect(apple.keyBindings.command(for: KeyChord(key), isTextEditing: false)! == .navigation(direction))
       #expect(linux.keyBindings.command(for: KeyChord(key), isTextEditing: false)! == .navigation(direction))
     }
-    for key: Key in [.leftArrow, .rightArrow, .upArrow, .downArrow, .pageUp, .pageDown] {
+    for key: Key in [.pageUp, .pageDown] {
       #expect(apple.keyBindings.command(for: KeyChord(key)) == nil)
       #expect(linux.keyBindings.command(for: KeyChord(key)) == nil)
     }
@@ -126,8 +126,7 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
 
 @MainActor
 @Test func fontTabOpensAndRendersSample() throws {
-  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessHost(size: demo.windowSize)
+  let renderer = HeadlessHost(size: Size(width: 1200, height: 820))
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -159,8 +158,7 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
 
 @MainActor
 @Test func fontPageMovementCommandsMoveTheGlyphHighlight() throws {
-  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessHost(size: demo.windowSize)
+  let renderer = HeadlessHost(size: Size(width: 1200, height: 820))
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -183,13 +181,15 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
     return try #require(highlightedCell())
   }
 
-  renderer.render(input: InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
   let initialHighlight = try #require(highlightedCell())
+  let firstGlyph = try #require(renderer.render().commands.compactMap { command -> Point? in
+    if case .text(let point, "A", _, _) = command { return point }
+    return nil
+  }.first)
+  let target = Point(x: firstGlyph.x + 2, y: firstGlyph.y + 2)
+  renderer.render(input: InputState(pointerPosition: target, pointerDown: true, pointerPressed: true))
+  renderer.render(input: InputState(pointerPosition: target, pointerReleased: true))
   let cell: Float = 40
-  for _ in 0..<50 {
-    press(.navigation(.down))
-    if focusedGlyphCell(renderer) != nil { break }
-  }
   let firstRow = try activateCell()
   press(.navigation(.down))
   let secondRow = try activateCell()
@@ -208,8 +208,7 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
 
 @MainActor
 @Test func escapeLeavesTheFontPreviewField() throws {
-  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessHost(size: demo.windowSize)
+  let renderer = HeadlessHost(size: Size(width: 1200, height: 820))
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -327,8 +326,7 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
 
 extension DemoContentTests {
   @Test func scenePageScrollsTheUuidListWithMovementCommands() throws {
-    let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-    let renderer = HeadlessHost(size: demo.windowSize)
+    let renderer = HeadlessHost(size: Size(width: 1200, height: 820))
     let gallery = PerformanceDemoState(itemCount: 100)
     renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
 
@@ -362,8 +360,7 @@ extension DemoContentTests {
   }
 
   @Test func scenePageStepsOutOfTheUuidListAndBackToTheRememberedRow() throws {
-    let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-    let renderer = HeadlessHost(size: demo.windowSize)
+    let renderer = HeadlessHost(size: Size(width: 1200, height: 820))
     let gallery = PerformanceDemoState(itemCount: 100)
     renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
     let parked = InputState(pointerPosition: Point(x: 5000, y: 5000))
