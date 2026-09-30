@@ -143,10 +143,12 @@ package final class FrameProducer {
     _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = []
   ) {
     let interaction = context.interaction
-    interaction.refreshingRegistrations = interaction.tree != nil
+    let previousPass = interaction.framePass
+    defer { interaction.framePass = previousPass }
+    // Bootstrap input state only when there is no existing registration tree.
+    interaction.framePass = interaction.tree == nil ? .painting : .registrations
     interaction.beginFrame(input: InputState(commands: commands))
-    interaction.refreshingRegistrations = true
-    defer { interaction.refreshingRegistrations = false }
+    interaction.framePass = .registrations
     var discarded = DrawList()
     if let content {
       BlockEngine.draw(content, into: &discarded, in: Rect(origin: .zero, size: viewport), context: context)

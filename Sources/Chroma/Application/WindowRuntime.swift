@@ -17,17 +17,14 @@ package final class WindowRuntime {
   package var content: (any Block)? {
     didSet {
       producer.reset()
-      scheduler.animationsActive = false
+      reconcileAnimationDemand()
       scheduler.contentAnimationActive = false
       scheduler.requestContent()
     }
   }
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
-  package var nextAnimationDeadline: Double? {
-    guard needsAnimationFrame, let lastFrameTime = scheduler.lastFrameTime else { return nil }
-    return lastFrameTime + 1 / scheduler.minimumRefreshRate
-  }
+  package var nextAnimationDeadline: Double? { scheduler.animationDeadline }
   package var needsAnimationFrame: Bool { producer.needsAnimationFrame }
   package var context: BlockContext { BlockContext(interaction: interaction) }
 
@@ -44,6 +41,7 @@ package final class WindowRuntime {
     pendingInputs = []
     producer.reset()
     scheduler.reset()
+    reconcileAnimationDemand()
   }
 
   package func dispatchInput(requestsFrame: Bool = true, _ action: @escaping @MainActor () -> Void) {
@@ -118,12 +116,19 @@ package final class WindowRuntime {
     let list = producer.render(
       content: content, viewport: viewport, input: input, context: context,
       processingInput: processingInput, onChange: onChange)
-    scheduler.animationsActive = producer.needsAnimationFrame
+    reconcileAnimationDemand()
     return list
   }
 
   package func renderAnimations() -> DrawList {
-    producer.renderAnimations()
+    let list = producer.renderAnimations()
+    reconcileAnimationDemand()
+    return list
+  }
+
+  private func reconcileAnimationDemand() {
+    // Paint demand belongs to the producer; full-content animation remains independent.
+    scheduler.animationsActive = producer.needsAnimationFrame
   }
 
   package func observe(_ list: DrawList, viewport: Size, rasterScale: Point? = nil) {

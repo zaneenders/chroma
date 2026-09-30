@@ -49,10 +49,16 @@ package final class FrameScheduler {
         deadline: lastFrameTime.map { $0 + 1 / maximumRefreshRate } ?? pendingSince,
         kind: .content, priority: .userInitiated)
     }
-    guard animationsActive || contentAnimationActive, let lastFrameTime else { return nil }
+    guard let animationDeadline else { return nil }
     return ScheduledFrame(
-      deadline: lastFrameTime + 1 / minimumRefreshRate,
+      deadline: animationDeadline,
       kind: contentAnimationActive ? .content : .animation, priority: .utility)
+  }
+
+  /// Animation cadence, independent of content demand and backend readiness.
+  package var animationDeadline: Double? {
+    guard animationsActive || contentAnimationActive, let lastFrameTime else { return nil }
+    return lastFrameTime + 1 / minimumRefreshRate
   }
 
   package func takeFrame() -> FrameKind? {

@@ -143,6 +143,76 @@ struct WindowRuntimeTests {
     runtime.reset()
   }
 
+  @Test func queuedInputCanRequestContentOnlyWhenFlushed() throws {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
+    let viewport = Size(width: 100, height: 100)
+    runtime.content = ProgressIndicator()
+    #expect(runtime.scheduler.takeFrame() == .content)
+    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    clock.now = try #require(runtime.scheduler.nextFrame).deadline
+    let kind = try #require(runtime.scheduler.takeFrame())
+    #expect(kind == .animation)
+    runtime.dispatchInput(requestsFrame: false) {
+      runtime.content = Text("Updated by input")
+    }
+    #expect(!runtime.scheduler.hasContentRequest)
+    let list = runtime.renderScheduled(kind, viewport: viewport, onChange: {})
+    #expect(list.commands.contains {
+      if case .text(_, "Updated by input", _, _) = $0 { return true }
+      return false
+    })
+    #expect(!runtime.needsAnimationFrame)
+    #expect(!runtime.scheduler.animationsActive)
+    #expect(!runtime.scheduler.inputPending)
+    #expect(runtime.scheduler.nextFrame == nil)
+    runtime.reset()
+  }
+
+  @Test func animationDemandAndDeadlinesFollowRenderingReplacementAndReset() {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
+    let viewport = Size(width: 100, height: 100)
+    runtime.content = ProgressIndicator()
+    #expect(runtime.nextAnimationDeadline == nil)
+    #expect(runtime.scheduler.takeFrame() == .content)
+    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    #expect(runtime.scheduler.animationsActive)
+    #expect(runtime.nextAnimationDeadline == 100 + 1.0 / 30)
+    runtime.scheduler.setRefreshRates(minimum: 20, maximum: 60)
+    runtime.scheduler.requestContent()
+    #expect(runtime.nextAnimationDeadline == 100 + 1.0 / 20)
+    #expect(runtime.nextAnimationDeadline == runtime.scheduler.animationDeadline)
+    runtime.scheduler.contentAnimationActive = true
+    _ = runtime.renderAnimations()
+    #expect(runtime.scheduler.contentAnimationActive)
+    runtime.content = Text("Static")
+    #expect(!runtime.scheduler.animationsActive)
+    #expect(!runtime.scheduler.contentAnimationActive)
+    #expect(runtime.nextAnimationDeadline == nil)
+    runtime.scheduler.contentAnimationActive = true
+    #expect(runtime.nextAnimationDeadline == 100 + 1.0 / 20)
+    runtime.reset()
+    #expect(runtime.nextAnimationDeadline == nil)
+    #expect(!runtime.scheduler.animationsActive)
+    #expect(!runtime.scheduler.contentAnimationActive)
+  }
+
+  @Test func registrationPassRestoresThePreviousModeAndDoesNotCollectAnimations() {
+    let producer = FrameProducer()
+    let interaction = Interaction()
+    let context = BlockContext(interaction: interaction)
+    let viewport = Size(width: 100, height: 100)
+    producer.refreshRegistrations(ProgressIndicator(), viewport: viewport, context: context)
+    #expect(interaction.framePass == .painting)
+    #expect(interaction.tree != nil)
+    #expect(interaction.animationPaints.isEmpty)
+    interaction.framePass = .registrations
+    producer.refreshRegistrations(ProgressIndicator(), viewport: viewport, context: context)
+    #expect(interaction.framePass == .registrations)
+    #expect(interaction.animationPaints.isEmpty)
+  }
+
   @Test func backendReadinessNotificationsDoNotTurnAnimationIntoContent() {
     let runtime = WindowRuntime()
     let viewport = Size(width: 100, height: 100)

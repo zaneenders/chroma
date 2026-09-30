@@ -347,7 +347,10 @@ package final class Interaction {
     return redrawRequested
   }
 
-  @ObservationIgnored var refreshingRegistrations = false
+  enum FramePass { case painting, registrations }
+
+  @ObservationIgnored var framePass: FramePass = .painting
+  var refreshingRegistrations: Bool { framePass == .registrations }
 
   package func beginFrame(input: InputState, processingInput: Bool = true) {
     building = FrameRegistrations()
