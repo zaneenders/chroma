@@ -411,10 +411,7 @@ package final class Interaction {
     if input.pointerPressed {
       let pressed = tree.hitTest(input.pointerPressPosition)
       if let pressed {
-        moveCursor(to: pressed)
-        if let leafID = tree.node(at: pressed)?.leafID {
-          selectNavigationLeaf(leafID)
-        }
+        moveCursor(to: pressed, revealing: false)
         pressedLeaf = tree.node(at: pressed)?.leafID
       } else {
         endEditing()
@@ -528,10 +525,10 @@ extension Interaction {
     }
   }
 
-  func moveCursor(to path: [Int]) {
+  func moveCursor(to path: [Int], revealing: Bool = true) {
     guard let tree, tree.node(at: path) != nil else { return }
     if let navigation, let pathInNavigation = navigation.path(to: path) {
-      selectNavigation(pathInNavigation)
+      selectNavigation(pathInNavigation, revealing: revealing)
       return
     }
   }
