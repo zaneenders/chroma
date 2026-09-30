@@ -177,6 +177,20 @@ public struct BlockContext {
       submitInsertsNewline: submitInsertsNewline)
   }
 
+  public func textSelectionState(
+    in rect: Rect,
+    text: @escaping @MainActor () -> String,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
+  ) -> TextInputState {
+    let id = widgetID
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.registerTextInput(
+      id: id, rect: rect, text: text, onChange: { _ in },
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset,
+      navigationIgnored: navigationIgnored, readOnly: true)
+  }
+
   public func withFocusGroup<Result>(
     in rect: Rect,
     axis: FocusGroupAxis? = nil,
