@@ -99,6 +99,15 @@ public struct HighResolutionFontAtlas: Sendable {
       scalarIndices[value] = index
     }
     guard let fallback = scalarIndices[0xFFFD] else { throw AssetError.invalidAtlas }
+    if let space = scalarIndices[0x20] {
+      // Monospaced rendering preserves the original text while displaying Unicode spaces without tofu.
+      for scalar: UInt32 in [
+        0xA0, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x202F, 0x205F,
+        0x3000,
+      ] {
+        indices[Character(String(UnicodeScalar(scalar)!))] = space
+      }
+    }
     self.indices = indices
     characterIndices = scalarIndices
     self.levels = levels
@@ -108,7 +117,13 @@ public struct HighResolutionFontAtlas: Sendable {
   public func mipLevels() -> [FontAtlasMipLevel] { levels }
 
   public func glyphUV(_ character: Character) -> (Float, Float, Float, Float) {
-    let index = indices[character] ?? fallback
+    let index: Int
+    if let supported = indices[character] {
+      index = supported
+    } else {
+      MissingGlyphWarnings.shared.report(character)
+      index = fallback
+    }
     let x = (index % Self.columns) * cellWidth + Self.padding
     let y = (index / Self.columns) * cellHeight + Self.padding
     return (

@@ -124,9 +124,41 @@ struct FontGlyphTests {
       0x270E,
       0x23F5,
       0x23F9,
+      0x2630,
     ]
     for codepoint in required {
       #expect(HighResolutionFontAtlas().characterIndices[codepoint] != nil)
+    }
+  }
+
+  @Test func unicodeSpacesUseTheBlankGlyph() {
+    let atlas = HighResolutionFontAtlas()
+    for scalar: UInt32 in [
+      0xA0, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x202F, 0x205F,
+      0x3000,
+    ] {
+      #expect(atlas.glyphUV(Character(String(UnicodeScalar(scalar)!))) == atlas.glyphUV(" "))
+    }
+  }
+
+  @Test func screenshotFilenameKeepsItsNonBreakingSpaceWithoutReplacementGlyphs() {
+    let atlas = HighResolutionFontAtlas()
+    let filename = "Screenshot 2026-09-29 at 7.10.45\u{202F}PM.png"
+    for character in filename {
+      #expect(atlas.glyphUV(character) != atlas.glyphUV("�"))
+    }
+  }
+
+  @Test func menuGlyphHasThreeBars() throws {
+    let atlas = HighResolutionFontAtlas()
+    let index = try #require(atlas.characterIndices[0x2630])
+    let x = (index % HighResolutionFontAtlas.columns) * atlas.cellWidth + HighResolutionFontAtlas.padding
+    let y = (index / HighResolutionFontAtlas.columns) * atlas.cellHeight + HighResolutionFontAtlas.padding
+    for row in 0..<atlas.glyphHeight {
+      for column in 0..<atlas.glyphWidth {
+        let isBar = (24..<30).contains(row) || (39..<45).contains(row) || (54..<60).contains(row)
+        #expect(atlas.pixels[(y + row) * atlas.width + x + column] == (isBar && (3..<33).contains(column) ? 255 : 0))
+      }
     }
   }
 
@@ -161,7 +193,7 @@ struct FontGlyphTests {
 
   @Test func bundledPixelsRemainUnchanged() {
     let atlas = HighResolutionFontAtlas()
-    #expect(atlas.characterIndices.count == 762)
+    #expect(atlas.characterIndices.count == 763)
     var hash: UInt64 = 14_695_981_039_346_656_037
     for scalar in atlas.characterIndices.sorted(by: { $0.value < $1.value }).map(\.key) {
       for shift in stride(from: 0, to: 32, by: 8) {
@@ -171,7 +203,7 @@ struct FontGlyphTests {
     for level in atlas.mipLevels() {
       for pixel in level.pixels { hash = (hash ^ UInt64(pixel)) &* 1_099_511_628_211 }
     }
-    #expect(hash == 999_759_037_810_430_912)
+    #expect(hash == 10_942_404_915_680_660_513)
     let uv = atlas.glyphUV(" ")
     let x = Int((uv.0 * Float(atlas.width)).rounded())
     let y = Int((uv.1 * Float(atlas.height)).rounded())
