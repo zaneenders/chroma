@@ -15,6 +15,7 @@ package final class FrameScheduler {
   private var wakeTask: Task<Void, Never>?
   private var scheduled: ScheduledFrame?
   private var isProducing = false
+  private var frameTakenDuringWake = false
   private var pendingSince: Double?
   package private(set) var lastFrameTime: Double?
   package private(set) var minimumRefreshRate = 30.0
@@ -23,7 +24,8 @@ package final class FrameScheduler {
   package var contentAnimationActive = false { didSet { schedule() } }
   package var inputPending = false { didSet { schedule() } }
   package var isReady = false { didSet { schedule() } }
-  package var onFrame: (@MainActor (FrameKind) -> Void)? { didSet { schedule() } }
+  /// Synchronous readiness notification; the host prepares input before taking a frame.
+  package var onWake: (@MainActor () -> Void)? { didSet { schedule() } }
 
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
     self.clock = clock
@@ -65,6 +67,7 @@ package final class FrameScheduler {
     let now = clock()
     guard let nextFrame, now >= nextFrame.deadline else { return nil }
     pendingSince = nil
+    if isProducing { frameTakenDuringWake = true }
     lastFrameTime = now
     return nextFrame.kind
   }
@@ -83,6 +86,7 @@ package final class FrameScheduler {
     wakeTask?.cancel()
     wakeTask = nil
     scheduled = nil
+    frameTakenDuringWake = false
     pendingSince = nil
     lastFrameTime = nil
     animationsActive = false
@@ -94,7 +98,7 @@ package final class FrameScheduler {
 
   private func schedule() {
     guard !isProducing else { return }
-    let next = isReady && !inputPending && onFrame != nil ? nextFrame : nil
+    let next = isReady && !inputPending && onWake != nil ? nextFrame : nil
     guard next != scheduled else { return }
     wakeTask?.cancel()
     wakeTask = nil
@@ -106,11 +110,13 @@ package final class FrameScheduler {
       guard let self, !Task.isCancelled else { return }
       self.wakeTask = nil
       self.scheduled = nil
-      if let kind = self.takeFrame() {
+      // Hosts prepare input before taking a frame; a wake-up does not commit its kind.
+      if self.isReady, !self.inputPending, let next = self.nextFrame, self.clock() >= next.deadline {
+        self.frameTakenDuringWake = false
         self.isProducing = true
-        self.onFrame?(kind)
+        self.onWake?()
         self.isProducing = false
-        if self.lastFrameTime != nil { self.recordProducedFrame() }
+        if self.frameTakenDuringWake, self.lastFrameTime != nil { self.recordProducedFrame() }
       }
       self.schedule()
     }

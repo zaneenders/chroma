@@ -60,7 +60,7 @@ struct WindowRuntimeTests {
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     #expect(model.actions == 2)
-    let list = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    let list = runtime.renderContent(viewport: viewport, onChange: {})
     #expect(model.actions == 2)
     #expect(model.text == "ac")
     #expect(
@@ -77,7 +77,7 @@ struct WindowRuntimeTests {
       runtime.handleInput(InputState(pointerPosition: point, pointerReleased: true))
     }
     #expect(model.actions == 4)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderContent(viewport: viewport, onChange: {})
     #expect(model.actions == 4)
     runtime.reset()
   }
@@ -99,7 +99,7 @@ struct WindowRuntimeTests {
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     if !beforeInitialFrame { #expect(model.actions == 2) }
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderContent(viewport: viewport, onChange: {})
     #expect(model.actions == 2)
   }
 
@@ -117,29 +117,30 @@ struct WindowRuntimeTests {
     runtime.handleInput(InputState(textEvents: [.moveCaretUp]))
     #expect(model.text == "a\nb")
     #expect(runtime.interaction.caretOffset == 1)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderContent(viewport: viewport, onChange: {})
     #expect(runtime.interaction.caretOffset == 1)
   }
 
-  @Test func queuedInputSupersedesAnAlreadyRunnableAnimation() {
-    let runtime = WindowRuntime()
+  @Test func queuedInputSupersedesAnAlreadyRunnableAnimation() throws {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
     let model = InputModel()
     let viewport = Size(width: 100, height: 100)
-    runtime.content = DeferredBlock { Text(model.text) }
-    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
-    runtime.dispatchInput {
-      model.text += "a"
-      runtime.scheduler.requestContent()
-    }
+    runtime.content = DeferredBlock { ProgressIndicator(); Text(model.text) }
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
+    clock.now = try #require(runtime.scheduler.nextFrame).deadline
+    #expect(runtime.scheduler.nextFrame?.kind == .animation)
+    runtime.dispatchInput { model.text += "a" }
     runtime.dispatchInput { model.text += "b" }
-    let list = runtime.renderScheduled(.animation, viewport: viewport, onChange: {})
+    let list = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(model.text == "ab")
-    #expect(
-      list.commands.contains {
-        if case .text(_, "ab", _, _) = $0 { return true }
-        return false
-      })
-    #expect(runtime.scheduler.nextFrame == nil)
+    #expect(list?.commands.contains {
+      if case .text(_, "ab", _, _) = $0 { return true }
+      return false
+    } == true)
+    #expect(runtime.scheduler.nextFrame?.kind == .animation)
+    #expect(runtime.scheduler.nextFrame?.deadline == clock.now + 1.0 / 30)
+    #expect(runtime.scheduler.takeFrame() == nil)
     runtime.reset()
   }
 
@@ -149,15 +150,15 @@ struct WindowRuntimeTests {
     let viewport = Size(width: 100, height: 100)
     runtime.content = ProgressIndicator()
     #expect(runtime.scheduler.takeFrame() == .content)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderContent(viewport: viewport, onChange: {})
     clock.now = try #require(runtime.scheduler.nextFrame).deadline
-    let kind = try #require(runtime.scheduler.takeFrame())
-    #expect(kind == .animation)
+    #expect(runtime.scheduler.nextFrame?.kind == .animation)
     runtime.dispatchInput(requestsFrame: false) {
       runtime.content = Text("Updated by input")
     }
     #expect(!runtime.scheduler.hasContentRequest)
-    let list = runtime.renderScheduled(kind, viewport: viewport, onChange: {})
+    let produced = runtime.renderScheduled(viewport: viewport, onChange: {})
+    let list = try #require(produced)
     #expect(list.commands.contains {
       if case .text(_, "Updated by input", _, _) = $0 { return true }
       return false
@@ -169,6 +170,67 @@ struct WindowRuntimeTests {
     runtime.reset()
   }
 
+  @Test func hostInputPreparationRunsBeforeSelectionAndFlushesItsQueuedActions() throws {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
+    let viewport = Size(width: 100, height: 100)
+    runtime.content = ProgressIndicator()
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
+    clock.now = try #require(runtime.scheduler.nextFrame).deadline
+    var order: [Int] = []
+    runtime.dispatchInput(requestsFrame: false) { order.append(1) }
+    let list = runtime.renderScheduled(
+      viewport: viewport,
+      prepareInput: {
+        order.append(2)
+        runtime.dispatchInput(requestsFrame: false) {
+          order.append(3)
+          runtime.content = Text("Prepared input")
+        }
+      }, onChange: {})
+    #expect(order == [1, 2, 3])
+    #expect(list?.commands.contains {
+      if case .text(_, "Prepared input", _, _) = $0 { return true }
+      return false
+    } == true)
+    #expect(!runtime.scheduler.inputPending)
+    runtime.reset()
+  }
+
+  @Test func inputPreparationCannotBypassTheGlobalCap() {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
+    let viewport = Size(width: 100, height: 100)
+    runtime.content = ProgressIndicator()
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
+    clock.now += 0.001
+    let list = runtime.renderScheduled(
+      viewport: viewport,
+      prepareInput: { runtime.scheduler.requestContent() }, onChange: {})
+    #expect(list == nil)
+    #expect(runtime.scheduler.lastFrameTime == 100)
+    #expect(runtime.scheduler.nextFrame?.kind == .content)
+    #expect(runtime.scheduler.nextFrame?.deadline == 100 + 1.0 / 60)
+    clock.now = 100 + 1.0 / 60
+    let produced = runtime.renderScheduled(viewport: viewport, onChange: {})
+    #expect(produced != nil)
+    runtime.reset()
+  }
+
+  @Test func inputCanCancelAnimationDemandBeforeSelection() throws {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
+    let viewport = Size(width: 100, height: 100)
+    runtime.content = ProgressIndicator()
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
+    clock.now = try #require(runtime.scheduler.nextFrame).deadline
+    runtime.dispatchInput(requestsFrame: false) { runtime.reset() }
+    let produced = runtime.renderScheduled(viewport: viewport, onChange: {})
+    #expect(produced == nil)
+    #expect(runtime.scheduler.lastFrameTime == nil)
+    #expect(runtime.scheduler.nextFrame == nil)
+  }
+
   @Test func animationDemandAndDeadlinesFollowRenderingReplacementAndReset() {
     let clock = FrameSchedulerTests.Clock()
     let runtime = WindowRuntime(clock: { clock.now })
@@ -176,7 +238,7 @@ struct WindowRuntimeTests {
     runtime.content = ProgressIndicator()
     #expect(runtime.nextAnimationDeadline == nil)
     #expect(runtime.scheduler.takeFrame() == .content)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderContent(viewport: viewport, onChange: {})
     #expect(runtime.scheduler.animationsActive)
     #expect(runtime.nextAnimationDeadline == 100 + 1.0 / 30)
     runtime.scheduler.setRefreshRates(minimum: 20, maximum: 60)
@@ -213,8 +275,9 @@ struct WindowRuntimeTests {
     #expect(interaction.animationPaints.isEmpty)
   }
 
-  @Test func backendReadinessNotificationsDoNotTurnAnimationIntoContent() {
-    let runtime = WindowRuntime()
+  @Test func backendReadinessNotificationsDoNotTurnAnimationIntoContent() throws {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
     let viewport = Size(width: 100, height: 100)
     var builds = 0
     var notifications = 0
@@ -224,9 +287,11 @@ struct WindowRuntimeTests {
     }
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.scheduler.consumeContentRequest()
+    runtime.scheduler.recordProducedFrame()
+    clock.now = try #require(runtime.scheduler.nextFrame).deadline
     let initialBuilds = builds
     runtime.dispatchInput(requestsFrame: false) { notifications += 1 }
-    _ = runtime.renderScheduled(.animation, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(notifications == 1)
     #expect(builds == initialBuilds)
     runtime.reset()
@@ -239,7 +304,7 @@ struct WindowRuntimeTests {
     runtime.handleInput(InputState(commands: [.navigation(.nextFocus)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
-    _ = runtime.renderScheduled(.content, viewport: Size(width: 200, height: 100), onChange: {})
+    _ = runtime.renderContent(viewport: Size(width: 200, height: 100), onChange: {})
     #expect(model.actions == 2)
     runtime.reset()
   }
@@ -252,7 +317,7 @@ struct WindowRuntimeTests {
     let viewport = Size(width: 100, height: 100)
     runtime.content = DeferredBlock { Text(model.text) }
     #expect(runtime.scheduler.takeFrame() == .content)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: { runtime.scheduler.requestContent() })
+    _ = runtime.renderContent(viewport: viewport, onChange: { runtime.scheduler.requestContent() })
     model.text = "one"
     model.text = "two"
     await drainObservationChanges()
@@ -260,7 +325,7 @@ struct WindowRuntimeTests {
     #expect(runtime.scheduler.takeFrame() == nil)
     clock.now = try #require(runtime.scheduler.nextFrame).deadline
     #expect(runtime.scheduler.takeFrame() == .content)
-    let list = runtime.renderScheduled(.content, viewport: viewport, onChange: { runtime.scheduler.requestContent() })
+    let list = runtime.renderContent(viewport: viewport, onChange: { runtime.scheduler.requestContent() })
     #expect(
       list.commands.contains {
         if case .text(_, "two", _, _) = $0 { return true }

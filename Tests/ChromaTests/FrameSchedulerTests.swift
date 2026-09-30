@@ -98,7 +98,8 @@ struct FrameSchedulerTests {
     let clock = ContinuousClock()
     let frames = await withCheckedContinuation { continuation in
       var frames: [(FrameScheduler.FrameKind, TaskPriority, ContinuousClock.Instant)] = []
-      scheduler.onFrame = { kind in
+      scheduler.onWake = {
+        guard let kind = scheduler.takeFrame() else { return }
         frames.append((kind, Task.currentPriority, clock.now))
         switch frames.count {
         case 1: scheduler.animationsActive = true
@@ -118,10 +119,56 @@ struct FrameSchedulerTests {
     scheduler.reset()
   }
 
+  @Test func wakeupDoesNotConsumeDemandOrRecordAFrameUntilTheHostTakesIt() async {
+    let clock = Clock()
+    let scheduler = FrameScheduler(clock: { clock.now })
+    scheduler.requestContent()
+    #expect(scheduler.takeFrame() == .content)
+    scheduler.animationsActive = true
+    clock.now += 1
+    await withCheckedContinuation { continuation in
+      scheduler.onWake = {
+        #expect(scheduler.lastFrameTime == 100)
+        #expect(scheduler.nextFrame?.kind == .animation)
+        scheduler.requestContent()
+        #expect(scheduler.nextFrame?.kind == .content)
+        // Simulate a host that is no longer able to present.
+        scheduler.isReady = false
+        continuation.resume()
+      }
+      scheduler.isReady = true
+    }
+    #expect(scheduler.lastFrameTime == 100)
+    #expect(scheduler.hasContentRequest)
+    scheduler.reset()
+  }
+
+  @Test func wakeupRecordsCompletionOnlyAfterTheHostTakesAFrame() async {
+    let clock = Clock()
+    let scheduler = FrameScheduler(clock: { clock.now })
+    scheduler.requestContent()
+    await withCheckedContinuation { continuation in
+      scheduler.onWake = {
+        #expect(scheduler.takeFrame() == .content)
+        clock.now += 0.1
+        scheduler.requestContent()
+        scheduler.isReady = false
+        continuation.resume()
+      }
+      scheduler.isReady = true
+    }
+    #expect(scheduler.lastFrameTime == clock.now)
+    #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
+    #expect(scheduler.takeFrame() == nil)
+    scheduler.reset()
+  }
+
   @Test func readinessAndResetCancelScheduledWork() async {
     let scheduler = FrameScheduler()
     var frames = 0
-    scheduler.onFrame = { _ in frames += 1 }
+    scheduler.onWake = {
+      if scheduler.takeFrame() != nil { frames += 1 }
+    }
     scheduler.isReady = true
     scheduler.requestContent()
     scheduler.isReady = false

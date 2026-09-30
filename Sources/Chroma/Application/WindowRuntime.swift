@@ -82,14 +82,24 @@ package final class WindowRuntime {
     interaction.finishInput()
   }
 
+  /// Called only once the backend is ready. Input may change demand or cancel this wake-up.
   package func renderScheduled(
-    _ kind: FrameScheduler.FrameKind,
+    viewport: Size,
+    prepareInput: @MainActor () -> Void = {},
+    onChange: @escaping @MainActor @Sendable () -> Void
+  ) -> DrawList? {
+    flushInput()
+    prepareInput()
+    flushInput()
+    guard let kind = scheduler.takeFrame() else { return nil }
+    if kind == .animation { return renderAnimations() }
+    return renderContent(viewport: viewport, onChange: onChange)
+  }
+
+  package func renderContent(
     viewport: Size,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
-    // A timer may already be runnable when input arrives. Never paint stale animation first.
-    flushInput()
-    if kind == .animation && !scheduler.hasContentRequest { return renderAnimations() }
     _ = interaction.consumeRedrawRequest()
     if !pendingInputs.isEmpty {
       // Establish the viewport, then refresh registrations between queued events too.

@@ -82,7 +82,7 @@ public final class WaylandHost: Chroma.Host {
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
-    runtime.scheduler.onFrame = { [weak self] kind in self?.renderFrame(kind) }
+    runtime.scheduler.onWake = { [weak self] in self?.renderFrame() }
     keyboard.resolve = { [weak self] input, _ in self?.runtime.resolve(input) }
     keyboard.onInputAvailable = { [weak self] in self?.receiveInput() }
     keyboard.onCopy = { [weak self] in self?.clipboard.copyToClipboard() }
@@ -218,8 +218,14 @@ public final class WaylandHost: Chroma.Host {
     runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
   }
 
-  private func renderFrame(_ kind: FrameScheduler.FrameKind) {
+  private func renderFrame() {
     guard !framePending, running, configured, eglSurface != nil, let surface else { return }
+    updateFrameRate()
+    let viewport = Size(width: Float(width), height: Float(height))
+    guard let drawList = runtime.renderScheduled(
+      viewport: viewport,
+      prepareInput: { [self] in if input.hasScrollMomentum { receiveInput() } },
+      onChange: { [weak self] in self?.requestFrame() }) else { return }
     guard let callback = unsafe wl_surface_frame(surface) else {
       failEventLoop(WaylandError("could not create Wayland frame callback"))
       return
@@ -229,7 +235,7 @@ public final class WaylandHost: Chroma.Host {
     runtime.scheduler.isReady = false
     unsafe wl_callback_add_listener(
       callback, &Self.frameListener, Unmanaged.passUnretained(self).toOpaque())
-    drawFrame(kind)
+    drawFrame(drawList)
     flushWayland()
   }
 
@@ -664,16 +670,11 @@ public final class WaylandHost: Chroma.Host {
     _ = unsafe eglSwapInterval(eglDisplay, 1)
   }
 
-  private func drawFrame(_ kind: FrameScheduler.FrameKind) {
+  private func drawFrame(_ drawList: DrawList) {
     guard eglDisplay != nil, eglSurface != nil else { return }
     openGL.beginFrame(width: width, height: height, bufferScale: bufferScale)
 
-    updateFrameRate()
-    if input.hasScrollMomentum { receiveInput() }
     let viewport = Size(width: Float(width), height: Float(height))
-    let drawList = runtime.renderScheduled(
-      kind, viewport: viewport,
-      onChange: { [weak self] in self?.requestFrame() })
     runtime.observe(
       drawList, viewport: viewport, rasterScale: Point(x: Float(bufferScale), y: Float(bufferScale)))
     if interaction.consumeRedrawRequest() { requestFrame() }

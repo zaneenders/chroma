@@ -32,7 +32,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   private let queue: MTLCommandQueue
   private let displayRenderer: MetalDisplayListRenderer
   private var window: NSWindow?
-  private var scheduledFrame: FrameScheduler.FrameKind?
+  private var frameRequested = false
   private var lastFrameTime: Double = 0
 
   public init(size: Size = Size(width: 800, height: 600)) throws {
@@ -60,9 +60,9 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
       self.runtime.dispatchInput { [weak self] in self?.handleKey(input, frameInput: frameInput) }
     }
     interaction.onRedrawRequested = { [weak self] in self?.runtime.scheduler.requestContent() }
-    runtime.scheduler.onFrame = { [weak self] kind in
+    runtime.scheduler.onWake = { [weak self] in
       guard let self else { return }
-      self.scheduledFrame = kind
+      self.frameRequested = true
       self.view.draw()
     }
   }
@@ -147,20 +147,20 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   public func draw(in view: MTKView) {
     let viewport = Size(width: Float(view.bounds.width), height: Float(view.bounds.height))
     guard viewport.width > 0, viewport.height > 0 else {
-      scheduledFrame = nil
+      frameRequested = false
       return
     }
-    guard let kind = scheduledFrame else {
+    guard frameRequested else {
       runtime.scheduler.requestContent()
       return
     }
-    scheduledFrame = nil
+    frameRequested = false
     let now = ProcessInfo.processInfo.systemUptime
     if lastFrameTime > 0, now > lastFrameTime { interaction.frameRate = 1 / (now - lastFrameTime) }
     lastFrameTime = now
-    let list = runtime.renderScheduled(
-      kind, viewport: viewport,
-      onChange: { [weak self] in self?.runtime.scheduler.requestContent() })
+    guard let list = runtime.renderScheduled(
+      viewport: viewport,
+      onChange: { [weak self] in self?.runtime.scheduler.requestContent() }) else { return }
     let redraw = interaction.consumeRedrawRequest()
     defer { if redraw { runtime.scheduler.requestContent() } }
     guard let drawable = view.currentDrawable, let pass = view.currentRenderPassDescriptor else {
