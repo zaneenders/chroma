@@ -26,7 +26,6 @@ private enum ObservationTestScope {
   @TaskLocal static var pending: PendingObservationChanges?
 }
 
-// Each test gets its own scheduler, including when tests run concurrently.
 struct ControlledObservationDelivery: SuiteTrait, TestTrait, TestScoping {
   var isRecursive: Bool { true }
 

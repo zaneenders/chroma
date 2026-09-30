@@ -3,11 +3,11 @@ import Testing
 @testable import Chroma
 
 @MainActor
-struct RenderContextTests {
+struct BlockContextTests {
 
   @Test func contextBundlesInteractionState() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
 
     #expect(context.interaction === interaction)
     #expect(context.selection === interaction.textSelection)
@@ -27,7 +27,7 @@ struct RenderContextTests {
     interaction.beginFrame(
       input: InputState(pointerPosition: current, pointerDown: true))
 
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     #expect(context.isPointerDragging)
     #expect(context.pointerDragOrigin == origin)
     #expect(context.pointerDragPosition == current)
@@ -35,7 +35,7 @@ struct RenderContextTests {
 
   @Test func contextFontMetricsWriteThroughToInteraction() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
 
     var metrics = FontMetrics()
     metrics.glyphWidth = 10
@@ -52,15 +52,15 @@ struct RenderContextTests {
   }
 
   @Test func contextsOwnIndependentSelectionManagers() {
-    let first = RenderContext()
-    let second = RenderContext()
+    let first = BlockContext()
+    let second = BlockContext()
 
     #expect(first.selection !== second.selection)
   }
 
   @Test func blockEngineForwardsExplicitContext() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let recorder = ContextRecorder()
     let block = ContextRecordingBlock(recorder: recorder)
 
@@ -109,22 +109,23 @@ private struct ContextRecordingBlock: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     recorder.measuredInteraction = context.interaction
     return proposal
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     recorder.drawnInteraction = context.interaction
   }
 }
 
 @MainActor
-private final class FakeRenderer: Renderer {
+private final class FakeRenderer: Host {
   let name = "Fake"
   var content: (any Block)?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
-  let interaction = Interaction()
+  let runtime = WindowRuntime()
+  func setMinimumRefreshRate(_ refreshRate: Double) {}
   func run(title: String) {}
 }

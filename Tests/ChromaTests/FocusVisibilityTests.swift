@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct FocusVisibilityTests {
   private let viewport = Size(width: 200, height: 200)
-  private let context = RenderContext()
+  private let context = BlockContext()
 
   private func render(_ content: any Block, input: InputState = InputState()) {
     let isInitialFrame = context.interaction.tree == nil
@@ -71,7 +71,7 @@ struct FocusVisibilityTests {
     var text = ""
     var cancelCalls = 0
     let content = VStack {
-      TextField(text: { text }, onChange: { text = $0 })
+      TextEditor(singleLine: true, text: { text }, onChange: { text = $0 })
         .onCommand(.action(.cancel)) {
           cancelCalls += 1
           return .handled
@@ -90,13 +90,12 @@ struct FocusVisibilityTests {
   }
 }
 
-/// A column taller than the clip it is drawn in, with no scroll container to reveal it.
 private struct ClippedColumn: PrimitiveBlock {
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     context.withInteractionClip(Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 60)) {
       BlockEngine.draw(
         VStack(spacing: 0) {

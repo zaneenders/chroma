@@ -1,6 +1,6 @@
 import Chroma
+import ChromaTesting
 import Foundation
-import HeadlessBackend
 import Synchronization
 import Testing
 
@@ -37,19 +37,6 @@ struct DemoContentTests {
     #expect(state.elapsedTime() == 5)
   }
 
-  @Test func sharedSceneSurvivesCaptureRoundTrip() throws {
-    let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-    let renderer = HeadlessRenderer(size: demo.windowSize)
-    renderer.content = demo.body
-    let frame = renderer.render()
-    #expect(!frame.commands.isEmpty)
-    let decoded = try SceneCapture.decode(
-      SceneCapture.encode(
-        FrameObservation(drawList: DrawList(commands: frame.commands), viewport: frame.viewport)))
-    #expect(decoded.viewport == frame.viewport)
-    #expect(decoded.drawList.commands == frame.commands)
-  }
-
   @Test func defaultClipboardShortcutsUsePlatformModifier() {
     let demo = DemoApplication()
     #if os(macOS)
@@ -84,7 +71,6 @@ struct DemoContentTests {
     #expect(apple.keyBindings.command(for: KeyChord("c", modifiers: .command))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .superKey))! == .editing(.copy))
     #expect(linux.keyBindings.command(for: KeyChord("c", modifiers: .command)) == nil)
-    // Plain s/l step in and out of focus scopes; they stay free for text while editing.
     for (key, command) in [
       (Key.character("s"), NavigationCommand.stepOut),
       (Key.character("l"), NavigationCommand.stepIn),
@@ -94,7 +80,13 @@ struct DemoContentTests {
       #expect(apple.keyBindings.command(for: KeyChord(key), isTextEditing: true) == nil)
       #expect(linux.keyBindings.command(for: KeyChord(key), isTextEditing: true) == nil)
     }
-    for key: Key in [.pageUp, .pageDown] {
+    for (key, direction): (Character, NavigationCommand) in [
+      ("d", .left), ("f", .up), ("j", .down), ("k", .right),
+    ] {
+      #expect(apple.keyBindings.command(for: KeyChord(key), isTextEditing: false)! == .navigation(direction))
+      #expect(linux.keyBindings.command(for: KeyChord(key), isTextEditing: false)! == .navigation(direction))
+    }
+    for key: Key in [.leftArrow, .rightArrow, .upArrow, .downArrow, .pageUp, .pageDown] {
       #expect(apple.keyBindings.command(for: KeyChord(key)) == nil)
       #expect(linux.keyBindings.command(for: KeyChord(key)) == nil)
     }
@@ -102,115 +94,7 @@ struct DemoContentTests {
 }
 
 @MainActor
-@Test func captureShortcutRequestsExactlyOneFrame() throws {
-  let directory = try captureTestDirectory()
-  defer { try? FileManager.default.removeItem(at: directory) }
-  let configuration = try DemoCaptureConfiguration(directory: directory)
-  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command, captureConfiguration: configuration)
-  #expect(demo.keyBindings.command(for: KeyChord("g", modifiers: [.control, .shift]))! == .application("demo.capture"))
-  let renderer = HeadlessRenderer(size: demo.windowSize)
-  renderer.content = demo.body
-  renderer.render()
-  let requested = renderer.render(input: InputState(commands: [.application("demo.capture")]))
-  #expect(
-    requested.commands.contains { command in
-      if case .text(_, let text, _, _) = command { return text == "Scene capture requested" }
-      return false
-    })
-}
-
-@MainActor
-@Test func demoCaptureWritesReplayableScene() async throws {
-  let directory = try captureTestDirectory()
-  defer { try? FileManager.default.removeItem(at: directory) }
-  let configuration = try DemoCaptureConfiguration(directory: directory)
-  let demo = DemoApplication(itemCount: 100, shortcutModifier: .command, captureConfiguration: configuration)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
-  renderer.content = demo.body
-  renderer.frameObserver = demo.frameObserver
-  renderer.render()
-  let captured = renderer.render(input: InputState(commands: [.application("demo.capture")]))
-  for _ in 0..<200 {
-    try await Task.sleep(for: .milliseconds(25))
-    let frame = renderer.render()
-    for command in frame.commands {
-      if case .text(_, let text, _, _) = command, text.hasPrefix("Saved scene: ") {
-        let filename = String(text.dropFirst("Saved scene: ".count))
-        let url = directory.appendingPathComponent(filename)
-        defer { try? FileManager.default.removeItem(at: url) }
-        let decoded = try SceneCapture.decode(Data(contentsOf: url))
-        #expect(decoded.drawList.commands == captured.commands)
-        #expect(decoded.viewport == captured.viewport)
-        return
-      }
-    }
-  }
-  Issue.record("Capture did not complete within five seconds")
-}
-
-private func captureTestDirectory() throws -> URL {
-  let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-    UUID().uuidString, isDirectory: true)
-  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-  return directory
-}
-
-@MainActor
-@Test func captureIsDisabledWithoutConfiguration() {
-  let demo = DemoApplication()
-  #expect(demo.frameObserver == nil)
-  #expect(demo.keyBindings.command(for: KeyChord("g", modifiers: [.control, .shift])) == nil)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
-  renderer.content = demo.body
-  let frame = renderer.render(input: InputState(commands: [.application("demo.capture")]))
-  #expect(
-    !frame.commands.contains { command in
-      if case .text(_, let text, _, _) = command { return text.contains("capture") }
-      return false
-    })
-}
-
-@Test func captureConfigurationRequiresExplicitValidDirectory() throws {
-  var empty: [String] = []
-  #expect(try DemoCaptureConfiguration.parse(arguments: &empty) == nil)
-  for invalid in [
-    ["--capture-directory"], ["--capture-directory", ""],
-    ["--capture-directory", "/tmp", "--capture-directory", "/tmp"], ["--capture"],
-  ] {
-    var arguments = invalid
-    #expect(throws: (any Error).self) { try DemoCaptureConfiguration.parse(arguments: &arguments) }
-  }
-  let directory = try captureTestDirectory()
-  defer { try? FileManager.default.removeItem(at: directory) }
-  var arguments = ["--other-option", "--capture-directory", directory.path, "value"]
-  let configuration = try DemoCaptureConfiguration.parse(arguments: &arguments)
-  #expect(configuration?.directory == directory.standardizedFileURL.resolvingSymlinksInPath())
-  #expect(arguments == ["--other-option", "value"])
-  #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
-  let file = directory.appendingPathComponent("not-directory")
-  try Data().write(to: file)
-  #expect(throws: (any Error).self) { try DemoCaptureConfiguration(directory: file) }
-  #expect(throws: (any Error).self) {
-    try DemoCaptureConfiguration(directory: directory.appendingPathComponent("missing"))
-  }
-  #expect(throws: (any Error).self) { try DemoCaptureConfiguration(directory: URL(string: "https://example.com")!) }
-}
-
-@Test func nativeCaptureDefaultUsesDemoPackageDirectory() throws {
-  let expected = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .standardizedFileURL.resolvingSymlinksInPath()
-  let configuration = try DemoCaptureConfiguration.nativeDefault()
-  #expect(configuration.directory.path == expected.path)
-  #expect(
-    FileManager.default.fileExists(
-      atPath: configuration.directory.appendingPathComponent("Package.swift").path))
-}
-
-@MainActor
-private func clickFontTab(_ renderer: HeadlessRenderer) throws {
+private func clickFontTab(_ renderer: HeadlessHost) throws {
   let initial = renderer.render()
   let tab = try #require(
     initial.commands.compactMap { command -> Point? in
@@ -226,10 +110,8 @@ private func clickFontTab(_ renderer: HeadlessRenderer) throws {
       pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
 }
 
-/// The glyph grid's focused cell draws a 40 x 40 tint; every other stop on the font page
-/// has a different size, so the tint identifies the grid without activating anything.
 @MainActor
-private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
+private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   let frame = renderer.render(input: InputState(pointerPosition: Point(x: 5000, y: 5000)))
   for command in frame.commands {
     if case .fillRect(let rect, let color) = command,
@@ -243,9 +125,9 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 }
 
 @MainActor
-@Test func fontTabOpensAndSurvivesCaptureRoundTrip() throws {
+@Test func fontTabOpensAndRendersSample() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
+  let renderer = HeadlessHost(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -260,15 +142,12 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
       if case .text(_, "café Ångström naïve façade Český", _, _) = command { return true }
       return false
     })
-  let decoded = try SceneCapture.decode(
-    SceneCapture.encode(
-      FrameObservation(drawList: DrawList(commands: frame.commands), viewport: frame.viewport)))
-  #expect(decoded.drawList.commands == frame.commands)
+
 }
 
 @MainActor
 @Test func terminalSpecimenUsesContiguousBundledFontCells() {
-  let renderer = HeadlessRenderer(size: Size(width: 500, height: 84))
+  let renderer = HeadlessHost(size: Size(width: 500, height: 84))
   renderer.content = TerminalSpecimen()
   let rows = renderer.render().commands.compactMap { command -> Point? in
     if case .text(let position, _, _, _) = command { return position }
@@ -279,14 +158,13 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 }
 
 @MainActor
-@Test func fontPageArrowKeysMoveTheGlyphHighlight() throws {
+@Test func fontPageMovementCommandsMoveTheGlyphHighlight() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
+  let renderer = HeadlessHost(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
 
-  /// The glyph grid draws the inspected cell in the accent color; the page heading supplies that color.
   func highlightedCell() -> Point? {
     let frame = renderer.render()
     var accent: Color?
@@ -308,8 +186,6 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
   renderer.render(input: InputState(commands: [.navigation(.down), .navigation(.stepIn)]))
   let initialHighlight = try #require(highlightedCell())
   let cell: Float = 40
-  // Arrow keys stop on every focusable element — tabs, headings, the preview field —
-  // so walk down until the grid takes focus.
   for _ in 0..<50 {
     press(.navigation(.down))
     if focusedGlyphCell(renderer) != nil { break }
@@ -333,7 +209,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func escapeLeavesTheFontPreviewField() throws {
   let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-  let renderer = HeadlessRenderer(size: demo.windowSize)
+  let renderer = HeadlessHost(size: demo.windowSize)
   let gallery = PerformanceDemoState(itemCount: 100)
   renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
   try clickFontTab(renderer)
@@ -371,11 +247,8 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
   press(.navigation(.down))
   #expect(activate() == before)
 
-  // Esc resolves to the edit-exit event while a field is being edited.
   renderer.render(input: InputState(textEvents: [.endEditing]))
-  // Leave the text level before navigating the surrounding controls.
   press(.navigation(.stepOut))
-  // Walk down until the grid takes focus, then activate.
   for _ in 0..<50 {
     press(.navigation(.down))
     if focusedGlyphCell(renderer) != nil { break }
@@ -386,7 +259,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func glyphExplorerSelectionUpdatesInspectorState() {
   let state = PerformanceDemoState(itemCount: 100)
-  let renderer = HeadlessRenderer(size: Size(width: 400, height: 800))
+  let renderer = HeadlessHost(size: Size(width: 400, height: 800))
   renderer.content = GlyphExplorer(state: state)
   renderer.render()
   let point = Point(x: 20, y: 20)
@@ -410,7 +283,7 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 @MainActor
 @Test func glyphExplorerCellsHighlightHoverAndFocus() {
   let state = PerformanceDemoState(itemCount: 100)
-  let renderer = HeadlessRenderer(size: Size(width: 400, height: 800))
+  let renderer = HeadlessHost(size: Size(width: 400, height: 800))
   renderer.content = GlyphExplorer(state: state)
   let tint = HoverStyle.standardTint(in: .dark)
   let pressedTint = HoverStyle.standardTint(in: .dark, pressed: true)
@@ -418,17 +291,16 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 
   func tintRects() -> [Rect] {
     renderer.render(input: parked).commands.compactMap { command -> Rect? in
-      if case .fillRect(let rect, let color) = command, color == tint { return rect }
+      if case .strokeRect(let rect, let width, let color) = command,
+        width == 2, color == ChromaTheme.dark.focus.ring { return rect }
       return nil
     }
   }
 
-  // Explicitly select the first cell from the window root.
   renderer.render(input: parked)
   renderer.render(input: InputState(commands: [.navigation(.down)]))
   #expect(tintRects() == [Rect(x: 0, y: 0, width: 40, height: 40)])
 
-  // Pointer hover paints the same tint over the hovered cell.
   let hovered = renderer.render(input: InputState(pointerPosition: Point(x: 45, y: 85)))
   #expect(
     hovered.commands.contains { command in
@@ -438,7 +310,6 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
       return false
     })
 
-  // Pressing swaps in the pressed tint.
   let pressed = renderer.render(
     input: InputState(
       pointerPosition: Point(x: 45, y: 85), pointerDown: true, pointerPressed: true))
@@ -452,9 +323,9 @@ private func focusedGlyphCell(_ renderer: HeadlessRenderer) -> Rect? {
 }
 
 extension DemoContentTests {
-  @Test func scenePageScrollsTheUuidListWithArrowKeys() throws {
+  @Test func scenePageScrollsTheUuidListWithMovementCommands() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-    let renderer = HeadlessRenderer(size: demo.windowSize)
+    let renderer = HeadlessHost(size: demo.windowSize)
     let gallery = PerformanceDemoState(itemCount: 100)
     renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
 
@@ -465,7 +336,6 @@ extension DemoContentTests {
       }.min()
     }
 
-    // Pointer selection enters the list directly; keyboard movement reveals later rows.
     let header = try #require(
       renderer.render().commands.compactMap { command -> Point? in
         if case .text(let point, let text, _, _) = command, text == "UUID 1" {
@@ -481,8 +351,6 @@ extension DemoContentTests {
       input: InputState(pointerPosition: click, pointerPressPosition: click, pointerReleased: true))
 
     #expect(firstVisibleRow() == 1)
-    // Arrow keys walk every focusable element on the way down the list; keep walking
-    // until the focused row must be revealed by scrolling.
     for _ in 0..<200 {
       renderer.render(input: InputState(commands: [.navigation(.down)]))
       if let row = firstVisibleRow(), row > 1 { break }
@@ -492,7 +360,7 @@ extension DemoContentTests {
 
   @Test func scenePageStepsOutOfTheUuidListAndBackToTheRememberedRow() throws {
     let demo = DemoApplication(itemCount: 100, shortcutModifier: .command)
-    let renderer = HeadlessRenderer(size: demo.windowSize)
+    let renderer = HeadlessHost(size: demo.windowSize)
     let gallery = PerformanceDemoState(itemCount: 100)
     renderer.content = DeferredBlock { PerformanceDemo(state: gallery) }
     let parked = InputState(pointerPosition: Point(x: 5000, y: 5000))
@@ -504,14 +372,10 @@ extension DemoContentTests {
       }.min()
     }
 
-    // Focused rows paint the standard tint over their content; a focused control outside
-    // the list (buttons paint rounded tints, text paints flat ones elsewhere) never
-    // covers a UUID row's text.
     func tintRects() -> [Rect] {
       renderer.render(input: parked).commands.compactMap { command -> Rect? in
-        if case .fillRect(let rect, let color) = command, color == HoverStyle.standardTint(in: .dark) {
-          return rect
-        }
+        if case .strokeRect(let rect, let width, let color) = command,
+          width == 2, color == ChromaTheme.dark.focus.ring { return rect }
         return nil
       }
     }
@@ -528,7 +392,6 @@ extension DemoContentTests {
       return uuidTextOrigins().contains { origin in tints.contains { $0.contains(origin) } }
     }
 
-    // Select the first row, then walk far enough to require scrolling.
     let header = try #require(
       renderer.render().commands.compactMap { command -> Point? in
         if case .text(let point, let text, _, _) = command, text == "UUID 1" {
@@ -552,19 +415,40 @@ extension DemoContentTests {
     #expect(deepRow > 1)
     #expect(focusCoversARow())
 
-    // A single step out leaves the row list, no matter how deep the scroll went.
     renderer.render(input: InputState(commands: [.navigation(.stepOut)]))
     #expect(!focusCoversARow())
 
-    // A single step back in returns to the remembered row, with no walking.
     renderer.render(input: InputState(commands: [.navigation(.stepIn)]))
     #expect(firstVisibleRow() == deepRow)
     #expect(focusCoversARow())
   }
 
+  @Test func middleButtonRevealsVirtualizedRow() throws {
+    let state = PerformanceDemoState(itemCount: 100)
+    state.togglePaused()
+    let host = HeadlessHost(size: Size(width: 1200, height: 820))
+    host.content = DeferredBlock { PerformanceDemo(state: state) }
+    let position = try #require(
+      host.render().commands.compactMap { command -> Point? in
+        if case .text(let position, let text, _, _) = command, text == "Middle" { return position }
+        return nil
+      }.first)
+    let click = Point(x: position.x + 2, y: position.y + 2)
+    host.render(input: InputState(pointerPosition: click, pointerDown: true, pointerPressed: true))
+    host.render(input: InputState(pointerPosition: click, pointerReleased: true))
+    let frame = host.render()
+    #expect(state.uuidScrollController.offset == Float(state.identifiers.count / 2) * 53)
+    #expect(
+      frame.commands.contains {
+        if case .text(_, let text, _, _) = $0 { return text == "UUID 5001" }
+        return false
+      })
+    #expect(host.nextAnimationDeadline == nil)
+  }
+
   @Test func animationRequestsFramesWithoutInputAndStopsWhenInactive() async throws {
     let state = PerformanceDemoState(itemCount: 100)
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { PerformanceDemo(state: state) }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }

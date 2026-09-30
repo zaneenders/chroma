@@ -9,13 +9,13 @@ import Testing
 
     #expect(theme.accent == accent)
     #expect(theme.button.pressedBackground == accent)
-    #expect(theme.textField.editingBorder == accent)
+    #expect(theme.textEditor.editingBorder == accent)
     #expect(theme.focus.ring == accent)
   }
 
   @Test @MainActor func scopedThemeReachesDescendants() {
-    let theme = ChromaTheme.light
-    let context = RenderContext()
+    let theme = ChromaTheme.dark.accentColor(Color(r: 1, g: 0, b: 0, a: 1))
+    let context = BlockContext()
     let themed = context.withTheme(theme)
 
     #expect(themed.theme == theme)

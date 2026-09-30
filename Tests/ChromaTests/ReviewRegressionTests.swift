@@ -1,4 +1,4 @@
-import HeadlessBackend
+import ChromaTesting
 import Observation
 import Testing
 
@@ -25,9 +25,9 @@ struct ReviewRegressionTests {
 
     var focusRule: FocusRule { .control }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       let state = context.textInputState(
         id: WidgetID("editor"), in: rect, text: { text }, onChange: { model.text = $0 })
       capture.range = state.selectionRange
@@ -40,12 +40,12 @@ struct ReviewRegressionTests {
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       capture.measurements += 1
       return Size(width: proposal.width, height: model.height)
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.drawnHeight = rect.size.height
       list.fillRect(rect, color: .white)
     }
@@ -54,7 +54,7 @@ struct ReviewRegressionTests {
   @Test func capturedTextSelectionIsClampedToCurrentText() {
     let model = Model()
     let capture = Capture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
@@ -68,7 +68,7 @@ struct ReviewRegressionTests {
   @Test func editsUseCurrentCapturedText() {
     let model = Model()
     let capture = Capture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
@@ -78,11 +78,11 @@ struct ReviewRegressionTests {
     renderer.close()
   }
 
-  @Test func builtInTextFieldHandlesShrinkingCapturedText() {
+  @Test func builtInTextEditorHandlesShrinkingCapturedText() {
     let model = Model()
-    let renderer = HeadlessRenderer()
-    func field(_ text: String) -> TextField {
-      TextField(id: WidgetID("editor"), text: { text }, onChange: { model.text = $0 })
+    let renderer = HeadlessHost()
+    func field(_ text: String) -> TextEditor {
+      TextEditor(singleLine: true, text: { text }, onChange: { model.text = $0 })
     }
     renderer.content = DeferredBlock { field(model.text) }
     renderer.render()
@@ -99,10 +99,11 @@ struct ReviewRegressionTests {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
-    renderer.content = LazyVStack(
-      id: WidgetID("stack"), controller: controller,
-      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
+    let renderer = HeadlessHost()
+    renderer.content = ScrollView(
+      controller: controller,
+      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+    ).id(WidgetID("stack"))
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -131,9 +132,9 @@ struct ReviewRegressionTests {
 
     var focusRule: FocusRule { .control }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.inputs.append(context.input)
       if context.buttonState(id: WidgetID("probe"), in: rect).clicked {
         capture.clicks += 1
@@ -143,7 +144,7 @@ struct ReviewRegressionTests {
 
   @Test func registrationRefreshDoesNotReplayClickOrInput() {
     let capture = InputCapture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = InputProbe(capture: capture)
     renderer.render()
@@ -155,7 +156,6 @@ struct ReviewRegressionTests {
     #expect(capture.clicks == 1)
     #expect(capture.inputs == [InputState(), textInput])
 
-    // The refresh must still allow a new activation in the actual input pass.
     renderer.render(
       input: InputState(
         commands: [.action(.activate)], textEvents: [.insert("y")]))
@@ -164,7 +164,7 @@ struct ReviewRegressionTests {
 
   @Test func registrationRefreshDoesNotReplayPointerOrScrollEdges() {
     let capture = InputCapture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = InputProbe(capture: capture)
     renderer.render()
@@ -182,11 +182,12 @@ struct ReviewRegressionTests {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = LazyVStack(
-      id: WidgetID("stack"), controller: controller,
-      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))])
+    renderer.content = ScrollView(
+      controller: controller,
+      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+    ).id(WidgetID("stack"))
     renderer.render()
     for height: Float in [50, 80, 30] {
       model.height = height
@@ -194,7 +195,6 @@ struct ReviewRegressionTests {
       #expect(capture.drawnHeight == height)
     }
     #expect(capture.measurements == 4)
-    // Queued callbacks for replaced measurements must not invalidate the new cache.
     await drainObservationChanges()
     renderer.render()
     #expect(capture.measurements == 4)
@@ -204,12 +204,12 @@ struct ReviewRegressionTests {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = LazyVStack(
-      id: WidgetID("stack"), controller: controller,
+    renderer.content = ScrollView(
+      controller: controller,
       rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-    ).onCommand(.application("resize")) {
+    ).id(WidgetID("stack")).onCommand(.application("resize")) {
       model.height = 80
       return .handled
     }

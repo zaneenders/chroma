@@ -1,5 +1,5 @@
 import Chroma
-import HeadlessBackend
+import ChromaTesting
 import Testing
 
 @testable import DemoContent
@@ -8,7 +8,7 @@ import Testing
 struct WorkspaceTests {
   @MainActor private final class Harness {
     let state = WorkspaceState()
-    let renderer = HeadlessRenderer(size: Size(width: 1200, height: 820))
+    let renderer = HeadlessHost(size: Size(width: 1200, height: 820))
     init() {
       let state = state
       let gallery = PerformanceDemoState(itemCount: 100)
@@ -85,6 +85,30 @@ struct WorkspaceTests {
     h.move(.right, .stepIn)
     #expect(h.state.session.draft == "> " + h.state.session.messages[0].text)
     #expect(h.contains("Quoted into the composer"))
+  }
+
+  @Test func composerKeepsMultilineDraftUntilSendIsActivated() throws {
+    let h = Harness()
+    let count = h.state.session.messages.count
+    h.state.session.input.focus(editing: true)
+    h.renderer.render()
+    h.renderer.render(input: InputState(textEvents: [.insert("First line"), .submit, .insert("Second line")]))
+    #expect(h.state.session.draft == "First line\nSecond line")
+    #expect(h.state.session.messages.count == count)
+    h.renderer.render(input: InputState(textEvents: [.endEditing]))
+    #expect(!h.state.session.input.isEditing)
+    #expect(h.state.status == "Draft kept. Select Send when you are ready.")
+    let position = try #require(
+      h.renderer.render().commands.compactMap { command -> Point? in
+        if case .text(let point, let text, _, _) = command, text == "Send" { return point }
+        return nil
+      }.first)
+    let click = Point(x: position.x + 2, y: position.y + 2)
+    h.renderer.render(input: InputState(pointerPosition: click, pointerDown: true, pointerPressed: true))
+    h.renderer.render(input: InputState(pointerPosition: click, pointerReleased: true))
+    try #require(h.state.session.messages.count == count + 2)
+    #expect(h.state.session.messages[count].text == "First line\nSecond line")
+    #expect(h.state.session.draft.isEmpty)
   }
 
   @Test func emptySendIsIgnoredAndRepliesAreLocal() {

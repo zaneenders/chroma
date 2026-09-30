@@ -4,19 +4,21 @@ import PackageDescription
 var products: [Product] = [
   .library(name: "Chroma", targets: ["Chroma"]),
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
-  .library(name: "HeadlessBackend", targets: ["HeadlessBackend"]),
+  .library(name: "ChromaTesting", targets: ["ChromaTesting"]),
 ]
 
 var targets: [Target] = [
   .testTarget(
     name: "ChromaTests",
-    dependencies: ["Chroma", "ChromaFont", "HeadlessBackend"]
+    dependencies: ["Chroma", "ChromaFont", "ChromaTesting"]
   ),
   .target(name: "Chroma", swiftSettings: [.strictMemorySafety()]),
+  .executableTarget(
+    name: "InputFrameBenchmark", dependencies: ["Chroma"], path: "Benchmarks/Sources/InputFrameBenchmark"),
   .target(
     name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")],
     swiftSettings: [.strictMemorySafety()]),
-  .target(name: "HeadlessBackend", dependencies: ["Chroma"]),
+  .target(name: "ChromaTesting", dependencies: ["Chroma"]),
 ]
 #if os(macOS)
 products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))

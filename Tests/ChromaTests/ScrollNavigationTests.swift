@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct ScrollNavigationTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     func render(_ content: any Block, _ commands: [NavigationCommand] = []) {
       _ = producer.render(
@@ -18,7 +18,7 @@ struct ScrollNavigationTests {
     let h = Harness()
     let controller = ScrollViewController()
     let rows = (0..<40).map { _ in FocusTarget() }
-    let content = LazyVStack(data: rows.indices, rowHeight: 20, controller: controller) { index in
+    let content = ScrollView(data: rows.indices, rowHeight: 20, controller: controller) { index in
       Button("Row \(index)") {}.focusTarget(rows[index])
     }
     h.render(content)
@@ -39,6 +39,40 @@ struct ScrollNavigationTests {
     #expect(controller.offset > 0)
   }
 
+  @Test func logicalRowSelectionSurvivesVirtualizationAndDownRevealsSuccessor() {
+    let h = Harness()
+    let controller = ScrollViewController()
+    let selection = ScrollSelection<Int>()
+    let targets = (0..<100).map { _ in FocusTarget() }
+    struct Item: Identifiable { let id: Int }
+    let content = ScrollView(
+      data: (0..<100).map { Item(id: $0) }, rowHeight: 20, controller: controller, selection: selection
+    ) { index in
+      Button("Row \(index.id)") {}.focusTarget(targets[index.id])
+    }
+    h.render(content)
+    h.render(content, [.down, .stepIn, .down])
+    #expect(selection.selectedID == 1)
+    #expect(targets[1].isFocused)
+
+    controller.scroll(to: 1200)
+    h.render(content)
+    #expect(selection.selectedID == 1)
+    #expect(!targets[1].isFocused)
+    h.render(content, [.down])
+    #expect(selection.selectedID == 2)
+    h.render(content)
+    #expect(targets[2].isFocused)
+    #expect(controller.offset < 1200)
+  }
+
+  @Test func logicalSelectionHasExplicitMissingItemPolicy() {
+    let selection = ScrollSelection(2)
+    #expect(selection.move(in: [1, 3], by: 1) == nil)
+    selection.selectedID = 2
+    #expect(selection.move(in: [1, 3], by: 1, ifMissing: .first) == 1)
+  }
+
   @Test func removedRememberedRowFallsBackWithoutActivatingAnother() {
     let h = Harness()
     let controller = ScrollViewController()
@@ -46,7 +80,7 @@ struct ScrollNavigationTests {
     let rows = Rows()
     var calls = 0
     let content = DeferredBlock {
-      LazyVStack(data: rows.ids, rowHeight: 20, controller: controller) { index in
+      ScrollView(data: rows.ids, rowHeight: 20, controller: controller) { index in
         Button("Row \(index)") { calls += 1 }
       }
     }
@@ -57,6 +91,29 @@ struct ScrollNavigationTests {
     h.render(content, [.stepIn])
     #expect(h.context.interaction.selectedLeafID != nil)
     #expect(calls == 0)
+  }
+
+  @Test func pendingRowRevealSurvivesLayoutWidthChange() {
+    let h = Harness()
+    let controller = ScrollViewController()
+    let content = ScrollView(data: 0..<20, rowHeight: 20, controller: controller) { index in
+      Button("Row \(index)") {}
+    }
+    h.render(content)
+    h.render(content, [.down, .stepIn])
+    let interaction = h.context.interaction
+    guard let scrollID = interaction.scrollStates.first(where: { $0.value.layout != nil })?.key else {
+      Issue.record("Missing scroll layout")
+      return
+    }
+    interaction.scrollStates[scrollID]?.pendingReveal = Rect(x: 0, y: 300, width: 200, height: 20)
+    let expectedFocus = Interaction.PendingFocus(leaf: WidgetID("row-15"), scrollID: scrollID)
+    interaction.pendingFocus = expectedFocus
+    _ = h.producer.render(
+      content: content, viewport: Size(width: 150, height: 100), input: InputState(),
+      context: h.context, onChange: {})
+    #expect(controller.offset > 0)
+    #expect(interaction.pendingFocus == expectedFocus)
   }
 
   @Test func scrollControllerRestoresBothAxesAndResetsForNewIdentity() {

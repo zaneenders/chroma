@@ -3,6 +3,23 @@ import Testing
 @testable import Chroma
 
 struct KeyBindingsTests {
+  @Test func desktopBindingsKeepNavigationAndEditingSeparate() {
+    let bindings = KeyBindings.desktopNavigation
+    #expect(bindings.command(for: KeyChord(.downArrow), isTextEditing: false) == .some(.some(.navigation(.down))))
+    #expect(bindings.command(for: KeyChord(.downArrow), isTextEditing: true) == .some(.some(.editing(.moveCaretDown))))
+    #expect(
+      bindings.command(for: KeyChord(.leftArrow, modifiers: .shift), isTextEditing: true)
+        == .some(.some(.editing(.selectCaretLeft))))
+    #expect(bindings.command(for: KeyChord(.tab), isTextEditing: true) == .some(.some(.navigation(.nextFocus))))
+    #expect(
+      bindings.command(for: KeyChord(.tab, modifiers: .shift), isTextEditing: false)
+        == .some(.some(.navigation(.previousFocus))))
+    #expect(bindings.resolve(KeyboardInput(chord: KeyChord("j"), text: "j"), isTextEditing: false) == nil)
+    #expect(
+      KeyBindings.vimNavigation.command(for: KeyChord("j"), isTextEditing: false)
+        == .some(.some(.navigation(.down))))
+  }
+
   @Test func physicalCommandAndSuperAreDistinct() {
     #expect(KeyModifiers.command != KeyModifiers.superKey)
     #expect(!KeyModifiers.command.contains(.superKey))
@@ -127,6 +144,19 @@ extension KeyBindingsTests {
       #expect(
         KeyBindings.vimNavigation.prefersTextInsertion(
           chord: KeyChord(Character(character)), text: character, isTextEditing: true))
+    }
+    for (key, direction, selection) in [
+      ("d", NavigationCommand.sectionLeft, TextEditEvent.selectCaretLeft),
+      ("f", .sectionUp, .selectCaretUp),
+      ("j", .sectionDown, .selectCaretDown),
+      ("k", .sectionRight, .selectCaretRight),
+    ] {
+      #expect(KeyBindings.vimNavigation.command(for: KeyChord(Character(key), modifiers: .control), isTextEditing: false)
+        == .some(.some(.navigation(direction))))
+      #expect(KeyBindings.vimNavigation.command(for: KeyChord(Character(key), modifiers: .shift), isTextEditing: false)
+        == .some(.some(.editing(selection))))
+      #expect(KeyBindings.vimNavigation.prefersTextInsertion(
+        chord: KeyChord(Character(key), modifiers: .shift), text: key.uppercased(), isTextEditing: true))
     }
     #expect(
       KeyBindings.vimNavigation.command(for: KeyChord(.upArrow), isTextEditing: false) == nil

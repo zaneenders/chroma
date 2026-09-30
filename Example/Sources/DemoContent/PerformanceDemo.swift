@@ -122,6 +122,7 @@ private struct PerformanceScene: Block {
             .fontScale(demoTitleText)
             .foregroundColor(theme.accent)
           Spacer()
+          ProgressIndicator(color: theme.accent, diameter: 16, isActive: !state.isPaused)
           Text(state.isPaused ? "● PAUSED" : "● LIVE")
             .fontScale(demoSmallText)
             .foregroundColor(state.isPaused ? .yellow : Color(r: 0.25, g: 0.95, b: 0.55, a: 1))
@@ -186,9 +187,10 @@ private struct PerformanceScene: Block {
         .padding(10)
 
         HStack(spacing: 12) {
-          Text(state.lastAction)
-            .fontScale(demoSmallText)
-            .foregroundColor(theme.foreground)
+          MarqueeText(
+            state.lastAction + " — Pause stops the canvas, progress indicator, and scrolling text.",
+            color: theme.foreground, fontScale: demoSmallText, isActive: !state.isPaused
+          ).sizing(x: .grow)
           Spacer()
           Text("\(state.itemCount) shapes  •  \(state.palette.rawValue)  •  \(state.shape.rawValue)")
             .fontScale(demoSmallText)
@@ -222,11 +224,14 @@ private struct UUIDList: Block {
           Button("Top", fontScale: demoSmallText) {
             state.uuidScrollController.scrollToTop()
           }
+          Button("Middle", fontScale: demoSmallText) {
+            state.uuidScrollController.scrollToRow(state.identifiers.count / 2)
+          }
           Button("Bottom", fontScale: demoSmallText) {
             state.uuidScrollController.scrollToBottom()
           }
         }
-        LazyVStack(
+        ScrollView(
           data: state.identifiers.indices, rowHeight: 48, spacing: 5,
           controller: state.uuidScrollController
         ) { index in
@@ -261,9 +266,9 @@ private struct ShapeCanvas: PrimitiveBlock {
   var expandsHorizontally: Bool { true }
   var expandsVertically: Bool { true }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { proposal }
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: Color(r: 0.025, g: 0.035, b: 0.065, a: 1))
 
     let area = Rect(
@@ -276,7 +281,7 @@ private struct ShapeCanvas: PrimitiveBlock {
     let rows = max(1, (count + columns - 1) / columns)
     let cellWidth = area.size.width / Float(columns)
     let cellHeight = area.size.height / Float(rows)
-    let frame = context.animationFrame(active: !state.isPaused)
+    let frame = context.animationFrame(active: !state.isPaused, updatesPerSecond: 60)
     let elapsed = state.elapsedTime(at: frame.timestamp)
     let burstPhase = Float(state.burst) * 1.731
 
@@ -351,7 +356,7 @@ struct PerformanceDemo: Block {
           state.page = .font
         }
         Spacer()
-        Text("f/j/d/k or arrows navigate • s steps out, l steps in • Enter select • Esc exits input")
+        Text("d/f/j/k navigate • s steps out, l steps in • Enter select • Esc exits input")
           .fontScale(demoSmallText)
           .hover(.none)
       }
@@ -360,13 +365,13 @@ struct PerformanceDemo: Block {
           Text("CLIPBOARD")
           Text("Drag to select this text, then copy it to another app.")
             .fontScale(0.65).selectable()
-          TextField(
-            "Copy source", fontScale: 0.7,
+          TextEditor(
+            "Copy source", fontScale: 0.7, singleLine: true,
             text: { state.sourceText }, onChange: { state.sourceText = $0 })
-          TextField(
-            "Paste here…", fontScale: 0.7,
+          TextEditor(
+            "Paste here…", fontScale: 0.7, singleLine: true,
             text: { state.pastedText }, onChange: { state.pastedText = $0 })
-          Text("Copy / cut / paste / select all: platform shortcut modifier + C / X / V / A. Escape ends editing.")
+          Text("Click text, then Escape to move with d/f/j/k; Shift+d/f/j/k selects. Cmd/Ctrl+A selects all.")
             .fontScale(0.55)
           Spacer()
         }.padding(20).hover(.none)

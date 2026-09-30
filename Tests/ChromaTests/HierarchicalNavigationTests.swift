@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct HierarchicalNavigationTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = []) {
       _ = producer.render(
@@ -30,7 +30,7 @@ struct HierarchicalNavigationTests {
           Group("History") { Button("Message") {} }.sizing(x: .grow, y: .grow)
           Group("Composer") {
             HStack {
-              TextField(text: { "" }, onChange: { _ in }).focusTarget(input)
+              TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(input)
               Button("Send") {}
             }
           }
@@ -83,7 +83,7 @@ struct HierarchicalNavigationTests {
     var activations = 0
     let content = Group {
       HStack {
-        TextField(text: { text }, onChange: { text = $0 }).focusTarget(input)
+        TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(input)
         Button("Send") { activations += 1 }.focusTarget(button)
       }
     }
@@ -101,6 +101,45 @@ struct HierarchicalNavigationTests {
     h.render(content, [.navigation(.stepIn)])
     #expect(button.isFocused)
     #expect(activations == 1)
+  }
+
+  @Test func sectionMovementLeavesTextCaretAndSelectsNeighboringArea() {
+    let h = Harness()
+    let editor = FocusTarget()
+    let sessions = FocusTarget()
+    var text = "hello"
+    let content = HStack {
+      Group("Sessions") { Button("Session") {}.focusTarget(sessions) }
+        .sizing(x: .fixed(200), y: .grow)
+      Group("Conversation") {
+        TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(editor)
+      }.sizing(x: .grow, y: .grow)
+    }
+    h.render(content)
+    editor.focus(editing: true)
+    h.render(content)
+    h.render(content, text: [.endEditing])
+    #expect(!editor.isEditing && editor.isFocused)
+    #expect(h.context.interaction.editingLeaf != nil)
+    h.render(content, [.navigation(.sectionLeft)])
+    #expect(h.context.navigationBreadcrumb == ["Window", "Sessions"])
+    #expect(h.context.interaction.editingLeaf == nil)
+  }
+
+  @Test func shiftSelectsAndCopiesEditorTextInMovementMode() {
+    let h = Harness()
+    let editor = FocusTarget()
+    var text = "hello"
+    let content = TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(editor)
+    h.render(content)
+    editor.focus(editing: true)
+    h.render(content)
+    h.render(content, text: [.endEditing])
+    h.render(content, text: [.selectCaretLeft, .selectCaretLeft])
+    #expect(h.context.interactionMode == .movement)
+    #expect(h.context.interaction.copyText() == "lo")
+    h.render(content, [.navigation(.stepOut)])
+    #expect(h.context.interaction.copyText() == nil)
   }
 
   @Test func selectingOffscreenMessageGroupRevealsItWithoutEntering() {

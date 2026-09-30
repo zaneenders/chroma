@@ -15,12 +15,12 @@ struct StructuralPathTests {
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       recorder.measured[name] = context.structuralPath
       return Size(width: 10, height: 10)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       recorder.drawn[name] = context.structuralPath
     }
   }
@@ -32,7 +32,7 @@ struct StructuralPathTests {
   }
 
   private func render(_ block: any Block, recorder: Recorder) -> [String: StructuralPath] {
-    let context = RenderContext()
+    let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
     recorder.measured = [:]
     recorder.drawn = [:]
@@ -62,7 +62,7 @@ struct StructuralPathTests {
     #expect(first["row1"] != first["row2"])
     #expect(first["row1"] != first["sibling"])
     let size = BlockEngine.measure(
-      content(1), proposal: Size(width: 100, height: 100), context: RenderContext())
+      content(1), proposal: Size(width: 100, height: 100), context: BlockContext())
     #expect(size.height == 30)
   }
 
@@ -129,14 +129,14 @@ struct StructuralPathTests {
 
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       _ = BlockEngine.measure(
         Probe(name: "first", recorder: recorder), proposal: proposal, context: context.childScope(0))
       return BlockEngine.measure(
         Probe(name: "second", recorder: recorder), proposal: proposal, context: context.childScope(1))
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       BlockEngine.draw(
         Probe(name: "second", recorder: recorder), into: &drawList, in: rect, context: context.childScope(1))
       BlockEngine.draw(
@@ -171,7 +171,7 @@ struct StructuralPathTests {
     let expected = render(probe, recorder: recorder)["content"]
     let layered = probe.background(Probe(name: "inner", recorder: recorder))
       .background(Probe(name: "outer", recorder: recorder))
-    let context = RenderContext()
+    let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
     func draw() -> [String: StructuralPath] {
       recorder.drawn = [:]
@@ -186,6 +186,77 @@ struct StructuralPathTests {
     recorder.measured = [:]
     _ = BlockEngine.measure(layered, proposal: rect.size, context: context)
     #expect(recorder.measured["content"] == expected)
+  }
+
+  private struct TransparentScope: PrimitiveBlock {
+    var preservesContentIdentity: Bool { true }
+    var content: any Block
+    var focusRule: FocusRule { .container }
+
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+      BlockEngine.measure(content, proposal: proposal, context: context)
+    }
+
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    }
+  }
+
+  @Test func identityTransparencyDoesNotDistributeOverCollections() {
+    let recorder = Recorder()
+    let collection = ForEach([1, 2], id: \.self) { value in
+      Probe(name: String(value), recorder: recorder)
+    }
+    let grouped = VStack { TransparentScope(content: collection) }
+    let distributed = VStack { collection.padding(0) }
+    #expect(grouped.children.count == 1)
+    #expect(distributed.children.count == 2)
+    let paths = render(grouped, recorder: recorder)
+    #expect(paths["1"] != paths["2"])
+    let reordered = VStack {
+      TransparentScope(content: ForEach([2, 1], id: \.self) { value in
+        Probe(name: String(value), recorder: recorder)
+      })
+    }
+    #expect(render(reordered, recorder: recorder) == paths)
+    let probe = Probe(name: "single", recorder: recorder)
+    #expect(render(TransparentScope(content: probe), recorder: recorder) == render(probe, recorder: recorder))
+  }
+
+  private struct DistributingScope: PrimitiveBlock, CollectionDistributingBlock {
+    var content: any Block
+    var focusRule: FocusRule { .container }
+
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+      BlockEngine.measure(content, proposal: proposal, context: context)
+    }
+
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    }
+  }
+
+  @Test func collectionDistributionDoesNotPreserveContentIdentity() {
+    let recorder = Recorder()
+    func content(_ ids: [Int]) -> some Block {
+      DistributingScope(content: ForEach(ids, id: \.self) { value in
+        Probe(name: String(value), recorder: recorder)
+      })
+    }
+    let stack = VStack { content([1, 2]) }
+    #expect(stack.children.count == 2)
+    let paths = render(stack, recorder: recorder)
+    #expect(paths["1"] != paths["2"])
+    #expect(render(VStack { content([2, 1]) }, recorder: recorder) == paths)
+    let plain = render(VStack {
+      ForEach([1, 2], id: \.self) { value in
+        Probe(name: String(value), recorder: recorder)
+      }
+    }, recorder: recorder)
+    for name in ["1", "2"] {
+      #expect(paths[name] != plain[name])
+      #expect(paths[name]?.segments.contains(.component(ObjectIdentifier(DistributingScope.self))) == true)
+    }
   }
 
   private struct Item: Identifiable {
@@ -212,7 +283,7 @@ struct StructuralPathTests {
     #expect(
       BlockEngine.measure(
         content([1, 2]), proposal: Size(width: 100, height: 100),
-        context: RenderContext()) == Size(width: 10, height: 36))
+        context: BlockContext()) == Size(width: 10, height: 36))
   }
 
   @Test(arguments: ["vertical", "horizontal", "overlay"])
@@ -251,8 +322,8 @@ struct StructuralPathTests {
     let paths = render(plain, recorder: recorder)
     #expect(render(styled, recorder: recorder) == paths)
     #expect(
-      BlockEngine.measure(plain, proposal: proposal, context: RenderContext())
-        == BlockEngine.measure(styled, proposal: proposal, context: RenderContext()))
+      BlockEngine.measure(plain, proposal: proposal, context: BlockContext())
+        == BlockEngine.measure(styled, proposal: proposal, context: BlockContext()))
     let reordered = render(content(true, ids: [2, 3, 1]), recorder: recorder)
     for (name, path) in paths { #expect(reordered[name] == path) }
     #expect(render(content(true, ids: []), recorder: recorder)["sibling"] == paths["sibling"])
@@ -266,7 +337,7 @@ struct StructuralPathTests {
       }.padding(2)
     }
     #expect(
-      BlockEngine.measure(block, proposal: Size(width: 100, height: 100), context: RenderContext())
+      BlockEngine.measure(block, proposal: Size(width: 100, height: 100), context: BlockContext())
         == Size(width: 14, height: 31))
   }
 
@@ -286,22 +357,23 @@ struct StructuralPathTests {
   func lazyRowsFollowKeysAcrossReordering(uniform: Bool) {
     let recorder = Recorder()
     let controller = ScrollViewController()
-    let context = RenderContext()
+    let context = BlockContext()
     func draw(_ ids: [Int]) -> [String: StructuralPath] {
       recorder.measured = [:]
       recorder.drawn = [:]
-      let stack: LazyVStack
+      let stack: any Block
       if uniform {
-        stack = LazyVStack(
-          id: WidgetID("list"), data: ids.map { Item(id: $0) },
+        stack = ScrollView(
+          data: ids.map { Item(id: $0) },
           rowHeight: 10, controller: controller
         ) { item in
           Probe(name: String(item.id), recorder: recorder)
-        }
+        }.id(WidgetID("list"))
       } else {
-        stack = LazyVStack(
-          id: WidgetID("list"), controller: controller,
-          rows: ids.map { .init(id: WidgetID(String($0)), content: Probe(name: String($0), recorder: recorder)) })
+        stack = ScrollView(
+          controller: controller,
+          rows: ids.map { .init(id: WidgetID(String($0)), content: Probe(name: String($0), recorder: recorder)) }
+        ).id(WidgetID("list"))
       }
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()

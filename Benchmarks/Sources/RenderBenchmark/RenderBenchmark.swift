@@ -46,11 +46,11 @@ struct RenderBenchmark {
     var arguments = Array(CommandLine.arguments.dropFirst())
     if arguments == ["--help"] {
       print(
-        "RenderBenchmark [--scene \(RenderFixture.names.joined(separator: "|"))] [--capture PATH] [--stage cull|metal] [--count 2000] [--frames 300] [--warmup 30] [--seconds 0]"
+        "RenderBenchmark [--scene \(RenderFixture.names.joined(separator: "|"))] [--stage cull|metal] [--count 2000] [--frames 300] [--warmup 30] [--seconds 0]"
       )
       return
     }
-    let allowed = Set(["--scene", "--stage", "--count", "--frames", "--warmup", "--seconds", "--capture"])
+    let allowed = Set(["--scene", "--stage", "--count", "--frames", "--warmup", "--seconds"])
     while !arguments.isEmpty {
       let key = arguments.removeFirst()
       guard allowed.contains(key), !arguments.isEmpty, options[key] == nil else {
@@ -58,7 +58,7 @@ struct RenderBenchmark {
       }
       options[key] = arguments.removeFirst()
     }
-    var scene = options["--scene"] ?? "shapes"
+    let scene = options["--scene"] ?? "shapes"
     let stage = options["--stage"] ?? "cull"
     guard RenderFixture.names.contains(scene), ["cull", "metal"].contains(stage),
       let count = Int(options["--count"] ?? "2000"), (1...100_000).contains(count),
@@ -66,31 +66,10 @@ struct RenderBenchmark {
       let warmup = Int(options["--warmup"] ?? "30"), (0...100_000).contains(warmup),
       let seconds = Double(options["--seconds"] ?? "0"), seconds.isFinite, (0...3600).contains(seconds)
     else { throw BenchmarkError.failed("Invalid benchmark configuration; see --help") }
-    let sequence: [DrawList]
-    let viewport: Size
-    let rasterScale: Point
-    if let path = options["--capture"] {
-      guard options["--scene"] == nil, options["--count"] == nil else {
-        throw BenchmarkError.failed("--capture cannot be combined with --scene or --count")
-      }
-      let url = URL(fileURLWithPath: path)
-      let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-      guard let size = attributes[.size] as? NSNumber, size.intValue <= 65 * 1024 * 1024 else {
-        throw BenchmarkError.failed("Capture exceeds file size limit")
-      }
-      let data = try Data(contentsOf: url)
-      let frame = try SceneCapture.decode(data)
-      sequence = [frame.drawList]
-      viewport = frame.viewport
-      rasterScale = frame.rasterScale ?? Point(x: 1, y: 1)
-      let fingerprint = data.reduce(UInt64(14_695_981_039_346_656_037)) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 }
-      scene = "capture-" + String(fingerprint, radix: 16)
-    } else {
-      let fixture = try RenderFixture(name: scene, count: count)
-      sequence = fixture.sequence
-      viewport = fixture.viewport
-      rasterScale = Point(x: 1, y: 1)
-    }
+    let fixture = try RenderFixture(name: scene, count: count)
+    let sequence = fixture.sequence
+    let viewport = fixture.viewport
+    let rasterScale = Point(x: 1, y: 1)
     #if os(macOS)
     let metal = stage == "cull" ? nil : try MetalReplay(viewport: viewport, rasterScale: rasterScale)
     #else
@@ -108,7 +87,6 @@ struct RenderBenchmark {
       let cullStart = now()
       let replay = source.culled(to: viewport)
       durations["cull"] = now() - cullStart
-      // Keep the culling result observable even in the CPU-only benchmark.
       guard replay.commands.count <= source.commands.count else {
         throw BenchmarkError.failed("Culling increased command count")
       }

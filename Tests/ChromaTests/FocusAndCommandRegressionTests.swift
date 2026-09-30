@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct FocusAndCommandRegressionTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
 
     func render(_ content: any Block, input: InputState = InputState()) {
@@ -54,7 +54,6 @@ struct FocusAndCommandRegressionTests {
   @Test func keyedTupleChildHandlerDoesNotInterceptSibling() {
     let harness = Harness()
     var calls = 0
-    // The button is the first leaf, so the keyed child's handler must not intercept for it.
     let content = BlockBuilder.buildBlock(
       Button("Sibling") {},
       Text("No controls")
@@ -234,9 +233,9 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let controller = ScrollViewController()
     let listID = WidgetID("plain-row-list")
-    let content = LazyVStack(id: listID, data: 0..<20, rowHeight: 25, controller: controller) { index in
+    let content = ScrollView(data: 0..<20, rowHeight: 25, controller: controller) { index in
       Text("Row \(index)")
-    }
+    }.id(listID)
 
     harness.render(content)
     let firstRow = harness.context.interaction.selectedLeafID
@@ -245,14 +244,14 @@ struct FocusAndCommandRegressionTests {
     for _ in 0..<4 {
       harness.render(content, input: InputState(commands: [.navigation(.down)]))
     }
-    #expect(harness.context.interaction.scrollOffset(for: listID) == 25)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y == 25)
     #expect(harness.context.interaction.selectedLeafID != firstRow)
 
     for _ in 0..<4 {
       harness.render(content, input: InputState(commands: [.navigation(.up)]))
     }
     #expect(harness.context.interaction.selectedLeafID == firstRow)
-    #expect(harness.context.interaction.scrollOffset(for: listID) == 0)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y == 0)
   }
 
   @Test func editingBlocksStructuralNavigation() {
@@ -296,10 +295,10 @@ struct FocusAndCommandRegressionTests {
 
   @Test func cancelLeavesEditingWhenTheFocusedScopeHasNoCancelAction() {
     let harness = Harness()
-    harness.render(TextField(text: { "text" }, onChange: { _ in }))
+    harness.render(TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }))
     harness.context.interaction.beginEditing(harness.context.interaction.selectedLeafID!, caretOffset: 0)
 
-    harness.render(TextField(text: { "text" }, onChange: { _ in }), input: InputState(commands: [.action(.cancel)]))
+    harness.render(TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }), input: InputState(commands: [.action(.cancel)]))
 
     #expect(harness.context.interaction.mode == .movement)
   }
@@ -384,15 +383,15 @@ struct FocusAndCommandRegressionTests {
 
     func content() -> any Block {
       VStack {
-        LazyVStack(id: listID, data: 0...40, rowHeight: 20, controller: controller) { index in
+        ScrollView(data: 0...40, rowHeight: 20, controller: controller) { index in
           if index < rows.count {
             Button("Row \(index)") {}.focusTarget(rows[index])
           } else if fieldIsPresent {
-            TextField(text: { text }, onChange: { text = $0 }).focusTarget(field)
+            TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(field)
           } else {
             Button("Fallback") {}.focusTarget(fallback)
           }
-        }
+        }.id(listID)
         if panelIsOpen { Button("Panel") {}.focusTarget(panel) }
       }
       .onCommand(.application("custom")) {
@@ -430,10 +429,10 @@ struct FocusAndCommandRegressionTests {
     #expect(rows[0].isFocused)
     for _ in 0..<15 { press(KeyboardInput(chord: KeyChord("j"))) }
     #expect(rows[15].isFocused)
-    #expect(harness.context.interaction.scrollOffset(for: listID) > 0)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y > 0)
     for _ in 0..<15 { press(KeyboardInput(chord: KeyChord("f"))) }
     #expect(rows[0].isFocused)
-    #expect(harness.context.interaction.scrollOffset(for: listID) == 0)
+    #expect(harness.context.interaction.scrollState(for: listID).offset.y == 0)
 
     for _ in 0..<40 { press(KeyboardInput(chord: KeyChord("j"))) }
     #expect(field.isFocused)
@@ -468,7 +467,7 @@ struct FocusAndCommandRegressionTests {
     ) -> ResolvedKeyboardInput? {
       let harness = Harness()
       let target = FocusTarget()
-      let field = TextField(text: { "" }, onChange: { _ in })
+      let field = TextEditor(singleLine: true, text: { "" }, onChange: { _ in })
         .focusTarget(target)
         .keyBindings(scoped)
       target.focus(editing: true)
@@ -501,7 +500,6 @@ struct FocusAndCommandRegressionTests {
   }
 }
 
-/// Draws a `rows` x `columns` grid of controls using only public container APIs.
 private struct GridProbe: PrimitiveBlock {
   let rows: Int
   let columns: Int
@@ -509,11 +507,11 @@ private struct GridProbe: PrimitiveBlock {
 
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: Float(columns) * cell, height: Float(rows) * cell)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     context.withFocusGroup(in: rect, axis: .vertical) {
       for row in 0..<rows {
         let rowRect = Rect(

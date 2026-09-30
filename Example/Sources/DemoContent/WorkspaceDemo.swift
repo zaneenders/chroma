@@ -186,12 +186,16 @@ private struct ConversationPanel: Block {
   @MainActor private var composer: some Block {
     Group("Composer") {
       VStack(spacing: 10) {
-        Text("COMPOSE / l to enter / Enter to type / Escape to move").fontScale(0.38)
+        Text("COMPOSE / Enter adds a line / Escape keeps your draft / Send posts it").fontScale(0.38)
           .foregroundColor(WorkspacePalette.accent).navigationIgnored()
         HStack(spacing: 10) {
-          TextField(
-            "Leave a thought here...", fontScale: 0.55,
-            text: { session.draft }, onChange: { session.draft = $0 }, onSubmit: { _ in session.send() }
+          TextEditor(
+            "Leave a thought here...", fontScale: 0.55, lineLimits: 1...4,
+            text: { session.draft }, onChange: { session.draft = $0 },
+            onEndEditing: {
+              workspace.status = "Draft kept. Select Send when you are ready."
+              return .ignored
+            }
           )
           .focusTarget(session.input)
           Button("Send", fontScale: 0.5) { session.send() }
@@ -220,7 +224,7 @@ private struct MessageCard: Block {
       VStack(spacing: 10) {
         Text("\(message.author) / \(String(format: "%02d", message.id + 1))")
           .fontScale(0.35).foregroundColor(WorkspacePalette.accent).navigationIgnored()
-        WrappedMessage(text: message.text)
+        Text(message.text).fontScale(0.5).wrapping().selectable()
         HStack(spacing: 8) {
           Button(message.saved ? "Saved" : "Save", fontScale: 0.35) {
             if let index = session.messages.firstIndex(where: { $0.id == message.id }) {
@@ -237,55 +241,23 @@ private struct MessageCard: Block {
   }
 }
 
-private struct WrappedMessage: PrimitiveBlock {
-  let text: String
-  var focusRule: FocusRule { .container }
-  var expandsHorizontally: Bool { true }
-
-  @MainActor private func content(width: Float, context: RenderContext) -> Text {
-    let columns = max(1, Int(max(1, width) / max(1, context.fontMetrics.cellAdvance * 0.5 * context.textScale)))
-    var lines: [String] = []
-    var line = ""
-    for word in text.split(separator: " ") {
-      if !line.isEmpty, line.count + 1 + word.count > columns {
-        lines.append(line)
-        line = ""
-      }
-      if !line.isEmpty { line += " " }
-      line += word
-    }
-    if !line.isEmpty { lines.append(line) }
-    return Text(lines.joined(separator: "\n")).fontScale(0.5).selectable()
-  }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
-    let measured = BlockEngine.measure(
-      content(width: proposal.width, context: context), proposal: proposal, context: context)
-    return Size(width: proposal.width, height: measured.height)
-  }
-
-  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
-    BlockEngine.draw(content(width: rect.size.width, context: context), into: &drawList, in: rect, context: context)
-  }
-}
-
 private struct NavigationGuide: PrimitiveBlock {
   var focusRule: FocusRule { .decorative }
   var expandsHorizontally: Bool { true }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: proposal.width, height: 64)
   }
 
-  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let editing = context.interactionMode == .editing
     let mode = editing ? "INPUT" : "MOVE"
     let location = context.navigationBreadcrumb.joined(separator: " / ")
     let hint =
       context.isSelectingText
-      ? "dfjk caret   Shift+dfjk select   s out   Enter input   Cmd/Ctrl+C copy"
+      ? "d/f/j/k move insertion point   Shift+d/f/j/k select text   Enter type   Cmd/Ctrl+C copy"
       : editing
-        ? "Escape  MOVE inside text     Enter  send     Your draft stays here."
+        ? "Shift+arrows select text   Escape moves insertion point without typing"
         : "dfjk move   Shift+dfjk section     s out     l \(context.navigationSelectionIsGroup ? "enter" : "enter / use")"
     drawList.fillRoundedRect(rect, radius: 8, color: WorkspacePalette.card)
     drawList.pushClip(rect)

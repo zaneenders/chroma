@@ -8,7 +8,7 @@ import WaylandBackend
 #endif
 
 #if os(macOS)
-private protocol DemoApp: MetalApp {}
+private protocol DemoApp: MacOSApp {}
 #elseif os(Linux)
 private protocol DemoApp: WaylandApp {}
 #else
@@ -26,38 +26,10 @@ extension DemoApp {
 #endif
 
 @main
-struct ChromaDemo {
-  @MainActor static func main() throws {
-    var arguments = Array(CommandLine.arguments.dropFirst())
-    if arguments.contains("--help") || arguments.contains("-h") {
-      print("usage: ChromaDemo [--capture-directory EXISTING_WRITABLE_DIRECTORY]")
-      print("Default capture directory: the demo package directory (Example/). Save with Ctrl+Shift+G.")
-      return
-    }
-    let capture = try DemoCaptureConfiguration.parse(arguments: &arguments)
-    guard arguments.isEmpty else {
-      throw DemoCaptureConfiguration.ConfigurationError.missingOrDuplicateDirectory
-    }
-    #if os(macOS)
-    let modifier: KeyModifiers = .command
-    #else
-    let modifier: KeyModifiers = .control
-    #endif
-    ConfiguredDemo.configuration = try DemoApplication(
-      shortcutModifier: modifier,
-      captureConfiguration: capture ?? DemoCaptureConfiguration.nativeDefault())
-    try ConfiguredDemo.main()
-  }
-}
-
-private struct ConfiguredDemo: DemoApp {
-  @MainActor static var configuration: DemoApplication?
-  private let demo: DemoApplication
-  init() { demo = Self.configuration ?? DemoApplication() }
+private struct ChromaDemo: DemoApp {
+  private let demo = DemoApplication()
   var title: String { demo.title }
   var windowSize: Size { demo.windowSize }
-  var minimumRefreshRate: Double { demo.minimumRefreshRate }
-  var frameObserver: FrameObserver? { demo.frameObserver }
   var keyBindings: KeyBindings { demo.keyBindings }
   var body: some Block { demo.body }
 }

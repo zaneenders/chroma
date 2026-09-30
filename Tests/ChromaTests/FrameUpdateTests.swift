@@ -1,4 +1,4 @@
-import HeadlessBackend
+import ChromaTesting
 import Observation
 import Testing
 
@@ -13,7 +13,7 @@ struct FrameUpdateTests {
 
   @Test func actionUpdatesEarlierSiblingInTheSameFrame() {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock {
       VStack {
         Text(model.text)
@@ -24,7 +24,6 @@ struct FrameUpdateTests {
       }
     }
     renderer.render()
-    // Keyboard focus starts on the text; move to the button and activate in one frame.
     let frame = renderer.render(
       input: InputState(commands: [.navigation(.down), .navigation(.down), .action(.activate)]))
     #expect(model.actions == 1)
@@ -39,15 +38,14 @@ struct FrameUpdateTests {
 
   @Test func textEditingUpdatesEarlierSiblingBeforeDrawing() {
     let model = Model()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     renderer.content = DeferredBlock {
       VStack {
         Text(model.text)
-        TextField(id: WidgetID("editor"), text: { model.text }, onChange: { model.text = $0 })
+        TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 })
       }
     }
     renderer.render()
-    // Keyboard focus starts on the text; move to the field and activate in one frame.
     renderer.render(
       input: InputState(commands: [.navigation(.down), .navigation(.down), .action(.activate)]))
     let frame = renderer.render(input: InputState(textEvents: [.insert("!")]))
@@ -63,10 +61,10 @@ struct FrameUpdateTests {
   @Test(ControlledObservationDelivery())
   func externalScrollRequestInvalidatesObservedFrame() async {
     let controller = ScrollViewController()
-    let renderer = HeadlessRenderer()
-    renderer.content = ScrollView(id: WidgetID("scroll"), controller: controller) {
+    let renderer = HeadlessHost()
+    renderer.content = ScrollView(controller: controller) {
       Text("hello")
-    }
+    }.id(WidgetID("scroll"))
     var requests = 0
     renderer.onRedrawRequested = { requests += 1 }
     renderer.render()
@@ -96,14 +94,12 @@ struct FrameUpdateTests {
     #expect(second.duration == .milliseconds(480))
 
     let oldTask = try #require(clock.task)
-    // Simulate sleep completing just before deactivation, with its task still queued.
     second.resume.resume()
     clock.setActive(false)
     #expect(clock.visible)
     await oldTask.value
     #expect(clock.visible)
 
-    // An old cancelled tick must not interfere with a newly started clock either.
     clock.setActive(true)
     let third = try #require(await iterator.next())
     let restartedTask = try #require(clock.task)

@@ -1,0 +1,251 @@
+public enum Key: Hashable, Sendable {
+  case character(Character)
+  case upArrow, downArrow, leftArrow, rightArrow
+  case tab, enter, escape, space
+  case home, end, pageUp, pageDown
+  case delete, backspace
+}
+
+public struct KeyModifiers: OptionSet, Hashable, Sendable {
+  public let rawValue: UInt8
+  public init(rawValue: UInt8) { self.rawValue = rawValue }
+
+  public static let shift = Self(rawValue: 1 << 0)
+  public static let control = Self(rawValue: 1 << 1)
+  public static let option = Self(rawValue: 1 << 2)
+  public static let command = Self(rawValue: 1 << 3)
+  public static let superKey = Self(rawValue: 1 << 4)
+}
+
+public struct KeyChord: Hashable, Sendable {
+  public var key: Key
+  public var modifiers: KeyModifiers
+
+  public init(_ key: Key, modifiers: KeyModifiers = []) {
+    self.key = key
+    self.modifiers = modifiers
+  }
+
+  public init(_ character: Character, modifiers: KeyModifiers = []) {
+    self.init(.character(character), modifiers: modifiers)
+  }
+}
+
+@resultBuilder
+public enum KeyBindingsBuilder {
+  public static func buildBlock(_ components: KeyBinding...) -> [KeyBinding] { components }
+  public static func buildArray(_ components: [[KeyBinding]]) -> [KeyBinding] { components.flatMap { $0 } }
+  public static func buildOptional(_ component: [KeyBinding]?) -> [KeyBinding] { component ?? [] }
+  public static func buildEither(first component: [KeyBinding]) -> [KeyBinding] { component }
+  public static func buildEither(second component: [KeyBinding]) -> [KeyBinding] { component }
+  public static func buildExpression(_ expression: KeyBinding) -> KeyBinding { expression }
+}
+
+public enum KeyBindingContext: Hashable, Sendable {
+  case shared
+  case movement
+  case editing
+}
+
+public struct KeyBinding: Hashable, Sendable {
+  public var chord: KeyChord
+  public var context: KeyBindingContext {
+    didSet { contexts = [context] }
+  }
+  public var command: Command?
+  fileprivate var contexts: Set<KeyBindingContext>
+
+  public init(_ chord: KeyChord, in context: KeyBindingContext? = nil, to command: Command?) {
+    self.chord = chord
+    self.context = context ?? Self.defaultContext(for: command)
+    self.command = command
+    self.contexts = [self.context]
+  }
+
+  fileprivate init(disabling chord: KeyChord, in context: KeyBindingContext?) {
+    self.chord = chord
+    self.context = context ?? .shared
+    self.command = nil
+    self.contexts = context.map { [$0] } ?? [.shared, .movement, .editing]
+  }
+
+  private static func defaultContext(for command: Command?) -> KeyBindingContext {
+    guard let command else { return .shared }
+    return switch command {
+    case .navigation: .movement
+    case .editing(.copy), .editing(.selectAll): .shared
+    case .editing: .editing
+    case .action, .application: .shared
+    }
+  }
+}
+
+public func bind(
+  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil, to command: Command
+) -> KeyBinding {
+  KeyBinding(KeyChord(key, modifiers: modifiers), in: context, to: command)
+}
+
+public func bind(
+  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil, to command: Command
+) -> KeyBinding {
+  KeyBinding(KeyChord(character, modifiers: modifiers), in: context, to: command)
+}
+
+public func disable(
+  _ key: Key, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil
+) -> KeyBinding {
+  KeyBinding(disabling: KeyChord(key, modifiers: modifiers), in: context)
+}
+
+public func disable(
+  _ character: Character, modifiers: KeyModifiers = [], in context: KeyBindingContext? = nil
+) -> KeyBinding {
+  KeyBinding(disabling: KeyChord(character, modifiers: modifiers), in: context)
+}
+
+public struct KeyBindings: Sendable {
+  private var entries: [KeyChord: [KeyBindingContext: Command?]] = [:]
+
+  public init(@KeyBindingsBuilder _ content: () -> [KeyBinding]) {
+    for binding in content() {
+      for context in binding.contexts { entries[binding.chord, default: [:]][context] = binding.command }
+    }
+  }
+
+  public init() {}
+
+  public func command(for chord: KeyChord) -> Command?? {
+    for context in [.editing, .movement, .shared] as [KeyBindingContext] {
+      if let command = entries[chord]?[context] { return .some(command) }
+    }
+    return nil
+  }
+
+  public func command(for chord: KeyChord, isTextEditing: Bool) -> Command?? {
+    let contexts: [KeyBindingContext] = isTextEditing ? [.editing, .shared] : [.movement, .shared]
+    for context in contexts {
+      if let command = entries[chord]?[context] { return .some(command) }
+    }
+    return nil
+  }
+
+  public func resolve(_ input: KeyboardInput, isTextEditing: Bool) -> ResolvedKeyboardInput? {
+    resolve(input, isTextEditing: isTextEditing) { chord in
+      command(for: chord, isTextEditing: isTextEditing)
+    }
+  }
+
+  package func resolve(
+    _ input: KeyboardInput,
+    isTextEditing: Bool,
+    commandForChord: (KeyChord) -> Command??
+  ) -> ResolvedKeyboardInput? {
+    if isTextEditing, let text = input.text, !text.isEmpty {
+      if let chord = input.chord, let resolution = commandForChord(chord) {
+        if resolution == nil { return nil }
+      } else if input.chord?.modifiers.intersection([.command, .control, .superKey]).isEmpty ?? true {
+        return .text(.insert(text))
+      }
+    }
+    guard let chord = input.chord,
+      let resolution = commandForChord(chord),
+      let command = resolution
+    else { return nil }
+    return switch command {
+    case .editing(let event): .text(event)
+    default: .command(command)
+    }
+  }
+
+  public func prefersTextInsertion(
+    chord: KeyChord?, text: String?, isTextEditing: Bool
+  ) -> Bool {
+    if case .some(.text(.insert)) = resolve(KeyboardInput(chord: chord, text: text), isTextEditing: isTextEditing) {
+      return true
+    }
+    return false
+  }
+
+  public func overlay(@KeyBindingsBuilder _ content: () -> [KeyBinding]) -> KeyBindings {
+    var result = self
+    for binding in content() {
+      for context in binding.contexts { result.entries[binding.chord, default: [:]][context] = binding.command }
+    }
+    return result
+  }
+
+  public func overlay(_ other: KeyBindings) -> KeyBindings {
+    var result = self
+    for (chord, bindings) in other.entries {
+      for (context, command) in bindings { result.entries[chord, default: [:]][context] = command }
+    }
+    return result
+  }
+}
+
+extension KeyBindings {
+  public static let desktopNavigation = KeyBindings {
+    bind(.upArrow, to: .navigation(.up))
+    bind(.downArrow, to: .navigation(.down))
+    bind(.leftArrow, to: .navigation(.left))
+    bind(.rightArrow, to: .navigation(.right))
+    bind(.tab, in: .shared, to: .navigation(.nextFocus))
+    bind(.tab, modifiers: .shift, in: .shared, to: .navigation(.previousFocus))
+    bind(.leftArrow, in: .editing, to: .editing(.moveCaretLeft))
+    bind(.rightArrow, in: .editing, to: .editing(.moveCaretRight))
+    bind(.upArrow, in: .editing, to: .editing(.moveCaretUp))
+    bind(.downArrow, in: .editing, to: .editing(.moveCaretDown))
+    bind(.leftArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretLeft))
+    bind(.rightArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretRight))
+    bind(.upArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretUp))
+    bind(.downArrow, modifiers: .shift, in: .editing, to: .editing(.selectCaretDown))
+    bind(.leftArrow, modifiers: .option, in: .editing, to: .editing(.move(.word, .backward, extendSelection: false)))
+    bind(.rightArrow, modifiers: .option, in: .editing, to: .editing(.move(.word, .forward, extendSelection: false)))
+    bind(
+      .leftArrow, modifiers: [.option, .shift], in: .editing,
+      to: .editing(.move(.word, .backward, extendSelection: true)))
+    bind(
+      .rightArrow, modifiers: [.option, .shift], in: .editing,
+      to: .editing(.move(.word, .forward, extendSelection: true)))
+    bind(.backspace, modifiers: .option, in: .editing, to: .editing(.delete(.word, .backward)))
+    bind(.delete, modifiers: .option, in: .editing, to: .editing(.delete(.word, .forward)))
+    bind(.home, modifiers: .shift, in: .editing, to: .editing(.move(.document, .backward, extendSelection: true)))
+    bind(.end, modifiers: .shift, in: .editing, to: .editing(.move(.document, .forward, extendSelection: true)))
+    bind(.home, in: .editing, to: .editing(.moveCaretToStart))
+    bind(.end, in: .editing, to: .editing(.moveCaretToEnd))
+    bind(.enter, in: .movement, to: .action(.activate))
+    bind(.space, in: .movement, to: .action(.activate))
+    bind(.escape, in: .shared, to: .action(.cancel))
+    bind(.escape, in: .editing, to: .editing(.endEditing))
+  }
+
+  public static let modalNavigation = KeyBindings {
+    bind("f", to: .navigation(.up))
+    bind("j", to: .navigation(.down))
+    bind("d", to: .navigation(.left))
+    bind("k", to: .navigation(.right))
+    bind("d", modifiers: .control, to: .navigation(.sectionLeft))
+    bind("f", modifiers: .control, to: .navigation(.sectionUp))
+    bind("j", modifiers: .control, to: .navigation(.sectionDown))
+    bind("k", modifiers: .control, to: .navigation(.sectionRight))
+    bind("d", modifiers: .control, in: .editing, to: .navigation(.sectionLeft))
+    bind("f", modifiers: .control, in: .editing, to: .navigation(.sectionUp))
+    bind("j", modifiers: .control, in: .editing, to: .navigation(.sectionDown))
+    bind("k", modifiers: .control, in: .editing, to: .navigation(.sectionRight))
+    bind("d", modifiers: .shift, in: .movement, to: .editing(.selectCaretLeft))
+    bind("f", modifiers: .shift, in: .movement, to: .editing(.selectCaretUp))
+    bind("j", modifiers: .shift, in: .movement, to: .editing(.selectCaretDown))
+    bind("k", modifiers: .shift, in: .movement, to: .editing(.selectCaretRight))
+    bind(.home, in: .editing, to: .editing(.moveCaretToStart))
+    bind(.end, in: .editing, to: .editing(.moveCaretToEnd))
+    bind(.escape, in: .editing, to: .editing(.endEditing))
+    bind("s", to: .navigation(.stepOut))
+    bind("l", to: .navigation(.stepIn))
+    bind(.enter, in: .movement, to: .action(.activate))
+    bind(.space, in: .movement, to: .action(.activate))
+    bind(.escape, to: .action(.cancel))
+  }
+
+  public static let vimNavigation = modalNavigation
+}

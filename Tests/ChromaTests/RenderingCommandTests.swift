@@ -9,9 +9,9 @@ private struct CommandProbe: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size { size }
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.text(name, at: rect.origin, color: color)
   }
 }
@@ -29,7 +29,7 @@ struct RenderingCommandTests {
   private func render(
     _ block: any Block,
     in rect: Rect,
-    context: RenderContext,
+    context: BlockContext,
     input: InputState = InputState()
   ) -> DrawList {
     context.interaction.beginFrame(input: input)
@@ -47,7 +47,7 @@ struct RenderingCommandTests {
     let list = render(
       CommandProbe(name: "content").background(background).border(border, width: 2),
       in: rect,
-      context: RenderContext())
+      context: BlockContext())
 
     #expect(
       list.commands == [
@@ -57,6 +57,21 @@ struct RenderingCommandTests {
       ])
   }
 
+  @Test func modifierOrderChangesBackgroundGeometry() {
+    let rect = Rect(x: 0, y: 0, width: 30, height: 20)
+    let inset = Rect(x: 5, y: 5, width: 20, height: 10)
+    let color = Color.black
+    let context = BlockContext()
+
+    let outerBackground = render(
+      CommandProbe(name: "content").padding(5).background(color), in: rect, context: context)
+    let innerBackground = render(
+      CommandProbe(name: "content").background(color).padding(5), in: rect, context: context)
+
+    #expect(outerBackground.commands.first == .fillRect(rect: rect, color: color))
+    #expect(innerBackground.commands.first == .fillRect(rect: inset, color: color))
+  }
+
   @Test func nestedClipsAreBalancedAndPreserveTheirOwnGeometry() {
     let rect = Rect(x: 10, y: 20, width: 50, height: 40)
     let inner = Rect(x: 15, y: 25, width: 40, height: 30)
@@ -64,7 +79,7 @@ struct RenderingCommandTests {
     let list = render(
       CommandProbe(name: "clipped").clipped().padding(5).clipped(),
       in: rect,
-      context: RenderContext())
+      context: BlockContext())
 
     #expect(
       list.commands == [
@@ -84,7 +99,7 @@ struct RenderingCommandTests {
     metrics.cellAdvance = 8
     metrics.lineAdvance = 16
     interaction.fontMetrics = metrics
-    let context = RenderContext(interaction: interaction, theme: .light)
+    let context = BlockContext(interaction: interaction, theme: .dark)
     let rect = Rect(x: 10, y: 5, width: 32, height: 16)
     let id = WidgetID("render-selection")
     let textColor = Color(r: 1, g: 0, b: 0, a: 1)
@@ -106,11 +121,11 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
         .text(position: Point(x: 10, y: 5), text: "ABCD", color: textColor, scale: 1),
-        .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
         .pushClip(Rect(x: 18, y: 5, width: 16, height: 16)),
-        .text(position: Point(x: 10, y: 5), text: "ABCD", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .text(position: Point(x: 10, y: 5), text: "ABCD", color: ChromaTheme.dark.focus.selectionForeground, scale: 1),
         .popClip,
       ])
   }
@@ -122,7 +137,7 @@ struct RenderingCommandTests {
     metrics.cellAdvance = 6
     metrics.lineAdvance = 16
     interaction.fontMetrics = metrics
-    let context = RenderContext(interaction: interaction, theme: .light)
+    let context = BlockContext(interaction: interaction, theme: .dark)
     let id = WidgetID("text-selection")
     let text = Text("ABC").selectable(id)
     let rect = Rect(x: 4, y: 5, width: 36, height: 16)
@@ -147,11 +162,11 @@ struct RenderingCommandTests {
 
     #expect(
       list.commands == [
-        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .light)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
         .text(position: Point(x: 4, y: 5), text: "ABC", color: .white, scale: 1),
-        .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.light.focus.selectionBackground),
+        .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
         .pushClip(Rect(x: 10, y: 5, width: 6, height: 16)),
-        .text(position: Point(x: 4, y: 5), text: "ABC", color: ChromaTheme.light.focus.selectionForeground, scale: 1),
+        .text(position: Point(x: 4, y: 5), text: "ABC", color: ChromaTheme.dark.focus.selectionForeground, scale: 1),
         .popClip,
       ])
   }
@@ -169,7 +184,7 @@ struct RenderingCommandTests {
         third
       },
       in: rect,
-      context: RenderContext())
+      context: BlockContext())
 
     #expect(
       list.commands == [
@@ -180,7 +195,7 @@ struct RenderingCommandTests {
   }
 
   @Test func emptyContentEmitsNothingAndNegativeGeometryIsPreserved() {
-    let context = RenderContext()
+    let context = BlockContext()
     let negative = Rect(x: 5, y: 7, width: -20, height: -10)
     let fill = Color(r: 0.2, g: 0.3, b: 0.4, a: 1)
 
@@ -206,7 +221,7 @@ struct RenderingCommandTests {
     }
     block = block.background(background).border(.yellow, width: 2).clipped()
 
-    let list = render(block, in: rect, context: RenderContext())
+    let list = render(block, in: rect, context: BlockContext())
 
     #expect(
       list.commands == [
@@ -227,7 +242,7 @@ struct RenderingCommandTests {
         .roundedBackground(.black, radii: radii)
         .roundedBorder(.yellow, radii: radii, width: 2),
       in: rect,
-      context: RenderContext())
+      context: BlockContext())
 
     #expect(
       list.commands == [
@@ -241,15 +256,15 @@ struct RenderingCommandTests {
     let rect = Rect(x: 2, y: 3, width: 40, height: 24)
     let content = CommandProbe(name: "square")
     let square = render(
-      content.border(.yellow, width: 2), in: rect, context: RenderContext())
+      content.border(.yellow, width: 2), in: rect, context: BlockContext())
     let rounded = render(
-      content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: RenderContext())
+      content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: BlockContext())
     #expect(rounded.commands == square.commands)
   }
 
   @Test(arguments: [CornerRadii.zero, CornerRadii(4)])
   func bordersPreserveContentLayout(radii: CornerRadii) {
-    let context = RenderContext()
+    let context = BlockContext()
     let proposal = Size(width: 100, height: 40)
     let content = CommandProbe(name: "layout").sizing(x: .grow)
     let border = content.roundedBorder(.yellow, radii: radii, width: 3)
@@ -273,7 +288,7 @@ struct RenderingCommandTests {
 
   @Test func scopedThemePropagatesThroughCompositeWidgets() {
     let rect = Rect(x: 3, y: 4, width: 120, height: 28)
-    var theme = ChromaTheme.light
+    var theme = ChromaTheme.dark
     theme.button.idleBackground = Color(r: 0.1, g: 0.15, b: 0.2, a: 1)
     theme.button.foreground = Color(r: 0.9, g: 0.8, b: 0.7, a: 1)
     theme.button.border = Color(r: 0.4, g: 0.5, b: 0.6, a: 1)
@@ -281,7 +296,7 @@ struct RenderingCommandTests {
     let list = render(
       CompositeButton(id: WidgetID("themed-composite")).chromaTheme(theme),
       in: rect,
-      context: RenderContext())
+      context: BlockContext())
 
     #expect(
       list.commands == [

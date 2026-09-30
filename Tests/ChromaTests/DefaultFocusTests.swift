@@ -6,7 +6,11 @@ import Testing
 struct DefaultFocusTests {
   private let viewport = Rect(x: 0, y: 0, width: 100, height: 40)
   private let parked = InputState(pointerPosition: Point(x: 500, y: 500))
-  private let context = RenderContext()
+  private let context = BlockContext()
+
+  private func focusBorder(_ rect: Rect) -> DrawCommand {
+    .strokeRect(rect: rect, width: 2, color: context.theme.focus.ring)
+  }
 
   private var standardHighlight: Color {
     HoverStyle.standardTint(in: context.theme)
@@ -58,7 +62,7 @@ struct DefaultFocusTests {
     #expect(context.interaction.tree?.node(at: second ?? [])?.rect == rects.last)
   }
 
-  @Test func keyboardFocusAndPointerHoverDrawTheSameHighlight() {
+  @Test func keyboardFocusUsesBorderWhilePointerHoverUsesTint() {
     let content = VStack(spacing: 10) {
       Text("alpha")
       Text("beta")
@@ -70,16 +74,16 @@ struct DefaultFocusTests {
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     let keyboard = render(content, input: parked)
     let focused = highlightCommands(in: keyboard, for: target)
-    #expect(!focused.isEmpty, "keyboard focus highlights the text")
+    #expect(keyboard.commands.contains(focusBorder(target)))
+    #expect(focused.isEmpty)
 
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.up)]))
     let hovered = render(
       content,
       input: InputState(pointerPosition: Point(x: target.minX + 1, y: target.minY + 1)))
     #expect(context.interaction.hoveredLeafID != nil)
-    #expect(
-      highlightCommands(in: hovered, for: target) == focused,
-      "pointer hover shows the same UI state as keyboard focus")
+    #expect(hovered.commands.contains(.fillRect(rect: target, color: standardHighlight)))
+    #expect(!hovered.commands.contains(focusBorder(target)))
   }
 
   @Test func pressingUsesThePressedTint() {
@@ -142,22 +146,22 @@ struct DefaultFocusTests {
 
   @Test func lazyRowsClaimTheirTextContent() {
     let controller = ScrollViewController()
-    let content = LazyVStack(
-      id: WidgetID("claim-list"), data: 0..<3, rowHeight: 20, spacing: 0,
+    let content = ScrollView(
+      data: 0..<3, rowHeight: 20, spacing: 0,
       showsIndicator: false, controller: controller
     ) { index in
       VStack(spacing: 2) {
         Text("label \(index)")
         Text("value \(index)")
       }
-    }
+    }.id(WidgetID("claim-list"))
 
     render(content, input: parked)
     #expect(leafRects().count == 3, "each row is one focus stop, not one per text")
 
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     let list = render(content, input: parked)
-    #expect(!highlightCommands(in: list, for: leafRects()[1]).isEmpty, "the whole row highlights")
+    #expect(list.commands.contains(focusBorder(leafRects()[1])))
   }
 
   @Test func backgroundsStayDecorative() {
@@ -168,17 +172,16 @@ struct DefaultFocusTests {
     #expect(context.interaction.tree?.firstLeafPath() != nil)
   }
 
-  /// A custom primitive that paints cells the way immediate-mode content does.
   private struct CellGrid: PrimitiveBlock {
     let action: (@MainActor () -> Void)?
 
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       Size(width: proposal.width, height: 40)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       context.withFocusGroup(in: rect, axis: .horizontal) {
         for column in 0..<2 {
           let box = Rect(
@@ -196,15 +199,13 @@ struct DefaultFocusTests {
     let rects = leafRects()
     #expect(rects == [Rect(x: 0, y: 0, width: 50, height: 40), Rect(x: 50, y: 0, width: 50, height: 40)])
 
-    // Keyboard focus paints the standard tint over the first cell.
     let focused = render(content, input: parked)
-    #expect(focused.commands.contains(.fillRect(rect: rects[0], color: standardHighlight)))
+    #expect(focused.commands.contains(focusBorder(rects[0])))
+    #expect(!focused.commands.contains(.fillRect(rect: rects[0], color: standardHighlight)))
 
-    // Pointer hover paints the same tint over the hovered cell.
     let hovered = render(content, input: InputState(pointerPosition: Point(x: 60, y: 10)))
     #expect(hovered.commands.contains(.fillRect(rect: rects[1], color: standardHighlight)))
 
-    // Pressing uses the pressed tint.
     let list = render(
       content,
       input: InputState(pointerPosition: Point(x: 60, y: 10), pointerDown: true, pointerPressed: true))

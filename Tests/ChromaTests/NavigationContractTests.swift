@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct NavigationContractTests {
   @MainActor private final class Harness {
-    let context = RenderContext()
+    let context = BlockContext()
     let producer = FrameProducer()
     @discardableResult func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = [])
       -> DrawList
@@ -16,6 +16,35 @@ struct NavigationContractTests {
     }
   }
 
+  @Test func tabTraversesLeavesAcrossGroupsAndLeavesEditing() {
+    let h = Harness()
+    let first = FocusTarget()
+    let field = FocusTarget()
+    let last = FocusTarget()
+    let content = VStack {
+      Group("First") { Button("One") {}.focusTarget(first) }
+      Group("Second") {
+        TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(field)
+        Button("Three") {}.focusTarget(last)
+      }
+    }
+    h.render(content)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(first.isFocused)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(field.isFocused)
+    field.focus(editing: true)
+    h.render(content)
+    #expect(field.isEditing)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(last.isFocused)
+    #expect(!field.isEditing)
+    h.render(content, [.navigation(.nextFocus)])
+    #expect(first.isFocused)
+    h.render(content, [.navigation(.previousFocus)])
+    #expect(last.isFocused)
+  }
+
   @Test func plainMovementStopsAtBoundaryAndShiftSkipsLocalPeers() {
     let h = Harness()
     let input = FocusTarget()
@@ -24,7 +53,7 @@ struct NavigationContractTests {
       Group("Sessions") { Button("Session") {} }.sizing(x: .fixed(150), y: .grow)
       Group("Composer") {
         HStack {
-          TextField(text: { "" }, onChange: { _ in }).focusTarget(input)
+          TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(input)
           Button("Send") {}.focusTarget(send)
         }
       }.sizing(x: .grow, y: .grow)
@@ -87,13 +116,17 @@ struct NavigationContractTests {
     #expect(save.isFocused)
   }
 
-  @Test func shiftedMovementBindingsPreserveUppercaseTyping() {
-    for (key, command): (Character, NavigationCommand) in [
-      ("d", .sectionLeft), ("f", .sectionUp), ("j", .sectionDown), ("k", .sectionRight),
+  @Test func shiftSelectsTextAndControlMovesSectionsWithoutPreventingUppercaseTyping() {
+    for (key, command, selection): (Character, NavigationCommand, TextEditEvent) in [
+      ("d", .sectionLeft, .selectCaretLeft), ("f", .sectionUp, .selectCaretUp),
+      ("j", .sectionDown, .selectCaretDown), ("k", .sectionRight, .selectCaretRight),
     ] {
-      let input = KeyboardInput(chord: KeyChord(key, modifiers: .shift), text: String(key).uppercased())
-      #expect(KeyBindings.vimNavigation.resolve(input, isTextEditing: false) == .command(.navigation(command)))
-      #expect(KeyBindings.vimNavigation.resolve(input, isTextEditing: true) == .text(.insert(String(key).uppercased())))
+      let shifted = KeyboardInput(chord: KeyChord(key, modifiers: .shift), text: String(key).uppercased())
+      let controlled = KeyboardInput(chord: KeyChord(key, modifiers: .control))
+      #expect(KeyBindings.vimNavigation.resolve(shifted, isTextEditing: false) == .text(selection))
+      #expect(KeyBindings.vimNavigation.resolve(shifted, isTextEditing: true) == .text(.insert(String(key).uppercased())))
+      #expect(KeyBindings.vimNavigation.resolve(controlled, isTextEditing: false) == .command(.navigation(command)))
+      #expect(KeyBindings.vimNavigation.resolve(controlled, isTextEditing: true) == .command(.navigation(command)))
     }
   }
 
@@ -102,7 +135,7 @@ struct NavigationContractTests {
     var draft = ""
     let content = VStack {
       Text("café\n👨‍👩‍👧‍👦 tea").selectable()
-      TextField(text: { draft }, onChange: { draft = $0 })
+      TextEditor(singleLine: true, text: { draft }, onChange: { draft = $0 })
     }
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn)])
@@ -152,7 +185,7 @@ extension NavigationContractTests {
     let field = FocusTarget()
     let content = Group("Composer") {
       HStack {
-        TextField(text: { value }, onChange: { value = $0 }).focusTarget(field)
+        TextEditor(singleLine: true, text: { value }, onChange: { value = $0 }).focusTarget(field)
         Button("Send") {}
       }
     }
@@ -204,8 +237,10 @@ extension NavigationContractTests {
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn)])
     h.render(content, [.navigation(.right)])
-    h.render(content, [.navigation(.sectionDown)])
+    h.render(content, text: [.selectCaretDown])
     #expect(h.context.interaction.copyText() == "b\nc")
+    h.render(content, [.navigation(.sectionDown)])
+    #expect(h.context.interaction.copyText() == nil)
     h.render(content, [.action(.activate)])
     #expect(h.context.interaction.mode == .movement)
     #expect(!h.context.interaction.acceptsTextInsertion)

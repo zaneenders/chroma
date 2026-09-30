@@ -1,4 +1,4 @@
-import HeadlessBackend
+import ChromaTesting
 import Testing
 
 @testable import Chroma
@@ -9,15 +9,16 @@ struct ObservationDeliveryTests {
   func lazyMeasurementsRequestRedrawUsingMainActorTasks() async throws {
     let model = ReviewRegressionTests.Model()
     let capture = ReviewRegressionTests.Capture()
-    let renderer = HeadlessRenderer()
+    let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = LazyVStack(
-      id: WidgetID("stack"), controller: ScrollViewController(),
+    renderer.content = ScrollView(
+      controller: ScrollViewController(),
       rows: [
         .init(
           id: WidgetID("row"),
           content: ReviewRegressionTests.Row(model: model, capture: capture))
-      ])
+      ]
+    ).id(WidgetID("stack"))
     let (redraws, continuation) = AsyncStream<Void>.makeStream()
     defer { continuation.finish() }
     renderer.onRedrawRequested = { continuation.yield(()) }
@@ -25,7 +26,6 @@ struct ObservationDeliveryTests {
     renderer.render()
     for height: Float in [50, 80] {
       model.height = height
-      // Await the real redraw, not elapsed time or an assumed executor order.
       let redraw: Void? = await iterator.next()
       try #require(redraw != nil)
       renderer.render()

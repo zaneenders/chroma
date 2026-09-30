@@ -37,6 +37,48 @@ struct TextInputTests {
     frame(ctx, input: InputState(commands: [.action(.activate)]), text: &text)
   }
 
+  @Test func wordMovementCollapseAndReverseSelection() {
+    let ctx = Interaction()
+    var text = "one two! 👨‍👩‍👧‍👦"
+    enterInsertMode(ctx, text: &text)
+    func edit(_ event: TextEditEvent) -> TextInputState {
+      frame(ctx, input: InputState(textEvents: [event]), text: &text)
+    }
+    let left: TextEditEvent = .move(.word, .backward, extendSelection: false)
+    let right: TextEditEvent = .move(.word, .forward, extendSelection: false)
+    #expect(edit(left).caretOffset == 9)
+    #expect(edit(left).caretOffset == 7)
+    #expect(edit(.move(.word, .backward, extendSelection: true)).selectionRange == 4..<7)
+    #expect(edit(.move(.word, .forward, extendSelection: true)).selectionRange == nil)
+    #expect(edit(.move(.word, .forward, extendSelection: true)).selectionRange == 7..<9)
+    #expect(edit(left).caretOffset == 7)
+    #expect(edit(right).caretOffset == 9)
+    #expect(text == "one two! 👨‍👩‍👧‍👦")
+  }
+
+  @Test func wordDeletionSelectionAndDocumentBoundaries() {
+    let ctx = Interaction()
+    var text = "hi 👨‍👩‍👧‍👦  world"
+    enterInsertMode(ctx, text: &text)
+    func edit(_ event: TextEditEvent) -> TextInputState {
+      frame(ctx, input: InputState(textEvents: [event]), text: &text)
+    }
+    #expect(edit(.move(.document, .backward, extendSelection: true)).selectionRange == 0..<text.count)
+    #expect(edit(.move(.document, .forward, extendSelection: true)).selectionRange == nil)
+    #expect(edit(.delete(.word, .backward)).caretOffset == 6)
+    #expect(text == "hi 👨‍👩‍👧‍👦  ")
+    #expect(edit(.delete(.word, .backward)).caretOffset == 3)
+    #expect(text == "hi ")
+    #expect(edit(.move(.document, .backward, extendSelection: false)).caretOffset == 0)
+    #expect(edit(.delete(.word, .backward)).caretOffset == 0)
+    #expect(edit(.delete(.word, .forward)).caretOffset == 0)
+    #expect(text.isEmpty)
+    _ = edit(.selectAll)
+    #expect(edit(.delete(.word, .forward)).caretOffset == 0)
+    #expect(text.isEmpty)
+    #expect(edit(.move(.word, .forward, extendSelection: true)).selectionRange == nil)
+  }
+
   @Test func unchangedLargeDraftSkipsCharacterMaterializationAndClampsReplacement() {
     let ctx = Interaction()
     var text = String(repeating: "log 👨‍👩‍👧‍👦\n", count: 800)

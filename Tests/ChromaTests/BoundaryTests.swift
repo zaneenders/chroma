@@ -7,11 +7,11 @@ private struct NamedBlock: PrimitiveBlock {
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: 10, height: 10)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: RenderContext) {
+  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.text(name, at: rect.origin, color: .white)
   }
 }
@@ -51,7 +51,7 @@ struct BoundaryTests {
   }
 
   @Test func modifierOrderChangesBackgroundGeometryAndCommandOrder() {
-    let context = RenderContext()
+    let context = BlockContext()
     let viewport = Rect(x: 0, y: 0, width: 40, height: 40)
     let red = Color(r: 1, g: 0, b: 0, a: 1)
     let blue = Color(r: 0, g: 0, b: 1, a: 1)
@@ -79,7 +79,7 @@ struct BoundaryTests {
 
   @Test func nestedClipModifiersProduceBalancedProperlyNestedCommands() {
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     let viewport = Rect(x: 0, y: 0, width: 20, height: 20)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
@@ -104,7 +104,7 @@ struct BoundaryTests {
   }
 
   @Test func zeroAndNegativeProposalsStayFinite() {
-    let context = RenderContext()
+    let context = BlockContext()
     let proposals = [
       Size.zero,
       Size(width: -100, height: -50),

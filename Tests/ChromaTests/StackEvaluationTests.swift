@@ -20,7 +20,7 @@ struct StackEvaluationTests {
   @Test func engineResolvesCompositeOncePerOperation() {
     let counter = Counter()
     let block = Composite(counter: counter)
-    let context = RenderContext()
+    let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 40)
     #expect(BlockEngine.expandsHorizontally(block))
     #expect(counter.bodies == 1)
@@ -38,12 +38,52 @@ struct StackEvaluationTests {
       })
   }
 
+  @Test func reusesNestedModifiersWithinEachOperation() {
+    let counter = Counter()
+    let child = Composite(counter: counter)
+      .padding(4)
+      .background(Color.black)
+      .clipped()
+      .sizing(x: .grow, y: .grow)
+    let stack = HStack { child }
+    let context = BlockContext(interaction: Interaction())
+    let rect = Rect(x: 0, y: 0, width: 200, height: 80)
+
+    counter.bodies = 0
+    _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
+    #expect(counter.bodies == 1)
+    context.interaction.beginFrame(input: InputState())
+    var list = DrawList()
+    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    context.interaction.endFrame()
+    #expect(counter.bodies == 2)
+    #expect(list.commands.contains {
+      if case .text(_, "before", _, _) = $0 { return true }
+      return false
+    })
+  }
+
+  @Test func deferredNestedContentIsReevaluatedPerOperation() {
+    let counter = Counter()
+    let stack = DeferredBlock { Composite(counter: counter).padding(3).border(.black) }
+    let context = BlockContext(interaction: Interaction())
+    let rect = Rect(x: 0, y: 0, width: 120, height: 60)
+    counter.bodies = 0
+    _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
+    #expect(counter.bodies == 1)
+    context.interaction.beginFrame(input: InputState())
+    var list = DrawList()
+    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    context.interaction.endFrame()
+    #expect(counter.bodies == 2)
+  }
+
   @Test(arguments: [false, true])
   func resolvesCompositeOncePerOperation(horizontal: Bool) {
     let counter = Counter()
     let child = Composite(counter: counter)
     let stack: any Block = horizontal ? HStack { child } : VStack { child }
-    let context = RenderContext(interaction: Interaction())
+    let context = BlockContext(interaction: Interaction())
     let rect = Rect(x: 0, y: 0, width: 400, height: 300)
     _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)

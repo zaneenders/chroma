@@ -8,10 +8,10 @@ struct TrailingControlsRowTests {
   private struct Wrapping: PrimitiveBlock {
     let recorder: Recorder
     var focusRule: FocusRule { .standard }
-    func sizeThatFits(_ proposal: Size, context: RenderContext) -> Size {
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       Size(width: proposal.width, height: proposal.width < 80 ? 40 : 20)
     }
-    func draw(into list: inout DrawList, in rect: Rect, context: RenderContext) {
+    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       recorder.rects.append(rect)
     }
   }
@@ -24,7 +24,7 @@ struct TrailingControlsRowTests {
       Color.white.sizing(x: .fixed(30), y: .fixed(10))
     }
     let interaction = Interaction()
-    let context = RenderContext(interaction: interaction)
+    let context = BlockContext(interaction: interaction)
     #expect(row.sizeThatFits(Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
     #expect(row.sizeThatFits(Size(width: 150, height: 200), context: context).height == 20)
     interaction.beginFrame(input: InputState())
