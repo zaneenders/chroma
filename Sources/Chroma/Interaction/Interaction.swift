@@ -12,7 +12,7 @@ package final class Interaction {
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
   @ObservationIgnored var animationFrame = AnimationFrame(timestamp: 0)
-  @ObservationIgnored var nextAnimationDeadline: Double?
+  @ObservationIgnored var animationPaints: [AnimationPaint] = []
 
   package let textSelection = TextSelectionManager()
 
@@ -291,7 +291,7 @@ package final class Interaction {
     textSelection.layoutRegistry.clear()
     pendingFocus = nil
     scrollStates = [:]
-    nextAnimationDeadline = nil
+    animationPaints = []
     tree = nil
     navigation = nil
     navigationPath = []
@@ -349,10 +349,20 @@ package final class Interaction {
 
   @ObservationIgnored var refreshingRegistrations = false
 
-  package func beginFrame(input: InputState) {
+  package func beginFrame(input: InputState, processingInput: Bool = true) {
     building = FrameRegistrations()
     buildingLogicalSelections = [:]
 
+    if processingInput { processInput(input) } else { self.input = input }
+    let root = FocusNode(kind: .group, rect: .zero)
+    builderRoot = root
+    builderStack = [root]
+    builderPath = []
+    clipStack = []
+    textSelection.layoutRegistry.clear()
+  }
+
+  package func processInput(_ input: InputState) {
     self.input = input
     activatePending = false
     enterTextPending = false
@@ -366,16 +376,7 @@ package final class Interaction {
 
     activatedLeaf = nil
 
-    let root = FocusNode(kind: .group, rect: .zero)
-    builderRoot = root
-    builderStack = [root]
-    builderPath = []
-    clipStack = []
-
-    if refreshingRegistrations {
-      textSelection.layoutRegistry.clear()
-      return
-    }
+    if refreshingRegistrations { return }
 
     if input.pointerPressed {
       dragOrigin = input.pointerPressPosition
@@ -389,7 +390,6 @@ package final class Interaction {
       dragCurrent = input.pointerPosition
     }
     textSelection.updateFromDrag(interaction: self)
-    textSelection.layoutRegistry.clear()
 
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
@@ -430,14 +430,16 @@ package final class Interaction {
     }
   }
 
-  package func endFrame() {
-    defer {
-      if input.pointerReleased {
-        dragOrigin = nil
-        textDragAnchor = nil
-        textDragViewportRow = nil
-      }
+  package func finishInput() {
+    if input.pointerReleased {
+      dragOrigin = nil
+      textDragAnchor = nil
+      textDragViewportRow = nil
     }
+  }
+
+  package func endFrame() {
+    defer { finishInput() }
     if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
 
@@ -469,11 +471,12 @@ package final class Interaction {
 
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
-    caretClock.setActive(editingLeaf != nil && textSelectionRange == nil)
+    caretClock.setActive(editingLeaf != nil && textSelectionRange == nil, timestamp: animationFrame.timestamp)
     registrations = building
     logicalSelections = buildingLogicalSelections
     builderRoot = nil
     builderStack = []
+    activatedLeaf = nil
     activatePending = false
     enterTextPending = false
     movementTextEvents = []

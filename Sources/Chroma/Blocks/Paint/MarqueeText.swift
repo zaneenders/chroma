@@ -23,29 +23,27 @@ public struct MarqueeText: PrimitiveBlock {
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let scale = fontScale * context.textScale
     let width = context.fontMetrics.measure(text, scale: scale).width
-    var offset: Float = 0
-    if isActive, width > rect.size.width, rect.size.width > 0 {
-      let now = context.animationTimestamp
-      let distance = Double(width - rect.size.width)
-      let travel = distance / 28
-      let pause = 0.8
-      let cycle = 2 * (pause + travel)
-      let phase = now.truncatingRemainder(dividingBy: cycle)
-      if phase < pause {
-        context.requestAnimation(at: now + pause - phase)
-      } else if phase < pause + travel {
-        offset = Float((phase - pause) * 28)
-        context.requestAnimation(updatesPerSecond: 30)
-      } else if phase < 2 * pause + travel {
-        offset = Float(distance)
-        context.requestAnimation(at: now + 2 * pause + travel - phase)
-      } else {
-        offset = Float(distance - (phase - 2 * pause - travel) * 28)
-        context.requestAnimation(updatesPerSecond: 30)
+    let active = isActive && width > rect.size.width && rect.size.width > 0
+    context.animate(into: &drawList, isActive: active) { drawList, frame in
+      var offset: Float = 0
+      if active {
+        let now = frame.timestamp
+        let distance = Double(width - rect.size.width)
+        let travel = distance / 28
+        let pause = 0.8
+        let cycle = 2 * (pause + travel)
+        let phase = now.truncatingRemainder(dividingBy: cycle)
+        if phase >= pause && phase < pause + travel {
+          offset = Float((phase - pause) * 28)
+        } else if phase >= pause + travel && phase < 2 * pause + travel {
+          offset = Float(distance)
+        } else if phase >= 2 * pause + travel {
+          offset = Float(distance - (phase - 2 * pause - travel) * 28)
+        }
       }
+      drawList.pushClip(rect)
+      drawList.text(text, at: Point(x: rect.minX - offset, y: rect.minY), color: color, scale: scale)
+      drawList.popClip()
     }
-    drawList.pushClip(rect)
-    drawList.text(text, at: Point(x: rect.minX - offset, y: rect.minY), color: color, scale: scale)
-    drawList.popClip()
   }
 }

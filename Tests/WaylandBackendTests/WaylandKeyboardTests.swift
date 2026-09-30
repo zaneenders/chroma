@@ -85,4 +85,22 @@ struct WaylandKeyboardTests {
     #expect(copied)
     #expect(events == [.selectAll, .insert("pasted")])
   }
+  @Test func delayedRepeatsDeliverEveryEventBeforeTheNextFrame() throws {
+    let keyboard = try keyboard()
+    defer { keyboard.cleanup() }
+    keyboard.updateModifiers(depressed: 0, latched: 0, locked: 0, group: 0)
+    keyboard.updateRepeatInfo(rate: 20, delay: 100)
+    var events: [TextEditEvent] = []
+    var deliveries = 0
+    keyboard.onInputAvailable = {
+      deliveries += 1
+      var commands: [Command] = []
+      keyboard.drain(editingSession: 1, commands: &commands, textEvents: &events)
+    }
+    keyboard.keyPressed(30, editing: true, editingSession: 1, now: 0)
+    #expect(keyboard.dispatchRepeats(editing: true, editingSession: 1, now: 0.26))
+    #expect(deliveries == 5)
+    #expect(events == Array(repeating: .insert("a"), count: 5))
+  }
+
 }

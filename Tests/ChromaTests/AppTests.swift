@@ -12,6 +12,8 @@ struct AppTests {
     try app.run(on: renderer)
 
     #expect(renderer.title == "App \(app.identifier) — Test")
+    #expect(renderer.runtime.scheduler.minimumRefreshRate == 24)
+    #expect(renderer.runtime.scheduler.maximumRefreshRate == 48)
     let root = renderer.content as? DeferredBlock<TupleBlock>
     #expect((root?.body.children.first as? AppContent)?.identifier == app.identifier)
   }
@@ -29,6 +31,8 @@ struct AppTests {
 private struct StatefulApp: App {
   let identifier = UUID()
 
+  var minimumRefreshRate: Double { 24 }
+  var maximumRefreshRate: Double { 48 }
   var title: String { "App \(identifier)" }
 
   @MainActor var body: some Block {

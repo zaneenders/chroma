@@ -74,51 +74,18 @@ struct FrameUpdateTests {
     renderer.close()
   }
 
-  @Test(.timeLimit(.minutes(1)))
-  func caretClockStopsWhenInactive() async throws {
-    let (ticks, continuation) = AsyncStream<PendingTick>.makeStream()
-    defer { continuation.finish() }
-    let clock = CaretClock { duration in
-      await withCheckedContinuation { resume in
-        continuation.yield(PendingTick(duration: duration, resume: resume))
-      }
-    }
-    var iterator = ticks.makeAsyncIterator()
-    #expect(clock.visible)
-    clock.setActive(true)
-    let first = try #require(await iterator.next())
-    #expect(first.duration == .milliseconds(720))
-    first.resume.resume()
-    let second = try #require(await iterator.next())
-    #expect(!clock.visible)
-    #expect(second.duration == .milliseconds(480))
-
-    let oldTask = try #require(clock.task)
-    second.resume.resume()
+  @Test func caretClockUsesHostFrameTimeWithoutATask() {
+    let clock = CaretClock()
+    #expect(clock.isVisible(at: 100))
+    clock.setActive(true, timestamp: 100)
+    #expect(clock.isVisible(at: 100.7))
+    #expect(!clock.isVisible(at: 100.8))
+    #expect(clock.isVisible(at: 101.3))
+    clock.setActive(true, timestamp: 101.3)
+    #expect(!clock.isVisible(at: 102.0))
     clock.setActive(false)
-    #expect(clock.visible)
-    await oldTask.value
-    #expect(clock.visible)
-
-    clock.setActive(true)
-    let third = try #require(await iterator.next())
-    let restartedTask = try #require(clock.task)
-    third.resume.resume()
-    clock.setActive(false)
-    clock.setActive(true)
-    await restartedTask.value
-    #expect(clock.visible)
-    let fourth = try #require(await iterator.next())
-    #expect(fourth.duration == .milliseconds(720))
-    let finalTask = try #require(clock.task)
-    clock.setActive(false)
-    fourth.resume.resume()
-    await finalTask.value
-    #expect(clock.visible)
-  }
-
-  private struct PendingTick: Sendable {
-    let duration: Duration
-    let resume: CheckedContinuation<Void, Never>
+    #expect(clock.isVisible(at: 102.0))
+    clock.setActive(true, timestamp: 102.0)
+    #expect(clock.isVisible(at: 102.1))
   }
 }

@@ -96,8 +96,10 @@ public struct TextEditor: PrimitiveBlock {
           context.interaction.textDragViewportRow = viewportRow
         }
         return layout.offset(
-          row: singleLine ? 0 : (context.interaction.textDragViewportRow ?? firstRow(caret))
-            + Int(((point.y - inner.minY) / lineHeight).rounded(.down)),
+          row: singleLine
+            ? 0
+            : (context.interaction.textDragViewportRow ?? firstRow(caret))
+              + Int(((point.y - inner.minY) / lineHeight).rounded(.down)),
           column: Int(((point.x - inner.minX - horizontalOffset(caret)) / cellWidth).rounded(.toNearestOrAwayFromZero)))
       },
       verticalOffset: { layout.verticalOffset($0, direction: $1) },
@@ -135,14 +137,15 @@ public struct TextEditor: PrimitiveBlock {
         selection: selection, theme: context.theme.focus)
     }
 
-    if let caret = state.caretOffset, state.selectionRange == nil, context.caretVisible {
+    if let caret = state.caretOffset, state.selectionRange == nil {
       let row = layout.row(containing: caret)
-      drawList.fillRect(
-        Rect(
-          x: inner.minX + horizontalOffset(state.caretOffset)
-            + Float(caret - layout.lines[row].range.lowerBound) * cellWidth,
-          y: inner.minY + Float(row - first) * lineHeight, width: max(1, scale), height: lineHeight),
-        color: style.caret)
+      let caretRect = Rect(
+        x: inner.minX + horizontalOffset(state.caretOffset)
+          + Float(caret - layout.lines[row].range.lowerBound) * cellWidth,
+        y: inner.minY + Float(row - first) * lineHeight, width: max(1, scale), height: lineHeight)
+      context.animate(into: &drawList) { list, _ in
+        if context.caretVisible { list.fillRect(caretRect, color: style.caret) }
+      }
     }
   }
 }

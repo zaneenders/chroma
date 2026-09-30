@@ -19,7 +19,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     get { runtime.content }
     set {
       runtime.content = newValue
-      view.needsDisplay = true
+      runtime.scheduler.requestContent()
     }
   }
   public var frameObserver: FrameObserver? {
@@ -32,7 +32,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   private let queue: MTLCommandQueue
   private let displayRenderer: MetalDisplayListRenderer
   private var window: NSWindow?
-  private var animationTimer: Timer?
+  private var scheduledFrame: FrameScheduler.FrameKind?
   private var lastFrameTime: Double = 0
 
   public init(size: Size = Size(width: 800, height: 600)) throws {
@@ -49,21 +49,22 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     displayRenderer = try MetalDisplayListRenderer(device: device, pixelFormat: view.colorPixelFormat)
     super.init()
     view.delegate = self
-    view.onInputAvailable = { [weak self] in self?.view.draw() }
-    view.onKey = { [weak self] input in self?.handleKey(input) }
-    interaction.onRedrawRequested = { [weak self] in self?.view.needsDisplay = true }
-  }
-
-  private func updateFrameScheduling() {
-    animationTimer?.invalidate()
-    animationTimer = nil
-    guard let deadline = runtime.nextAnimationDeadline else { return }
-    let timer = Timer(timeInterval: max(0, deadline - ProcessInfo.processInfo.systemUptime), repeats: false) {
-      [weak self] _ in
-      MainActor.assumeIsolated { self?.view.needsDisplay = true }
+    view.onInputAvailable = { [weak self] in
+      guard let self else { return }
+      let input = self.view.frameInput()
+      self.runtime.dispatchInput { [weak self] in self?.runtime.handleInput(input) }
     }
-    animationTimer = timer
-    RunLoop.main.add(timer, forMode: .common)
+    view.onKey = { [weak self] input in
+      guard let self else { return }
+      let frameInput = self.view.frameInput()
+      self.runtime.dispatchInput { [weak self] in self?.handleKey(input, frameInput: frameInput) }
+    }
+    interaction.onRedrawRequested = { [weak self] in self?.runtime.scheduler.requestContent() }
+    runtime.scheduler.onFrame = { [weak self] kind in
+      guard let self else { return }
+      self.scheduledFrame = kind
+      self.view.draw()
+    }
   }
 
   @diagnose(UnnecessaryUnsafe, as: warning, reason: "SDK compatibility")
@@ -82,19 +83,18 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     window.center()
     window.makeKeyAndOrderFront(nil)
     window.makeFirstResponder(view)
-    view.needsDisplay = true
+    runtime.scheduler.isReady = true
+    runtime.scheduler.requestContent()
     app.activate()
     app.run()
-    animationTimer?.invalidate()
-    animationTimer = nil
+    runtime.scheduler.isReady = false
     runtime.reset()
     self.window = nil
   }
 
   public func windowWillClose(_ notification: Notification) {
     view.isPaused = true
-    animationTimer?.invalidate()
-    animationTimer = nil
+    runtime.scheduler.isReady = false
     runtime.reset()
     onClose?()
     NSApplication.shared.stop(nil)
@@ -106,16 +106,19 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     }
   }
 
-  private var pendingCommands: [Command] = []
   private var pendingTextEvents: [TextEditEvent] = []
 
-  func handleKey(_ input: KeyboardInput) {
+  func handleKey(_ input: KeyboardInput, frameInput: InputState) {
     guard let resolved = runtime.resolve(input) else { return }
+    var input = frameInput
     switch resolved {
-    case .command(let command): pendingCommands.append(command)
-    case .text(let event): applyTextEvent(event)
+    case .command(let command): input.commands = [command]
+    case .text(let event):
+      applyTextEvent(event)
+      input.textEvents = pendingTextEvents
+      pendingTextEvents.removeAll(keepingCapacity: true)
     }
-    view.draw()
+    runtime.handleInput(input)
   }
 
   private func applyTextEvent(_ event: TextEditEvent) {
@@ -143,23 +146,25 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
 
   public func draw(in view: MTKView) {
     let viewport = Size(width: Float(view.bounds.width), height: Float(view.bounds.height))
-    guard viewport.width > 0, viewport.height > 0 else { return }
-    var input = self.view.frameInput()
-    input.commands = pendingCommands
-    input.textEvents = pendingTextEvents
-    pendingCommands.removeAll(keepingCapacity: true)
-    pendingTextEvents.removeAll(keepingCapacity: true)
+    guard viewport.width > 0, viewport.height > 0 else {
+      scheduledFrame = nil
+      return
+    }
+    guard let kind = scheduledFrame else {
+      runtime.scheduler.requestContent()
+      return
+    }
+    scheduledFrame = nil
     let now = ProcessInfo.processInfo.systemUptime
     if lastFrameTime > 0, now > lastFrameTime { interaction.frameRate = 1 / (now - lastFrameTime) }
     lastFrameTime = now
-    let list = runtime.render(
-      viewport: viewport, input: input,
-      onChange: { [weak self] in self?.view.needsDisplay = true })
-    updateFrameScheduling()
+    let list = runtime.renderScheduled(
+      kind, viewport: viewport,
+      onChange: { [weak self] in self?.runtime.scheduler.requestContent() })
     let redraw = interaction.consumeRedrawRequest()
-    defer { if redraw { view.needsDisplay = true } }
+    defer { if redraw { runtime.scheduler.requestContent() } }
     guard let drawable = view.currentDrawable, let pass = view.currentRenderPassDescriptor else {
-      view.needsDisplay = true
+      runtime.scheduler.requestContent()
       return
     }
     let scale = Point(
@@ -171,7 +176,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
         let frame = try displayRenderer.prepareFrame(
           list.culled(to: viewport), viewport: viewport, rasterScale: scale, queue: queue, renderPass: pass)
       else {
-        view.needsDisplay = true
+        runtime.scheduler.requestContent()
         return
       }
       _ = frame.submit(presenting: drawable)
@@ -181,6 +186,6 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   }
 
   public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-    view.needsDisplay = true
+    runtime.scheduler.requestContent()
   }
 }

@@ -20,6 +20,7 @@ public final class WaylandHost: Chroma.Host {
     get { runtime.content }
     set {
       runtime.content = newValue
+      requestFrame()
     }
   }
   public var frameObserver: FrameObserver? {
@@ -48,20 +49,21 @@ public final class WaylandHost: Chroma.Host {
   private lazy var clipboard = WaylandClipboard(
     interaction: interaction, keyboard: keyboard,
     flush: { [weak self] in self?.flushWayland() },
-    requestFrame: { [weak self] in self?.requestFrame() })
+    requestFrame: { [weak self] in
+      self?.runtime.dispatchInput { [weak self] in self?.receiveInput() }
+    })
   private var surface: OpaquePointer?
   private var xdgSurface: OpaquePointer?
   private var toplevel: OpaquePointer?
 
   private let input = InputAccumulator()
   private let cursor = WaylandCursor()
+  private var displayReadQueued = false
   private var displayReadSource: DispatchSourceRead?
   private var displayWriteSource: DispatchSourceWrite?
-  private var animationTimer: DispatchSourceTimer?
   private var keyboardRepeatTimer: DispatchSourceTimer?
   private var frameCallback: OpaquePointer?
   private var framePending = false
-  private var dirty = false
   private var eventLoopError: Error?
   private var lastFrameTime: Double = 0
   private var smoothedFrameRate: Double = 0
@@ -80,7 +82,9 @@ public final class WaylandHost: Chroma.Host {
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
+    runtime.scheduler.onFrame = { [weak self] kind in self?.renderFrame(kind) }
     keyboard.resolve = { [weak self] input, _ in self?.runtime.resolve(input) }
+    keyboard.onInputAvailable = { [weak self] in self?.receiveInput() }
     keyboard.onCopy = { [weak self] in self?.clipboard.copyToClipboard() }
     keyboard.onCut = { [weak self] in self?.clipboard.copyEditableSelectionToClipboard() ?? false }
     keyboard.onPaste = { [weak self] id in self?.clipboard.pasteFromClipboard(id: id) }
@@ -101,6 +105,7 @@ public final class WaylandHost: Chroma.Host {
       self?.requestFrame()
     }
     startEventSources()
+    runtime.scheduler.isReady = true
     requestFrame()
 
     while running {
@@ -123,12 +128,24 @@ public final class WaylandHost: Chroma.Host {
     let fd = unsafe wl_display_get_fd(display)
     let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
     source.setEventHandler { [weak self] in
-      MainActor.assumeIsolated { self?.displayBecameReadable() }
+      MainActor.assumeIsolated { self?.queueDisplayRead() }
     }
     displayReadSource = source
     source.resume()
     updateKeyboardRepeatTimer()
     flushWayland()
+  }
+
+  private func queueDisplayRead() {
+    // DispatchSource can notify again before the high-priority task drains the socket.
+    // Queue one read only: a second wl_display_dispatch could block on an already drained fd.
+    guard running, !displayReadQueued else { return }
+    displayReadQueued = true
+    runtime.dispatchInput(requestsFrame: false) { [weak self] in
+      guard let self else { return }
+      defer { self.displayReadQueued = false }
+      self.displayBecameReadable()
+    }
   }
 
   private func displayBecameReadable() {
@@ -163,19 +180,6 @@ public final class WaylandHost: Chroma.Host {
     source.resume()
   }
 
-  private func updateAnimationTimer() {
-    animationTimer?.cancel()
-    animationTimer = nil
-    guard running, let deadline = runtime.nextAnimationDeadline else { return }
-    let timer = DispatchSource.makeTimerSource(queue: .main)
-    timer.schedule(deadline: .now() + max(0, deadline - ProcessInfo.processInfo.systemUptime))
-    timer.setEventHandler { [weak self] in
-      MainActor.assumeIsolated { self?.requestFrame() }
-    }
-    animationTimer = timer
-    timer.resume()
-  }
-
   private func updateKeyboardRepeatTimer() {
     keyboardRepeatTimer?.cancel()
     keyboardRepeatTimer = nil
@@ -184,7 +188,9 @@ public final class WaylandHost: Chroma.Host {
     let timer = DispatchSource.makeTimerSource(queue: .main)
     timer.schedule(deadline: .now() + delay, leeway: .milliseconds(1))
     timer.setEventHandler { [weak self] in
-      MainActor.assumeIsolated { self?.keyboardRepeatTimerFired() }
+      MainActor.assumeIsolated {
+        self?.runtime.dispatchInput { [weak self] in self?.keyboardRepeatTimerFired() }
+      }
     }
     keyboardRepeatTimer = timer
     timer.resume()
@@ -193,33 +199,37 @@ public final class WaylandHost: Chroma.Host {
   private func keyboardRepeatTimerFired() {
     keyboardRepeatTimer?.cancel()
     keyboardRepeatTimer = nil
-    let repeated = keyboard.dispatchRepeats(
+    _ = keyboard.dispatchRepeats(
       editing: interaction.mode == .editing,
       editingSession: interaction.editingSessionGeneration,
       now: ProcessInfo.processInfo.systemUptime)
-    if repeated { requestFrame() }
     updateKeyboardRepeatTimer()
   }
 
   private func requestFrame() {
-    guard running, configured, eglSurface != nil else { return }
-    dirty = true
-    renderIfPossible()
+    guard running else { return }
+    runtime.scheduler.requestContent()
   }
 
-  private func renderIfPossible() {
-    guard dirty, !framePending, running else { return }
-    guard let surface else { return }
-    dirty = false
+  private func receiveInput() {
+    guard running else { return }
+    input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
+    runtime.handleInput(input.frameInput())
+    runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
+  }
+
+  private func renderFrame(_ kind: FrameScheduler.FrameKind) {
+    guard !framePending, running, configured, eglSurface != nil, let surface else { return }
     guard let callback = unsafe wl_surface_frame(surface) else {
       failEventLoop(WaylandError("could not create Wayland frame callback"))
       return
     }
     frameCallback = callback
     framePending = true
+    runtime.scheduler.isReady = false
     unsafe wl_callback_add_listener(
       callback, &Self.frameListener, Unmanaged.passUnretained(self).toOpaque())
-    drawFrame()
+    drawFrame(kind)
     flushWayland()
   }
 
@@ -233,7 +243,7 @@ public final class WaylandHost: Chroma.Host {
         if let callback { unsafe wl_callback_destroy(callback) }
         if renderer.frameCallback == callback { renderer.frameCallback = nil }
         renderer.framePending = false
-        renderer.renderIfPossible()
+        renderer.runtime.scheduler.isReady = true
       }
     }
   )
@@ -246,6 +256,7 @@ public final class WaylandHost: Chroma.Host {
 
   private func stopEventLoop() {
     running = false
+    runtime.scheduler.isReady = false
     CFRunLoopStop(CFRunLoopGetMain())
   }
 
@@ -405,7 +416,6 @@ public final class WaylandHost: Chroma.Host {
             editingSession: renderer.interaction.editingSessionGeneration,
             now: ProcessInfo.processInfo.systemUptime
           )
-          renderer.requestFrame()
         } else {
           renderer.keyboard.keyReleased(key)
         }
@@ -443,7 +453,7 @@ public final class WaylandHost: Chroma.Host {
         if let pointer { renderer.cursor.apply(pointer: pointer, serial: serial) }
         renderer.input.pointerEntered(
           x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
-        renderer.requestFrame()
+        renderer.receiveInput()
       }
     }
 
@@ -457,7 +467,7 @@ public final class WaylandHost: Chroma.Host {
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard eventSurface == renderer.surface else { return }
         renderer.input.pointerLeft()
-        renderer.requestFrame()
+        renderer.receiveInput()
       }
     }
 
@@ -470,7 +480,7 @@ public final class WaylandHost: Chroma.Host {
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.input.pointerMoved(
           x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
-        renderer.requestFrame()
+        renderer.receiveInput()
       }
     }
 
@@ -489,7 +499,7 @@ public final class WaylandHost: Chroma.Host {
           renderer.input.pointerReleased()
         default: break
         }
-        renderer.requestFrame()
+        renderer.receiveInput()
       }
     }
 
@@ -508,7 +518,7 @@ public final class WaylandHost: Chroma.Host {
           renderer.input.scrollBy(x: 0, y: delta, time: time)
         default: break
         }
-        renderer.requestFrame()
+        renderer.receiveInput()
       }
     }
 
@@ -534,7 +544,7 @@ public final class WaylandHost: Chroma.Host {
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         renderer.input.stopScroll(
           horizontal: axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue, time: time)
-        renderer.requestFrame()
+        renderer.receiveInput()
       }
     },
     axis_discrete: { _, _, _, _ in },
@@ -654,23 +664,22 @@ public final class WaylandHost: Chroma.Host {
     _ = unsafe eglSwapInterval(eglDisplay, 1)
   }
 
-  private func drawFrame() {
+  private func drawFrame(_ kind: FrameScheduler.FrameKind) {
     guard eglDisplay != nil, eglSurface != nil else { return }
     openGL.beginFrame(width: width, height: height, bufferScale: bufferScale)
 
     updateFrameRate()
-    input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
+    if input.hasScrollMomentum { receiveInput() }
     let viewport = Size(width: Float(width), height: Float(height))
-    let drawList = runtime.render(
-      viewport: viewport, input: input.frameInput(),
+    let drawList = runtime.renderScheduled(
+      kind, viewport: viewport,
       onChange: { [weak self] in self?.requestFrame() })
     runtime.observe(
       drawList, viewport: viewport, rasterScale: Point(x: Float(bufferScale), y: Float(bufferScale)))
-    _ = interaction.consumeRedrawRequest()
+    if interaction.consumeRedrawRequest() { requestFrame() }
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
-    updateAnimationTimer()
-    if input.hasScrollMomentum { dirty = true }
+    runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
   }
 
   private func updateFrameRate() {
@@ -690,8 +699,7 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private func cleanup() {
-    animationTimer?.cancel()
-    animationTimer = nil
+    runtime.scheduler.isReady = false
     runtime.reset()
     interaction.onRedrawRequested = nil
     keyboardRepeatTimer?.cancel()
@@ -699,11 +707,11 @@ public final class WaylandHost: Chroma.Host {
     displayWriteSource?.cancel()
     keyboardRepeatTimer = nil
     displayReadSource = nil
+    displayReadQueued = false
     displayWriteSource = nil
     if let frameCallback { unsafe wl_callback_destroy(frameCallback) }
     frameCallback = nil
     framePending = false
-    dirty = false
 
     openGL.cleanup()
 

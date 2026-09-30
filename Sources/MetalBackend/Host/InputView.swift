@@ -29,7 +29,6 @@ final class ChromaInputView: MTKView {
   }
 
   private func scheduleRedraw() {
-    needsDisplay = true
     onInputAvailable?()
   }
 
