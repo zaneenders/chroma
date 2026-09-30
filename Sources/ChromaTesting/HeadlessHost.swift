@@ -50,10 +50,10 @@ public final class HeadlessHost: Host {
 
   @discardableResult
   public func render(input: InputState = InputState()) -> HeadlessFrame {
-    runtime.scheduler.recordProducedFrame()
     let drawList = runtime.render(
       viewport: viewport, input: input,
       onChange: { [weak self] in self?.onRedrawRequested?() })
+    runtime.scheduler.recordProducedFrame()
     _ = interaction.consumeRedrawRequest()
     runtime.observe(drawList, viewport: viewport)
 
@@ -65,8 +65,8 @@ public final class HeadlessHost: Host {
   /// Explicitly step animation paint without evaluating the content tree.
   @discardableResult
   public func renderAnimations() -> HeadlessFrame {
-    runtime.scheduler.recordProducedFrame()
     let list = runtime.renderAnimations()
+    runtime.scheduler.recordProducedFrame()
     runtime.observe(list, viewport: viewport)
     let frame = HeadlessFrame(viewport: viewport, commands: list.commands)
     lastFrame = frame

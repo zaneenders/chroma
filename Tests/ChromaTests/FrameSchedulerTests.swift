@@ -71,7 +71,7 @@ struct FrameSchedulerTests {
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
     scheduler.reset()
     #expect(scheduler.nextFrame == nil)
-    #expect(scheduler.lastFrameTime == nil)
+    #expect(scheduler.lastFrameBoundaryTime == nil)
   }
 
   @Test func rateChangesAndContentAnimationsRemainCapped() throws {
@@ -128,7 +128,7 @@ struct FrameSchedulerTests {
     clock.now += 1
     await withCheckedContinuation { continuation in
       scheduler.onWake = {
-        #expect(scheduler.lastFrameTime == 100)
+        #expect(scheduler.lastFrameBoundaryTime == 100)
         #expect(scheduler.nextFrame?.kind == .animation)
         scheduler.requestContent()
         #expect(scheduler.nextFrame?.kind == .content)
@@ -138,7 +138,7 @@ struct FrameSchedulerTests {
       }
       scheduler.isReady = true
     }
-    #expect(scheduler.lastFrameTime == 100)
+    #expect(scheduler.lastFrameBoundaryTime == 100)
     #expect(scheduler.hasContentRequest)
     scheduler.reset()
   }
@@ -157,9 +157,72 @@ struct FrameSchedulerTests {
       }
       scheduler.isReady = true
     }
-    #expect(scheduler.lastFrameTime == clock.now)
+    #expect(scheduler.lastFrameBoundaryTime == clock.now)
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
     #expect(scheduler.takeFrame() == nil)
+    scheduler.reset()
+  }
+
+  @Test func initialContentDeadlineSurvivesCoalescingWhileGated() {
+    let clock = Clock()
+    let scheduler = FrameScheduler(clock: { clock.now })
+    scheduler.inputPending = true
+    scheduler.requestContent()
+    clock.now += 2
+    scheduler.requestContent()
+    scheduler.setRefreshRates(minimum: 20, maximum: 40)
+    #expect(scheduler.nextFrame?.deadline == 100)
+    #expect(scheduler.hasContentRequest)
+    scheduler.consumeContentRequest()
+    scheduler.requestContent()
+    #expect(scheduler.nextFrame?.deadline == 102)
+    scheduler.reset()
+  }
+
+  @Test func resetDuringProductionDiscardsCompletionAndKeepsNewDemand() async {
+    let clock = Clock()
+    let scheduler = FrameScheduler(clock: { clock.now })
+    scheduler.requestContent()
+    await withCheckedContinuation { continuation in
+      scheduler.onWake = {
+        #expect(!Task.isCancelled)
+        #expect(scheduler.takeFrame() == .content)
+        clock.now += 1
+        scheduler.reset()
+        scheduler.requestContent()
+        scheduler.isReady = false
+        continuation.resume()
+      }
+      scheduler.isReady = true
+    }
+    #expect(scheduler.lastFrameBoundaryTime == nil)
+    #expect(scheduler.nextFrame?.deadline == 101)
+    #expect(scheduler.hasContentRequest)
+    scheduler.reset()
+  }
+
+  @Test func inputGatingCancelsAndResumesOneCoalescedWake() async {
+    let scheduler = FrameScheduler()
+    var wakes = 0
+    scheduler.inputPending = true
+    scheduler.isReady = true
+    scheduler.requestContent()
+    await withCheckedContinuation { continuation in
+      scheduler.onWake = {
+        wakes += 1
+        #expect(!Task.isCancelled)
+        #expect(!scheduler.inputPending)
+        #expect(scheduler.takeFrame() == .content)
+        scheduler.isReady = false
+        continuation.resume()
+      }
+      for _ in 0..<100 { scheduler.requestContent() }
+      scheduler.inputPending = false
+      scheduler.inputPending = true
+      scheduler.inputPending = false
+    }
+    #expect(wakes == 1)
+    #expect(!scheduler.hasContentRequest)
     scheduler.reset()
   }
 

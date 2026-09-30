@@ -208,7 +208,7 @@ struct WindowRuntimeTests {
       viewport: viewport,
       prepareInput: { runtime.scheduler.requestContent() }, onChange: {})
     #expect(list == nil)
-    #expect(runtime.scheduler.lastFrameTime == 100)
+    #expect(runtime.scheduler.lastFrameBoundaryTime == 100)
     #expect(runtime.scheduler.nextFrame?.kind == .content)
     #expect(runtime.scheduler.nextFrame?.deadline == 100 + 1.0 / 60)
     clock.now = 100 + 1.0 / 60
@@ -227,7 +227,7 @@ struct WindowRuntimeTests {
     runtime.dispatchInput(requestsFrame: false) { runtime.reset() }
     let produced = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(produced == nil)
-    #expect(runtime.scheduler.lastFrameTime == nil)
+    #expect(runtime.scheduler.lastFrameBoundaryTime == nil)
     #expect(runtime.scheduler.nextFrame == nil)
   }
 

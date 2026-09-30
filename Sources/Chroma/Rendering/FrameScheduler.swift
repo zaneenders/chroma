@@ -14,10 +14,12 @@ package final class FrameScheduler {
   private let clock: @MainActor () -> Double
   private var wakeTask: Task<Void, Never>?
   private var scheduled: ScheduledFrame?
-  private var isProducing = false
-  private var frameTakenDuringWake = false
-  private var pendingSince: Double?
-  package private(set) var lastFrameTime: Double?
+  private enum WakePhase { case idle, preparingInput, producing }
+  private var wakePhase: WakePhase = .idle
+  // Also fixes the first frame's deadline while readiness/input gates are closed.
+  private var pendingContentDeadline: Double?
+  /// Rate-cap boundary: selection time initially, advanced to synchronous completion.
+  package private(set) var lastFrameBoundaryTime: Double?
   package private(set) var minimumRefreshRate = 30.0
   package private(set) var maximumRefreshRate = 60.0
   package var animationsActive = false { didSet { schedule() } }
@@ -39,16 +41,16 @@ package final class FrameScheduler {
   }
 
   package func requestContent() {
-    if pendingSince == nil { pendingSince = clock() }
+    if pendingContentDeadline == nil { pendingContentDeadline = clock() }
     schedule()
   }
 
-  package var hasContentRequest: Bool { pendingSince != nil }
+  package var hasContentRequest: Bool { pendingContentDeadline != nil }
 
   package var nextFrame: ScheduledFrame? {
-    if let pendingSince {
+    if let pendingContentDeadline {
       return ScheduledFrame(
-        deadline: lastFrameTime.map { $0 + 1 / maximumRefreshRate } ?? pendingSince,
+        deadline: lastFrameBoundaryTime.map { $0 + 1 / maximumRefreshRate } ?? pendingContentDeadline,
         kind: .content, priority: .userInitiated)
     }
     guard let animationDeadline else { return nil }
@@ -59,36 +61,37 @@ package final class FrameScheduler {
 
   /// Animation cadence, independent of content demand and backend readiness.
   package var animationDeadline: Double? {
-    guard animationsActive || contentAnimationActive, let lastFrameTime else { return nil }
-    return lastFrameTime + 1 / minimumRefreshRate
+    guard animationsActive || contentAnimationActive, let lastFrameBoundaryTime else { return nil }
+    return lastFrameBoundaryTime + 1 / minimumRefreshRate
   }
 
+  /// Select after input preparation and establish a provisional rate-cap boundary.
   package func takeFrame() -> FrameKind? {
     let now = clock()
     guard let nextFrame, now >= nextFrame.deadline else { return nil }
-    pendingSince = nil
-    if isProducing { frameTakenDuringWake = true }
-    lastFrameTime = now
+    pendingContentDeadline = nil
+    if wakePhase == .preparingInput { wakePhase = .producing }
+    lastFrameBoundaryTime = now
     return nextFrame.kind
   }
 
   package func consumeContentRequest() {
-    pendingSince = nil
+    pendingContentDeadline = nil
     schedule()
   }
 
+  /// Advance the boundary to completion; never schedule catch-up frames from start time.
   package func recordProducedFrame() {
-    lastFrameTime = clock()
+    lastFrameBoundaryTime = clock()
     schedule()
   }
 
   package func reset() {
-    wakeTask?.cancel()
-    wakeTask = nil
-    scheduled = nil
-    frameTakenDuringWake = false
-    pendingSince = nil
-    lastFrameTime = nil
+    clearWake()
+    // Keep scheduling suppressed until an in-flight wake returns, but discard its completion.
+    if wakePhase == .producing { wakePhase = .preparingInput }
+    pendingContentDeadline = nil
+    lastFrameBoundaryTime = nil
     animationsActive = false
     contentAnimationActive = false
     inputPending = false
@@ -96,27 +99,31 @@ package final class FrameScheduler {
 
   deinit { wakeTask?.cancel() }
 
+  private func clearWake(cancelTask: Bool = true) {
+    if cancelTask { wakeTask?.cancel() }
+    wakeTask = nil
+    scheduled = nil
+  }
+
   private func schedule() {
-    guard !isProducing else { return }
+    guard wakePhase == .idle else { return }
     let next = isReady && !inputPending && onWake != nil ? nextFrame : nil
     guard next != scheduled else { return }
-    wakeTask?.cancel()
-    wakeTask = nil
+    clearWake()
     scheduled = next
     guard let next else { return }
     let delay = max(0, next.deadline - clock())
     wakeTask = Task(priority: next.priority) { @MainActor [weak self] in
       do { try await Task.sleep(for: .seconds(delay)) } catch { return }
       guard let self, !Task.isCancelled else { return }
-      self.wakeTask = nil
-      self.scheduled = nil
+      self.clearWake(cancelTask: false)
       // Hosts prepare input before taking a frame; a wake-up does not commit its kind.
       if self.isReady, !self.inputPending, let next = self.nextFrame, self.clock() >= next.deadline {
-        self.frameTakenDuringWake = false
-        self.isProducing = true
+        self.wakePhase = .preparingInput
         self.onWake?()
-        self.isProducing = false
-        if self.frameTakenDuringWake, self.lastFrameTime != nil { self.recordProducedFrame() }
+        let produced = self.wakePhase == .producing
+        self.wakePhase = .idle
+        if produced { self.recordProducedFrame() }
       }
       self.schedule()
     }
