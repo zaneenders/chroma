@@ -72,7 +72,7 @@ extension Interaction {
     }
   }
 
-  private func setNavigationSelection(_ path: [Int]) {
+  private func setNavigationSelection(_ path: [Int], revealing: Bool = true) {
     guard let navigation, let node = navigation.node(at: path) else { return }
     navigationPath = path
     rememberNavigation(path, in: navigation)
@@ -92,18 +92,18 @@ extension Interaction {
         logicalSelections[groupID]?.select(key)
       }
       pendingFocus = nil
-      reveal(renderPath, in: tree)
+      if revealing { reveal(renderPath, in: tree) }
     } else {
       selection = nil
       selectedLeafID = nil
       pendingFocus = nil
       endEditing()
-      if let tree { reveal(node.renderPath, in: tree) }
+      if revealing, let tree { reveal(node.renderPath, in: tree) }
     }
   }
 
-  func selectNavigation(_ path: [Int]) {
-    setNavigationSelection(path)
+  func selectNavigation(_ path: [Int], revealing: Bool = true) {
+    setNavigationSelection(path, revealing: revealing)
   }
 
   func selectNavigationLeaf(_ id: WidgetID) {
