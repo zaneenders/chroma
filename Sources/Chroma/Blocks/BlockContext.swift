@@ -177,9 +177,6 @@ public struct BlockContext {
       submitInsertsNewline: submitInsertsNewline)
   }
 
-  /// Registers read-only text with keyboard navigation, selection, and host clipboard handling.
-  /// Offsets and ranges count `Character` values in `text`, not UTF-8 bytes or rendered columns.
-  /// Custom renderers draw the returned caret and selection using their own layout.
   public func textSelectionState(
     in rect: Rect,
     text: @escaping @MainActor () -> String,
