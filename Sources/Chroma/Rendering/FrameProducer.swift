@@ -38,17 +38,20 @@ package final class FrameProducer {
   private weak var interaction: Interaction?
 
   private let clock: @MainActor () -> Double
-  private var cachedCommands: [DrawCommand] = []
-  private var animationPaints: [AnimationPaint] = []
-  package var needsAnimationFrame: Bool { !animationPaints.isEmpty }
+  private struct CachedFrame {
+    let commands: [DrawCommand]
+    let animations: [AnimationPaint]
+  }
+
+  private var cachedFrame = CachedFrame(commands: [], animations: [])
+  package var needsAnimationFrame: Bool { !cachedFrame.animations.isEmpty }
 
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
     self.clock = clock
   }
 
   package func reset() {
-    cachedCommands = []
-    animationPaints = []
+    cachedFrame = CachedFrame(commands: [], animations: [])
     interaction?.resetRegistrations()
     interaction = nil
     resetTracking()
@@ -117,8 +120,7 @@ package final class FrameProducer {
     interaction.endFrame()
     var result = drawList
     interaction.paintNavigation(into: &result, theme: context.theme)
-    cachedCommands = result.commands
-    animationPaints = interaction.animationPaints
+    cachedFrame = CachedFrame(commands: result.commands, animations: interaction.animationPaints)
     interaction.animationPaints = []
     return result
   }
@@ -126,16 +128,18 @@ package final class FrameProducer {
   package func renderAnimations() -> DrawList {
     let frame = AnimationFrame(timestamp: clock())
     interaction?.animationFrame = frame
+    // Ranges always address the content snapshot, never the previous animation output.
+    let cachedFrame = cachedFrame
     var commands: [DrawCommand] = []
     var cursor = 0
-    for animation in animationPaints {
-      commands.append(contentsOf: cachedCommands[cursor..<animation.range.lowerBound])
+    for animation in cachedFrame.animations {
+      commands.append(contentsOf: cachedFrame.commands[cursor..<animation.range.lowerBound])
       var animated = DrawList()
       animation.paint(&animated, frame)
       commands.append(contentsOf: animated.commands)
       cursor = animation.range.upperBound
     }
-    commands.append(contentsOf: cachedCommands[cursor...])
+    commands.append(contentsOf: cachedFrame.commands[cursor...])
     return DrawList(commands: commands)
   }
 

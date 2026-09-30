@@ -184,6 +184,55 @@ struct AnimationFrameTests {
     producer.reset()
   }
 
+  @Test func contentReplacementReplacesCommandsAndAnimationRangesTogether() {
+    let clock = Samples()
+    let producer = FrameProducer(clock: { clock.now })
+    let context = BlockContext()
+    func render(_ content: any Block) -> DrawList {
+      producer.render(
+        content: content, viewport: Size(width: 200, height: 50),
+        input: InputState(), context: context, onChange: {})
+    }
+    _ = render(HStack { Text("Old prefix"); Painted(model: PaintModel()); Text("Old suffix") })
+    clock.now = 102
+    _ = producer.renderAnimations()
+    let replacement = render(ProgressIndicator())
+    #expect(producer.needsAnimationFrame)
+    #expect(producer.renderAnimations().commands == replacement.commands)
+    clock.now += 1
+    #expect(producer.renderAnimations().commands.count == replacement.commands.count)
+    let staticFrame = render(Text("Replacement"))
+    #expect(!producer.needsAnimationFrame)
+    #expect(producer.renderAnimations().commands == staticFrame.commands)
+    _ = render(Painted(model: PaintModel()))
+    let emptyFrame = render(EmptyBlock())
+    #expect(!producer.needsAnimationFrame)
+    #expect(producer.renderAnimations().commands == emptyFrame.commands)
+    producer.reset()
+    #expect(producer.renderAnimations().commands.isEmpty)
+  }
+
+  @Test func contentReplacementReleasesPreviousAnimationCaptures() {
+    let producer = FrameProducer()
+    let context = BlockContext()
+    weak var released: PaintModel?
+    do {
+      let model = PaintModel()
+      released = model
+      _ = producer.render(
+        content: RetainedPaint(model: model), viewport: Size(width: 100, height: 100),
+        input: InputState(), context: context, onChange: {})
+    }
+    #expect(released != nil)
+    let replacement = producer.render(
+      content: Text("Static"), viewport: Size(width: 100, height: 100),
+      input: InputState(), context: context, onChange: {})
+    #expect(released == nil)
+    #expect(!producer.needsAnimationFrame)
+    #expect(producer.renderAnimations().commands == replacement.commands)
+    producer.reset()
+  }
+
   @Test func resetReleasesCachedAnimationCaptures() {
     let producer = FrameProducer()
     weak var released: PaintModel?
