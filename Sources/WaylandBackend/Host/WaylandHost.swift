@@ -137,8 +137,7 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private func queueDisplayRead() {
-    // DispatchSource can notify again before the high-priority task drains the socket.
-    // Queue one read only: a second wl_display_dispatch could block on an already drained fd.
+    // Coalesce notifications while the high-priority input task is queued.
     guard running, !displayReadQueued else { return }
     displayReadQueued = true
     runtime.dispatchInput(requestsFrame: false) { [weak self] in
@@ -150,7 +149,7 @@ public final class WaylandHost: Chroma.Host {
 
   private func displayBecameReadable() {
     guard running, let display else { return }
-    guard unsafe wl_display_dispatch(display) != -1 else {
+    guard WaylandDisplayEvents.dispatchAvailable(display) != -1 else {
       failEventLoop(WaylandError("Wayland display dispatch failed"))
       return
     }
