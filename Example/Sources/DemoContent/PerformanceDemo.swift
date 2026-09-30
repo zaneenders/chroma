@@ -281,7 +281,8 @@ private struct ShapeCanvas: PrimitiveBlock {
     let rows = max(1, (count + columns - 1) / columns)
     let cellWidth = area.size.width / Float(columns)
     let cellHeight = area.size.height / Float(rows)
-    let frame = context.animationFrame(active: !state.isPaused, updatesPerSecond: 60)
+    if !state.isPaused { context.requestAnimation(updatesPerSecond: 60) }
+    let frame = AnimationFrame(timestamp: context.animationTimestamp)
     let elapsed = state.elapsedTime(at: frame.timestamp)
     let burstPhase = Float(state.burst) * 1.731
 

@@ -32,7 +32,6 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   private let queue: MTLCommandQueue
   private let displayRenderer: MetalDisplayListRenderer
   private var window: NSWindow?
-  private var minimumRefreshRate: Double = 0
   private var animationTimer: Timer?
   private var lastFrameTime: Double = 0
 
@@ -55,16 +54,9 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     interaction.onRedrawRequested = { [weak self] in self?.view.needsDisplay = true }
   }
 
-  package func setMinimumRefreshRate(_ refreshRate: Double) {
-    minimumRefreshRate = refreshRate.isFinite ? min(240, max(0, refreshRate)) : 0
-    updateFrameScheduling()
-  }
-
   private func updateFrameScheduling() {
     animationTimer?.invalidate()
     animationTimer = nil
-    view.preferredFramesPerSecond = max(1, Int(minimumRefreshRate))
-    view.isPaused = minimumRefreshRate == 0
     guard let deadline = runtime.nextAnimationDeadline else { return }
     let timer = Timer(timeInterval: max(0, deadline - ProcessInfo.processInfo.systemUptime), repeats: false) {
       [weak self] _ in

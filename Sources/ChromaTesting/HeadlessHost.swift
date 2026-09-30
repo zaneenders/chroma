@@ -39,8 +39,6 @@ public final class HeadlessHost: Host {
     self.viewport = size
   }
 
-  package func setMinimumRefreshRate(_ refreshRate: Double) {}
-
   public func launch<A: App>(_ app: A) throws {
     try app.run(on: self)
   }

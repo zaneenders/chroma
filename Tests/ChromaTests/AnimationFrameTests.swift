@@ -16,8 +16,21 @@ struct AnimationFrameTests {
     var focusRule: FocusRule { .standard }
     func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
     func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-      samples.timestamps.append(context.animationFrame(active: active).timestamp)
+      if active { context.requestAnimation(updatesPerSecond: 60) }
+      samples.timestamps.append(context.animationTimestamp)
     }
+  }
+
+  @Test func readingTimeDoesNotScheduleAnimationAndRatesAreExplicit() {
+    let context = BlockContext()
+    context.interaction.animationFrame = AnimationFrame(timestamp: 100.01)
+    #expect(context.animationTimestamp == 100.01)
+    #expect(context.interaction.nextAnimationDeadline == nil)
+
+    context.requestAnimation(updatesPerSecond: 11)
+    #expect(context.interaction.nextAnimationDeadline == 1101.0 / 11)
+    context.requestAnimation(updatesPerSecond: 60)
+    #expect(context.interaction.nextAnimationDeadline == 6001.0 / 60)
   }
 
   @Test func sharedTimestampAndDemandFollowProducedFrames() {

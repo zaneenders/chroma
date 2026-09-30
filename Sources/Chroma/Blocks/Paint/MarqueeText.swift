@@ -35,13 +35,13 @@ public struct MarqueeText: PrimitiveBlock {
         context.requestAnimation(at: now + pause - phase)
       } else if phase < pause + travel {
         offset = Float((phase - pause) * 28)
-        _ = context.animationFrame(updatesPerSecond: 30)
+        context.requestAnimation(updatesPerSecond: 30)
       } else if phase < 2 * pause + travel {
         offset = Float(distance)
         context.requestAnimation(at: now + 2 * pause + travel - phase)
       } else {
         offset = Float(distance - (phase - 2 * pause - travel) * 28)
-        _ = context.animationFrame(updatesPerSecond: 30)
+        context.requestAnimation(updatesPerSecond: 30)
       }
     }
     drawList.pushClip(rect)

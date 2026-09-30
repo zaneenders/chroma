@@ -19,7 +19,8 @@ public struct ProgressIndicator: PrimitiveBlock {
   }
 
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    let timestamp = context.animationFrame(active: isActive, updatesPerSecond: 11).timestamp
+    if isActive { context.requestAnimation(updatesPerSecond: 11) }
+    let timestamp = context.animationTimestamp
     let head = isActive ? Int(timestamp * 11) % 8 : 0
     let dot = diameter / 5
     let radius = (diameter - dot) / 2

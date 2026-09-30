@@ -16,12 +16,11 @@ extension BlockContext {
     interaction.nextAnimationDeadline = min(interaction.nextAnimationDeadline ?? deadline, deadline)
   }
 
-  public func animationFrame(active: Bool = true, updatesPerSecond: Double = 60) -> AnimationFrame {
+  /// Schedule a future frame at the next tick of an explicit animation rate.
+  /// Read `animationTimestamp` separately; reading time does not request a frame.
+  public func requestAnimation(updatesPerSecond: Double) {
     precondition(updatesPerSecond.isFinite && updatesPerSecond > 0 && updatesPerSecond <= 240)
-    if active {
-      let now = interaction.animationFrame.timestamp
-      requestAnimation(at: (floor(now * updatesPerSecond) + 1) / updatesPerSecond)
-    }
-    return interaction.animationFrame
+    let now = animationTimestamp
+    requestAnimation(at: (floor(now * updatesPerSecond) + 1) / updatesPerSecond)
   }
 }

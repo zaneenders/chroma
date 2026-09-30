@@ -55,11 +55,9 @@ public final class WaylandHost: Chroma.Host {
 
   private let input = InputAccumulator()
   private let cursor = WaylandCursor()
-  private var minimumRefreshRate: Double = 0
   private var displayReadSource: DispatchSourceRead?
   private var displayWriteSource: DispatchSourceWrite?
   private var animationTimer: DispatchSourceTimer?
-  private var refreshTimer: DispatchSourceTimer?
   private var keyboardRepeatTimer: DispatchSourceTimer?
   private var frameCallback: OpaquePointer?
   private var framePending = false
@@ -87,10 +85,6 @@ public final class WaylandHost: Chroma.Host {
     keyboard.onCut = { [weak self] in self?.clipboard.copyEditableSelectionToClipboard() ?? false }
     keyboard.onPaste = { [weak self] id in self?.clipboard.pasteFromClipboard(id: id) }
     keyboard.onSelectAll = { [weak self] in self?.selectAllOutsideEditor() ?? false }
-  }
-
-  package func setMinimumRefreshRate(_ refreshRate: Double) {
-    minimumRefreshRate = refreshRate.isFinite ? max(0, refreshRate) : 0
   }
 
   public func run(title: String) throws {
@@ -133,7 +127,6 @@ public final class WaylandHost: Chroma.Host {
     }
     displayReadSource = source
     source.resume()
-    updateRefreshTimer()
     updateKeyboardRepeatTimer()
     flushWayland()
   }
@@ -168,20 +161,6 @@ public final class WaylandHost: Chroma.Host {
     }
     displayWriteSource = source
     source.resume()
-  }
-
-  private func updateRefreshTimer() {
-    refreshTimer?.cancel()
-    refreshTimer = nil
-    guard running, minimumRefreshRate > 0 else { return }
-    let interval = 1 / minimumRefreshRate
-    let timer = DispatchSource.makeTimerSource(queue: .main)
-    timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(1))
-    timer.setEventHandler { [weak self] in
-      MainActor.assumeIsolated { self?.requestFrame() }
-    }
-    refreshTimer = timer
-    timer.resume()
   }
 
   private func updateAnimationTimer() {
@@ -715,11 +694,9 @@ public final class WaylandHost: Chroma.Host {
     animationTimer = nil
     runtime.reset()
     interaction.onRedrawRequested = nil
-    refreshTimer?.cancel()
     keyboardRepeatTimer?.cancel()
     displayReadSource?.cancel()
     displayWriteSource?.cancel()
-    refreshTimer = nil
     keyboardRepeatTimer = nil
     displayReadSource = nil
     displayWriteSource = nil
