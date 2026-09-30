@@ -292,7 +292,10 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   func tintRects() -> [Rect] {
     renderer.render(input: parked).commands.compactMap { command -> Rect? in
       if case .strokeRect(let rect, let width, let color) = command,
-        width == 2, color == ChromaTheme.dark.focus.ring { return rect }
+        width == 2, color == ChromaTheme.dark.focus.ring
+      {
+        return rect
+      }
       return nil
     }
   }
@@ -375,7 +378,10 @@ extension DemoContentTests {
     func tintRects() -> [Rect] {
       renderer.render(input: parked).commands.compactMap { command -> Rect? in
         if case .strokeRect(let rect, let width, let color) = command,
-          width == 2, color == ChromaTheme.dark.focus.ring { return rect }
+          width == 2, color == ChromaTheme.dark.focus.ring
+        {
+          return rect
+        }
         return nil
       }
     }
@@ -457,7 +463,7 @@ extension DemoContentTests {
     let first = renderer.render()
     #expect(renderer.needsAnimationFrame)
     try await Task.sleep(for: .milliseconds(20))
-    #expect(renderer.render() != first)
+    #expect(renderer.renderAnimations() != first)
 
     state.togglePaused()
     renderer.render()

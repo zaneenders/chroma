@@ -281,38 +281,41 @@ private struct ShapeCanvas: PrimitiveBlock {
     let rows = max(1, (count + columns - 1) / columns)
     let cellWidth = area.size.width / Float(columns)
     let cellHeight = area.size.height / Float(rows)
-    let frame = context.animationFrame(active: !state.isPaused, updatesPerSecond: 60)
-    let elapsed = state.elapsedTime(at: frame.timestamp)
     let burstPhase = Float(state.burst) * 1.731
+    let shape = state.shape
+    let palette = state.palette
+    context.animate(into: &drawList, isActive: !state.isPaused) { drawList, frame in
+      let elapsed = state.elapsedTime(at: frame.timestamp)
 
-    for index in 0..<count {
-      let column = index % columns
-      let row = index / columns
-      let phase = elapsed * 1.8 + Float(index) * 0.071 + burstPhase
-      let waveX = sin(phase) * cellWidth * 0.22
-      let waveY = cos(phase * 0.73 + burstPhase) * cellHeight * 0.22
-      let pulse = 0.48 + 0.12 * abs(sin(phase * 0.41))
-      let width = max(2, cellWidth * pulse)
-      let height = max(2, cellHeight * pulse)
-      let shapeRect = Rect(
-        x: area.minX + Float(column) * cellWidth + (cellWidth - width) / 2 + waveX,
-        y: area.minY + Float(row) * cellHeight + (cellHeight - height) / 2 + waveY,
-        width: width, height: height)
-      let hue = Float(index % 97) / 97
-      let color = color(for: hue, elapsed: elapsed, palette: state.palette)
+      for index in 0..<count {
+        let column = index % columns
+        let row = index / columns
+        let phase = elapsed * 1.8 + Float(index) * 0.071 + burstPhase
+        let waveX = sin(phase) * cellWidth * 0.22
+        let waveY = cos(phase * 0.73 + burstPhase) * cellHeight * 0.22
+        let pulse = 0.48 + 0.12 * abs(sin(phase * 0.41))
+        let width = max(2, cellWidth * pulse)
+        let height = max(2, cellHeight * pulse)
+        let shapeRect = Rect(
+          x: area.minX + Float(column) * cellWidth + (cellWidth - width) / 2 + waveX,
+          y: area.minY + Float(row) * cellHeight + (cellHeight - height) / 2 + waveY,
+          width: width, height: height)
+        let hue = Float(index % 97) / 97
+        let color = color(for: hue, elapsed: elapsed, palette: palette)
 
-      switch state.shape {
-      case .rounded:
-        drawList.fillRoundedRect(shapeRect, radius: min(width, height) * 0.38, color: color)
-      case .outline:
-        drawList.strokeRect(shapeRect, width: 1, color: color)
-      case .mixed:
-        if index.isMultiple(of: 3) {
-          drawList.fillRoundedRect(shapeRect, radius: min(width, height) * 0.3, color: color)
-        } else if index.isMultiple(of: 2) {
+        switch shape {
+        case .rounded:
+          drawList.fillRoundedRect(shapeRect, radius: min(width, height) * 0.38, color: color)
+        case .outline:
           drawList.strokeRect(shapeRect, width: 1, color: color)
-        } else {
-          drawList.fillRect(shapeRect, color: color)
+        case .mixed:
+          if index.isMultiple(of: 3) {
+            drawList.fillRoundedRect(shapeRect, radius: min(width, height) * 0.3, color: color)
+          } else if index.isMultiple(of: 2) {
+            drawList.strokeRect(shapeRect, width: 1, color: color)
+          } else {
+            drawList.fillRect(shapeRect, color: color)
+          }
         }
       }
     }

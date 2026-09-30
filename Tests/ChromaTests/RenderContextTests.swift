@@ -126,6 +126,5 @@ private final class FakeRenderer: Host {
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
-  func setMinimumRefreshRate(_ refreshRate: Double) {}
   func run(title: String) {}
 }

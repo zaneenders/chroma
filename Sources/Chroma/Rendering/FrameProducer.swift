@@ -38,15 +38,17 @@ package final class FrameProducer {
   private weak var interaction: Interaction?
 
   private let clock: @MainActor () -> Double
-  package private(set) var nextAnimationDeadline: Double?
-  package var needsAnimationFrame: Bool { nextAnimationDeadline != nil }
+  private var cachedCommands: [DrawCommand] = []
+  private var animationPaints: [AnimationPaint] = []
+  package var needsAnimationFrame: Bool { !animationPaints.isEmpty }
 
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
     self.clock = clock
   }
 
   package func reset() {
-    nextAnimationDeadline = nil
+    cachedCommands = []
+    animationPaints = []
     interaction?.resetRegistrations()
     interaction = nil
     resetTracking()
@@ -65,6 +67,7 @@ package final class FrameProducer {
     viewport: Size,
     input: InputState,
     context: BlockContext,
+    processingInput: Bool = true,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     resetTracking()
@@ -90,8 +93,8 @@ package final class FrameProducer {
     {
       refreshRegistrations(content, viewport: viewport, context: context, commands: input.commands)
     }
-    interaction.nextAnimationDeadline = nil
-    interaction.beginFrame(input: input)
+    interaction.animationPaints = []
+    interaction.beginFrame(input: input, processingInput: processingInput)
     let subscription = FrameTrackingSubscription(onChange)
     self.subscription = subscription
     let enqueue = ObservationDelivery.enqueue
@@ -114,11 +117,29 @@ package final class FrameProducer {
     interaction.endFrame()
     var result = drawList
     interaction.paintNavigation(into: &result, theme: context.theme)
-    nextAnimationDeadline = interaction.nextAnimationDeadline
+    cachedCommands = result.commands
+    animationPaints = interaction.animationPaints
+    interaction.animationPaints = []
     return result
   }
 
-  private func refreshRegistrations(
+  package func renderAnimations() -> DrawList {
+    let frame = AnimationFrame(timestamp: clock())
+    interaction?.animationFrame = frame
+    var commands: [DrawCommand] = []
+    var cursor = 0
+    for animation in animationPaints {
+      commands.append(contentsOf: cachedCommands[cursor..<animation.range.lowerBound])
+      var animated = DrawList()
+      animation.paint(&animated, frame)
+      commands.append(contentsOf: animated.commands)
+      cursor = animation.range.upperBound
+    }
+    commands.append(contentsOf: cachedCommands[cursor...])
+    return DrawList(commands: commands)
+  }
+
+  package func refreshRegistrations(
     _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = []
   ) {
     let interaction = context.interaction

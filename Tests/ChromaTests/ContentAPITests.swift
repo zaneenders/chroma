@@ -38,7 +38,7 @@ struct ContentAPITests {
     #expect(layout.textInRange(from: 1, to: 3) == "bc")
   }
 
-  @Test func spinnerDeadlinesCoalesceAndDisappearWithContent() {
+  @Test func spinnerDemandDisappearsWithContent() {
     let producer = FrameProducer(clock: { 100 })
     let context = BlockContext()
     func render(_ content: any Block) {
@@ -53,21 +53,12 @@ struct ContentAPITests {
         ProgressIndicator()
         ProgressIndicator()
       })
-    #expect(producer.nextAnimationDeadline == 1101.0 / 11)
+    #expect(producer.needsAnimationFrame)
     render(ProgressIndicator(isActive: false))
-    #expect(producer.nextAnimationDeadline == nil)
+    #expect(!producer.needsAnimationFrame)
     render(ProgressIndicator())
     producer.reset()
-    #expect(producer.nextAnimationDeadline == nil)
-  }
-
-  @Test func earliestAnimationWins() {
-    let context = BlockContext()
-    context.interaction.animationFrame = AnimationFrame(timestamp: 100)
-    context.requestAnimation(at: 102)
-    context.requestAnimation(at: 101)
-    context.requestAnimation(at: 103)
-    #expect(context.interaction.nextAnimationDeadline == 101)
+    #expect(!producer.needsAnimationFrame)
   }
 
   @Test func nonOverflowingMarqueeDoesNotAnimate() {
@@ -75,7 +66,7 @@ struct ContentAPITests {
     _ = producer.render(
       content: MarqueeText("short"), viewport: Size(width: 500, height: 40), input: InputState(),
       context: BlockContext(), onChange: {})
-    #expect(producer.nextAnimationDeadline == nil)
+    #expect(!producer.needsAnimationFrame)
   }
 
   @Test func editorInsertsNewlineAtCaretAndReplacesSelection() {

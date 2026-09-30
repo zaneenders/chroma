@@ -10,8 +10,6 @@ package protocol Host: AnyObject {
 
   var runtime: WindowRuntime { get }
 
-  func setMinimumRefreshRate(_ refreshRate: Double)
-
   func run(title: String) throws
 }
 

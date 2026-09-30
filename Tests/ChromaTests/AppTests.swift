@@ -12,7 +12,8 @@ struct AppTests {
     try app.run(on: renderer)
 
     #expect(renderer.title == "App \(app.identifier) — Test")
-    #expect(renderer.minimumRefreshRate == 12)
+    #expect(renderer.runtime.scheduler.minimumRefreshRate == 24)
+    #expect(renderer.runtime.scheduler.maximumRefreshRate == 48)
     let root = renderer.content as? DeferredBlock<TupleBlock>
     #expect((root?.body.children.first as? AppContent)?.identifier == app.identifier)
   }
@@ -30,8 +31,9 @@ struct AppTests {
 private struct StatefulApp: App {
   let identifier = UUID()
 
+  var minimumRefreshRate: Double { 24 }
+  var maximumRefreshRate: Double { 48 }
   var title: String { "App \(identifier)" }
-  var minimumRefreshRate: Double { 12 }
 
   @MainActor var body: some Block {
     AppContent(identifier: identifier)
@@ -57,7 +59,6 @@ private final class FailingAppRenderer: Chroma.Host {
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
-  func setMinimumRefreshRate(_ refreshRate: Double) {}
   let error: BackendError
 
   init(error: BackendError) {
@@ -77,11 +78,6 @@ private final class AppRenderer: Chroma.Host {
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
   var title: String?
-  var minimumRefreshRate: Double?
-
-  func setMinimumRefreshRate(_ refreshRate: Double) {
-    minimumRefreshRate = refreshRate
-  }
 
   func run(title: String) {
     self.title = title

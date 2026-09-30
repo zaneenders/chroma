@@ -29,6 +29,7 @@ final class WaylandKeyboard {
   private var repeatDelay: Int32 = 0
   private var repeatingKey: UInt32?
   private var nextRepeatTime: Double?
+  var onInputAvailable: (() -> Void)?
   var onCopy: (() -> Void)?
   var onCut: (() -> Bool)?
   var onPaste: ((Int32) -> Void)?
@@ -41,6 +42,7 @@ final class WaylandKeyboard {
     keyboard = nil
     pendingCommands.removeAll(keepingCapacity: false)
     pendingTextEvents.removeAll(keepingCapacity: false)
+    onInputAvailable = nil
     onCopy = nil
     onCut = nil
     onPaste = nil
@@ -110,6 +112,7 @@ final class WaylandKeyboard {
       chord: keyChord(symbol: chroma_xkb_keyboard_keysym(keyboard, key), keyboard: keyboard),
       text: text(for: key, keyboard: keyboard))
     guard let resolved = resolve?(input, editing) else { return }
+    defer { onInputAvailable?() }
     switch resolved {
     case .command(let command): pendingCommands.append(command)
     case .text(let event) where editing && event == .selectAll:
