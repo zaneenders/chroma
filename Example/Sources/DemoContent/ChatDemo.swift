@@ -29,9 +29,7 @@ struct ChatDemo: Block {
             .foregroundColor(DemoStyle.muted).navigationIgnored().padding(8)
         }.padding(12)
       }.sizing(x: .fixed(248), y: .grow).roundedBackground(DemoStyle.panel, radius: 14)
-      ForEach([state.session]) { session in
-        conversation(session)
-      }
+      conversation(state.session).id(state.session.id)
     }.sizing(x: .grow, y: .grow)
   }
 

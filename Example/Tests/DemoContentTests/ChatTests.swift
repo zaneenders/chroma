@@ -66,6 +66,41 @@ struct ChatTests {
     #expect(state.session.messages[1].text == "Tell me about Chroma")
   }
 
+  @Test func conversationSwitchDoesNotTransferComposerFocusOrSelection() throws {
+    let state = DemoState(automaticallyUpdates: false)
+    state.open(.chat)
+    let ui = try NavigationTestHost(app: DemoApplication(state: state, shortcutModifier: .command))
+    let first = state.chat.session
+    first.draft = "First draft"
+    first.input.focus(editing: true)
+    ui.host.render()
+    ui.press(KeyboardInput(chord: KeyChord("a", modifiers: .command)))
+    #expect(first.input.isEditing)
+
+    state.chat.selectedSession = 1
+    let second = state.chat.session
+    second.draft = "Second draft"
+    ui.host.render()
+    #expect(!first.input.isFocused)
+    #expect(!second.input.isFocused)
+    #expect(!second.input.isEditing)
+
+    second.input.focus(editing: true)
+    ui.host.render()
+    ui.press("!")
+    #expect(second.draft == "Second draft!")
+    #expect(first.draft == "First draft")
+
+    state.chat.selectedSession = 0
+    ui.host.render()
+    #expect(!second.input.isFocused)
+    #expect(!first.input.isEditing)
+    first.input.focus(editing: true)
+    ui.host.render()
+    ui.press("!")
+    #expect(first.draft == "First draft!")
+  }
+
   @Test func historyDoesNotJumpWhenAReplyStreams() {
     let state = ChatState(automaticallyStreams: false)
     let session = state.session
