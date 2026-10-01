@@ -10,6 +10,10 @@ final class FrameTrackingSubscription: Observable, Sendable {
     callback = Mutex(onChange)
   }
 
+  var isActive: Bool {
+    callback.withLock { $0 != nil }
+  }
+
   private var isCancelled: Bool {
     callback.withLock { $0 == nil }
   }
@@ -35,6 +39,8 @@ final class FrameTrackingSubscription: Observable, Sendable {
 package final class FrameProducer {
   private var generation: UInt64 = 0
   private var subscription: FrameTrackingSubscription?
+  private var registrationSubscription: FrameTrackingSubscription?
+  private var registrationViewport: Size?
   private weak var interaction: Interaction?
 
   private let clock: @MainActor () -> Double
@@ -52,6 +58,9 @@ package final class FrameProducer {
     interaction?.resetRegistrations()
     interaction = nil
     resetTracking()
+    registrationSubscription?.cancel()
+    registrationSubscription = nil
+    registrationViewport = nil
   }
 
   private func resetTracking() {
@@ -60,7 +69,10 @@ package final class FrameProducer {
     subscription = nil
   }
 
-  deinit { subscription?.cancel() }
+  deinit {
+    subscription?.cancel()
+    registrationSubscription?.cancel()
+  }
 
   package func render(
     content: (any Block)?,
@@ -101,10 +113,7 @@ package final class FrameProducer {
     let drawList = withObservationTracking(options: .didSet) {
       subscription.trackCancellation()
       var drawList = DrawList()
-      if let content {
-        BlockEngine.draw(
-          content, into: &drawList, in: Rect(origin: .zero, size: viewport), context: context)
-      }
+      drawRegistrations(content, into: &drawList, viewport: viewport, context: context)
       return drawList
     } onChange: { [weak self, weak subscription] event in
       event.cancel()
@@ -148,10 +157,30 @@ package final class FrameProducer {
     interaction.refreshingRegistrations = true
     defer { interaction.refreshingRegistrations = false }
     var discarded = DrawList()
-    if let content {
-      BlockEngine.draw(content, into: &discarded, in: Rect(origin: .zero, size: viewport), context: context)
-    }
+    drawRegistrations(content, into: &discarded, viewport: viewport, context: context)
     interaction.endFrame()
+  }
+
+  package func registrationsAreValid(viewport: Size) -> Bool {
+    registrationViewport == viewport && registrationSubscription?.isActive == true
+  }
+
+  private func drawRegistrations(
+    _ content: (any Block)?, into list: inout DrawList, viewport: Size, context: BlockContext
+  ) {
+    registrationSubscription?.cancel()
+    let subscription = FrameTrackingSubscription({})
+    registrationSubscription = subscription
+    registrationViewport = viewport
+    withObservationTracking(options: .didSet) {
+      subscription.trackCancellation()
+      if let content {
+        BlockEngine.draw(content, into: &list, in: Rect(origin: .zero, size: viewport), context: context)
+      }
+    } onChange: { [weak subscription] event in
+      event.cancel()
+      _ = subscription?.takeCallback()
+    }
   }
 
 }

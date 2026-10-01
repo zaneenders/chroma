@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 struct InteractionWorkloadTests {
-  @Test func pointerEventsRebuildRegistrationsBeforeOneScheduledRender() {
+  @Test func pointerEventsReuseRegistrationsBeforeOneScheduledRender() {
     let counters = InteractionWorkloadCounters()
     let host = HeadlessHost(size: Size(width: 400, height: 600))
     host.content = InteractionWorkload(count: 100, lazy: false, counters: counters)
@@ -13,7 +13,7 @@ struct InteractionWorkloadTests {
     counters.resetDraws()
     host.handleInput(InputState(pointerPosition: Point(x: 40, y: 40)))
     let firstEventDraws = counters.rowDraws
-    #expect(firstEventDraws > 0)
+    #expect(firstEventDraws == 0)
     host.handleInput(InputState(pointerPosition: Point(x: 41, y: 41)))
     #expect(counters.rowDraws == firstEventDraws * 2)
     counters.resetDraws()
@@ -61,6 +61,8 @@ struct InteractionWorkloadTests {
     host.renderScheduled()
     counters.resetDraws()
     host.handleInput(InputState(pointerPosition: Point(x: 40, y: 40)))
+    #expect(counters.rowDraws == 0)
+    host.renderScheduled()
     #expect(counters.rowDraws > 0)
     #expect(counters.rowDraws < 100)
   }

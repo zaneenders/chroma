@@ -77,8 +77,14 @@ package final class WindowRuntime {
   }
 
   private func processInput(_ input: InputState) {
-    producer.refreshRegistrations(
-      content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+    let pointerOnly =
+      !input.pointerDown && !input.pointerPressed && !input.pointerReleased
+      && !interaction.isProcessingDrag && input.scrollDelta == .zero
+      && input.commands.isEmpty && input.textEvents.isEmpty
+    if !pointerOnly || !producer.registrationsAreValid(viewport: interaction.viewport.size) {
+      producer.refreshRegistrations(
+        content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+    }
     interaction.processInput(input)
     interaction.finishInput()
   }
