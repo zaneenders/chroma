@@ -264,10 +264,6 @@ extension Interaction {
   private func center(of rect: Rect) -> Point {
     Point(x: rect.minX + rect.size.width / 2, y: rect.minY + rect.size.height / 2)
   }
-}
-
-@MainActor
-extension Interaction {
   func registerLogicalSelection(
     scrollID: WidgetID, selectedKey: @escaping @MainActor () -> StructuralKey?,
     select: @escaping @MainActor (StructuralKey) -> Void,
@@ -324,5 +320,38 @@ extension Interaction {
         selectedLeafID = nil
       }
     }
+  }
+  func focus(_ id: WidgetID, editing: Bool = false) {
+    guard let tree, let path = tree.findLeaf(id), tree.node(at: path)?.acceptsFocus == true else {
+      return
+    }
+    moveCursor(to: path)
+    if editing {
+      beginEditing(id, caretOffset: .max)
+    }
+  }
+
+  func moveCursor(to path: [Int], revealing: Bool = true) {
+    guard let tree, tree.node(at: path) != nil else { return }
+    if let navigation, let pathInNavigation = navigation.path(to: path) {
+      selectNavigation(pathInNavigation, revealing: revealing)
+      return
+    }
+  }
+
+  func reveal(_ path: [Int], in tree: FocusNode) {
+    guard let target = tree.node(at: path)?.rect else { return }
+    for depth in 0...path.count {
+      let ancestorPath = Array(path.prefix(depth))
+      guard let scrollID = tree.node(at: ancestorPath)?.scrollID else { continue }
+      scrollStates[scrollID, default: ScrollState()].pendingReveal = target
+    }
+  }
+
+  package var selectionDescription: String {
+    guard let selection else { return "—" }
+    let path = selection.isEmpty ? "·" : selection.map(String.init).joined(separator: ".")
+    let kind = selectedLeafID != nil ? "leaf" : selection.isEmpty ? "root" : "group"
+    return "\(path) (\(kind))"
   }
 }

@@ -1,0 +1,61 @@
+import Chroma
+
+@MainActor
+public final class InteractionWorkloadCounters {
+  public private(set) var rowDraws = 0
+  public private(set) var activations = 0
+
+  public init() {}
+  public func resetDraws() { rowDraws = 0 }
+  fileprivate func recordDraw() { rowDraws += 1 }
+  fileprivate func activate() { activations += 1 }
+}
+
+@MainActor
+public struct InteractionWorkload: Block {
+  public let count: Int
+  public let lazy: Bool
+  public let counters: InteractionWorkloadCounters
+  private let controller = ScrollViewController()
+
+  public init(count: Int, lazy: Bool, counters: InteractionWorkloadCounters) {
+    precondition(count > 0)
+    self.count = count
+    self.lazy = lazy
+    self.counters = counters
+  }
+
+  public var body: some Block {
+    if lazy {
+      ScrollView(data: 0..<count, rowHeight: 28, controller: controller) { index in
+        InteractionRow(index: index, counters: counters)
+      }
+    } else {
+      ScrollView(controller: controller) {
+        VStack(spacing: 0) {
+          ForEach(0..<count, id: \.self) { index in
+            InteractionRow(index: index, counters: counters).sizing(y: .fixed(28))
+          }
+        }
+      }
+    }
+  }
+}
+
+private struct InteractionRow: PrimitiveBlock {
+  let index: Int
+  let counters: InteractionWorkloadCounters
+  var focusRule: FocusRule { .control }
+  var expandsHorizontally: Bool { true }
+
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    Size(width: proposal.width, height: 28)
+  }
+
+  @MainActor func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    counters.recordDraw()
+    let state = context.buttonState(in: rect) { counters.activate() }
+    list.fillRoundedRect(rect, radius: 3, color: state.hovered ? .yellow : .black)
+    list.text("Session \(index)", at: Point(x: rect.minX + 8, y: rect.minY + 6), color: .white, scale: 0.6)
+  }
+}

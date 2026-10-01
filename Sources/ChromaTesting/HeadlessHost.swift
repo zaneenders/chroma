@@ -62,6 +62,22 @@ public final class HeadlessHost: Host {
     return frame
   }
 
+  public func handleInput(_ input: InputState) {
+    runtime.handleInput(input)
+  }
+
+  @discardableResult
+  public func renderScheduled() -> HeadlessFrame {
+    runtime.scheduler.recordProducedFrame()
+    let list = runtime.renderScheduled(
+      .content, viewport: viewport,
+      onChange: { [weak self] in self?.onRedrawRequested?() })
+    runtime.observe(list, viewport: viewport)
+    let frame = HeadlessFrame(viewport: viewport, commands: list.commands)
+    lastFrame = frame
+    return frame
+  }
+
   @discardableResult
   public func renderAnimations() -> HeadlessFrame {
     runtime.scheduler.recordProducedFrame()

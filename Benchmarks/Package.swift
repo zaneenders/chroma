@@ -13,9 +13,17 @@ let package = Package(
   name: "ChromaBenchmarks",
   platforms: [.macOS(.v27)],
   dependencies: [
-    .package(path: "..")
+    .package(path: ".."),
+    .package(path: "../Examples"),
   ],
   targets: [
+    .executableTarget(
+      name: "InteractionBenchmark",
+      dependencies: [
+        .product(name: "InteractionFixtures", package: "Examples"),
+        .product(name: "Chroma", package: "chroma"),
+        .product(name: "ChromaTesting", package: "chroma"),
+      ]),
     .executableTarget(
       name: "InputFrameBenchmark",
       dependencies: [

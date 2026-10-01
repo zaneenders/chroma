@@ -6,6 +6,10 @@ var dependencies: [Target.Dependency] = [
   .product(name: "Chroma", package: "chroma"),
 ]
 var targets: [Target] = [
+  .target(name: "InteractionFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
+  .testTarget(
+    name: "InteractionFixturesTests",
+    dependencies: ["InteractionFixtures", .product(name: "ChromaTesting", package: "chroma")]),
   .testTarget(
     name: "DemoContentTests",
     dependencies: [
@@ -30,15 +34,21 @@ dependencies.append(.product(name: "MetalBackend", package: "chroma"))
 dependencies.append(.product(name: "WaylandBackend", package: "chroma"))
 #endif
 
-let demos = ["PlayDemo", "ChatDemo", "ImageDemo"]
+let demos = ["PlayDemo", "ChatDemo", "ImageDemo", "InteractionDemo"]
 for demo in demos {
-  targets.append(.executableTarget(name: demo, dependencies: dependencies))
+  var demoDependencies = dependencies
+  if demo == "InteractionDemo" {
+    demoDependencies[0] = "InteractionFixtures"
+  }
+  targets.append(.executableTarget(name: demo, dependencies: demoDependencies))
 }
 
 let package = Package(
   name: "ChromaExamples",
   platforms: [.macOS(.v27)],
-  products: demos.map { .executable(name: $0, targets: [$0]) },
+  products: demos.map { .executable(name: $0, targets: [$0]) } + [
+    .library(name: "InteractionFixtures", targets: ["InteractionFixtures"])
+  ],
   dependencies: [
     .package(path: "..")
   ],

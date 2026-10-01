@@ -46,3 +46,13 @@ Comparisons require matching workloads, configuration, toolchain, dependencies, 
 ```sh
 swift test --package-path Benchmarks
 ```
+
+## Interaction rebuilding
+
+```sh
+swift run --package-path Benchmarks -c release InteractionBenchmark
+```
+
+Exercises the backend input path through `HeadlessHost.handleInput()` followed by `renderScheduled()`, without Metal. Content is installed once. Compares eager and lazy interactive lists with 100, 1,000, and 5,000 rows, sending one or eight pointer movements before each rendered frame. Uses five warm-up frames and 30 measured frames per case.
+
+Reports separate input-batch and render p50/p95 milliseconds, plus average row draw calls per frame for each phase. Input times are per batch, not per event. Row draw counts reveal registration rebuilds even when timing varies. This output is not consumed by `CompareBenchmarks`.

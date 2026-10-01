@@ -181,10 +181,6 @@ extension Interaction {
       selectionRange: editing ? textSelectionRange : nil)
   }
 
-}
-
-@MainActor
-extension Interaction {
   func registerTextInput(
     id: WidgetID, rect: Rect, text: @escaping @MainActor () -> String,
     onChange: @escaping @MainActor (String) -> Void,
@@ -230,6 +226,60 @@ extension Interaction {
       held: pressedLeaf == id && input.pointerDown,
       editing: editing && isTextEditing, caretOffset: editing ? caretOffset : nil,
       selectionRange: editing ? textSelectionRange : nil)
+  }
+
+  package func editableSelectionText() -> String? {
+    guard editingLeaf != nil, let range = textSelectionRange, let editingText else { return nil }
+    let characters = Array(editingText)
+    guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
+    return String(characters[range])
+  }
+
+  package func copyText() -> String? {
+    if let text = editableSelectionText() { return text }
+    if let text = onCopy?(), !text.isEmpty { return text }
+    return textSelection.selectedText()
+  }
+
+  package func selectAll(at point: Point) {
+    if editingLeaf != nil, let editingText {
+      caretOffset = editingText.count
+      textSelectionRange = editingText.isEmpty ? nil : 0..<editingText.count
+      return
+    }
+    if onSelectAll?() == true { return }
+    textSelection.selectAll(at: point)
+  }
+
+  func beginEditing(_ id: WidgetID, caretOffset: Int) {
+    textSelection.clear()
+    editingReadOnly = false
+    editingSessionGeneration &+= 1
+    editingLeaf = id
+    self.caretOffset = caretOffset
+    textSelectionRange = nil
+    mode = .editing
+  }
+
+  func startInput() {
+    if !isTextEditing { editingSessionGeneration &+= 1 }
+    mode = .editing
+  }
+
+  func stopInput() {
+    if isTextEditing { editingSessionGeneration &+= 1 }
+    mode = .movement
+  }
+
+  func endEditing() {
+    if editingLeaf != nil { editingSessionGeneration &+= 1 }
+    editingLeaf = nil
+    editingReadOnly = false
+    editingText = nil
+    inputLengthText = nil
+    inputLength = 0
+    textSelectionRange = nil
+    mode = .movement
   }
 }
 
