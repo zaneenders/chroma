@@ -8,6 +8,7 @@ final class NodeScene {
     case text(Text)
     case button(Button)
     case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
+    case scope(CommandScope)
     case empty
     case list(FixedHeightList)
   }
@@ -27,6 +28,7 @@ final class NodeScene {
     var children: [Description] = []
   }
 
+  private(set) var rowBuildRevision = 0
   private var store = NodeStore<Node>()
   private var root: NodeID?
   private var laidOut = false
@@ -48,6 +50,11 @@ final class NodeScene {
   private func lower(_ block: any Block, context: BlockContext) throws -> Description {
     if let scoped = block as? ScopedBlock {
       return try lower(scoped.content, context: context.scoped(scoped.path))
+    }
+    if let scope = block as? CommandScope {
+      return Description(
+        node: Node(content: .scope(scope), context: context),
+        children: [try lower(scope.content, context: context)])
     }
     let context = context.scoped([.component(ObjectIdentifier(type(of: block)))])
     if let list = block as? FixedHeightList {
@@ -118,6 +125,8 @@ final class NodeScene {
       node.measured = text.sizeThatFits(proposal, context: node.context)
     case .button(let button):
       node.measured = button.sizeThatFits(proposal, context: node.context)
+    case .scope:
+      node.measured = measure(store.children(of: id)![0], proposal: proposal)
     case .list:
       node.measured = proposal
     case .empty: node.measured = .zero
@@ -143,18 +152,22 @@ final class NodeScene {
         text.wraps && rect.size.width.isFinite && cell.isFinite && cell > 0
         ? Int(min(Float(Int32.max), max(1, rect.size.width / cell))) : nil
       node.lines = TextLayout(text.content, columns: columns).lines.map(\.text)
+    case .scope:
+      try place(store.children(of: id)![0], in: rect)
     case .list(let list):
       let interaction = node.context.interaction
       let scrollID = node.context.widgetID
       let offset = interaction.resolveScroll(
         id: scrollID, viewport: rect,
         contentSize: Size(width: rect.size.width, height: Float(list.count) * list.rowHeight),
-        controller: nil, sticksToBottom: false).y
+        controller: nil, sticksToBottom: false
+      ).y
       let range = list.visibleRange(offset: offset, height: rect.size.height)
       if range != node.visibleRange {
         let descriptions = try range.map { index in
           try lower(list.row(index), context: node.context.scoped([.key(list.key(index))]))
         }
+        rowBuildRevision += 1
         reconcile(descriptions, of: id)
         node.visibleRange = range
       }
@@ -190,6 +203,8 @@ final class NodeScene {
     guard let root, let node = store.value(for: root) else { return }
     let interaction = node.context.interaction
     interaction.viewport = Rect(origin: .zero, size: viewport)
+    interaction.refreshingRegistrations = true
+    defer { interaction.refreshingRegistrations = false }
     interaction.beginFrame(input: interaction.input, processingInput: false)
     prepare(root)
     interaction.endFrame()
@@ -206,6 +221,10 @@ final class NodeScene {
     case .button(let button):
       _ = node.context.buttonState(
         id: button.id ?? node.context.widgetID, in: node.rect, role: button.role, action: button.action)
+    case .scope(let scope):
+      scope.prepare(in: node.rect, context: node.context) {
+        prepare(store.children(of: id)![0])
+      }
     case .list:
       let interaction = node.context.interaction
       interaction.registerScrollInput(id: node.context.widgetID, rect: node.rect)
@@ -228,18 +247,35 @@ final class NodeScene {
     guard let root, let node = store.value(for: root) else { return }
     node.context.interaction.processInput(input)
     node.context.interaction.finishInput()
-    if scrollChanged(root) {
-      prepared = false
-      try place(root, in: node.rect)
-      prepare(viewport: node.context.interaction.viewport.size)
-    }
+    try refreshScroll()
+    prepareIfNeeded()
+  }
+
+  func processInput(_ input: InputState) {
+    precondition(prepared)
+    guard let root, let node = store.value(for: root) else { return }
+    node.context.interaction.processInput(input)
+    node.context.interaction.finishInput()
+  }
+
+  func refreshScroll() throws {
+    guard let root, let node = store.value(for: root), scrollChanged(root) else { return }
+    prepared = false
+    try place(root, in: node.rect)
+  }
+
+  func prepareIfNeeded() {
+    guard !prepared, let root, let node = store.value(for: root) else { return }
+    prepare(viewport: node.context.interaction.viewport.size)
   }
 
   private func scrollChanged(_ id: NodeID) -> Bool {
     let node = store.value(for: id)!
     if case .list = node.content,
       node.context.interaction.scrollStates[node.context.widgetID]?.offset.y != node.offset
-    { return true }
+    {
+      return true
+    }
     return store.children(of: id)!.contains { scrollChanged($0) }
   }
 
@@ -281,7 +317,7 @@ final class NodeScene {
       for child in store.children(of: id)! { paint(child, into: &list) }
       list.popClip()
     case .empty: break
-    case .stack:
+    case .stack, .scope:
       for child in store.children(of: id)! { paint(child, into: &list) }
     }
   }

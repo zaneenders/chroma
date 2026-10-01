@@ -1,14 +1,21 @@
 @MainActor
-struct FixedHeightList: Block {
+public struct FixedHeightList: Block {
   let count: Int
   let rowHeight: Float
   let overscan: Int
   let key: @MainActor (Int) -> StructuralKey
   let row: @MainActor (Int) -> any Block
 
+  public init(
+    count: Int, rowHeight: Float, overscan: Int = 1,
+    row: @escaping @MainActor (Int) -> any Block
+  ) {
+    self.init(count: count, rowHeight: rowHeight, overscan: overscan, key: { StructuralKey($0) }, row: row)
+  }
+
   init(
     count: Int, rowHeight: Float, overscan: Int = 1,
-    key: @escaping @MainActor (Int) -> StructuralKey = { StructuralKey($0) },
+    key: @escaping @MainActor (Int) -> StructuralKey,
     row: @escaping @MainActor (Int) -> any Block
   ) {
     precondition(count >= 0 && rowHeight.isFinite && rowHeight > 0 && overscan >= 0)
@@ -20,7 +27,7 @@ struct FixedHeightList: Block {
     self.row = row
   }
 
-  var body: Never { fatalError("FixedHeightList is lowered by NodeScene") }
+  public var body: Never { fatalError("FixedHeightList is lowered by NodeScene") }
 
   func visibleRange(offset: Float, height: Float) -> Range<Int> {
     guard count > 0, height > 0 else { return 0..<0 }

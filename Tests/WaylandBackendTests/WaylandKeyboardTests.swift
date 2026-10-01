@@ -33,6 +33,21 @@ struct WaylandKeyboardTests {
     return keyboard
   }
 
+  @Test func keyboardCommandsAndTextAreDrainedInArrivalOrder() throws {
+    let keyboard = try keyboard()
+    defer { keyboard.cleanup() }
+    var next = 0
+    keyboard.resolve = { _, _ in
+      defer { next += 1 }
+      return next == 1 ? .command(.action(.activate)) : .text(.insert("\(next)"))
+    }
+    for _ in 0..<3 { keyboard.keyPressed(30, editing: true, editingSession: 1, now: 0) }
+    var inputs: [InputState] = []
+    keyboard.drain(editingSession: 1) { inputs.append($0) }
+    #expect(inputs.map(\.commands) == [[], [.action(.activate)], []])
+    #expect(inputs.map(\.textEvents) == [[.insert("0")], [], [.insert("2")]])
+  }
+
   @Test func superASelectsAllInsteadOfInsertingText() throws {
     let keyboard = try keyboard()
     defer { keyboard.cleanup() }

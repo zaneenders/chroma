@@ -9,11 +9,13 @@ final class WaylandKeyboard {
   private var keyboard: OpaquePointer?
   var resolve: ((KeyboardInput, Bool) -> ResolvedKeyboardInput?)?
   private enum PendingTextEvent {
+    case command(Command)
     case event(TextEditEvent, session: Int)
     case paste(Int32, session: Int)
 
-    var session: Int {
+    var session: Int? {
       switch self {
+      case .command: nil
       case .event(_, let session), .paste(_, let session): session
       }
     }
@@ -23,7 +25,6 @@ final class WaylandKeyboard {
     case completed(String?)
   }
 
-  private var pendingCommands: [Command] = []
   private var pendingTextEvents: [PendingTextEvent] = []
   private var repeatRate: Int32 = 0
   private var repeatDelay: Int32 = 0
@@ -40,7 +41,6 @@ final class WaylandKeyboard {
   func cleanup() {
     if let keyboard { chroma_xkb_keyboard_destroy(keyboard) }
     keyboard = nil
-    pendingCommands.removeAll(keepingCapacity: false)
     pendingTextEvents.removeAll(keepingCapacity: false)
     onInputAvailable = nil
     onCopy = nil
@@ -114,7 +114,7 @@ final class WaylandKeyboard {
     guard let resolved = resolve?(input, editing) else { return }
     defer { onInputAvailable?() }
     switch resolved {
-    case .command(let command): pendingCommands.append(command)
+    case .command(let command): pendingTextEvents.append(.command(command))
     case .text(let event) where editing && event == .selectAll:
       pendingTextEvents.append(.event(event, session: editingSession))
     case .text(let event): applyEditingEvent(event, session: editingSession)
@@ -126,25 +126,31 @@ final class WaylandKeyboard {
     commands: inout [Command],
     textEvents: inout [TextEditEvent]
   ) {
-    commands.append(contentsOf: pendingCommands)
-    pendingCommands.removeAll(keepingCapacity: true)
+    drain(editingSession: editingSession) { input in
+      commands.append(contentsOf: input.commands)
+      textEvents.append(contentsOf: input.textEvents)
+    }
+  }
 
+  func drain(editingSession: Int, deliver: (InputState) -> Void) {
     var drainedCount = 0
     for pending in pendingTextEvents {
-      guard pending.session == editingSession else {
+      guard pending.session == nil || pending.session == editingSession else {
         if case .paste(let id, _) = pending { completedPastes.removeValue(forKey: id) }
         drainedCount += 1
         continue
       }
       switch pending {
+      case .command(let command):
+        deliver(InputState(commands: [command]))
       case .event(let event, _):
-        textEvents.append(event)
+        deliver(InputState(textEvents: [event]))
       case .paste(let id, _):
         guard case .completed(let text)? = completedPastes.removeValue(forKey: id) else {
           if drainedCount > 0 { pendingTextEvents.removeFirst(drainedCount) }
           return
         }
-        if let text, !text.isEmpty { textEvents.append(.insert(text)) }
+        if let text, !text.isEmpty { deliver(InputState(textEvents: [.insert(text)])) }
       }
       drainedCount += 1
     }

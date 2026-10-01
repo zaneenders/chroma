@@ -24,6 +24,10 @@ public final class HeadlessHost: Host {
     get { runtime.frameObserver }
     set { runtime.frameObserver = newValue }
   }
+  public var usesNodeLifecycle: Bool {
+    get { runtime.nodeLifecycleEnabled }
+    set { runtime.nodeLifecycleEnabled = newValue }
+  }
   public var nextAnimationDeadline: Double? { runtime.nextAnimationDeadline }
   public var needsAnimationFrame: Bool { runtime.needsAnimationFrame }
   public var onRedrawRequested: (@MainActor () -> Void)?

@@ -8,6 +8,25 @@ package final class WindowRuntime {
   }
 
   package let interaction = Interaction()
+  package var nodeLifecycleEnabled = false
+  private let nodeProducer = NodeFrameProducer()
+  private var nodeViewport: Size?
+  private var nodeOnChange: @MainActor @Sendable () -> Void = {}
+  package var nodeBuilds: Int { nodeProducer.builds }
+  package var nodePaints: Int { nodeProducer.paints }
+
+  private func refreshNodes() -> Bool {
+    guard nodeLifecycleEnabled, let content, let nodeViewport else { return false }
+    do {
+      try nodeProducer.refresh(
+        content: content, viewport: nodeViewport, context: context, onChange: nodeOnChange)
+      return true
+    } catch {
+      nodeProducer.reset()
+      return false
+    }
+  }
+
   private var inputActions: [@MainActor () -> Void] = []
   private var inputTask: Task<Void, Never>?
   private var pendingInputs: [InputState] = []
@@ -16,6 +35,7 @@ package final class WindowRuntime {
 
   package var content: (any Block)? {
     didSet {
+      nodeProducer.clear()
       producer.reset()
       scheduler.animationsActive = false
       scheduler.contentAnimationActive = false
@@ -32,7 +52,8 @@ package final class WindowRuntime {
   package var context: BlockContext { BlockContext(interaction: interaction) }
 
   package func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
-    interaction.resolve(input, appBindings: keyBindings)
+    _ = refreshNodes()
+    return interaction.resolve(input, appBindings: keyBindings)
   }
 
   deinit { inputTask?.cancel() }
@@ -42,6 +63,7 @@ package final class WindowRuntime {
     inputTask = nil
     inputActions = []
     pendingInputs = []
+    nodeProducer.clear()
     producer.reset()
     scheduler.reset()
   }
@@ -68,7 +90,9 @@ package final class WindowRuntime {
   }
 
   package func handleInput(_ input: InputState) {
-    if interaction.tree == nil {
+    if refreshNodes() {
+      do { try nodeProducer.dispatch(input, onChange: nodeOnChange) } catch { nodeProducer.reset() }
+    } else if interaction.tree == nil {
       pendingInputs.append(input)
     } else {
       processInput(input)
@@ -97,6 +121,16 @@ package final class WindowRuntime {
     flushInput()
     if kind == .animation && !scheduler.hasContentRequest { return renderAnimations() }
     _ = interaction.consumeRedrawRequest()
+    nodeViewport = viewport
+    nodeOnChange = onChange
+    if refreshNodes() {
+      let inputs = pendingInputs
+      pendingInputs.removeAll(keepingCapacity: true)
+      for input in inputs { handleInput(input) }
+      _ = refreshNodes()
+      scheduler.consumeContentRequest()
+      return nodeProducer.paint()
+    }
     if !pendingInputs.isEmpty {
       _ = render(viewport: viewport, input: InputState(), onChange: onChange)
       for input in pendingInputs { processInput(input) }
@@ -118,6 +152,15 @@ package final class WindowRuntime {
     processingInput: Bool = true,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
+    nodeViewport = viewport
+    nodeOnChange = onChange
+    if refreshNodes() {
+      if processingInput {
+        handleInput(input)
+        _ = refreshNodes()
+      }
+      return nodeProducer.paint()
+    }
     let list = producer.render(
       content: content, viewport: viewport, input: input, context: context,
       processingInput: processingInput, onChange: onChange)

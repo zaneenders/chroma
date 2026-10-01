@@ -384,14 +384,18 @@ Allocation profiling is **deferred**, not satisfied by sampling. The failed `xct
 #### Phase 2 — Prove the new lifecycle in one vertical slice
 
 - [x] Add a minimal single-owner node store with `NodeID(index, generation)`, stable slots, and reuse checks. Test stale handles and keyed row reordering.
-- [ ] Lower stacks, text, buttons, and a fixed-height virtual list into nodes; keep the existing `DrawList` output.
-- [ ] Separate build/update, layout, interaction preparation, and paint. Replace registration-through-draw for these primitives.
-- [ ] Retain a valid interaction snapshot and refresh stale callbacks/geometry without painting. Test content replacement, removed controls, resize, and a modal opening between events.
-- [ ] Preserve delivered input in one ordered sequence without coalescing, including pointer motion and scroll. Audit both hosts and replace lossy accumulation where necessary.
-- [ ] Route button activation and keyboard commands through the same action path outside layout/paint; include focus traversal and scope entry/exit.
-- [ ] Test eight events before one scheduled frame: eight ordered dispatches, zero input-phase paint calls, and no unconditional full rebuild per event.
+- [x] Lower stacks, text, buttons, and a fixed-height virtual list into nodes; keep the existing `DrawList` output.
+- [x] Separate build/update, layout, interaction preparation, and paint. Replace registration-through-draw for these primitives.
+- [x] Retain a valid interaction snapshot and refresh stale callbacks/geometry without painting. Test content replacement, removed controls, resize, and a modal opening between events.
+- [x] Preserve delivered input in one ordered sequence without coalescing, including pointer motion and scroll. Audit both hosts and replace lossy accumulation where necessary.
+- [x] Route button activation and keyboard commands through the same action path outside layout/paint; include focus traversal and scope entry/exit.
+- [x] Test eight events before one scheduled frame: eight ordered dispatches, zero input-phase paint calls, and no unconditional full rebuild per event.
 
 **Gate:** the slice renders correctly, accepts pointer and keyboard input, and demonstrably removes discarded drawing from input handling.
+
+The slice is opt-in through `HeadlessHost.usesNodeLifecycle` and `WindowRuntime.nodeLifecycleEnabled`. Supported content is stacks, nonselectable text, buttons, command scopes, empty blocks, and `FixedHeightList`; other existing primitives retain the old path. `FixedHeightList` requires the node lifecycle. Observation invalidation refreshes build/layout/preparation before the next event without painting. Eight queued activations produce one scheduled paint and reuse one build (`NodeRuntimeTests`). The slice does not yet provide offscreen logical selection/reveal or granular layout invalidation; those remain later-phase work.
+
+Host audit: Metal captures each event snapshot synchronously before queuing it in `WindowRuntime`; no host change was needed. Wayland now drains ordered pointer/scroll snapshots and one ordered keyboard command/text sequence instead of summed deltas and separate command/text queues. Linux core and host-input tests validate the gate headlessly. Metal compilation and live compositor/GPU presentation are unavailable in this Linux session and remain backend-validation blockers, not claimed successes.
 
 #### Phase 3 — Replace repeated traversal and cache safely
 

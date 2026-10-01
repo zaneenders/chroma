@@ -212,7 +212,7 @@ public final class WaylandHost: Chroma.Host {
   private func receiveInput() {
     guard running else { return }
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
-    runtime.handleInput(input.frameInput())
+    for event in input.drain() { runtime.handleInput(event) }
     runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
   }
 

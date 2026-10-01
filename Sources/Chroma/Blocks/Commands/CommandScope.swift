@@ -28,6 +28,12 @@ struct CommandScope: PrimitiveBlock, CollectionDistributingBlock {
     into drawList: inout DrawList, in rect: Rect, context: BlockContext,
     drawContent: (inout DrawList, Rect, BlockContext) -> Void
   ) {
+    prepare(in: rect, context: context) {
+      drawContent(&drawList, rect, context)
+    }
+  }
+
+  @MainActor func prepare(in rect: Rect, context: BlockContext, prepareContent: () -> Void) {
     let interaction = context.interaction
     switch operation {
     case .keyBindings(let bindings):
@@ -35,7 +41,7 @@ struct CommandScope: PrimitiveBlock, CollectionDistributingBlock {
       interaction.beginGroup(rect: rect)
       interaction.building.keyBindingScopes.append(
         Interaction.ScopedKeyBindings(path: interaction.builderPath, bindings: bindings))
-      drawContent(&drawList, rect, context)
+      prepareContent()
       if !interaction.endGroup() {
         interaction.building.keyBindingScopes.removeSubrange(bindingStart...)
       }
@@ -49,7 +55,7 @@ struct CommandScope: PrimitiveBlock, CollectionDistributingBlock {
           }
         }
       if isRoot {
-        drawContent(&drawList, rect, context)
+        prepareContent()
         interaction.building.commandHandlers.append(
           Interaction.ScopedCommandHandler(path: [], command: command, action: action))
         return
@@ -59,7 +65,7 @@ struct CommandScope: PrimitiveBlock, CollectionDistributingBlock {
       interaction.building.commandHandlers.append(
         Interaction.ScopedCommandHandler(
           path: interaction.builderPath, command: command, action: action))
-      drawContent(&drawList, rect, context)
+      prepareContent()
       if !interaction.endGroup() {
         interaction.building.commandHandlers.removeSubrange(handlerStart...)
       }

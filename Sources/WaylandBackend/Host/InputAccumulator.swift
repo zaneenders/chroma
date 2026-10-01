@@ -6,11 +6,7 @@ final class InputAccumulator {
   private var pointerPosition = Point(x: -1, y: -1)
   private var pointerPressPosition = Point(x: -1, y: -1)
   private var pointerDown = false
-  private var pressedEdge = false
-  private var releasedEdge = false
-  private var scroll = Point.zero
-  private var commands: [Command] = []
-  private var textEvents: [TextEditEvent] = []
+  private var events: [InputState] = []
 
   private var fingerScrolling = false
   private var horizontalMomentum = ScrollMomentum()
@@ -38,60 +34,61 @@ final class InputAccumulator {
     }
   }
 
-  func frameInput() -> InputState {
+  private func snapshot(
+    pressed: Bool = false, released: Bool = false, scroll: Point = .zero,
+    commands: [Command] = [], textEvents: [TextEditEvent] = []
+  ) -> InputState {
+    InputState(
+      pointerPosition: pointerPosition, pointerPressPosition: pointerPressPosition,
+      pointerDown: pointerDown, pointerPressed: pressed, pointerReleased: released,
+      scrollDelta: scroll, commands: commands, textEvents: textEvents)
+  }
+
+  func drain() -> [InputState] {
     let now = ProcessInfo.processInfo.systemUptime
-    scroll.x += horizontalMomentum.advance(now: now)
-    scroll.y += verticalMomentum.advance(now: now)
-    let input = InputState(
-      pointerPosition: pointerPosition,
-      pointerPressPosition: pointerPressPosition,
-      pointerDown: pointerDown,
-      pointerPressed: pressedEdge,
-      pointerReleased: releasedEdge,
-      scrollDelta: scroll,
-      commands: commands,
-      textEvents: textEvents
-    )
-    pressedEdge = false
-    releasedEdge = false
-    pointerPressPosition = Point(x: -1, y: -1)
-    scroll = .zero
-    commands.removeAll(keepingCapacity: true)
-    textEvents.removeAll(keepingCapacity: true)
-    return input
+    let momentum = Point(
+      x: horizontalMomentum.advance(now: now), y: verticalMomentum.advance(now: now))
+    if momentum != .zero { events.append(snapshot(scroll: momentum)) }
+    let result = events
+    events.removeAll(keepingCapacity: true)
+    return result
   }
 
   func drainKeyboard(_ keyboard: WaylandKeyboard, editingSession: Int) {
-    keyboard.drain(
-      editingSession: editingSession, commands: &commands, textEvents: &textEvents)
+    keyboard.drain(editingSession: editingSession) { input in
+      events.append(snapshot(commands: input.commands, textEvents: input.textEvents))
+    }
   }
 
   var pointerPositionSnapshot: Point { pointerPosition }
 
   func pointerEntered(x: Float, y: Float) {
     pointerPosition = Point(x: x, y: y)
+    events.append(snapshot())
   }
 
   func pointerMoved(x: Float, y: Float) {
     pointerPosition = Point(x: x, y: y)
+    events.append(snapshot())
   }
 
   func pointerLeft() {
     cancelMomentum()
     fingerScrolling = false
     pointerPosition = Point(x: -1, y: -1)
+    events.append(snapshot())
   }
 
   func pointerPressed() {
     cancelMomentum()
     pointerPressPosition = pointerPosition
     pointerDown = true
-    pressedEdge = true
+    events.append(snapshot(pressed: true))
   }
 
   func pointerReleased() {
     pointerDown = false
-    releasedEdge = true
+    events.append(snapshot(released: true))
   }
 
   func scrollBy(x: Float, y: Float, time: UInt32) {
@@ -101,7 +98,6 @@ final class InputAccumulator {
     } else {
       cancelMomentum()
     }
-    scroll.x += x
-    scroll.y += y
+    events.append(snapshot(scroll: Point(x: x, y: y)))
   }
 }

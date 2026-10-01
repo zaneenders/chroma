@@ -78,7 +78,7 @@ struct ScrollMomentumTests {
     input.scrollBy(x: 0, y: -10, time: 110)
     input.stopScroll(horizontal: false, time: 115)
     #expect(!input.hasScrollMomentum)
-    #expect(input.frameInput().scrollDelta.y == -20)
-    #expect(input.frameInput().scrollDelta.y == 0)
+    #expect(input.drain().map(\.scrollDelta.y) == [-10, -10])
+    #expect(input.drain().isEmpty)
   }
 }
