@@ -49,6 +49,145 @@ struct VariableHeightListTests {
     #expect(scene.paint().commands.first == .pushClip(rect))
   }
 
+  @Test func streamingTextChangesMeasuredExtentWithoutLosingAnchor() throws {
+    let scene = NodeScene()
+    let context = BlockContext()
+    let snapshot = VirtualListSnapshot(ids: 0..<100)
+    let controller = ScrollViewController()
+    var message = "short"
+    func content() -> VariableHeightList {
+      VariableHeightList(snapshot: snapshot, estimatedHeight: 20, controller: controller) { id in
+        Text(id == 0 ? message : "Row \(id)").wrapping()
+      }
+    }
+    let rect = Rect(x: 0, y: 0, width: 100, height: 40)
+    try scene.update(content(), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    let oldLimit = context.interaction.scrollStates.values.first!.limit.y
+    message = String(repeating: "streaming text ", count: 20)
+    try scene.update(content(), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(context.interaction.scrollStates.values.first!.limit.y > oldLimit)
+    #expect(controller.offset == 0)
+  }
+
+  @Test func widthChangesPreserveItemAndOffsetAfterMeasuredHeightReset() throws {
+    let scene = NodeScene()
+    let context = BlockContext()
+    let controller = ScrollViewController()
+    let snapshot = VirtualListSnapshot(ids: 0..<100)
+    let list = VariableHeightList(snapshot: snapshot, estimatedHeight: 20, overscan: 0, controller: controller) { id in
+      Text("\(id)").sizing(y: .fixed(40))
+    }
+    var rect = Rect(x: 0, y: 0, width: 100, height: 40)
+    try scene.update(list, context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -45)))
+    rect.size.width = 200
+    try scene.layout(in: rect)
+    #expect(controller.offset == 25)
+  }
+
+  @Test func logicalSelectionSurvivesScrollingAndReordering() throws {
+    let scene = NodeScene()
+    let context = BlockContext()
+    let controller = ScrollViewController()
+    let selection = ScrollSelection(50)
+    var actions: [Int] = []
+    func content(_ ids: [Int]) -> VariableHeightList {
+      VariableHeightList(
+        snapshot: VirtualListSnapshot(ids: ids), estimatedHeight: 20, overscan: 0,
+        controller: controller, selection: selection
+      ) { id in Button("\(id)") { actions.append(id) }.sizing(y: .fixed(20)) }
+    }
+    let rect = Rect(x: 0, y: 0, width: 100, height: 40)
+    try scene.update(content(Array(0..<100)), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(selection.selectedID == 50)
+    controller.scrollToRow(50)
+    try scene.update(content(Array(0..<100)), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(context.interaction.selectedLeafID != nil)
+    try scene.dispatch(InputState(commands: [.action(.activate)]))
+    #expect(actions == [50])
+    controller.scrollToTop()
+    try scene.update(content(Array(0..<100)), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(selection.selectedID == 50)
+    #expect(context.interaction.selectedLeafID == nil)
+    try scene.update(content(Array((0..<100).reversed())), context: context)
+    try scene.layout(in: rect)
+    #expect(selection.selectedID == 50)
+    try scene.update(content([1, 2, 3]), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    let registration = context.interaction.logicalSelections.values.first!
+    #expect(registration.selectedKey()?.value as? Int == 1)
+  }
+
+  @Test func insertionAndDeletionRestoreItemAnchorWithoutBuildingHistory() throws {
+    let scene = NodeScene()
+    let context = BlockContext()
+    let controller = ScrollViewController()
+    var built: [Int] = []
+    func content(_ ids: [Int]) -> VariableHeightList {
+      VariableHeightList(
+        snapshot: VirtualListSnapshot(ids: ids), estimatedHeight: 20, overscan: 0, controller: controller
+      ) { id in
+        built.append(id)
+        return Text("\(id)").sizing(y: .fixed(20))
+      }
+    }
+    let rect = Rect(x: 0, y: 0, width: 100, height: 40)
+    try scene.update(content(Array(0..<100)), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    controller.scrollToRow(50)
+    try scene.update(content(Array(0..<100)), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(controller.offset == 1000)
+    try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -5)))
+    try scene.update(content([-1] + Array(0..<100)), context: context)
+    try scene.layout(in: rect)
+    #expect(controller.offset == 1025)
+    #expect(built.suffix(3) == [50, 51, 52])
+    try scene.update(content(Array(0..<50) + Array(51..<100)), context: context)
+    try scene.layout(in: rect)
+    #expect(controller.offset == 1025)
+  }
+
+  @Test func bottomFollowingIsConditionalOnPreviousPosition() throws {
+    let scene = NodeScene()
+    let context = BlockContext()
+    let controller = ScrollViewController()
+    func content(_ count: Int) -> VariableHeightList {
+      VariableHeightList(
+        snapshot: VirtualListSnapshot(ids: 0..<count), estimatedHeight: 20, overscan: 0,
+        controller: controller, sticksToBottom: true
+      ) { id in Text("\(id)").sizing(y: .fixed(20)) }
+    }
+    let rect = Rect(x: 0, y: 0, width: 100, height: 40)
+    try scene.update(content(10), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(controller.offset == 160)
+    try scene.update(content(11), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(controller.offset == 180)
+    try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: 20)))
+    try scene.update(content(12), context: context)
+    try scene.layout(in: rect)
+    #expect(controller.offset == 160)
+  }
+
   @Test func emptyAndShrinkingContentClampScrollBeforePlacement() throws {
     let scene = NodeScene()
     let context = BlockContext()

@@ -63,6 +63,9 @@ final class NodeScene {
     var editorText = ""
     var editorDirty = true
     var visibleRange: Range<Int>?
+    var anchorKey: StructuralKey?
+    var anchorIndex: Int = 0
+    var anchorOffset: Double = 0
     var heightIndex: VariableHeightIndex?
     var measuredWidth: Float?
     var measuredMetrics: FontMetrics?
@@ -319,6 +322,9 @@ final class NodeScene {
       result.measuredMetrics = old.measuredMetrics
       result.measuredTextScale = old.measuredTextScale
     }
+    result.anchorKey = old.anchorKey
+    result.anchorIndex = old.anchorIndex
+    result.anchorOffset = old.anchorOffset
     result.visibleRange = old.visibleRange
     result.offset = old.offset
     if case .editor = old.content, case .editor = new.content { result.editorText = old.editorText }
@@ -558,6 +564,15 @@ final class NodeScene {
         try place(child, in: rowRect)
       }
     case .variableList(let list):
+      let interaction = node.context.interaction
+      let scrollID = node.context.widgetID
+      list.controller?.restore(id: scrollID, interaction: interaction)
+      let previousState = interaction.scrollStates[scrollID]
+      let followsBottom = list.sticksToBottom && previousState.map { abs($0.offset.y - $0.limit.y) <= 1 } == true
+      let previousHeights = node.heightIndex
+      let previousOffset = Double(previousState?.offset.y ?? 0)
+      let previousAnchor = previousHeights?.row(at: previousOffset) ?? node.anchorIndex
+      let previousAnchorOffset = previousHeights.map { previousOffset - $0.position(of: previousAnchor) } ?? node.anchorOffset
       var heights = node.heightIndex ?? VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
       if node.measuredWidth != rect.size.width
         || node.measuredMetrics != node.context.fontMetrics
@@ -565,11 +580,20 @@ final class NodeScene {
       {
         heights = VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
       }
-      let interaction = node.context.interaction
+      if list.count > 0, node.heightIndex == nil || node.measuredWidth != rect.size.width
+        || node.measuredMetrics != node.context.fontMetrics || node.measuredTextScale != node.context.textScale
+      {
+        let restored = node.anchorKey.flatMap { list.index($0) } ?? min(previousAnchor, list.count - 1)
+        interaction.scrollStates[scrollID, default: Interaction.ScrollState()].offset.y =
+          Float(heights.position(of: restored) + previousAnchorOffset)
+      }
+      if let request = list.controller?.request, case .row(let key) = request, let index = list.index(key) {
+        list.controller?.scroll(to: Float(heights.position(of: index)))
+      }
       var offset = Double(interaction.resolveScroll(
         id: node.context.widgetID, viewport: rect,
         contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
-        controller: nil, sticksToBottom: false).y)
+        controller: list.controller, sticksToBottom: list.sticksToBottom).y)
       let anchor = heights.row(at: offset)
       let anchorOffset = offset - heights.position(of: anchor)
       var range = heights.visibleRange(offset: offset, height: Double(rect.size.height), overscan: list.overscan)
@@ -606,6 +630,7 @@ final class NodeScene {
         offset = min(
           heights.position(of: anchor) + anchorOffset,
           max(0, heights.totalHeight - Double(rect.size.height)))
+        if followsBottom { offset = max(0, heights.totalHeight - Double(rect.size.height)) }
         let next = heights.visibleRange(offset: offset, height: Double(rect.size.height), overscan: list.overscan)
         // Only expand during convergence so newly measured short rows cannot cause oscillation.
         let expanded = min(range.lowerBound, next.lowerBound)..<max(range.upperBound, next.upperBound)
@@ -616,7 +641,13 @@ final class NodeScene {
       node.offset = interaction.resolveScroll(
         id: node.context.widgetID, viewport: rect,
         contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
-        controller: nil, sticksToBottom: false).y
+        controller: list.controller, sticksToBottom: false).y
+      node.anchorIndex = heights.row(at: Double(node.offset))
+      node.anchorKey = list.count > 0 ? list.key(node.anchorIndex) : nil
+      node.anchorOffset = Double(node.offset) - heights.position(of: node.anchorIndex)
+      interaction.updateScrollLayout(
+        id: scrollID, layout: Interaction.ScrollLayout(
+          width: rect.size.width, spacing: 0, rows: .indexed(Interaction.IndexedScrollRows(heights: heights, index: list.index))))
       node.heightIndex = heights
       node.measuredWidth = rect.size.width
       node.measuredMetrics = node.context.fontMetrics
@@ -948,9 +979,23 @@ final class NodeScene {
     case .tuple: for child in store.children(of: id)! { prepare(child) }
     case .list, .variableList:
       interaction.registerScrollInput(id: context.widgetID, rect: node.rect)
-      interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: context.widgetID)
+      if case .variableList(let list) = node.content, let selection = list.selection {
+        let heights = node.heightIndex
+        interaction.registerLogicalSelection(
+          scrollID: context.widgetID, selectedKey: selection.selectedKey, select: selection.select,
+          move: selection.move, reveal: { key in
+            guard let index = list.index(key), let heights else { return }
+            interaction.scrollStates[context.widgetID, default: Interaction.ScrollState()].offset.y = Float(heights.position(of: index))
+          })
+      }
+      interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: context.widgetID, navigationID: context.widgetID)
       interaction.pushClip(node.rect)
-      for child in store.children(of: id)! { prepare(child) }
+      for (index, child) in zip(node.visibleRange ?? 0..<0, store.children(of: id)!) {
+        prepare(child)
+        if case .variableList(let list) = node.content {
+          recordRowLeaves(child, scrollID: context.widgetID, key: list.key(index))
+        }
+      }
       interaction.popClip()
       interaction.endGroup()
     case .empty, .spacer: break
@@ -963,6 +1008,16 @@ final class NodeScene {
       for child in store.children(of: id)! { prepare(child) }
       interaction.endGroup()
     }
+  }
+
+  private func recordRowLeaves(_ id: NodeID, scrollID: WidgetID, key: StructuralKey) {
+    let node = store.value(for: id)!
+    let interaction = node.context.interaction
+    interaction.recordScrollRow(id: scrollID, leafID: node.context.widgetID, rowKey: key, rect: node.rect)
+    if case .button(let button) = node.content, let id = button.id {
+      interaction.recordScrollRow(id: scrollID, leafID: id, rowKey: key, rect: node.rect)
+    }
+    for child in store.children(of: id)! { recordRowLeaves(child, scrollID: scrollID, key: key) }
   }
 
   func dispatch(_ input: InputState) throws {

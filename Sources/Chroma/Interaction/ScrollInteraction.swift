@@ -40,11 +40,13 @@ extension Interaction {
     enum Rows: Equatable {
       case uniform(count: Int, height: Float, keys: [StructuralKey]?)
       case variable(VariableScrollRows)
+      case indexed(IndexedScrollRows)
 
       static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.uniform(let a, let h, let k), .uniform(let b, let j, let l)): a == b && h == j && k == l
         case (.variable(let a), .variable(let b)): a === b
+        case (.indexed(let a), .indexed(let b)): a === b
         default: false
         }
       }
@@ -54,13 +56,14 @@ extension Interaction {
     var spacing: Float
     var rows: Rows
 
-    func index(of key: StructuralKey) -> Int? {
+    @MainActor func index(of key: StructuralKey) -> Int? {
       switch rows {
       case .uniform(let count, _, let keys):
         if let keys { return keys.firstIndex(of: key) }
         guard let index = key.value as? Int, index >= 0, index < count else { return nil }
         return index
       case .variable(let rows): return rows.keys.firstIndex(of: key)
+      case .indexed(let rows): return rows.index(key)
       }
     }
 
@@ -68,7 +71,18 @@ extension Interaction {
       switch rows {
       case .uniform(_, let height, _): Float(index) * (height + spacing)
       case .variable(let rows): rows.starts[index]
+      case .indexed(let rows): Float(rows.heights.position(of: index))
       }
+    }
+  }
+
+  final class IndexedScrollRows {
+    let heights: VariableHeightIndex
+    let index: @MainActor (StructuralKey) -> Int?
+
+    init(heights: VariableHeightIndex, index: @escaping @MainActor (StructuralKey) -> Int?) {
+      self.heights = heights
+      self.index = index
     }
   }
 
