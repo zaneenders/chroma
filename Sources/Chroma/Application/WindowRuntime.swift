@@ -4,24 +4,33 @@ import Foundation
 package final class WindowRuntime {
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
     producer = FrameProducer(clock: clock)
+    nodeProducer = NodeFrameProducer(clock: clock)
     scheduler = FrameScheduler(clock: clock)
   }
 
   package let interaction = Interaction()
   package var nodeLifecycleEnabled = false
-  private let nodeProducer = NodeFrameProducer()
+  private let nodeProducer: NodeFrameProducer
+  private var usingNodes = false
   private var nodeViewport: Size?
   private var nodeOnChange: @MainActor @Sendable () -> Void = {}
   package var nodeBuilds: Int { nodeProducer.builds }
   package var nodePaints: Int { nodeProducer.paints }
 
-  private func refreshNodes() -> Bool {
-    guard nodeLifecycleEnabled, let content, let nodeViewport else { return false }
+  private func refreshNodes(forceEditorText: Bool = false) -> Bool {
+    guard nodeLifecycleEnabled, let content, let nodeViewport else {
+      usingNodes = false
+      return false
+    }
     do {
       try nodeProducer.refresh(
-        content: content, viewport: nodeViewport, context: context, onChange: nodeOnChange)
+        content: content, viewport: nodeViewport, context: context, forceEditorText: forceEditorText,
+        onChange: nodeOnChange)
+      usingNodes = true
+      scheduler.animationsActive = nodeProducer.needsAnimationFrame
       return true
     } catch {
+      usingNodes = false
       nodeProducer.reset()
       return false
     }
@@ -35,6 +44,7 @@ package final class WindowRuntime {
 
   package var content: (any Block)? {
     didSet {
+      usingNodes = false
       nodeProducer.clear()
       producer.reset()
       interaction.resetRegistrations()
@@ -49,7 +59,7 @@ package final class WindowRuntime {
     guard needsAnimationFrame, let lastFrameTime = scheduler.lastFrameTime else { return nil }
     return lastFrameTime + 1 / scheduler.minimumRefreshRate
   }
-  package var needsAnimationFrame: Bool { producer.needsAnimationFrame }
+  package var needsAnimationFrame: Bool { usingNodes ? nodeProducer.needsAnimationFrame : producer.needsAnimationFrame }
   package var context: BlockContext { BlockContext(interaction: interaction) }
 
   package func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
@@ -64,6 +74,7 @@ package final class WindowRuntime {
     inputTask = nil
     inputActions = []
     pendingInputs = []
+    usingNodes = false
     nodeProducer.clear()
     producer.reset()
     interaction.resetRegistrations()
@@ -99,6 +110,7 @@ package final class WindowRuntime {
     } else {
       processInput(input)
     }
+    scheduler.animationsActive = needsAnimationFrame
     scheduler.requestContent()
   }
 
@@ -121,17 +133,19 @@ package final class WindowRuntime {
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     flushInput()
-    if kind == .animation && !scheduler.hasContentRequest { return renderAnimations() }
+    if kind == .animation && !scheduler.hasContentRequest && (!usingNodes || nodeViewport == viewport) {
+      return renderAnimations()
+    }
     _ = interaction.consumeRedrawRequest()
     nodeViewport = viewport
     nodeOnChange = onChange
-    if refreshNodes() {
+    if refreshNodes(forceEditorText: true) {
       let inputs = pendingInputs
       pendingInputs.removeAll(keepingCapacity: true)
       for input in inputs { handleInput(input) }
       _ = refreshNodes()
       scheduler.consumeContentRequest()
-      return nodeProducer.paint()
+      return paintNodes()
     }
     if !pendingInputs.isEmpty {
       _ = render(viewport: viewport, input: InputState(), onChange: onChange)
@@ -156,12 +170,12 @@ package final class WindowRuntime {
   ) -> DrawList {
     nodeViewport = viewport
     nodeOnChange = onChange
-    if refreshNodes() {
+    if refreshNodes(forceEditorText: true) {
       if processingInput {
         handleInput(input)
         _ = refreshNodes()
       }
-      return nodeProducer.paint()
+      return paintNodes()
     }
     let list = producer.render(
       content: content, viewport: viewport, input: input, context: context,
@@ -170,8 +184,16 @@ package final class WindowRuntime {
     return list
   }
 
+  private func paintNodes() -> DrawList {
+    let list = nodeProducer.paint()
+    scheduler.animationsActive = nodeProducer.needsAnimationFrame
+    return list
+  }
+
   package func renderAnimations() -> DrawList {
-    producer.renderAnimations()
+    let list = usingNodes ? nodeProducer.renderAnimations() : producer.renderAnimations()
+    scheduler.animationsActive = needsAnimationFrame
+    return list
   }
 
   package func observe(_ list: DrawList, viewport: Size, rasterScale: Point? = nil) {

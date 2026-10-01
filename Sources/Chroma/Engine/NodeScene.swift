@@ -9,6 +9,7 @@ final class NodeScene {
   private enum Content {
     case text(Text)
     case button(Button)
+    case editor(TextEditor)
     case color(Color)
     case spacer
     case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
@@ -31,6 +32,7 @@ final class NodeScene {
   private enum LayoutContent: Equatable {
     case text(String, Float, Bool)
     case button(String, Float, EdgeInsets)
+    case editor(Float, ClosedRange<Int>, Bool, Float)
     case stack(StackLayout.Axis, Float, Bool, Bool)
     case overlay, tuple, scope, boundary, empty, color, spacer
     case list(Int, Float, Int)
@@ -54,6 +56,10 @@ final class NodeScene {
     var lines: [String] = []
     var lineMetrics: FontMetrics?
     var measurements: [Measurement] = []
+    var textLayouts: [(columns: Int?, layout: TextLayout)] = []
+    var editorLayout: TextEditorLayout?
+    var editorText = ""
+    var editorDirty = true
     var visibleRange: Range<Int>?
     var offset: Float = 0
     var rowsDirty = true
@@ -63,6 +69,7 @@ final class NodeScene {
       switch content {
       case .text(let text): .text(text.content, text.scale, text.wraps)
       case .button(let button): .button(button.label, button.fontScale, button.padding)
+      case .editor(let editor): .editor(editor.fontScale, editor.lineLimits, editor.singleLine, editor.padding)
       case .stack(let axis, let spacing, let reversed, let bottom): .stack(axis, spacing, reversed, bottom)
       case .overlay: .overlay
       case .tuple: .tuple
@@ -98,6 +105,7 @@ final class NodeScene {
     var children: [Description] = []
   }
 
+  private(set) var textLayoutBuilds = 0
   private(set) var measurements = 0
   private(set) var layouts = 0
   private(set) var preparations = 0
@@ -121,18 +129,25 @@ final class NodeScene {
     var isPanel: Bool
   }
 
+  private var editorSubscriptions: [NodeID: FrameTrackingSubscription] = [:]
+  var editorTextIsValid: Bool { editorSubscriptions.values.allSatisfy(\.isActive) }
   private var boundaries: [BoundaryID: Boundary] = [:]
   var boundariesAreValid: Bool { boundaries.values.allSatisfy { $0.subscription.isActive } }
   var onChange: @MainActor @Sendable () -> Void = {}
   private(set) var boundaryBuilds = 0
 
   func resetTracking() {
+    for subscription in editorSubscriptions.values { subscription.cancel() }
+    editorSubscriptions = [:]
     for boundary in boundaries.values { boundary.subscription.cancel() }
     boundaries = [:]
     onChange = {}
   }
 
-  deinit { for boundary in boundaries.values { boundary.subscription.cancel() } }
+  deinit {
+    for subscription in editorSubscriptions.values { subscription.cancel() }
+    for boundary in boundaries.values { boundary.subscription.cancel() }
+  }
 
   private var store = NodeStore<Node>()
   private var root: NodeID?
@@ -199,6 +214,11 @@ final class NodeScene {
         node: Node(content: .scope(scope), context: context),
         children: [try lower(scope.content, context: context)])
     }
+    if let target = block as? FocusTargetBlock {
+      var context = context
+      context.focusTargets.append(target.target)
+      return try lower(target.content, context: context)
+    }
     let context = context.scoped([.component(ObjectIdentifier(type(of: block)))])
     if let list = block as? FixedHeightList {
       return Description(node: Node(content: .list(list), context: context))
@@ -206,6 +226,9 @@ final class NodeScene {
     if let text = block as? Text {
       guard !text.isSelectable else { throw BuildError.unsupportedBlock }
       return Description(node: Node(content: .text(text), context: context))
+    }
+    if let editor = block as? TextEditor {
+      return Description(node: Node(content: .editor(editor), context: context))
     }
     if let button = block as? Button {
       return Description(node: Node(content: .button(button), context: context))
@@ -273,9 +296,12 @@ final class NodeScene {
       result.lines = old.lines
       result.lineMetrics = old.lineMetrics
       result.measurements = old.measurements
+      result.textLayouts = old.textLayouts
+      result.editorLayout = old.editorLayout
     }
     result.visibleRange = old.visibleRange
     result.offset = old.offset
+    if case .editor = old.content, case .editor = new.content { result.editorText = old.editorText }
     return result
   }
 
@@ -315,6 +341,7 @@ final class NodeScene {
   func layout(in rect: Rect) throws -> Size {
     guard let root else { return .zero }
     try installPanels(root)
+    refreshEditorText()
     let metrics = store.value(for: root)!.context.fontMetrics
     let needsPlacement = layoutDirty || layoutRect != rect || layoutMetrics != metrics
     let size = measure(root, proposal: rect.size)
@@ -364,6 +391,11 @@ final class NodeScene {
     switch node.content {
     case .text(let text): return text.sizeThatFits(proposal, context: node.context)
     case .button(let button): return button.sizeThatFits(proposal, context: node.context)
+    case .editor(let editor):
+      return editor.sizeThatFits(
+        proposal, context: node.context,
+        layout: editorTextLayout(
+          id, editor: editor, text: node.editorText, width: proposal.width, context: node.context))
     case .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
     case .list, .color, .spacer: return proposal
     case .empty: return .zero
@@ -382,6 +414,27 @@ final class NodeScene {
     }
   }
 
+  private func editorTextLayout(
+    _ id: NodeID, editor: TextEditor, text: String, width: Float, context: BlockContext
+  ) -> TextLayout {
+    let columns = editor.columns(width: width, context: context)
+    if let layout = store.withValue(
+      for: id,
+      { node in
+        node.textLayouts.first { $0.columns == columns && $0.layout.text == text }?.layout
+      })
+    {
+      return layout
+    }
+    let layout = TextLayout(text, columns: columns)
+    textLayoutBuilds += 1
+    store.modify(id) {
+      $0.textLayouts.append((columns, layout))
+      if $0.textLayouts.count > 2 { $0.textLayouts.removeFirst() }
+    }
+    return layout
+  }
+
   private func expands(_ id: NodeID, axis: StackLayout.Axis) -> Bool {
     let node = store.value(for: id)!
     for decoration in node.decorations {
@@ -389,6 +442,7 @@ final class NodeScene {
     }
     switch node.content {
     case .color, .spacer, .list: return true
+    case .editor: return axis == .horizontal
     case .stack, .overlay, .tuple: return store.children(of: id)!.contains { expands($0, axis: axis) }
     case .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
     default: return false
@@ -441,6 +495,11 @@ final class NodeScene {
         node.lines = TextLayout(text.content, columns: columns).lines.map(\.text)
         node.lineMetrics = node.context.fontMetrics
       }
+    case .editor(let editor):
+      let layout = editorTextLayout(
+        id, editor: editor, text: node.editorText, width: rect.size.width, context: node.context)
+      node.editorLayout = TextEditorLayout(editor: editor, layout: layout, rect: rect, context: node.context)
+      node.textLayouts = store.value(for: id)!.textLayouts
     case .scope, .boundary: try place(store.children(of: id)![0], in: rect)
     case .list(let list):
       let offset = node.context.interaction.resolveScroll(
@@ -474,6 +533,7 @@ final class NodeScene {
           x: rect.minX, y: rect.minY + Float(index) * list.rowHeight - offset,
           width: rect.size.width, height: list.rowHeight)
         try installPanels(child)
+        _ = refreshEditorText(child)
         _ = measure(child, proposal: rowRect.size)
         try place(child, in: rowRect)
       }
@@ -544,6 +604,46 @@ final class NodeScene {
     return changed
   }
 
+  @discardableResult
+  func refreshEditorText(force: Bool = false) -> Bool {
+    guard let root else { return false }
+    return refreshEditorText(root, force: force)
+  }
+
+  private func refreshEditorText(_ id: NodeID, force: Bool = false) -> Bool {
+    let node = store.value(for: id)!
+    var changed = false
+    if case .editor(let editor) = node.content,
+      force || node.editorDirty || editorSubscriptions[id]?.isActive != true
+    {
+      editorSubscriptions[id]?.cancel()
+      let subscription = FrameTrackingSubscription(onChange)
+      editorSubscriptions[id] = subscription
+      let text = withObservationTracking(options: .didSet) {
+        subscription.trackCancellation()
+        return editor.getText()
+      } onChange: { [weak subscription] event in
+        event.cancel()
+        if let callback = subscription?.takeCallback() { ObservationDelivery.enqueue(callback) }
+      }
+      store.modify(id) { $0.editorDirty = false }
+      if text != node.editorText {
+        store.modify(id) {
+          $0.editorText = text
+          $0.textLayouts = []
+        }
+        invalidateMeasurements(from: id)
+        layoutDirty = true
+        prepared = false
+        changed = true
+      }
+    }
+    for child in store.children(of: id)! {
+      if refreshEditorText(child, force: force) { changed = true }
+    }
+    return changed
+  }
+
   func refreshBoundaries() throws {
     let stale = boundaries.keys.filter { boundaries[$0]?.subscription.isActive == false }.sorted {
       let left = depth($0.node)
@@ -609,6 +709,11 @@ final class NodeScene {
   }
 
   private func releaseRemovedBoundaries() {
+    for id in editorSubscriptions.keys {
+      let valid =
+        store.contains(id) && store.withValue(for: id) { if case .editor = $0.content { true } else { false } }
+      if !valid { editorSubscriptions.removeValue(forKey: id)?.cancel() }
+    }
     for key in boundaries.keys {
       let valid =
         store.contains(key.node)
@@ -683,6 +788,9 @@ final class NodeScene {
         textBounds(
           button.label.split(separator: "\n", omittingEmptySubsequences: false).map(String.init),
           in: textRect, scale: button.fontScale * node.context.textScale, metrics: node.context.fontMetrics))
+    case .editor(let editor):
+      bounds = expanded(node.rect, by: max(2, (editor.style ?? node.context.theme.textEditor).borderWidth))
+      if let layout = node.editorLayout { bounds = union(bounds, expanded(layout.inner, by: 0)) }
     case .color: bounds = expanded(node.rect, by: 2)
     case .empty, .spacer: break
     case .list, .stack, .overlay, .tuple, .scope, .boundary:
@@ -735,6 +843,9 @@ final class NodeScene {
       if !context.focusLeafClaimed && !context.navigationIgnored {
         _ = context.buttonState(id: context.widgetID, in: node.rect)
       }
+    case .editor(let editor):
+      let text = node.editorText
+      node.editorLayout?.prepare(editor: editor, context: context, text: { text })
     case .button(let button):
       _ = context.buttonState(
         id: button.id ?? context.widgetID, in: node.rect, role: button.role, action: button.action)
@@ -761,7 +872,10 @@ final class NodeScene {
   }
 
   func dispatch(_ input: InputState) throws {
+    if refreshEditorText(force: true), let layoutRect { try layout(in: layoutRect) }
+    prepareIfNeeded()
     processInput(input)
+    if refreshEditorText(force: true), let layoutRect { try layout(in: layoutRect) }
     try refreshScroll()
     prepareIfNeeded()
   }
@@ -771,6 +885,9 @@ final class NodeScene {
     guard let root, let node = store.value(for: root) else { return }
     node.context.interaction.processInput(input)
     node.context.interaction.finishInput()
+    node.context.interaction.caretClock.setActive(
+      node.context.interaction.isTextEditing && node.context.interaction.textSelectionRange == nil,
+      timestamp: node.context.interaction.animationFrame.timestamp)
   }
 
   func refreshScroll() throws {
@@ -779,8 +896,18 @@ final class NodeScene {
     try place(root, in: layoutRect!)
   }
 
+  var hasPendingFocus: Bool {
+    guard let root else { return false }
+    return hasPendingFocus(root)
+  }
+
+  private func hasPendingFocus(_ id: NodeID) -> Bool {
+    store.withValue(for: id) { $0.context.focusTargets.contains { $0.pendingEditing != nil } }
+      || store.children(of: id)!.contains { hasPendingFocus($0) }
+  }
+
   func prepareIfNeeded(viewport: Size? = nil) {
-    guard !prepared, let root, let node = store.value(for: root) else { return }
+    guard !prepared || hasPendingFocus, let root, let node = store.value(for: root) else { return }
     prepare(viewport: viewport ?? node.context.interaction.viewport.size)
   }
 
@@ -865,6 +992,8 @@ final class NodeScene {
     case .color(let color):
       list.fillRect(node.rect, color: color)
       paintHighlight(node, into: &list)
+    case .editor(let editor):
+      node.editorLayout?.paint(editor: editor, context: context, into: &list)
     case .button(let button):
       let interaction = context.interaction
       let id = button.id ?? context.widgetID
