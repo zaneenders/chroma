@@ -383,7 +383,7 @@ Allocation profiling is **deferred**, not satisfied by sampling. The failed `xct
 
 #### Phase 2 — Prove the new lifecycle in one vertical slice
 
-- [ ] Add a minimal single-owner node store with `NodeID(index, generation)`, stable slots, and reuse checks. Test stale handles and keyed row reordering.
+- [x] Add a minimal single-owner node store with `NodeID(index, generation)`, stable slots, and reuse checks. Test stale handles and keyed row reordering.
 - [ ] Lower stacks, text, buttons, and a fixed-height virtual list into nodes; keep the existing `DrawList` output.
 - [ ] Separate build/update, layout, interaction preparation, and paint. Replace registration-through-draw for these primitives.
 - [ ] Retain a valid interaction snapshot and refresh stale callbacks/geometry without painting. Test content replacement, removed controls, resize, and a modal opening between events.
