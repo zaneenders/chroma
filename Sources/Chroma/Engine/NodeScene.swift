@@ -7,6 +7,8 @@ final class NodeScene {
   private enum Content {
     case text(Text)
     case button(Button)
+    case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
+    case empty
   }
 
   private struct Node {
@@ -14,6 +16,12 @@ final class NodeScene {
     var context: BlockContext
     var rect: Rect = .zero
     var lines: [String] = []
+    var measured: Size = .zero
+  }
+
+  private struct Description {
+    var node: Node
+    var children: [Description] = []
   }
 
   private var store = NodeStore<Node>()
@@ -22,52 +30,126 @@ final class NodeScene {
   private var prepared = false
 
   func update(_ block: any Block, context: BlockContext) throws {
-    let node = try lower(block, context: context)
+    let description = try lower(block, context: context)
+    let node = description.node
     if let root {
       store.update(root, value: node)
     } else {
       root = store.insert(node)
     }
+    reconcile(description.children, of: root!)
     laidOut = false
     prepared = false
   }
 
-  private func lower(_ block: any Block, context: BlockContext) throws -> Node {
+  private func lower(_ block: any Block, context: BlockContext) throws -> Description {
     if let scoped = block as? ScopedBlock {
       return try lower(scoped.content, context: context.scoped(scoped.path))
     }
     let context = context.scoped([.component(ObjectIdentifier(type(of: block)))])
     if let text = block as? Text {
       guard !text.isSelectable else { throw BuildError.unsupportedBlock }
-      return Node(content: .text(text), context: context)
+      return Description(node: Node(content: .text(text), context: context))
     }
     if let button = block as? Button {
-      return Node(content: .button(button), context: context)
+      return Description(node: Node(content: .button(button), context: context))
+    }
+    if block is EmptyBlock {
+      return Description(node: Node(content: .empty, context: context))
+    }
+    if let stack = block as? VStack {
+      return try lowerStack(
+        stack.scopedChildren, axis: .vertical, spacing: stack.spacing,
+        reversed: stack.isLayoutReversed, bottomAligned: false, context: context)
+    }
+    if let stack = block as? HStack {
+      return try lowerStack(
+        stack.scopedChildren, axis: .horizontal, spacing: stack.spacing,
+        reversed: stack.isLayoutReversed, bottomAligned: stack.alignment == .bottom, context: context)
     }
     guard !(block is any PrimitiveBlock) else { throw BuildError.unsupportedBlock }
     return try lower(block.body, context: context)
   }
 
+  private func lowerStack(
+    _ children: [any Block], axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool,
+    context: BlockContext
+  ) throws -> Description {
+    let children = try children.enumerated().map { index, child in
+      try lower(child, context: context.childContext(for: child, at: index))
+    }
+    return Description(
+      node: Node(
+        content: .stack(axis: axis, spacing: spacing, reversed: reversed, bottomAligned: bottomAligned),
+        context: context),
+      children: children)
+  }
+
+  private func reconcile(_ descriptions: [Description], of parent: NodeID) {
+    let children = store.reconcileChildren(
+      of: parent, with: descriptions.map { (StructuralKey($0.node.context.structuralPath), $0.node) })!
+    for (id, description) in zip(children, descriptions) {
+      reconcile(description.children, of: id)
+    }
+  }
+
   @discardableResult
   func layout(in rect: Rect) -> Size {
-    guard let root, var node = store.value(for: root) else { return .zero }
-    node.rect = rect
-    let size: Size
+    guard let root else { return .zero }
+    let size = measure(root, proposal: rect.size)
+    place(root, in: rect)
+    laidOut = true
+    prepared = false
+    return size
+  }
+
+  private func measure(_ id: NodeID, proposal: Size) -> Size {
+    var node = store.value(for: id)!
     switch node.content {
     case .text(let text):
-      size = text.sizeThatFits(rect.size, context: node.context)
+      node.measured = text.sizeThatFits(proposal, context: node.context)
+    case .button(let button):
+      node.measured = button.sizeThatFits(proposal, context: node.context)
+    case .empty: node.measured = .zero
+    case .stack(let axis, let spacing, _, _):
+      let sizes = store.children(of: id)!.map { measure($0, proposal: proposal) }
+      node.measured = .zero
+      node.measured[keyPath: axis.main] =
+        sizes.reduce(0) { $0 + $1[keyPath: axis.main] }
+        + spacing * Float(max(0, sizes.count - 1))
+      node.measured[keyPath: axis.cross] = sizes.map { $0[keyPath: axis.cross] }.max() ?? 0
+    }
+    store.update(id, value: node)
+    return node.measured
+  }
+
+  private func place(_ id: NodeID, in rect: Rect) {
+    var node = store.value(for: id)!
+    node.rect = rect
+    switch node.content {
+    case .text(let text):
       let cell = node.context.fontMetrics.cellAdvance * text.scale * node.context.textScale
       let columns =
         text.wraps && rect.size.width.isFinite && cell.isFinite && cell > 0
         ? Int(min(Float(Int32.max), max(1, rect.size.width / cell))) : nil
       node.lines = TextLayout(text.content, columns: columns).lines.map(\.text)
-    case .button(let button):
-      size = button.sizeThatFits(rect.size, context: node.context)
+    case .button, .empty: break
+    case .stack(let axis, let spacing, let reversed, let bottomAligned):
+      var cursor = axis == .horizontal ? rect.minX : rect.minY
+      if reversed { cursor += rect.size[keyPath: axis.main] }
+      for child in store.children(of: id)! {
+        let size = store.value(for: child)!.measured
+        let extent = size[keyPath: axis.main]
+        if reversed { cursor -= extent }
+        let origin =
+          axis == .horizontal
+          ? Point(x: cursor, y: bottomAligned ? rect.maxY - size.height : rect.minY)
+          : Point(x: rect.minX, y: cursor)
+        place(child, in: Rect(origin: origin, size: size))
+        cursor += reversed ? -spacing : extent + spacing
+      }
     }
-    store.update(root, value: node)
-    laidOut = true
-    prepared = false
-    return size
+    store.update(id, value: node)
   }
 
   func prepare(viewport: Size) {
@@ -76,6 +158,13 @@ final class NodeScene {
     let interaction = node.context.interaction
     interaction.viewport = Rect(origin: .zero, size: viewport)
     interaction.beginFrame(input: interaction.input, processingInput: false)
+    prepare(root)
+    interaction.endFrame()
+    prepared = true
+  }
+
+  private func prepare(_ id: NodeID) {
+    let node = store.value(for: id)!
     switch node.content {
     case .text:
       if !node.context.focusLeafClaimed && !node.context.navigationIgnored {
@@ -84,9 +173,13 @@ final class NodeScene {
     case .button(let button):
       _ = node.context.buttonState(
         id: button.id ?? node.context.widgetID, in: node.rect, role: button.role, action: button.action)
+    case .empty: break
+    case .stack(let axis, _, _, _):
+      node.context.interaction.beginGroup(
+        rect: node.rect, axis: axis == .horizontal ? .horizontal : .vertical)
+      for child in store.children(of: id)! { prepare(child) }
+      node.context.interaction.endGroup()
     }
-    interaction.endFrame()
-    prepared = true
   }
 
   func dispatch(_ input: InputState) {
@@ -99,7 +192,12 @@ final class NodeScene {
   func paint() -> DrawList {
     precondition(prepared, "Interaction preparation must precede paint")
     var list = DrawList()
-    guard let root, let node = store.value(for: root) else { return list }
+    if let root { paint(root, into: &list) }
+    return list
+  }
+
+  private func paint(_ id: NodeID, into list: inout DrawList) {
+    let node = store.value(for: id)!
     switch node.content {
     case .text(let text):
       let scale = text.scale * node.context.textScale
@@ -124,7 +222,9 @@ final class NodeScene {
         state: ButtonState(
           hovered: state.hovered == id, focused: state.selected == id,
           held: state.pressed == id && interaction.input.pointerDown, clicked: false))
+    case .empty: break
+    case .stack:
+      for child in store.children(of: id)! { paint(child, into: &list) }
     }
-    return list
   }
 }

@@ -104,6 +104,81 @@ struct NodeSceneTests {
     #expect(scene.paint().commands == before)
   }
 
+  @Test func nestedAndReversedStacksMatchLegacyMeasurementPaintAndFocusGeometry() throws {
+    for reversed in [false, true] {
+      let context = BlockContext()
+      var stack = VStack(spacing: 3) {
+        HStack(spacing: 5, alignment: .bottom) {
+          Text("Short")
+          Button("Tall") {}
+        }
+        Text("Second")
+        EmptyBlock()
+      }
+      if reversed { stack = stack.reverseLayout() }
+      let scene = NodeScene()
+      try scene.update(stack, context: context)
+      let measured = scene.layout(in: rect)
+      #expect(measured == BlockEngine.measure(stack, proposal: rect.size, context: context))
+      scene.prepare(viewport: rect.size)
+      let result = scene.paint()
+      let tree = try #require(context.interaction.tree)
+      let firstRow = tree.children[0].children[0]
+      let short = firstRow.children[0]
+      let tall = firstRow.children[1]
+      #expect(short.rect.maxY == tall.rect.maxY)
+      context.interaction.beginFrame(input: context.interaction.input, processingInput: false)
+      var legacy = DrawList()
+      BlockEngine.draw(stack, into: &legacy, in: rect, context: context)
+      context.interaction.endFrame()
+      #expect(result.commands == legacy.commands)
+    }
+  }
+
+  @Test func keyedStackReorderingPreservesFocusedControlAndRefreshesActions() throws {
+    let context = BlockContext()
+    let scene = NodeScene()
+    var actions: [String] = []
+    func content(_ ids: [Int], revision: String) -> VStack {
+      VStack(spacing: 2) {
+        ForEach(ids, id: \.self) { id in
+          Button("Row \(id)") { actions.append("\(revision)-\(id)") }
+        }
+      }
+    }
+    try scene.update(content([1, 2], revision: "old"), context: context)
+    scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    let point = Point(x: 10, y: 10)
+    scene.dispatch(InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
+    scene.dispatch(InputState(pointerPosition: point, pointerReleased: true))
+    let selected = context.interaction.selectedLeafID
+    try scene.update(content([2, 1], revision: "new"), context: context)
+    scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    #expect(context.interaction.selectedLeafID == selected)
+    scene.dispatch(InputState(commands: [.action(.activate)]))
+    #expect(actions == ["old-1", "new-1"])
+  }
+
+  @Test func unsupportedNestedChildLeavesCommittedSceneUnchanged() throws {
+    let scene = NodeScene()
+    let context = BlockContext()
+    try scene.update(VStack { Text("Retained") }, context: context)
+    scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    let before = scene.paint().commands
+    do {
+      try scene.update(
+        VStack {
+          Text("New")
+          Text("Unsupported").selectable()
+        }, context: context)
+      Issue.record("Unsupported nested content must fail atomically")
+    } catch NodeScene.BuildError.unsupportedBlock {}
+    #expect(scene.paint().commands == before)
+  }
+
   @Test func wrappedTextPaintUsesRetainedLines() throws {
     let context = BlockContext()
     let text = Text("one two three").wrapping()
