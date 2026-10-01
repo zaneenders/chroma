@@ -19,6 +19,7 @@ final class NodeScene {
     case boundary(UpdateBoundary)
     case empty
     case list(FixedHeightList)
+    case variableList(VariableHeightList)
   }
 
   private enum Decoration {
@@ -36,6 +37,7 @@ final class NodeScene {
     case stack(StackLayout.Axis, Float, Bool, Bool)
     case overlay, tuple, scope, boundary, empty, color, spacer
     case list(Int, Float, Int)
+    case variableList(Int, Float, Int)
   }
 
   private struct Measurement {
@@ -61,6 +63,10 @@ final class NodeScene {
     var editorText = ""
     var editorDirty = true
     var visibleRange: Range<Int>?
+    var heightIndex: VariableHeightIndex?
+    var measuredWidth: Float?
+    var measuredMetrics: FontMetrics?
+    var measuredTextScale: Float?
     var offset: Float = 0
     var rowsDirty = true
     var panelDirty = true
@@ -79,6 +85,7 @@ final class NodeScene {
       case .color: .color
       case .spacer: .spacer
       case .list(let list): .list(list.count, list.rowHeight, list.overscan)
+      case .variableList(let list): .variableList(list.count, list.estimatedHeight, list.overscan)
       }
     }
 
@@ -220,6 +227,9 @@ final class NodeScene {
       return try lower(target.content, context: context)
     }
     let context = context.scoped([.component(ObjectIdentifier(type(of: block)))])
+    if let list = block as? VariableHeightList {
+      return Description(node: Node(content: .variableList(list), context: context))
+    }
     if let list = block as? FixedHeightList {
       return Description(node: Node(content: .list(list), context: context))
     }
@@ -299,6 +309,16 @@ final class NodeScene {
       result.textLayouts = old.textLayouts
       result.editorLayout = old.editorLayout
     }
+    if case .variableList(let previous) = old.content,
+      case .variableList(let current) = new.content,
+      previous.snapshotIdentity == current.snapshotIdentity,
+      previous.estimatedHeight == current.estimatedHeight
+    {
+      result.heightIndex = old.heightIndex
+      result.measuredWidth = old.measuredWidth
+      result.measuredMetrics = old.measuredMetrics
+      result.measuredTextScale = old.measuredTextScale
+    }
     result.visibleRange = old.visibleRange
     result.offset = old.offset
     if case .editor = old.content, case .editor = new.content { result.editorText = old.editorText }
@@ -309,7 +329,7 @@ final class NodeScene {
   private func reconcile(_ descriptions: [Description], of parent: NodeID, updatingRows: Bool = false) -> Bool {
     if !updatingRows {
       switch store.value(for: parent)!.content {
-      case .list, .boundary:
+      case .list, .variableList, .boundary:
         layoutDirty = true
         return false
       default: break
@@ -397,7 +417,7 @@ final class NodeScene {
         layout: editorTextLayout(
           id, editor: editor, text: node.editorText, width: proposal.width, context: node.context))
     case .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
-    case .list, .color, .spacer: return proposal
+    case .list, .variableList, .color, .spacer: return proposal
     case .empty: return .zero
     case .overlay, .tuple:
       return store.children(of: id)!.reduce(Size.zero) {
@@ -441,7 +461,7 @@ final class NodeScene {
       if case .layout(.sizing(let x, let y)) = decoration { return (axis == .horizontal ? x : y) == .grow }
     }
     switch node.content {
-    case .color, .spacer, .list: return true
+    case .color, .spacer, .list, .variableList: return true
     case .editor: return axis == .horizontal
     case .stack, .overlay, .tuple: return store.children(of: id)!.contains { expands($0, axis: axis) }
     case .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
@@ -536,6 +556,77 @@ final class NodeScene {
         _ = refreshEditorText(child)
         _ = measure(child, proposal: rowRect.size)
         try place(child, in: rowRect)
+      }
+    case .variableList(let list):
+      var heights = node.heightIndex ?? VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
+      if node.measuredWidth != rect.size.width
+        || node.measuredMetrics != node.context.fontMetrics
+        || node.measuredTextScale != node.context.textScale
+      {
+        heights = VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
+      }
+      let interaction = node.context.interaction
+      var offset = Double(interaction.resolveScroll(
+        id: node.context.widgetID, viewport: rect,
+        contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
+        controller: nil, sticksToBottom: false).y)
+      let anchor = heights.row(at: offset)
+      let anchorOffset = offset - heights.position(of: anchor)
+      var range = heights.visibleRange(offset: offset, height: Double(rect.size.height), overscan: list.overscan)
+      var builtRange = node.visibleRange
+      var dirty = node.rowsDirty
+      while true {
+        if range != builtRange || dirty {
+          var tracked: [TrackedDescription] = []
+          var committed = false
+          defer { if !committed { for row in tracked { row.subscription.cancel() } } }
+          for index in range {
+            tracked.append(try track({ list.row(index) }, context: node.context.scoped([.key(list.key(index))])))
+          }
+          reconcile(tracked.map(\.description), of: id, updatingRows: true)
+          for ((index, child), row) in zip(zip(range, store.children(of: id)!), tracked) {
+            let boundary = BoundaryID(node: child, isPanel: false)
+            boundaries[boundary]?.subscription.cancel()
+            boundaries[boundary] = Boundary(
+              content: { list.row(index) }, context: node.context.scoped([.key(list.key(index))]),
+              subscription: row.subscription)
+          }
+          releaseRemovedBoundaries()
+          committed = true
+          builtRange = range
+          dirty = false
+        }
+        for (index, child) in zip(range, store.children(of: id)!) {
+          try installPanels(child)
+          _ = refreshEditorText(child)
+          let size = measure(child, proposal: Size(width: rect.size.width, height: .infinity))
+          precondition(size.height.isFinite)
+          heights.measure(index, height: Double(max(1, size.height)))
+        }
+        offset = min(
+          heights.position(of: anchor) + anchorOffset,
+          max(0, heights.totalHeight - Double(rect.size.height)))
+        let next = heights.visibleRange(offset: offset, height: Double(rect.size.height), overscan: list.overscan)
+        // Only expand during convergence so newly measured short rows cannot cause oscillation.
+        let expanded = min(range.lowerBound, next.lowerBound)..<max(range.upperBound, next.upperBound)
+        if expanded == range { break }
+        range = expanded
+      }
+      interaction.scrollStates[node.context.widgetID, default: Interaction.ScrollState()].offset.y = Float(offset)
+      node.offset = interaction.resolveScroll(
+        id: node.context.widgetID, viewport: rect,
+        contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
+        controller: nil, sticksToBottom: false).y
+      node.heightIndex = heights
+      node.measuredWidth = rect.size.width
+      node.measuredMetrics = node.context.fontMetrics
+      node.measuredTextScale = node.context.textScale
+      node.visibleRange = range
+      node.rowsDirty = false
+      for (index, child) in zip(range, store.children(of: id)!) {
+        try place(child, in: Rect(
+          x: rect.minX, y: rect.minY + Float(heights.position(of: index)) - node.offset,
+          width: rect.size.width, height: Float(heights.height(at: index))))
       }
     case .tuple:
       for child in store.children(of: id)! { try place(child, in: rect) }
@@ -793,9 +884,12 @@ final class NodeScene {
       if let layout = node.editorLayout { bounds = union(bounds, expanded(layout.inner, by: 0)) }
     case .color: bounds = expanded(node.rect, by: 2)
     case .empty, .spacer: break
-    case .list, .stack, .overlay, .tuple, .scope, .boundary:
+    case .list, .variableList, .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { bounds = union(bounds, store.value(for: child)!.visualBounds) }
-      if case .list = node.content { bounds = bounds?.intersection(node.rect) ?? node.rect }
+      switch node.content {
+      case .list, .variableList: bounds = bounds?.intersection(node.rect) ?? node.rect
+      default: break
+      }
     }
     for (decoration, rect) in zip(node.decorations, node.decorationRects).reversed() {
       switch decoration {
@@ -852,7 +946,7 @@ final class NodeScene {
     case .scope(let scope): scope.prepare(in: node.rect, context: context) { prepare(store.children(of: id)![0]) }
     case .boundary: prepare(store.children(of: id)![0])
     case .tuple: for child in store.children(of: id)! { prepare(child) }
-    case .list:
+    case .list, .variableList:
       interaction.registerScrollInput(id: context.widgetID, rect: node.rect)
       interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: context.widgetID)
       interaction.pushClip(node.rect)
@@ -913,10 +1007,10 @@ final class NodeScene {
 
   private func scrollChanged(_ id: NodeID) -> Bool {
     let node = store.value(for: id)!
-    if case .list = node.content,
-      node.context.interaction.scrollStates[node.context.widgetID]?.offset.y != node.offset
-    {
-      return true
+    switch node.content {
+    case .list, .variableList:
+      if node.context.interaction.scrollStates[node.context.widgetID]?.offset.y != node.offset { return true }
+    default: break
     }
     return store.children(of: id)!.contains { scrollChanged($0) }
   }
@@ -1003,7 +1097,7 @@ final class NodeScene {
         state: ButtonState(
           hovered: state.hovered == id, focused: state.selected == id,
           held: state.pressed == id && interaction.input.pointerDown, clicked: false))
-    case .list:
+    case .list, .variableList:
       list.pushClip(node.rect)
       let clip = clip.intersection(node.rect) ?? .zero
       for child in store.children(of: id)! { paint(child, into: &list, clip: clip, cullingEnabled: cullingEnabled) }
