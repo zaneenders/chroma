@@ -9,6 +9,7 @@ final class NodeScene {
     case button(Button)
     case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
     case empty
+    case list(FixedHeightList)
   }
 
   private struct Node {
@@ -17,6 +18,8 @@ final class NodeScene {
     var rect: Rect = .zero
     var lines: [String] = []
     var measured: Size = .zero
+    var visibleRange: Range<Int>?
+    var offset: Float = 0
   }
 
   private struct Description {
@@ -47,6 +50,9 @@ final class NodeScene {
       return try lower(scoped.content, context: context.scoped(scoped.path))
     }
     let context = context.scoped([.component(ObjectIdentifier(type(of: block)))])
+    if let list = block as? FixedHeightList {
+      return Description(node: Node(content: .list(list), context: context))
+    }
     if let text = block as? Text {
       guard !text.isSelectable else { throw BuildError.unsupportedBlock }
       return Description(node: Node(content: .text(text), context: context))
@@ -94,10 +100,12 @@ final class NodeScene {
   }
 
   @discardableResult
-  func layout(in rect: Rect) -> Size {
+  func layout(in rect: Rect) throws -> Size {
     guard let root else { return .zero }
+    laidOut = false
+    prepared = false
     let size = measure(root, proposal: rect.size)
-    place(root, in: rect)
+    try place(root, in: rect)
     laidOut = true
     prepared = false
     return size
@@ -110,6 +118,8 @@ final class NodeScene {
       node.measured = text.sizeThatFits(proposal, context: node.context)
     case .button(let button):
       node.measured = button.sizeThatFits(proposal, context: node.context)
+    case .list:
+      node.measured = proposal
     case .empty: node.measured = .zero
     case .stack(let axis, let spacing, _, _):
       let sizes = store.children(of: id)!.map { measure($0, proposal: proposal) }
@@ -123,7 +133,7 @@ final class NodeScene {
     return node.measured
   }
 
-  private func place(_ id: NodeID, in rect: Rect) {
+  private func place(_ id: NodeID, in rect: Rect) throws {
     var node = store.value(for: id)!
     node.rect = rect
     switch node.content {
@@ -133,6 +143,29 @@ final class NodeScene {
         text.wraps && rect.size.width.isFinite && cell.isFinite && cell > 0
         ? Int(min(Float(Int32.max), max(1, rect.size.width / cell))) : nil
       node.lines = TextLayout(text.content, columns: columns).lines.map(\.text)
+    case .list(let list):
+      let interaction = node.context.interaction
+      let scrollID = node.context.widgetID
+      let offset = interaction.resolveScroll(
+        id: scrollID, viewport: rect,
+        contentSize: Size(width: rect.size.width, height: Float(list.count) * list.rowHeight),
+        controller: nil, sticksToBottom: false).y
+      let range = list.visibleRange(offset: offset, height: rect.size.height)
+      if range != node.visibleRange {
+        let descriptions = try range.map { index in
+          try lower(list.row(index), context: node.context.scoped([.key(list.key(index))]))
+        }
+        reconcile(descriptions, of: id)
+        node.visibleRange = range
+      }
+      node.offset = offset
+      for (index, child) in zip(range, store.children(of: id)!) {
+        let rowRect = Rect(
+          x: rect.minX, y: rect.minY + Float(index) * list.rowHeight - offset,
+          width: rect.size.width, height: list.rowHeight)
+        _ = measure(child, proposal: rowRect.size)
+        try place(child, in: rowRect)
+      }
     case .button, .empty: break
     case .stack(let axis, let spacing, let reversed, let bottomAligned):
       var cursor = axis == .horizontal ? rect.minX : rect.minY
@@ -145,7 +178,7 @@ final class NodeScene {
           axis == .horizontal
           ? Point(x: cursor, y: bottomAligned ? rect.maxY - size.height : rect.minY)
           : Point(x: rect.minX, y: cursor)
-        place(child, in: Rect(origin: origin, size: size))
+        try place(child, in: Rect(origin: origin, size: size))
         cursor += reversed ? -spacing : extent + spacing
       }
     }
@@ -173,6 +206,14 @@ final class NodeScene {
     case .button(let button):
       _ = node.context.buttonState(
         id: button.id ?? node.context.widgetID, in: node.rect, role: button.role, action: button.action)
+    case .list:
+      let interaction = node.context.interaction
+      interaction.registerScrollInput(id: node.context.widgetID, rect: node.rect)
+      interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: node.context.widgetID)
+      interaction.pushClip(node.rect)
+      for child in store.children(of: id)! { prepare(child) }
+      interaction.popClip()
+      interaction.endGroup()
     case .empty: break
     case .stack(let axis, _, _, _):
       node.context.interaction.beginGroup(
@@ -182,11 +223,24 @@ final class NodeScene {
     }
   }
 
-  func dispatch(_ input: InputState) {
+  func dispatch(_ input: InputState) throws {
     precondition(prepared, "Interaction preparation must precede input")
     guard let root, let node = store.value(for: root) else { return }
     node.context.interaction.processInput(input)
     node.context.interaction.finishInput()
+    if scrollChanged(root) {
+      prepared = false
+      try place(root, in: node.rect)
+      prepare(viewport: node.context.interaction.viewport.size)
+    }
+  }
+
+  private func scrollChanged(_ id: NodeID) -> Bool {
+    let node = store.value(for: id)!
+    if case .list = node.content,
+      node.context.interaction.scrollStates[node.context.widgetID]?.offset.y != node.offset
+    { return true }
+    return store.children(of: id)!.contains { scrollChanged($0) }
   }
 
   func paint() -> DrawList {
@@ -222,6 +276,10 @@ final class NodeScene {
         state: ButtonState(
           hovered: state.hovered == id, focused: state.selected == id,
           held: state.pressed == id && interaction.input.pointerDown, clicked: false))
+    case .list:
+      list.pushClip(node.rect)
+      for child in store.children(of: id)! { paint(child, into: &list) }
+      list.popClip()
     case .empty: break
     case .stack:
       for child in store.children(of: id)! { paint(child, into: &list) }
