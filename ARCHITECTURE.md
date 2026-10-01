@@ -431,6 +431,8 @@ Validation: Swift 6.4/Linux release build passed; core 459 tests, Wayland input 
 
 Started with `VirtualListSnapshot`: immutable IDs, object identity, a caller-supplied revision, and an ID-to-index lookup built once per snapshot. Reuse snapshots across unchanged frames; `FixedHeightList(snapshot:)` defers rows and keys them by item ID. Content replacement still refreshes visible builders/callbacks independently of collection revision. Tests cover reorder/deletion lookup, fresh callbacks, and direct jumps near the end of 1,000, 100,000, and 1,000,000 items. Eight unchanged input/layout/paint cycles build no additional rows or layouts and retain only viewport nodes. These are work-count checks, not latency benchmarks. Linux `swift test` passed: 462 tests.
 
+The next increment adds an internal sparse `VariableHeightIndex`: implicit per-row estimates, cached measured heights, logarithmic measurement updates/prefix sums, and direct offset lookup using Fenwick binary lifting. Unmeasured rows require no per-row index storage. Reference tests verify varied measurements, replacements, exact row boundaries, far-offset ranges, and independent value copies at up to 1,000,000 rows. Linux `swift test` passed: 467 tests. Integration with row building/measurement and item-and-offset anchoring is still pending; the variable-height checklist item remains open.
+
 **Gate:** viewport work remains bounded for unchanged collections, and scrolling/navigation remain stable as rows appear, disappear, or change height.
 
 #### Phase 5 — Migrate real consumers and retire the old path
