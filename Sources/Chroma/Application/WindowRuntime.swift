@@ -37,6 +37,7 @@ package final class WindowRuntime {
     didSet {
       nodeProducer.clear()
       producer.reset()
+      interaction.resetRegistrations()
       scheduler.animationsActive = false
       scheduler.contentAnimationActive = false
       scheduler.requestContent()
@@ -65,6 +66,7 @@ package final class WindowRuntime {
     pendingInputs = []
     nodeProducer.clear()
     producer.reset()
+    interaction.resetRegistrations()
     scheduler.reset()
   }
 

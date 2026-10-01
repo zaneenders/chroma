@@ -107,6 +107,31 @@ struct NodeRuntimeTests {
     #expect(runtime.interaction.registrations.buttonActions.isEmpty)
   }
 
+  @Test func clearingContentImmediatelyReleasesRegisteredActions() {
+    let runtime = WindowRuntime()
+    runtime.nodeLifecycleEnabled = true
+    var actions = 0
+    runtime.content = Button("Run") { actions += 1 }
+    _ = runtime.render(viewport: Size(width: 100, height: 40), input: InputState(), onChange: {})
+    runtime.handleInput(InputState(commands: [.navigation(.nextFocus)]))
+    runtime.content = nil
+    #expect(runtime.interaction.registrations.buttonActions.isEmpty)
+    runtime.handleInput(InputState(commands: [.action(.activate)]))
+    #expect(actions == 0)
+    runtime.reset()
+  }
+
+  @Test func resetImmediatelyClearsTheNodeInteractionSnapshot() {
+    let runtime = WindowRuntime()
+    runtime.nodeLifecycleEnabled = true
+    runtime.content = Button("Run") {}
+    _ = runtime.render(viewport: Size(width: 100, height: 40), input: InputState(), onChange: {})
+    #expect(!runtime.interaction.registrations.buttonActions.isEmpty)
+    runtime.reset()
+    #expect(runtime.interaction.registrations.buttonActions.isEmpty)
+    #expect(runtime.interaction.tree == nil)
+  }
+
   @Test func scopesRouteCommandsWithoutPaintingAndSupportEntryAndExit() {
     let runtime = WindowRuntime()
     runtime.nodeLifecycleEnabled = true
