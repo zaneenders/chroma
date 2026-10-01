@@ -80,13 +80,42 @@ struct NodeRuntimeTests {
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     #expect(model.actions == ["10", "10"])
     #expect(runtime.nodePaints == 1)
-    #expect(runtime.nodeBuilds == 2)
+    #expect(runtime.nodeBuilds == 1)
     let commands = runtime.renderScheduled(.content, viewport: viewport, onChange: {}).commands
     #expect(
       commands.contains { command in
         if case .text(_, let text, _, _) = command { return text == "Changed-10" }
         return false
       })
+  }
+
+  @Test func panelOpeningBetweenEventsRefreshesWithoutRootBuildOrPaint() {
+    let runtime = WindowRuntime()
+    runtime.nodeLifecycleEnabled = true
+    let model = Model()
+    runtime.content = VStack {
+      UpdateBoundary {
+        if model.modal {
+          Button("Modal") { model.actions.append("modal") }
+        } else {
+          Button("Open") {
+            model.modal = true
+            model.actions.append("open")
+          }
+        }
+      }
+      Text("Unchanged sibling")
+    }
+    _ = runtime.render(viewport: Size(width: 240, height: 160), input: InputState(), onChange: {})
+    let point = Point(x: 10, y: 10)
+    for _ in 0..<2 {
+      runtime.handleInput(InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
+      runtime.handleInput(InputState(pointerPosition: point, pointerReleased: true))
+    }
+    #expect(model.actions == ["open", "modal"])
+    #expect(runtime.nodeBuilds == 1)
+    #expect(runtime.nodePaints == 1)
+    runtime.reset()
   }
 
   @Test func replacementRemovalAndResizeRefreshTheRuntimeSnapshot() {

@@ -13,7 +13,9 @@ final class NodeScene {
     case spacer
     case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
     case overlay
+    case tuple
     case scope(CommandScope)
+    case boundary(UpdateBoundary)
     case empty
     case list(FixedHeightList)
   }
@@ -30,7 +32,7 @@ final class NodeScene {
     case text(String, Float, Bool)
     case button(String, Float, EdgeInsets)
     case stack(StackLayout.Axis, Float, Bool, Bool)
-    case overlay, scope, empty, color, spacer
+    case overlay, tuple, scope, boundary, empty, color, spacer
     case list(Int, Float, Int)
   }
 
@@ -55,6 +57,7 @@ final class NodeScene {
     var visibleRange: Range<Int>?
     var offset: Float = 0
     var rowsDirty = true
+    var panelDirty = true
 
     var layoutContent: LayoutContent {
       switch content {
@@ -62,11 +65,26 @@ final class NodeScene {
       case .button(let button): .button(button.label, button.fontScale, button.padding)
       case .stack(let axis, let spacing, let reversed, let bottom): .stack(axis, spacing, reversed, bottom)
       case .overlay: .overlay
+      case .tuple: .tuple
       case .scope: .scope
+      case .boundary: .boundary
       case .empty: .empty
       case .color: .color
       case .spacer: .spacer
       case .list(let list): .list(list.count, list.rowHeight, list.overscan)
+      }
+    }
+
+    var interactionClips: [Int] {
+      var layouts = 0
+      return decorations.compactMap {
+        switch $0 {
+        case .layout:
+          layouts += 1
+          return nil
+        case .clip: return layouts
+        default: return nil
+        }
       }
     }
 
@@ -86,17 +104,35 @@ final class NodeScene {
   private(set) var paintVisits = 0
   var slotCount: Int { store.slotCount }
   var liveCount: Int { store.liveCount }
-  private var rowSubscriptions: [NodeID: FrameTrackingSubscription] = [:]
-  var rowsAreValid: Bool { rowSubscriptions.values.allSatisfy(\.isActive) }
+  private struct TrackedDescription {
+    var description: Description
+    var subscription: FrameTrackingSubscription
+  }
+
+  private struct Boundary {
+    var content: @MainActor () -> any Block
+    var context: BlockContext
+    var subscription: FrameTrackingSubscription
+  }
+
+  // A virtual row can itself be a panel; their subscriptions must remain independent.
+  private struct BoundaryID: Hashable {
+    var node: NodeID
+    var isPanel: Bool
+  }
+
+  private var boundaries: [BoundaryID: Boundary] = [:]
+  var boundariesAreValid: Bool { boundaries.values.allSatisfy { $0.subscription.isActive } }
   var onChange: @MainActor @Sendable () -> Void = {}
+  private(set) var boundaryBuilds = 0
 
   func resetTracking() {
-    for subscription in rowSubscriptions.values { subscription.cancel() }
-    rowSubscriptions = [:]
+    for boundary in boundaries.values { boundary.subscription.cancel() }
+    boundaries = [:]
     onChange = {}
   }
 
-  deinit { for subscription in rowSubscriptions.values { subscription.cancel() } }
+  deinit { for boundary in boundaries.values { boundary.subscription.cancel() } }
 
   private var store = NodeStore<Node>()
   private var root: NodeID?
@@ -115,7 +151,7 @@ final class NodeScene {
       root = store.insert(description.node)
     }
     layoutDirty = reconcile(description.children, of: root!) || changed || layoutDirty
-    releaseRemovedRows()
+    releaseRemovedBoundaries()
     prepared = false
   }
 
@@ -155,6 +191,9 @@ final class NodeScene {
       result.node.decorations.insert(decoration, at: 0)
       return result
     }
+    if let boundary = block as? UpdateBoundary {
+      return Description(node: Node(content: .boundary(boundary), context: context))
+    }
     if let scope = block as? CommandScope {
       return Description(
         node: Node(content: .scope(scope), context: context),
@@ -191,6 +230,9 @@ final class NodeScene {
     if let stack = block as? ZStack {
       return try lowerChildren(stack.scopedChildren, content: .overlay, context: context)
     }
+    if let tuple = block as? TupleBlock {
+      return try lowerChildren(tuple.scopedChildren, content: .tuple, context: context)
+    }
     guard !(block is any PrimitiveBlock) else { throw BuildError.unsupportedBlock }
     return try lower(block.body, context: context)
   }
@@ -206,6 +248,19 @@ final class NodeScene {
   private static func sameLayout(_ old: Node, _ new: Node) -> Bool {
     old.layoutContent == new.layoutContent && old.layoutOperations == new.layoutOperations
       && old.context.textScale == new.context.textScale
+  }
+
+  private static func sameInteraction(_ old: Node, _ new: Node) -> Bool {
+    switch (old.content, new.content) {
+    case (.text, .text), (.color, .color), (.empty, .empty), (.spacer, .spacer), (.stack, .stack), (.overlay, .overlay),
+      (.tuple, .tuple):
+      return old.context.widgetID == new.context.widgetID
+        && old.context.navigationIgnored == new.context.navigationIgnored
+        && old.context.focusLeafClaimed == new.context.focusLeafClaimed
+        && old.context.focusTargets.map(ObjectIdentifier.init) == new.context.focusTargets.map(ObjectIdentifier.init)
+        && old.interactionClips == new.interactionClips
+    default: return false
+    }
   }
 
   private static func merge(_ old: Node, _ new: Node) -> Node {
@@ -226,9 +281,13 @@ final class NodeScene {
 
   @discardableResult
   private func reconcile(_ descriptions: [Description], of parent: NodeID, updatingRows: Bool = false) -> Bool {
-    if !updatingRows, case .list = store.value(for: parent)!.content {
-      layoutDirty = true
-      return false
+    if !updatingRows {
+      switch store.value(for: parent)!.content {
+      case .list, .boundary:
+        layoutDirty = true
+        return false
+      default: break
+      }
     }
     let previous = store.children(of: parent)!
     var changed = false
@@ -236,8 +295,10 @@ final class NodeScene {
       of: parent, with: descriptions.map { (StructuralKey($0.node.context.structuralPath), $0.node) },
       merge: { old, new in
         if !Self.sameLayout(old, new) { changed = true }
+        if !Self.sameInteraction(old, new) { prepared = false }
         return Self.merge(old, new)
       })!
+    if children != previous { prepared = false }
     changed = children != previous || changed
     for (id, description) in zip(children, descriptions) {
       if reconcile(description.children, of: id) { changed = true }
@@ -253,6 +314,7 @@ final class NodeScene {
   @discardableResult
   func layout(in rect: Rect) throws -> Size {
     guard let root else { return .zero }
+    try installPanels(root)
     let metrics = store.value(for: root)!.context.fontMetrics
     let needsPlacement = layoutDirty || layoutRect != rect || layoutMetrics != metrics
     let size = measure(root, proposal: rect.size)
@@ -271,19 +333,21 @@ final class NodeScene {
   }
 
   private func measure(_ id: NodeID, proposal: Size) -> Size {
-    var node = store.value(for: id)!
-    let metrics = node.context.fontMetrics
-    if let cached = node.measurements.first(where: {
-      $0.proposal == proposal && $0.metrics == metrics && $0.textScale == node.context.textScale
-    }) {
-      return cached.size
+    let cached = store.withValue(for: id) { value in
+      value.measurements.first {
+        $0.proposal == proposal && $0.metrics == value.context.fontMetrics && $0.textScale == value.context.textScale
+      }
     }
+    if let cached { return cached.size }
+    let node = store.value(for: id)!
+    let metrics = node.context.fontMetrics
     measurements += 1
     let size = measureDecorations(node, id: id, index: 0, proposal: proposal)
-    node.measurements.append(
-      Measurement(proposal: proposal, metrics: metrics, textScale: node.context.textScale, size: size))
-    if node.measurements.count > 2 { node.measurements.removeFirst() }
-    store.update(id, value: node)
+    let measurement = Measurement(proposal: proposal, metrics: metrics, textScale: node.context.textScale, size: size)
+    store.modify(id) {
+      $0.measurements.append(measurement)
+      if $0.measurements.count > 2 { $0.measurements.removeFirst() }
+    }
     return size
   }
 
@@ -300,10 +364,10 @@ final class NodeScene {
     switch node.content {
     case .text(let text): return text.sizeThatFits(proposal, context: node.context)
     case .button(let button): return button.sizeThatFits(proposal, context: node.context)
-    case .scope: return measure(store.children(of: id)![0], proposal: proposal)
+    case .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
     case .list, .color, .spacer: return proposal
     case .empty: return .zero
-    case .overlay:
+    case .overlay, .tuple:
       return store.children(of: id)!.reduce(Size.zero) {
         let size = measure($1, proposal: proposal)
         return Size(width: max($0.width, size.width), height: max($0.height, size.height))
@@ -325,8 +389,8 @@ final class NodeScene {
     }
     switch node.content {
     case .color, .spacer, .list: return true
-    case .stack, .overlay: return store.children(of: id)!.contains { expands($0, axis: axis) }
-    case .scope: return expands(store.children(of: id)![0], axis: axis)
+    case .stack, .overlay, .tuple: return store.children(of: id)!.contains { expands($0, axis: axis) }
+    case .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
     default: return false
     }
   }
@@ -377,7 +441,7 @@ final class NodeScene {
         node.lines = TextLayout(text.content, columns: columns).lines.map(\.text)
         node.lineMetrics = node.context.fontMetrics
       }
-    case .scope: try place(store.children(of: id)![0], in: rect)
+    case .scope, .boundary: try place(store.children(of: id)![0], in: rect)
     case .list(let list):
       let offset = node.context.interaction.resolveScroll(
         id: node.context.widgetID, viewport: rect,
@@ -386,26 +450,20 @@ final class NodeScene {
       ).y
       let range = list.visibleRange(offset: offset, height: rect.size.height)
       if range != node.visibleRange || node.rowsDirty {
-        var subscriptions: [FrameTrackingSubscription] = []
+        var tracked: [TrackedDescription] = []
         var committed = false
-        defer { if !committed { for subscription in subscriptions { subscription.cancel() } } }
-        let descriptions = try range.map { index in
-          let subscription = FrameTrackingSubscription(onChange)
-          subscriptions.append(subscription)
-          return try withObservationTracking(options: .didSet) {
-            subscription.trackCancellation()
-            return try lower(list.row(index), context: node.context.scoped([.key(list.key(index))]))
-          } onChange: { [weak subscription] event in
-            event.cancel()
-            if let callback = subscription?.takeCallback() { ObservationDelivery.enqueue(callback) }
-          }
+        defer { if !committed { for row in tracked { row.subscription.cancel() } } }
+        for index in range {
+          tracked.append(try track({ list.row(index) }, context: node.context.scoped([.key(list.key(index))])))
         }
-        reconcile(descriptions, of: id, updatingRows: true)
-        for (child, subscription) in zip(store.children(of: id)!, subscriptions) {
-          rowSubscriptions[child]?.cancel()
-          rowSubscriptions[child] = subscription
+        reconcile(tracked.map(\.description), of: id, updatingRows: true)
+        for ((index, child), row) in zip(zip(range, store.children(of: id)!), tracked) {
+          boundaries[BoundaryID(node: child, isPanel: false)]?.subscription.cancel()
+          boundaries[BoundaryID(node: child, isPanel: false)] = Boundary(
+            content: { list.row(index) }, context: node.context.scoped([.key(list.key(index))]),
+            subscription: row.subscription)
         }
-        releaseRemovedRows()
+        releaseRemovedBoundaries()
         committed = true
         node.rowsDirty = false
         node.visibleRange = range
@@ -415,9 +473,12 @@ final class NodeScene {
         let rowRect = Rect(
           x: rect.minX, y: rect.minY + Float(index) * list.rowHeight - offset,
           width: rect.size.width, height: list.rowHeight)
+        try installPanels(child)
         _ = measure(child, proposal: rowRect.size)
         try place(child, in: rowRect)
       }
+    case .tuple:
+      for child in store.children(of: id)! { try place(child, in: rect) }
     case .overlay:
       for child in store.children(of: id)! {
         try place(child, in: Rect(origin: rect.origin, size: measure(child, proposal: rect.size)))
@@ -442,9 +503,120 @@ final class NodeScene {
     updateBounds(id)
   }
 
-  private func releaseRemovedRows() {
-    for id in rowSubscriptions.keys where !store.contains(id) {
-      rowSubscriptions.removeValue(forKey: id)?.cancel()
+  private func track(_ content: @MainActor () -> any Block, context: BlockContext) throws -> TrackedDescription {
+    let subscription = FrameTrackingSubscription(onChange)
+    do {
+      let description = try withObservationTracking(options: .didSet) {
+        subscription.trackCancellation()
+        return try lower(content(), context: context)
+      } onChange: { [weak subscription] event in
+        event.cancel()
+        if let callback = subscription?.takeCallback() { ObservationDelivery.enqueue(callback) }
+      }
+      boundaryBuilds += 1
+      return TrackedDescription(description: description, subscription: subscription)
+    } catch {
+      subscription.cancel()
+      throw error
+    }
+  }
+
+  private func installPanels(_ id: NodeID) throws {
+    let node = store.value(for: id)!
+    if case .boundary(let boundary) = node.content, node.panelDirty {
+      try installBoundary(id, content: boundary.content, context: node.context)
+    }
+    for child in store.children(of: id)! { try installPanels(child) }
+  }
+
+  @discardableResult
+  private func installBoundary(_ id: NodeID, content: @escaping @MainActor () -> any Block, context: BlockContext)
+    throws -> Bool
+  {
+    let tracked = try track(content, context: context)
+    let changed = reconcile([tracked.description], of: id, updatingRows: true)
+    layoutDirty = layoutDirty || changed
+    if changed { invalidateMeasurements(from: id) }
+    boundaries[BoundaryID(node: id, isPanel: true)]?.subscription.cancel()
+    boundaries[BoundaryID(node: id, isPanel: true)] = Boundary(
+      content: content, context: context, subscription: tracked.subscription)
+    store.modify(id) { $0.panelDirty = false }
+    return changed
+  }
+
+  func refreshBoundaries() throws {
+    let stale = boundaries.keys.filter { boundaries[$0]?.subscription.isActive == false }.sorted {
+      let left = depth($0.node)
+      let right = depth($1.node)
+      return left == right ? !$0.isPanel && $1.isPanel : left < right
+    }
+    for key in stale {
+      let id = key.node
+      guard let boundary = boundaries[key], !boundary.subscription.isActive, store.contains(id) else { continue }
+      var changed: Bool
+      if key.isPanel {
+        changed = try installBoundary(id, content: boundary.content, context: boundary.context)
+      } else {
+        let tracked = try track(boundary.content, context: boundary.context)
+        let old = store.value(for: id)!
+        changed = !Self.sameLayout(old, tracked.description.node)
+        let interactionChanged = !Self.sameInteraction(old, tracked.description.node)
+        store.update(id, value: Self.merge(old, tracked.description.node))
+        let childrenChanged = reconcile(tracked.description.children, of: id)
+        changed = changed || childrenChanged
+        layoutDirty = layoutDirty || changed
+        boundaries[key] = Boundary(
+          content: boundary.content, context: boundary.context, subscription: tracked.subscription)
+        if interactionChanged || changed { prepared = false }
+      }
+      releaseRemovedBoundaries()
+      try installPanelsBelow(id)
+      if changed { invalidateMeasurements(from: id) }
+      refreshBounds(id)
+      var parent = store.parent(of: id)
+      while let ancestor = parent {
+        updateBounds(ancestor)
+        parent = store.parent(of: ancestor)
+      }
+    }
+    releaseRemovedBoundaries()
+  }
+
+  private func invalidateMeasurements(from id: NodeID) {
+    var current: NodeID? = id
+    while let node = current {
+      store.modify(node) { $0.measurements = [] }
+      current = store.parent(of: node)
+    }
+  }
+
+  private func depth(_ id: NodeID) -> Int {
+    var depth = 0
+    var parent = store.parent(of: id)
+    while let ancestor = parent {
+      depth += 1
+      parent = store.parent(of: ancestor)
+    }
+    return depth
+  }
+
+  private func installPanelsBelow(_ id: NodeID) throws {
+    if case .boundary = store.value(for: id)!.content {
+      try installPanels(id)
+    } else {
+      for child in store.children(of: id)! { try installPanels(child) }
+    }
+  }
+
+  private func releaseRemovedBoundaries() {
+    for key in boundaries.keys {
+      let valid =
+        store.contains(key.node)
+        && (!key.isPanel
+          || store.withValue(for: key.node) {
+            if case .boundary = $0.content { true } else { false }
+          })
+      if !valid { boundaries.removeValue(forKey: key)?.subscription.cancel() }
     }
   }
 
@@ -513,7 +685,7 @@ final class NodeScene {
           in: textRect, scale: button.fontScale * node.context.textScale, metrics: node.context.fontMetrics))
     case .color: bounds = expanded(node.rect, by: 2)
     case .empty, .spacer: break
-    case .list, .stack, .overlay, .scope:
+    case .list, .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { bounds = union(bounds, store.value(for: child)!.visualBounds) }
       if case .list = node.content { bounds = bounds?.intersection(node.rect) ?? node.rect }
     }
@@ -544,8 +716,12 @@ final class NodeScene {
   }
 
   private func prepare(_ id: NodeID) {
-    let node = store.value(for: id)!
-    let interaction = node.context.interaction
+    store.withValue(for: id) { node in prepare(node, id: id) }
+  }
+
+  private func prepare(_ node: borrowing Node, id: NodeID) {
+    let context = node.context
+    let interaction = context.interaction
     var clipCount = 0
     for (decoration, rect) in zip(node.decorations, node.decorationRects) {
       if case .clip = decoration {
@@ -556,16 +732,18 @@ final class NodeScene {
     defer { for _ in 0..<clipCount { interaction.popClip() } }
     switch node.content {
     case .text, .color:
-      if !node.context.focusLeafClaimed && !node.context.navigationIgnored {
-        _ = node.context.buttonState(id: node.context.widgetID, in: node.rect)
+      if !context.focusLeafClaimed && !context.navigationIgnored {
+        _ = context.buttonState(id: context.widgetID, in: node.rect)
       }
     case .button(let button):
-      _ = node.context.buttonState(
-        id: button.id ?? node.context.widgetID, in: node.rect, role: button.role, action: button.action)
-    case .scope(let scope): scope.prepare(in: node.rect, context: node.context) { prepare(store.children(of: id)![0]) }
+      _ = context.buttonState(
+        id: button.id ?? context.widgetID, in: node.rect, role: button.role, action: button.action)
+    case .scope(let scope): scope.prepare(in: node.rect, context: context) { prepare(store.children(of: id)![0]) }
+    case .boundary: prepare(store.children(of: id)![0])
+    case .tuple: for child in store.children(of: id)! { prepare(child) }
     case .list:
-      interaction.registerScrollInput(id: node.context.widgetID, rect: node.rect)
-      interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: node.context.widgetID)
+      interaction.registerScrollInput(id: context.widgetID, rect: node.rect)
+      interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: context.widgetID)
       interaction.pushClip(node.rect)
       for child in store.children(of: id)! { prepare(child) }
       interaction.popClip()
@@ -627,14 +805,19 @@ final class NodeScene {
   }
 
   private func paint(_ id: NodeID, into list: inout DrawList, clip: Rect, cullingEnabled: Bool) {
-    let node = store.value(for: id)!
+    store.withValue(for: id) { node in
+      paint(node, id: id, into: &list, clip: clip, cullingEnabled: cullingEnabled)
+    }
+  }
+
+  private func paint(_ node: borrowing Node, id: NodeID, into list: inout DrawList, clip: Rect, cullingEnabled: Bool) {
     if cullingEnabled, let bounds = node.visualBounds, bounds.intersection(clip) == nil { return }
     paintVisits += 1
     paintDecorations(node, id: id, index: 0, into: &list, clip: clip, cullingEnabled: cullingEnabled)
   }
 
   private func paintDecorations(
-    _ node: Node, id: NodeID, index: Int, into list: inout DrawList, clip: Rect, cullingEnabled: Bool
+    _ node: borrowing Node, id: NodeID, index: Int, into list: inout DrawList, clip: Rect, cullingEnabled: Bool
   ) {
     guard index < node.decorations.count else {
       paintContent(node, id: id, into: &list, clip: clip, cullingEnabled: cullingEnabled)
@@ -663,16 +846,19 @@ final class NodeScene {
     }
   }
 
-  private func paintContent(_ node: Node, id: NodeID, into list: inout DrawList, clip: Rect, cullingEnabled: Bool) {
+  private func paintContent(
+    _ node: borrowing Node, id: NodeID, into list: inout DrawList, clip: Rect, cullingEnabled: Bool
+  ) {
+    let context = node.context
     switch node.content {
     case .text(let text):
-      let scale = text.scale * node.context.textScale
+      let scale = text.scale * context.textScale
       for (row, line) in node.lines.enumerated() {
         list.text(
           line,
           at: Point(
             x: node.rect.minX,
-            y: node.rect.minY + Float(row) * node.context.fontMetrics.lineAdvance * scale), color: text.color,
+            y: node.rect.minY + Float(row) * context.fontMetrics.lineAdvance * scale), color: text.color,
           scale: scale)
       }
       paintHighlight(node, into: &list)
@@ -680,11 +866,11 @@ final class NodeScene {
       list.fillRect(node.rect, color: color)
       paintHighlight(node, into: &list)
     case .button(let button):
-      let interaction = node.context.interaction
-      let id = button.id ?? node.context.widgetID
+      let interaction = context.interaction
+      let id = button.id ?? context.widgetID
       let state = interaction.untrackedLeafState
       button.paint(
-        into: &list, in: node.rect, context: node.context,
+        into: &list, in: node.rect, context: context,
         state: ButtonState(
           hovered: state.hovered == id, focused: state.selected == id,
           held: state.pressed == id && interaction.input.pointerDown, clicked: false))
@@ -694,14 +880,15 @@ final class NodeScene {
       for child in store.children(of: id)! { paint(child, into: &list, clip: clip, cullingEnabled: cullingEnabled) }
       list.popClip()
     case .empty, .spacer: break
-    case .stack, .overlay, .scope:
+    case .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { paint(child, into: &list, clip: clip, cullingEnabled: cullingEnabled) }
     }
   }
 
-  private func paintHighlight(_ node: Node, into list: inout DrawList) {
-    if !node.context.focusLeafClaimed && !node.context.navigationIgnored {
-      BlockEngine.drawHighlight(for: node.context.widgetID, into: &list, in: node.rect, context: node.context)
+  private func paintHighlight(_ node: borrowing Node, into list: inout DrawList) {
+    let context = node.context
+    if !context.focusLeafClaimed && !context.navigationIgnored {
+      BlockEngine.drawHighlight(for: context.widgetID, into: &list, in: node.rect, context: context)
     }
   }
 }

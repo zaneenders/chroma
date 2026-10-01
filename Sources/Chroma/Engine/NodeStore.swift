@@ -9,6 +9,7 @@ struct NodeStore<Value>: ~Copyable {
     var generation: UInt64 = 0
     var value: Value?
     var key: StructuralKey?
+    var parent: NodeID?
     var children: [NodeID] = []
   }
 
@@ -30,6 +31,20 @@ struct NodeStore<Value>: ~Copyable {
 
   func children(of id: NodeID) -> [NodeID]? {
     contains(id) ? slots[id.index].children : nil
+  }
+
+  func parent(of id: NodeID) -> NodeID? {
+    contains(id) ? slots[id.index].parent : nil
+  }
+
+  borrowing func withValue<Result>(for id: NodeID, _ body: (borrowing Value) throws -> Result) rethrows -> Result {
+    precondition(contains(id))
+    return try body(slots[id.index].value!)
+  }
+
+  mutating func modify(_ id: NodeID, _ body: (inout Value) -> Void) {
+    precondition(contains(id))
+    body(&slots[id.index].value!)
   }
 
   mutating func insert(_ value: Value) -> NodeID {
@@ -80,6 +95,7 @@ struct NodeStore<Value>: ~Copyable {
         id = insert(value)
       }
       slots[id.index].key = key
+      slots[id.index].parent = parent
       children.append(id)
     }
     for id in previous.values { removeSubtree(id) }
@@ -93,6 +109,7 @@ struct NodeStore<Value>: ~Copyable {
     slots[id.index].children = []
     slots[id.index].value = nil
     slots[id.index].key = nil
+    slots[id.index].parent = nil
     slots[id.index].generation += 1
     freeSlots.append(id.index)
   }

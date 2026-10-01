@@ -92,6 +92,22 @@ struct NodeStoreTests {
     #expect((store.value(for: first) == 42) == true)
   }
 
+  @Test func borrowedReadsAndShortMutationsKeepParentsAndGenerationsValid() throws {
+    var store = NodeStore<[Int]>()
+    let root = store.insert([0])
+    let rows = store.reconcileChildren(of: root, with: [(StructuralKey(1), [1, 2])])
+    let child = try #require(rows?.first)
+    #expect((store.parent(of: root) == nil) == true)
+    #expect((store.parent(of: child) == root) == true)
+    let sum = store.withValue(for: child) { $0.reduce(0, +) }
+    #expect(sum == 3)
+    store.modify(child) { $0.append(3) }
+    let updated = store.withValue(for: child) { $0.count }
+    #expect(updated == 3)
+    _ = store.reconcileChildren(of: root, with: [])
+    #expect((store.parent(of: child) == nil) == true)
+  }
+
   private final class LifetimeProbe {}
 
   @Test func removedValuesAreReleased() throws {

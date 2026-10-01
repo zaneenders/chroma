@@ -274,7 +274,7 @@ struct NodeCachingTests {
     #expect(producer.builds == builds)
     rowModels[1].label = "Changed after resize"
     try producer.refresh(content: rows, viewport: Size(width: 200, height: 80), context: context, onChange: {})
-    #expect(producer.builds == builds + 1)
+    #expect(producer.builds == builds)
     #expect(
       producer.paint().commands.contains {
         if case .text(_, "Changed after resize", _, _) = $0 { true } else { false }
@@ -299,7 +299,7 @@ struct NodeCachingTests {
     let builds = producer.builds
     models[2].label = "Updated first list"
     try producer.refresh(content: content, viewport: rect.size, context: context, onChange: {})
-    #expect(producer.builds == builds + 1)
+    #expect(producer.builds == builds)
     #expect(
       producer.paint().commands.contains {
         if case .text(_, "Updated first list", _, _) = $0 { true } else { false }
@@ -312,7 +312,7 @@ struct NodeCachingTests {
     try scene.layout(in: rect)
     scene.prepare(viewport: rect.size)
     models[0].label = "Removed"
-    #expect(scene.rowsAreValid)
+    #expect(scene.boundariesAreValid)
   }
 
   private struct ObservedContent: Block {

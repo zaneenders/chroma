@@ -8,6 +8,7 @@ final class NodeFrameProducer {
   private var metrics: FontMetrics?
   private(set) var builds = 0
   private(set) var paints = 0
+  var boundaryBuilds: Int { scene.boundaryBuilds }
   var measurements: Int { scene.measurements }
   var layouts: Int { scene.layouts }
   var preparations: Int { scene.preparations }
@@ -33,8 +34,10 @@ final class NodeFrameProducer {
     content: any Block, viewport: Size, context: BlockContext,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) throws {
-    let needsBuild = subscription?.isActive != true || !scene.rowsAreValid
-    guard needsBuild || self.viewport != viewport || metrics != context.fontMetrics else { return }
+    let needsBuild = subscription?.isActive != true
+    guard needsBuild || !scene.boundariesAreValid || self.viewport != viewport || metrics != context.fontMetrics else {
+      return
+    }
     if needsBuild {
       reset()
       let subscription = FrameTrackingSubscription(onChange)
@@ -49,6 +52,7 @@ final class NodeFrameProducer {
       builds += 1
     }
     scene.onChange = onChange
+    try scene.refreshBoundaries()
     try scene.layout(in: Rect(origin: .zero, size: viewport))
     scene.prepareIfNeeded(viewport: viewport)
     self.viewport = viewport
