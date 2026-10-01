@@ -121,7 +121,7 @@ struct NodeSceneTests {
       let measured = try scene.layout(in: rect)
       #expect(measured == BlockEngine.measure(stack, proposal: rect.size, context: context))
       scene.prepare(viewport: rect.size)
-      let result = scene.paint()
+      let result = scene.paint(cullingEnabled: false)
       let tree = try #require(context.interaction.tree)
       let firstRow = tree.children[0].children[0]
       let short = firstRow.children[0]
@@ -186,7 +186,7 @@ struct NodeSceneTests {
     try scene.update(text, context: context)
     try scene.layout(in: rect)
     scene.prepare(viewport: rect.size)
-    let result = scene.paint()
+    let result = scene.paint(cullingEnabled: false)
     context.interaction.beginFrame(input: InputState(), processingInput: false)
     var legacy = DrawList()
     BlockEngine.draw(text, into: &legacy, in: rect, context: context)

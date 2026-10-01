@@ -1,5 +1,5 @@
 struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
-  enum Operation {
+  enum Operation: Equatable {
     case padding(EdgeInsets)
     case sizing(x: Sizing, y: Sizing)
   }

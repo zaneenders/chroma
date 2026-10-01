@@ -5,19 +5,18 @@ struct NodeID: Hashable, Sendable {
 
 @MainActor
 struct NodeStore<Value>: ~Copyable {
-  private struct Child {
-    let key: StructuralKey
-    let id: NodeID
-  }
-
   private struct Slot {
     var generation: UInt64 = 0
     var value: Value?
-    var children: [Child] = []
+    var key: StructuralKey?
+    var children: [NodeID] = []
   }
 
   private var slots: [Slot] = []
   private var freeSlots: [Int] = []
+
+  var slotCount: Int { slots.count }
+  var liveCount: Int { slots.count - freeSlots.count }
 
   func contains(_ id: NodeID) -> Bool {
     slots.indices.contains(id.index)
@@ -30,7 +29,7 @@ struct NodeStore<Value>: ~Copyable {
   }
 
   func children(of id: NodeID) -> [NodeID]? {
-    contains(id) ? slots[id.index].children.map(\.id) : nil
+    contains(id) ? slots[id.index].children : nil
   }
 
   mutating func insert(_ value: Value) -> NodeID {
@@ -56,40 +55,44 @@ struct NodeStore<Value>: ~Copyable {
   @discardableResult
   mutating func removeRoot(_ id: NodeID) -> Bool {
     guard contains(id) else { return false }
-    precondition(!slots.contains { $0.children.contains { $0.id == id } })
+    precondition(!slots.contains { $0.children.contains(id) })
     removeSubtree(id)
     return true
   }
 
   @discardableResult
   mutating func reconcileChildren(
-    of parent: NodeID, with values: [(key: StructuralKey, value: Value)]
+    of parent: NodeID, with values: [(key: StructuralKey, value: Value)],
+    merge: (Value, Value) -> Value = { _, new in new }
   ) -> [NodeID]? {
     guard contains(parent) else { return nil }
     precondition(Set(values.map(\.key)).count == values.count, "Duplicate sibling keys")
-    var previous = Dictionary(uniqueKeysWithValues: slots[parent.index].children.map { ($0.key, $0.id) })
-    var children: [Child] = []
+    var previous = Dictionary(uniqueKeysWithValues: slots[parent.index].children.map { (slots[$0.index].key!, $0) })
+    var children: [NodeID] = []
     children.reserveCapacity(values.count)
     for (key, value) in values {
       let id: NodeID
       if let existing = previous.removeValue(forKey: key) {
         id = existing
-        update(id, value: value)
+        let merged = merge(slots[id.index].value!, value)
+        update(id, value: merged)
       } else {
         id = insert(value)
       }
-      children.append(Child(key: key, id: id))
+      slots[id.index].key = key
+      children.append(id)
     }
     for id in previous.values { removeSubtree(id) }
     slots[parent.index].children = children
-    return children.map(\.id)
+    return children
   }
 
   private mutating func removeSubtree(_ id: NodeID) {
-    for child in slots[id.index].children { removeSubtree(child.id) }
+    for child in slots[id.index].children { removeSubtree(child) }
     precondition(slots[id.index].generation < UInt64.max, "Node generation exhausted")
     slots[id.index].children = []
     slots[id.index].value = nil
+    slots[id.index].key = nil
     slots[id.index].generation += 1
     freeSlots.append(id.index)
   }

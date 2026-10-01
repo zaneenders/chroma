@@ -399,15 +399,21 @@ Host audit: Metal captures each event snapshot synchronously before queuing it i
 
 #### Phase 3 — Replace repeated traversal and cache safely
 
-- [ ] Reuse resolved nodes between layout and paint; remove Block resolution and measurement from the paint pass.
-- [ ] Retain measurements with explicit validity for content, constraints, and layout environment. Verify changed callbacks update even when identity is unchanged.
-- [ ] Fold compatible modifiers into node properties without changing modifier order semantics or focus identity.
+- [x] Reuse resolved nodes between layout and paint; remove Block resolution and measurement from the paint pass.
+- [x] Retain measurements with explicit validity for content, constraints, and layout environment. Verify changed callbacks update even when identity is unchanged.
+- [x] Fold compatible modifiers into node properties without changing modifier order semantics or focus identity.
 - [ ] Separate structural, layout, interaction, and paint invalidation at panel/row boundaries. Test hover, focus, and caret changes without unnecessary layout.
 - [ ] Use short-lived spans or `borrowing` / `inout` access for passes; keep graph growth outside active borrows and submitted frame resources independently owned.
-- [ ] Prune proven-invisible paint subtrees using effective clips and conservative bounds. Test nested scrolling, overflowing children, overlays, and reversed layouts.
-- [ ] Release removed-node callbacks and caches; verify repeated mount/unmount and scrolling do not grow retained memory without bound.
+- [x] Prune proven-invisible paint subtrees using effective clips and conservative bounds. Test nested scrolling, overflowing children, overlays, and reversed layouts.
+- [x] Release removed-node callbacks and caches; verify repeated mount/unmount and scrolling do not grow retained memory without bound.
 
 **Gate:** unchanged layout is reused, paint does not evaluate Blocks, and culling does not change visible output or interaction behavior.
+
+Implemented for the opt-in slice: two-entry per-node measurement caches keyed by content/layout configuration, proposal, font metrics, and text scale; resize reuses lowered content. Ordered padding, sizing, color backgrounds, rounded backgrounds, borders, clips, hover/navigation context, and themes lower into node properties without modifier nodes. ZStack, Color, and Spacer now lower too. Paint uses retained geometry and text lines; conservative bounds include descendant and glyph overflow, with effective clips for nested fixed-height lists. Culling does not prune interaction preparation. Row observation subscriptions are independently owned and cancelled on removal; slot-count and weak-lifetime tests cover scrolling and unmount.
+
+Phase 3 remains open for independently tracked panel/row build invalidation and borrowed-access passes. Measurement invalidation is granular, and hover/focus reuse layout and preparation, but an observed change still rebuilds the supported description tree and refreshes registrations. Caret/editing primitives and non-color/custom backgrounds remain on the legacy path. Storage retains Array with short value copies; no custom lifetimes or unsafe borrows were introduced. Linux headless tests validate visible command equivalence against unculled output, modifier order, callback freshness, resize observation, and bounded retained slots; GPU/Metal validation is still unavailable here.
+
+Validation: Swift 6.4/Linux release build passed; core 430 tests, Wayland input 14 tests, Examples 54 tests, and Benchmarks 1 test passed. These are correctness/work-count checks, not timing or allocation measurements.
 
 #### Phase 4 — Make transcripts scale with the viewport
 
