@@ -1,6 +1,5 @@
 import Foundation
 
-/// Owns frame demand and timing; backends only gate presentation readiness.
 @MainActor
 package final class FrameScheduler {
   package enum FrameKind: Sendable { case content, animation }

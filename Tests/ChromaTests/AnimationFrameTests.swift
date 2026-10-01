@@ -98,7 +98,6 @@ struct AnimationFrameTests {
     #expect(second.commands.first == first.commands.first)
     #expect(second.commands.last == first.commands.last)
     #expect(second.commands != first.commands)
-    // Paint output may change length; ranges always refer to the cached content frame.
     clock.now += 1
     #expect(producer.renderAnimations().commands.count == first.commands.count + 1)
     #expect(builds == initialBuilds)

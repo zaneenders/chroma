@@ -77,7 +77,6 @@ package final class WindowRuntime {
   }
 
   private func processInput(_ input: InputState) {
-    // Presentation can coalesce, but each event needs current callbacks and hit-test geometry.
     producer.refreshRegistrations(
       content, viewport: interaction.viewport.size, context: context, commands: input.commands)
     interaction.processInput(input)
@@ -89,12 +88,10 @@ package final class WindowRuntime {
     viewport: Size,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
-    // A timer may already be runnable when input arrives. Never paint stale animation first.
     flushInput()
     if kind == .animation && !scheduler.hasContentRequest { return renderAnimations() }
     _ = interaction.consumeRedrawRequest()
     if !pendingInputs.isEmpty {
-      // Establish the viewport, then refresh registrations between queued events too.
       _ = render(viewport: viewport, input: InputState(), onChange: onChange)
       for input in pendingInputs { processInput(input) }
       pendingInputs.removeAll(keepingCapacity: true)

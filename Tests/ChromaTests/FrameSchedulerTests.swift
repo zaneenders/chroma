@@ -46,7 +46,6 @@ struct FrameSchedulerTests {
     #expect(scheduler.takeFrame() == .content)
     #expect(scheduler.nextFrame?.kind == .animation)
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 30)
-    // A content frame already advanced animations: no immediate catch-up animation frame.
     #expect(scheduler.takeFrame() == nil)
     clock.now = try #require(scheduler.nextFrame).deadline
     #expect(scheduler.takeFrame() == .animation)
@@ -64,7 +63,6 @@ struct FrameSchedulerTests {
     clock.now += 2
     #expect(scheduler.takeFrame() == .animation)
     #expect(scheduler.takeFrame() == nil)
-    // Record completion of synchronous frame work, not just the wake-up time.
     clock.now += 0.1
     scheduler.recordProducedFrame()
     scheduler.requestContent()

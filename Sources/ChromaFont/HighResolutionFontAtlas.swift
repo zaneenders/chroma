@@ -100,7 +100,6 @@ public struct HighResolutionFontAtlas: Sendable {
     }
     guard let fallback = scalarIndices[0xFFFD] else { throw AssetError.invalidAtlas }
     if let space = scalarIndices[0x20] {
-      // Monospaced rendering preserves the original text while displaying Unicode spaces without tofu.
       for scalar: UInt32 in [
         0xA0, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x202F, 0x205F,
         0x3000,

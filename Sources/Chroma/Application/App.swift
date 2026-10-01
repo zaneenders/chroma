@@ -10,10 +10,8 @@ public protocol App {
 
   var windowSize: Size { get }
 
-  /// Cadence for animation-only frames; idle content is never refreshed periodically.
   var minimumRefreshRate: Double { get }
 
-  /// Upper bound for all produced frames, including input and observed changes.
   var maximumRefreshRate: Double { get }
 
   var keyBindings: KeyBindings { get }

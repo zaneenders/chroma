@@ -15,10 +15,6 @@ struct AnimationPaint {
 extension BlockContext {
   public var animationTimestamp: Double { interaction.animationFrame.timestamp }
 
-  /// Paint time-dependent commands without rebuilding content or layout on animation ticks.
-  /// Capture layout and state here; the closure should only paint, not mutate state or register interaction.
-  /// Animation paint must not nest `animate` calls.
-  /// Chroma owns the cadence. Inactive paint runs once and does not keep the host awake.
   public func animate(
     into drawList: inout DrawList,
     isActive: Bool = true,

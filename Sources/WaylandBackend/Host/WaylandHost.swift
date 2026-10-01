@@ -137,8 +137,6 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private func queueDisplayRead() {
-    // DispatchSource can notify again before the high-priority task drains the socket.
-    // Queue one read only: a second wl_display_dispatch could block on an already drained fd.
     guard running, !displayReadQueued else { return }
     displayReadQueued = true
     runtime.dispatchInput(requestsFrame: false) { [weak self] in

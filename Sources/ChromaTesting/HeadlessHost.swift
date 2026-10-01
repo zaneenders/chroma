@@ -62,7 +62,6 @@ public final class HeadlessHost: Host {
     return frame
   }
 
-  /// Explicitly step animation paint without evaluating the content tree.
   @discardableResult
   public func renderAnimations() -> HeadlessFrame {
     runtime.scheduler.recordProducedFrame()
