@@ -57,10 +57,11 @@ struct StackEvaluationTests {
     BlockEngine.draw(stack, into: &list, in: rect, context: context)
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
-    #expect(list.commands.contains {
-      if case .text(_, "before", _, _) = $0 { return true }
-      return false
-    })
+    #expect(
+      list.commands.contains {
+        if case .text(_, "before", _, _) = $0 { return true }
+        return false
+      })
   }
 
   @Test func deferredNestedContentIsReevaluatedPerOperation() {

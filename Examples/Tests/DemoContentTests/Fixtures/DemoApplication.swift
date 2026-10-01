@@ -1,5 +1,6 @@
 import Chroma
 import Observation
+
 @testable import DemoContent
 
 @Observable @MainActor

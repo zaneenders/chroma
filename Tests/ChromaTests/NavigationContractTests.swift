@@ -124,7 +124,8 @@ struct NavigationContractTests {
       let shifted = KeyboardInput(chord: KeyChord(key, modifiers: .shift), text: String(key).uppercased())
       let controlled = KeyboardInput(chord: KeyChord(key, modifiers: .control))
       #expect(KeyBindings.vimNavigation.resolve(shifted, isTextEditing: false) == .text(selection))
-      #expect(KeyBindings.vimNavigation.resolve(shifted, isTextEditing: true) == .text(.insert(String(key).uppercased())))
+      #expect(
+        KeyBindings.vimNavigation.resolve(shifted, isTextEditing: true) == .text(.insert(String(key).uppercased())))
       #expect(KeyBindings.vimNavigation.resolve(controlled, isTextEditing: false) == .command(.navigation(command)))
       #expect(KeyBindings.vimNavigation.resolve(controlled, isTextEditing: true) == .command(.navigation(command)))
     }

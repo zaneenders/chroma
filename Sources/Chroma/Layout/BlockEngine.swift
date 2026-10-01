@@ -70,7 +70,8 @@ public enum BlockEngine {
     if let scoped = block as? ScopedBlock {
       return resolve(scoped.content, context: context.scoped(scoped.path))
     }
-    let context = (block as? any PrimitiveBlock)?.preservesContentIdentity == true
+    let context =
+      (block as? any PrimitiveBlock)?.preservesContentIdentity == true
       ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
     if let primitive = block as? any PrimitiveBlock {
       var content: (any Block)?
@@ -85,8 +86,9 @@ public enum BlockEngine {
         } else {
           childContext = context
         }
-        return Resolved(primitive: primitive, context: context,
-                        child: resolve(content, context: childContext))
+        return Resolved(
+          primitive: primitive, context: context,
+          child: resolve(content, context: childContext))
       }
       return Resolved(primitive: primitive, context: context, child: nil)
     }

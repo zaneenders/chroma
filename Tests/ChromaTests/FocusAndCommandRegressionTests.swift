@@ -298,7 +298,9 @@ struct FocusAndCommandRegressionTests {
     harness.render(TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }))
     harness.context.interaction.beginEditing(harness.context.interaction.selectedLeafID!, caretOffset: 0)
 
-    harness.render(TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }), input: InputState(commands: [.action(.cancel)]))
+    harness.render(
+      TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }),
+      input: InputState(commands: [.action(.cancel)]))
 
     #expect(harness.context.interaction.mode == .movement)
   }

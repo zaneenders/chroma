@@ -75,7 +75,8 @@ struct StackLayout {
     for (child, size) in zip(children, sizes) {
       let extent = size[keyPath: axis.main]
       if reversed { cursor -= extent }
-      let origin = axis == .horizontal
+      let origin =
+        axis == .horizontal
         ? Point(x: cursor, y: bottomAligned ? rect.maxY - size.height : rect.minY)
         : Point(x: rect.minX, y: cursor)
       child.draw(into: &drawList, in: Rect(origin: origin, size: size))

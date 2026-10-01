@@ -182,10 +182,11 @@ private func focusedGlyphCell(_ renderer: HeadlessHost) -> Rect? {
   }
 
   let initialHighlight = try #require(highlightedCell())
-  let firstGlyph = try #require(renderer.render().commands.compactMap { command -> Point? in
-    if case .text(let point, "A", _, _) = command { return point }
-    return nil
-  }.first)
+  let firstGlyph = try #require(
+    renderer.render().commands.compactMap { command -> Point? in
+      if case .text(let point, "A", _, _) = command { return point }
+      return nil
+    }.first)
   let target = Point(x: firstGlyph.x + 2, y: firstGlyph.y + 2)
   renderer.render(input: InputState(pointerPosition: target, pointerDown: true, pointerPressed: true))
   renderer.render(input: InputState(pointerPosition: target, pointerReleased: true))

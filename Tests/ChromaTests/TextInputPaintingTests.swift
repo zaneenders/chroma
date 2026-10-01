@@ -28,7 +28,8 @@ struct TextInputPaintingTests {
   func focusedTextInputHasBorderWithoutFocusFill(multiline: Bool) throws {
     let context = BlockContext()
     let producer = FrameProducer()
-    let content: any Block = multiline
+    let content: any Block =
+      multiline
       ? TextEditor(text: { "abcd" }, onChange: { _ in })
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
     let size = Size(width: 200, height: 40)
@@ -40,18 +41,20 @@ struct TextInputPaintingTests {
     let id = try #require(tree.firstLeafPath().flatMap { tree.node(at: $0)?.leafID })
     context.interaction.focus(id)
     let focused = render()
-    #expect(focused.commands.contains {
-      if case .strokeRoundedRect(_, _, let width, let color) = $0 {
-        return width == 2 && color == context.theme.focus.ring
-      }
-      return false
-    })
-    #expect(!focused.commands.contains {
-      if case .fillRoundedRect(_, _, let color) = $0 {
-        return color == HoverStyle.standardTint(in: context.theme)
-      }
-      return false
-    })
+    #expect(
+      focused.commands.contains {
+        if case .strokeRoundedRect(_, _, let width, let color) = $0 {
+          return width == 2 && color == context.theme.focus.ring
+        }
+        return false
+      })
+    #expect(
+      !focused.commands.contains {
+        if case .fillRoundedRect(_, _, let color) = $0 {
+          return color == HoverStyle.standardTint(in: context.theme)
+        }
+        return false
+      })
   }
 
   @Test func selectionRepaintsWholeGraphemesThroughAClip() {
@@ -75,9 +78,10 @@ struct TextInputPaintingTests {
   @Test func draggingBelowShortEditorKeepsViewportAtFirstRow() {
     let context = BlockContext()
     let editor = TextEditor(text: { "short" }, onChange: { _ in })
-    context.interaction.beginFrame(input: InputState(
-      pointerPosition: Point(x: 20, y: 99), pointerPressPosition: Point(x: 20, y: 16),
-      pointerDown: true, pointerPressed: true))
+    context.interaction.beginFrame(
+      input: InputState(
+        pointerPosition: Point(x: 20, y: 99), pointerPressPosition: Point(x: 20, y: 16),
+        pointerDown: true, pointerPressed: true))
     context.interaction.textDragViewportRow = 0
     #expect(context.interaction.isDragging)
     var list = DrawList()

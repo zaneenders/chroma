@@ -214,9 +214,10 @@ struct StructuralPathTests {
     let paths = render(grouped, recorder: recorder)
     #expect(paths["1"] != paths["2"])
     let reordered = VStack {
-      TransparentScope(content: ForEach([2, 1], id: \.self) { value in
-        Probe(name: String(value), recorder: recorder)
-      })
+      TransparentScope(
+        content: ForEach([2, 1], id: \.self) { value in
+          Probe(name: String(value), recorder: recorder)
+        })
     }
     #expect(render(reordered, recorder: recorder) == paths)
     let probe = Probe(name: "single", recorder: recorder)
@@ -239,20 +240,22 @@ struct StructuralPathTests {
   @Test func collectionDistributionDoesNotPreserveContentIdentity() {
     let recorder = Recorder()
     func content(_ ids: [Int]) -> some Block {
-      DistributingScope(content: ForEach(ids, id: \.self) { value in
-        Probe(name: String(value), recorder: recorder)
-      })
+      DistributingScope(
+        content: ForEach(ids, id: \.self) { value in
+          Probe(name: String(value), recorder: recorder)
+        })
     }
     let stack = VStack { content([1, 2]) }
     #expect(stack.children.count == 2)
     let paths = render(stack, recorder: recorder)
     #expect(paths["1"] != paths["2"])
     #expect(render(VStack { content([2, 1]) }, recorder: recorder) == paths)
-    let plain = render(VStack {
-      ForEach([1, 2], id: \.self) { value in
-        Probe(name: String(value), recorder: recorder)
-      }
-    }, recorder: recorder)
+    let plain = render(
+      VStack {
+        ForEach([1, 2], id: \.self) { value in
+          Probe(name: String(value), recorder: recorder)
+        }
+      }, recorder: recorder)
     for name in ["1", "2"] {
       #expect(paths[name] != plain[name])
       #expect(paths[name]?.segments.contains(.component(ObjectIdentifier(DistributingScope.self))) == true)

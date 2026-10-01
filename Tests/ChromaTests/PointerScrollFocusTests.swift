@@ -10,7 +10,8 @@ struct PointerScrollFocusTests {
     let producer = FrameProducer()
     let controller = ScrollViewController()
     let target = FocusTarget()
-    let row: any Block = hasControl
+    let row: any Block =
+      hasControl
       ? Button("Message") {}.sizing(y: .fixed(2000)).focusTarget(target)
       : Text("Message").sizing(y: .fixed(2000))
     let content = ScrollView(
@@ -26,9 +27,10 @@ struct PointerScrollFocusTests {
     render()
     let offset = controller.offset
     let point = Point(x: 100, y: 100)
-    render(InputState(
-      pointerPosition: point, pointerPressPosition: point,
-      pointerDown: true, pointerPressed: true))
+    render(
+      InputState(
+        pointerPosition: point, pointerPressPosition: point,
+        pointerDown: true, pointerPressed: true))
     #expect(controller.offset == offset)
     #expect(context.interaction.selectedLeafID != nil)
     if hasControl { #expect(target.isFocused) }
@@ -67,9 +69,10 @@ struct PointerScrollFocusTests {
     controller.scroll(to: 500)
     render()
     let point = Point(x: 100, y: 100)
-    render(InputState(
-      pointerPosition: point, pointerPressPosition: point,
-      pointerDown: true, pointerPressed: true))
+    render(
+      InputState(
+        pointerPosition: point, pointerPressPosition: point,
+        pointerDown: true, pointerPressed: true))
     #expect(controller.offset == 500)
     #expect(selection.selectedID == 0)
     #expect(targets[0].isFocused)
