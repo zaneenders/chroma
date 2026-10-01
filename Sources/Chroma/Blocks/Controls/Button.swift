@@ -46,9 +46,14 @@ public struct Button: PrimitiveBlock {
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    let style = style ?? context.theme.button
     let state = context.buttonState(id: id ?? context.widgetID, in: rect, role: role) { action() }
+    paint(into: &drawList, in: rect, context: context, state: state)
+  }
 
+  @MainActor func paint(
+    into drawList: inout DrawList, in rect: Rect, context: BlockContext, state: ButtonState
+  ) {
+    let style = style ?? context.theme.button
     let background: Color
     switch state.phase {
     case .idle, .hovered: background = style.idleBackground
