@@ -13,6 +13,16 @@ public struct FixedHeightList: Block {
     self.init(count: count, rowHeight: rowHeight, overscan: overscan, key: { StructuralKey($0) }, row: row)
   }
 
+  public init<ID: Hashable & Sendable>(
+    snapshot: VirtualListSnapshot<ID>, rowHeight: Float, overscan: Int = 1,
+    row: @escaping @MainActor (ID) -> any Block
+  ) {
+    self.init(
+      count: snapshot.count, rowHeight: rowHeight, overscan: overscan,
+      key: { StructuralKey(snapshot.ids[$0]) },
+      row: { row(snapshot.ids[$0]) })
+  }
+
   init(
     count: Int, rowHeight: Float, overscan: Int = 1,
     key: @escaping @MainActor (Int) -> StructuralKey,

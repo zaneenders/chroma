@@ -421,13 +421,15 @@ Validation: Swift 6.4/Linux release build passed; core 459 tests, Wayland input 
 
 #### Phase 4 — Make transcripts scale with the viewport
 
-- [ ] Give virtual lists collection identity/revisions, an ID-to-index lookup, and deferred row builders. Avoid full collection scans on unchanged input frames.
-- [ ] Jump directly to fixed-height visible ranges plus overscan, including views far from the start of the collection.
+- [x] Give virtual lists collection identity/revisions, an ID-to-index lookup, and deferred row builders. Avoid full collection scans on unchanged input frames.
+- [x] Jump directly to fixed-height visible ranges plus overscan, including views far from the start of the collection.
 - [ ] Add a variable-height index with estimates and cached measurements; build/measure only required rows and retain an estimated total extent.
 - [ ] Preserve item-and-offset scroll anchoring as heights change; test streaming text, insertion above the viewport, width changes, and conditional bottom-following.
 - [ ] Preserve offscreen logical selection and implement reveal independently of row instantiation. Test deletion/reordering fallback, scope restoration, and command routing.
 - [ ] Keep pointer capture and active editing valid when content is clipped; add tests for dragging out of view and navigating back to a virtualized row.
 - [ ] Benchmark 1,000, 100,000, and 1,000,000 fixed-height items plus realistic variable-height transcripts; verify warm work tracks visible/changed content rather than total history.
+
+Started with `VirtualListSnapshot`: immutable IDs, object identity, a caller-supplied revision, and an ID-to-index lookup built once per snapshot. Reuse snapshots across unchanged frames; `FixedHeightList(snapshot:)` defers rows and keys them by item ID. Content replacement still refreshes visible builders/callbacks independently of collection revision. Tests cover reorder/deletion lookup, fresh callbacks, and direct jumps near the end of 1,000, 100,000, and 1,000,000 items. Eight unchanged input/layout/paint cycles build no additional rows or layouts and retain only viewport nodes. These are work-count checks, not latency benchmarks. Linux `swift test` passed: 462 tests.
 
 **Gate:** viewport work remains bounded for unchanged collections, and scrolling/navigation remain stable as rows appear, disappear, or change height.
 

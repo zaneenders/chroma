@@ -89,6 +89,75 @@ struct FixedHeightListTests {
     #expect(actions == ["new-1"])
   }
 
+  @Test func snapshotsIndexReorderedAndRemovedIDs() {
+    let original = VirtualListSnapshot(ids: ["a", "b", "c"], revision: 1)
+    let replacement = VirtualListSnapshot(ids: ["c", "a"], revision: 2)
+    #expect(original.index(of: "b") == 1)
+    #expect(replacement.index(of: "c") == 0)
+    #expect(replacement.index(of: "b") == nil)
+    #expect(replacement.revision == 2)
+    #expect(original.ids == ["a", "b", "c"])
+  }
+
+  @Test func snapshotRowsAreDeferredAndWarmWorkIsViewportBounded() throws {
+    for count in [1_000, 100_000, 1_000_000] {
+      var visited = 0
+      let ids = (0..<count).lazy.map { index in
+        visited += 1
+        return index
+      }
+      let snapshot = VirtualListSnapshot(ids: ids)
+      #expect(visited == count)
+      let scene = NodeScene()
+      let context = BlockContext()
+      var built: [Int] = []
+      let list = FixedHeightList(snapshot: snapshot, rowHeight: 20, overscan: 0) { id in
+        built.append(id)
+        return Text("\(id)")
+      }
+      let rect = Rect(x: 0, y: 0, width: 100, height: 40)
+      try scene.update(list, context: context)
+      #expect(built.isEmpty)
+      try scene.layout(in: rect)
+      scene.prepare(viewport: rect.size)
+      let offset = Float((count - 2) * 20)
+      try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -offset)))
+      #expect(built == [0, 1, count - 2, count - 1])
+      let layouts = scene.layouts
+      for _ in 0..<8 {
+        try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 10)))
+        _ = try scene.layout(in: rect)
+        _ = scene.paint()
+      }
+      #expect(scene.layouts == layouts)
+      #expect(built.count == 4)
+      #expect(visited == count)
+      #expect(scene.liveCount == 3)
+    }
+  }
+
+  @Test func snapshotReplacementRoutesFreshCallbacksByID() throws {
+    let scene = NodeScene()
+    let context = BlockContext()
+    var actions: [String] = []
+    func list(_ ids: [String], revision: UInt64) -> FixedHeightList {
+      FixedHeightList(snapshot: VirtualListSnapshot(ids: ids, revision: revision), rowHeight: 20, overscan: 0) { id in
+        Button(id) { actions.append("\(revision)-\(id)") }
+      }
+    }
+    let rect = Rect(x: 0, y: 0, width: 100, height: 40)
+    try scene.update(list(["a", "b", "c"], revision: 1), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    try scene.update(list(["b", "a"], revision: 2), context: context)
+    try scene.layout(in: rect)
+    scene.prepare(viewport: rect.size)
+    let point = Point(x: 10, y: 10)
+    try scene.dispatch(InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
+    try scene.dispatch(InputState(pointerPosition: point, pointerReleased: true))
+    #expect(actions == ["2-b"])
+  }
+
   @Test func emptyListAndScrollPastEndStayBounded() throws {
     for count in [0, 2] {
       let scene = NodeScene()
