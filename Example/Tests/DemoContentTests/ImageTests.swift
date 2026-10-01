@@ -7,10 +7,8 @@ import Testing
 @MainActor
 struct ImageTests {
   @Test func imageScreenEmitsMandelbrotImage() throws {
-    let state = DemoState(automaticallyUpdates: false)
-    state.open(.image)
     let host = HeadlessHost(size: Size(width: 1120, height: 840))
-    host.content = DemoApplication(state: state, shortcutModifier: .command).body
+    host.content = ImageApplication().body
     let images = host.render().commands.compactMap { command -> ImageResource? in
       if case .image(_, let image, .contain, _) = command { return image }
       return nil

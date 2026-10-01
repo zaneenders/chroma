@@ -30,16 +30,15 @@ dependencies.append(.product(name: "MetalBackend", package: "chroma"))
 dependencies.append(.product(name: "WaylandBackend", package: "chroma"))
 #endif
 
-targets.append(
-  .executableTarget(
-    name: "ChromaDemo",
-    dependencies: dependencies
-  )
-)
+let demos = ["PlayDemo", "ChatDemo", "ImageDemo"]
+for demo in demos {
+  targets.append(.executableTarget(name: demo, dependencies: dependencies))
+}
 
 let package = Package(
   name: "ChromaExample",
   platforms: [.macOS(.v27)],
+  products: demos.map { .executable(name: $0, targets: [$0]) },
   dependencies: [
     .package(path: "..")
   ],

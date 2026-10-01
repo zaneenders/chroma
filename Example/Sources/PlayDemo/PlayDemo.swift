@@ -18,7 +18,7 @@ extension DemoApp {
   @MainActor
   static func main() throws {
     throw BackendError.unavailable(
-      backend: "ChromaDemo",
+      backend: "PlayDemo",
       reason: "no graphical backend is enabled"
     )
   }
@@ -26,8 +26,8 @@ extension DemoApp {
 #endif
 
 @main
-private struct ChromaDemo: DemoApp {
-  private let demo = DemoApplication()
+private struct PlayDemo: DemoApp {
+  private let demo = PlayApplication()
   var title: String { demo.title }
   var windowSize: Size { demo.windowSize }
   var keyBindings: KeyBindings { demo.keyBindings }
