@@ -16,6 +16,12 @@ let package = Package(
     .package(path: "..")
   ],
   targets: [
+    .executableTarget(
+      name: "InputFrameBenchmark",
+      dependencies: [
+        .product(name: "Chroma", package: "chroma"),
+        .product(name: "ChromaTesting", package: "chroma"),
+      ]),
     .executableTarget(name: "CompareBenchmarks"),
     .testTarget(name: "CompareBenchmarksTests", dependencies: ["CompareBenchmarks"]),
     .target(name: "RenderFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),

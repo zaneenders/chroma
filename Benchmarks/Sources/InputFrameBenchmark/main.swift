@@ -1,12 +1,11 @@
 import Chroma
+import ChromaTesting
 import Foundation
 
 @MainActor
 func benchmark(count: Int, identified: Bool) {
-  let producer = FrameProducer()
-  let context = BlockContext()
   let controller = ScrollViewController()
-  let viewport = Size(width: 200, height: 200)
+  let host = HeadlessHost(size: Size(width: 200, height: 200))
   let data = 0..<count
   let items = identified ? data.map { Item(id: $0) } : []
   let makeView: () -> ScrollView = {
@@ -19,11 +18,9 @@ func benchmark(count: Int, identified: Bool) {
   }
   for iteration in 0..<6 {
     let start = ProcessInfo.processInfo.systemUptime
-    let view = makeView()
-    let list = producer.render(
-      content: view, viewport: viewport,
-      input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -1)),
-      context: context, onChange: {})
+    host.content = makeView()
+    let list = host.render(
+      input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -1)))
     let duration = (ProcessInfo.processInfo.systemUptime - start) * 1000
     print(
       "\(count) \(identified ? "identified" : "unkeyed") \(iteration == 0 ? "cold" : "warm") \(duration) ms \(list.commands.count) commands"
