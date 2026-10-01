@@ -12,7 +12,6 @@ if [ -e "$out" ]; then
   echo "Refusing to overwrite baseline: $out" >&2
   exit 1
 fi
-mkdir -p "$out"
 i=1
 while [ "$i" -le "$trials" ]; do
   Benchmarks/Scripts/run.sh "$out/trial-$i"

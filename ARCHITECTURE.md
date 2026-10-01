@@ -304,13 +304,19 @@ The first milestone is **a vertical slice containing a virtual list, button acti
 
 #### Phase 1 — Establish a trustworthy baseline
 
-- [ ] Reproduce and resolve `replacingContentInvalidatesBeforePointerInput`; assert correct input behavior rather than require drawing as the mechanism.
-- [ ] Run core, Examples, and Benchmarks tests; record any remaining failures before changing the engine.
-- [ ] Capture release baselines with revision/worktree, toolchain, hardware, viewport, item count, and event count recorded. Separate construction, steady-state input, layout, paint, and backend submission costs.
-- [ ] Add counters for Block evaluations, measurements, registration/preparation work, paints, visible rows, and storage growth; profile allocations alongside p50/p95 timings.
-- [ ] Compare `Array<Node>` and `UniqueArray<Node>` under equivalent build/update/traversal workloads. Choose storage from results; add a pinned Swift Collections dependency only if selected.
+See [storage comparison and baseline status](Benchmarks/StorageComparison/README.md).
+- [x] Assert content replacement uses the new callbacks rather than require drawing as the mechanism (`replacingContentBeforeInputUsesNewCallbacks`).
+- [x] Run core, Examples, and Benchmarks tests before engine changes: 390, 53, and 3 tests passed; no remaining failures.
+- [x] Capture release interaction timings with revision/worktree, toolchain, hardware, viewport, item count, and event count. Report installation, cold frame, and warm input/render separately.
+- [ ] Separate layout, paint, and backend submission costs; warm render currently combines layout and paint.
+- [x] Add fixture counters for workload body evaluations, row measurements, and row draw calls.
+- [ ] Add engine-wide Block evaluation, registration/preparation, paint, visible-row, and storage-growth counters. Fixture draw calls are not distinct paint or visible-row counts.
+- [ ] Profile allocations alongside p50/p95 timings. The bounded Allocations recording failed to attach; do not treat its trace as valid evidence.
+- [x] Compare `Array<Node>` and `UniqueArray<Node>` under equivalent build/update/traversal workloads. Retain Array provisionally; results do not justify adding Swift Collections.
 
-**Gate:** reproducible baseline and a runnable test suite, with construction cost distinguished from warm-frame cost.
+Collection must stop on build/test failure (`set -e` or `&&`), use a freshly built release binary, and preserve results in a new directory. Limit `xctrace record` to `--time-limit 30s`; inspect recording errors before accepting a trace.
+
+**Gate: not complete.** Tests are runnable and construction is distinguished from warm-frame cost, but phase-separated timings, engine-wide counters, and valid allocation profiling remain required.
 
 #### Phase 2 — Prove the new lifecycle in one vertical slice
 
