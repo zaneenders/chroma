@@ -98,12 +98,15 @@ struct RegistrationValidityTests {
     host.renderScheduled()
     old.draws = 0
     host.content = Content(model: model, counters: current)
-    host.handleInput(InputState(pointerPosition: Point(x: 20, y: 20)))
-    #expect(old.draws == 0)
-    #expect(current.draws > 0)
-    let draws = current.draws
-    host.handleInput(InputState(pointerPosition: Point(x: 21, y: 20)))
-    #expect(current.draws == draws)
+    let point = Point(x: 20, y: 20)
+    host.handleInput(InputState(pointerPosition: point))
+    host.handleInput(InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
+    host.handleInput(InputState(pointerPosition: point, pointerReleased: true))
+    #expect(old.activatedValue == nil)
+    host.renderScheduled()
+    #expect(old.activatedValue == nil)
+    #expect(current.activatedValue == model.callbackValue)
+    #expect(host.runtime.interaction.untrackedLeafState.hovered != nil)
   }
 
   @Test func viewportChangeInvalidatesRegistrationGeometry() {
