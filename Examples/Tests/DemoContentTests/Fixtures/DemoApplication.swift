@@ -1,5 +1,6 @@
 import Chroma
 import Observation
+@testable import DemoContent
 
 @Observable @MainActor
 final class DemoState {
@@ -46,37 +47,10 @@ public struct DemoApplication: App {
   public var windowSize: Size { Size(width: 1120, height: 840) }
 
   public var keyBindings: KeyBindings {
-    var bindings = KeyBindings.modalNavigation.overlay {
-      bind("c", modifiers: shortcutModifier, to: .editing(.copy))
-      bind("x", modifiers: shortcutModifier, to: .editing(.cut))
-      bind("v", modifiers: shortcutModifier, to: .editing(.paste))
-      bind("a", modifiers: shortcutModifier, to: .editing(.selectAll))
-      bind(.backspace, to: .editing(.backspace))
-      bind(.delete, to: .editing(.deleteForward))
-      bind(.enter, to: .editing(.submit))
+    demoKeyBindings(shortcutModifier: shortcutModifier).overlay {
       bind("1", modifiers: shortcutModifier, to: .application("demo.play"))
       bind("2", modifiers: shortcutModifier, to: .application("demo.chat"))
     }
-    for key: Key in [.tab, .leftArrow, .rightArrow, .upArrow, .downArrow] {
-      bindings = bindings.overlay {
-        disable(key)
-        disable(key, modifiers: .shift)
-        disable(key, modifiers: .option)
-        disable(key, modifiers: [.option, .shift])
-      }
-    }
-    #if os(Linux)
-    if shortcutModifier == .control || shortcutModifier == .superKey {
-      let alternate: KeyModifiers = shortcutModifier == .control ? .superKey : .control
-      bindings = bindings.overlay {
-        bind("c", modifiers: alternate, to: .editing(.copy))
-        bind("x", modifiers: alternate, to: .editing(.cut))
-        bind("v", modifiers: alternate, to: .editing(.paste))
-        bind("a", modifiers: alternate, to: .editing(.selectAll))
-      }
-    }
-    #endif
-    return bindings
   }
 
   public var body: some Block {
