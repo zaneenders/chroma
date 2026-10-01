@@ -2,6 +2,8 @@ import Chroma
 import ChromaTesting
 import Foundation
 import InteractionFixtures
+import Logging
+import ProfileRecorderServer
 
 private func percentile(_ values: [Double], _ fraction: Double) -> Double {
   values.sorted()[Int(Double(values.count - 1) * fraction)]
@@ -24,20 +26,51 @@ private enum InputWorkload: String, CaseIterable {
 
 @main
 struct InteractionBenchmark {
-  @MainActor static func main() {
-    for count in [100, 1_000, 5_000] {
-      for lazy in [false, true] {
-        for events in [1, 8] {
-          for workload in InputWorkload.allCases {
-            measure(count: count, lazy: lazy, events: events, workload: workload)
-          }
-        }
+  @MainActor static func main() async throws {
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    func option(_ name: String, default fallback: String) -> String {
+      guard let index = arguments.firstIndex(of: name), index + 1 < arguments.count else { return fallback }
+      return arguments[index + 1]
+    }
+    let allowed = ["--rows", "--layout", "--workload", "--events", "--diagnostics", "--replay-seconds"]
+    guard arguments.count % 2 == 0,
+      stride(from: 0, to: arguments.count, by: 2).allSatisfy({ allowed.contains(arguments[$0]) }),
+      let count = Int(option("--rows", default: "1000")), count > 0,
+      let events = Int(option("--events", default: "8")), events > 0,
+      let seconds = Double(option("--replay-seconds", default: "0")), seconds >= 0, seconds <= 60,
+      ["on", "off"].contains(option("--diagnostics", default: "off")),
+      ["all", "eager", "lazy"].contains(option("--layout", default: "all")),
+      ["all", "pointer", "scroll", "drag"].contains(option("--workload", default: "all"))
+    else { throw NSError(domain: "InteractionBenchmark.arguments", code: 1) }
+    let layouts = [false, true].filter { option("--layout", default: "all") == "all" || option("--layout", default: "all") == ($0 ? "lazy" : "eager") }
+    let workloads = InputWorkload.allCases.filter { option("--workload", default: "all") == "all" || option("--workload", default: "all") == $0.rawValue }
+    guard seconds == 0 || (layouts.count == 1 && workloads.count == 1) else { throw NSError(domain: "InteractionBenchmark.arguments", code: 1) }
+    EngineDiagnostics.enabled = option("--diagnostics", default: "off") == "on"
+    var server: Task<Void, Never>?
+    if let pattern = ProcessInfo.processInfo.environment["PROFILE_RECORDER_SERVER_URL_PATTERN"] {
+      guard pattern.hasPrefix("unix:///"), pattern.contains("{PID}"),
+        ProcessInfo.processInfo.environment["PROFILE_RECORDER_SERVER_URL"] == nil
+      else { throw NSError(domain: "InteractionBenchmark.arguments", code: 1) }
+      server = Task.detached {
+        do {
+          let configuration = try await ProfileRecorderServerConfiguration.parseFromEnvironment()
+          await ProfileRecorderServer(configuration: configuration).runIgnoringFailures(logger: Logger(label: "chroma.profile"))
+        } catch { print("profile configuration failed: \(error)") }
       }
     }
+    for lazy in layouts {
+      for workload in workloads {
+        measure(count: count, lazy: lazy, events: events, workload: workload, replaySeconds: seconds)
+      }
+    }
+    server?.cancel()
+    await server?.value
   }
 
-  @MainActor private static func measure(count: Int, lazy: Bool, events: Int, workload: InputWorkload) {
+  @MainActor private static func measure(count: Int, lazy: Bool, events: Int, workload: InputWorkload, replaySeconds: Double) {
+    EngineDiagnostics.reset()
     let counters = InteractionWorkloadCounters()
+    counters.enabled = EngineDiagnostics.enabled
     let host = HeadlessHost(size: Size(width: 400, height: 600))
     let constructionStart = ProcessInfo.processInfo.systemUptime
     host.content = InteractionWorkload(count: count, lazy: lazy, counters: counters)
@@ -58,7 +91,10 @@ struct InteractionBenchmark {
     var renderEvaluations = 0
     var inputDraws = 0
     var renderDraws = 0
-    for iteration in 0..<35 {
+    let replayEnd = ProcessInfo.processInfo.systemUptime + replaySeconds
+    var iteration = 0
+    while replaySeconds > 0 ? ProcessInfo.processInfo.systemUptime < replayEnd : iteration < 35 {
+      defer { iteration += 1 }
       counters.resetDraws()
       let start = ProcessInfo.processInfo.systemUptime
       for event in 0..<events {
@@ -71,7 +107,7 @@ struct InteractionBenchmark {
       counters.resetDraws()
       host.renderScheduled()
       let end = ProcessInfo.processInfo.systemUptime
-      if iteration >= 5 {
+      if iteration >= 5 && replaySeconds == 0 {
         inputTimes.append((inputEnd - start) * 1000)
         renderTimes.append((end - inputEnd) * 1000)
         inputMeasurements += measurements
@@ -82,6 +118,7 @@ struct InteractionBenchmark {
         renderDraws += counters.rowDraws
       }
     }
+    if replaySeconds == 0 {
     print("\(workload.rawValue) \(lazy ? "lazy" : "eager") rows=\(count) events/frame=\(events)")
     print(
       String(
@@ -91,6 +128,8 @@ struct InteractionBenchmark {
     print("  row draws/frame: input=\(inputDraws / inputTimes.count) render=\(renderDraws / renderTimes.count)")
     print("  measurements/frame: input=\(inputMeasurements / inputTimes.count) render=\(renderMeasurements / renderTimes.count)")
     print("  workload body evaluations/frame: input=\(inputEvaluations / inputTimes.count) render=\(renderEvaluations / renderTimes.count)")
+    }
+    print("diagnostics enabled=\(EngineDiagnostics.enabled) body=\(EngineDiagnostics.bodyEvaluations) registration=\(EngineDiagnostics.registrationPasses) primitive=\(EngineDiagnostics.primitivePaintVisits) lazy-row=\(EngineDiagnostics.visibleLazyRowVisits) focus-growth=\(EngineDiagnostics.focusArrayCapacityGrowth)")
     if workload == .drag {
       host.handleInput(InputState(pointerPosition: Point(x: 47, y: 54), pointerReleased: true))
       host.renderScheduled()

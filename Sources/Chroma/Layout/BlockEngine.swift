@@ -92,6 +92,7 @@ public enum BlockEngine {
       }
       return Resolved(primitive: primitive, context: context, child: nil)
     }
+    if EngineDiagnostics.enabled { EngineDiagnostics.bodyEvaluations += 1 }
     return resolve(block.body, context: context)
   }
 
@@ -127,6 +128,7 @@ public enum BlockEngine {
   ) {
     let parent = context.interaction.builderStack.last
     let registered = parent?.children.count
+    if EngineDiagnostics.enabled { EngineDiagnostics.primitivePaintVisits += 1 }
     primitive.draw(into: &drawList, in: rect, context: context)
     guard let parent, parent.children.count == registered else { return }
     switch primitive.focusRule {

@@ -59,4 +59,15 @@ Reports separate input-batch and render p50/p95 milliseconds, plus average row d
 
 Interaction reports also include content installation and cold-frame timings at a 400×600 viewport, plus fixture row measurements and workload body evaluations. These are not engine-wide counters; row draws combine registration and painting work, and warm render combines layout and paint.
 
-For profiling, stop on failed builds (`set -e` or `&&`) before launching the freshly built release executable. Use `xctrace record --template Allocations --time-limit 30s --output NEW_TRACE_PATH --launch -- EXECUTABLE`. Check the exit status and recording log: a saved trace with attach errors is not a valid allocation profile.
+## Bounded Phase 1 collection
+
+```sh
+python3 Benchmarks/Scripts/collect-phase1.py Benchmarks/results/NEW_DIRECTORY
+python3 Benchmarks/Scripts/test_collect_phase1.py
+```
+
+The collector uses a Python process-group watchdog on Linux/macOS, preserves partial artifacts on failure, stops on test/build failure, and resolves the executable only after a fresh release build. It runs three minimum-matrix trials, one separate diagnostic matrix, and eager/lazy scroll sampling replays. Each profile uses the actual target PID's local Unix socket, a readiness deadline, separate capture/conversion, and stack validation. No automatic retries. Default deadlines match the revised Phase 1 gate; override with `CHROMA_DEADLINE_RESOLVE`, `TEST`, `BUILD`, `METADATA`, `TRIAL`, `READINESS`, `SAMPLE`, `CONVERSION`, `VALIDATION`, `TARGET`, or `ENTIRE` (each prefixed `CHROMA_DEADLINE_`, seconds). Values are recorded in `stages.json`. Legacy rendering/storage scripts above are not the revised-gate collector.
+
+The interaction runner defaults to the minimum matrix with diagnostics off. Select with `--rows 1000 --layout eager|lazy|all --workload pointer|scroll|drag|all --events 8 --diagnostics on|off`. `--replay-seconds 30` requires one layout and workload; accepts at most 60 seconds and prints no latency summary. UI work stays on MainActor; the optional server runs in a detached, cancelled-and-awaited task. Only a `unix:///` URL pattern containing `{PID}` enables it; direct URL overrides are rejected.
+
+ProfileRecorderServer 0.3.16 is pinned only in the benchmark package, linked only to InteractionBenchmark. Dependency resolution is recorded per collection. Sampling is neither allocation profiling nor an exact phase timer. See [baseline evidence and limitations](StorageComparison/README.md).

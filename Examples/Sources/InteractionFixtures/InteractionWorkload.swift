@@ -8,15 +8,16 @@ public final class InteractionWorkloadCounters {
   public private(set) var activations = 0
   public private(set) var lastActivatedRow: Int?
 
+  public var enabled = true
   public init() {}
   public func resetDraws() {
     rowDraws = 0
     rowMeasurements = 0
     blockEvaluations = 0
   }
-  fileprivate func recordMeasurement() { rowMeasurements += 1 }
-  fileprivate func recordEvaluation() { blockEvaluations += 1 }
-  fileprivate func recordDraw() { rowDraws += 1 }
+  fileprivate func recordMeasurement() { if enabled { rowMeasurements += 1 } }
+  fileprivate func recordEvaluation() { if enabled { blockEvaluations += 1 } }
+  fileprivate func recordDraw() { if enabled { rowDraws += 1 } }
   fileprivate func activate(row: Int) {
     activations += 1
     lastActivatedRow = row

@@ -14,13 +14,17 @@ let package = Package(
   platforms: [.macOS(.v27)],
   dependencies: [
     .package(path: ".."),
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     .package(path: "../Examples"),
+    .package(url: "https://github.com/apple/swift-profile-recorder.git", exact: "0.3.16"),
   ],
   targets: [
     .executableTarget(
       name: "InteractionBenchmark",
       dependencies: [
         .product(name: "InteractionFixtures", package: "Examples"),
+        .product(name: "ProfileRecorderServer", package: "swift-profile-recorder"),
+        .product(name: "Logging", package: "swift-log"),
         .product(name: "Chroma", package: "chroma"),
         .product(name: "ChromaTesting", package: "chroma"),
       ]),

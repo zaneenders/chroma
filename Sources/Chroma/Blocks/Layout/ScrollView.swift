@@ -268,6 +268,7 @@ public struct ScrollView: PrimitiveBlock {
       let end = min(uniformRows.count, visibleEnd + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
+          if EngineDiagnostics.enabled { EngineDiagnostics.visibleLazyRowVisits += 1 }
           drawRow(
             uniformRows.content(index), into: &drawList,
             in: Rect(
@@ -286,6 +287,7 @@ public struct ScrollView: PrimitiveBlock {
       let end = min(rows.count, positions.firstRow(startingAfter: visibleBottom) + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
+          if EngineDiagnostics.enabled { EngineDiagnostics.visibleLazyRowVisits += 1 }
           drawRow(
             rows[index].content,
             into: &drawList,

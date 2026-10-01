@@ -168,6 +168,7 @@ package final class FrameProducer {
   private func drawRegistrations(
     _ content: (any Block)?, into list: inout DrawList, viewport: Size, context: BlockContext
   ) {
+    if EngineDiagnostics.enabled { EngineDiagnostics.registrationPasses += 1 }
     registrationSubscription?.cancel()
     let subscription = FrameTrackingSubscription({})
     registrationSubscription = subscription

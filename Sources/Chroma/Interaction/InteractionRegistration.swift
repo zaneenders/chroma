@@ -38,6 +38,12 @@ extension Interaction {
       kind: .group, rect: rect, hitRect: clippedRect(rect), axis: axis, scrollID: scrollID,
       navigationID: navigationID, navigationName: navigationName,
       canBeRevealed: scrollID != nil || (builderStack.last?.canBeRevealed ?? false))
+    let capacity = EngineDiagnostics.enabled ? parent.children.capacity : 0
+    defer {
+      if EngineDiagnostics.enabled && parent.children.capacity != capacity {
+        EngineDiagnostics.focusArrayCapacityGrowth += 1
+      }
+    }
     parent.children.append(node)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
@@ -74,6 +80,12 @@ extension Interaction {
   ) -> ButtonState {
     guard let parent = builderStack.last else {
       preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
+    }
+    let capacity = EngineDiagnostics.enabled ? parent.children.capacity : 0
+    defer {
+      if EngineDiagnostics.enabled && parent.children.capacity != capacity {
+        EngineDiagnostics.focusArrayCapacityGrowth += 1
+      }
     }
     parent.children.append(
       FocusNode(
