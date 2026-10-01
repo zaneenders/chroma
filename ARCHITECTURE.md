@@ -287,7 +287,7 @@ Later, if profiling warrants it, evolve `DrawList` into reusable scene segments.
 
 | Step | Deliverable | Acceptance criterion |
 |---|---|---|
-| **1. Establish baseline** | Resolve the existing test failure; add build/measure/prepare/paint counters; compare `Array` and `UniqueArray` storage | Repeatable correctness, allocation, and workload measurements |
+| **1. Establish baseline** | Finish a bounded timing/counter baseline; add opt-in Swift Profile Recorder sampling for Linux/macOS | Reproducible input/render results and a validated stack profile or explicit profiling blocker; allocation profiling is not a gate |
 | **2. Prove the lifecycle** | New path for stacks, text, buttons, and fixed-height lists; ordered input without coalescing | Input produces **zero paint calls**; every delivered event is processed in order; stale callbacks remain safe |
 | **3. Replace repeated traversal** | Compact nodes, retained layout, modifier lowering, conservative subtree culling | No Block resolution during paint; unchanged measurements reused; no unsafe borrowed lifetimes |
 | **4. Fix transcript scaling** | Viewport-driven variable-height virtualization and logical navigation | Scrolling does not scan or measure the entire history; offscreen selection and scroll anchoring survive |
@@ -298,25 +298,88 @@ Both consumers pin different Chroma revisions. Migration validation must explici
 
 ### Plan of attack
 
-Work through these phases in order, in small runnable changes. All implementation tasks below are pending; the investigation and isolated ownership probes are not an engine implementation.
+Work through these phases in order, in small runnable changes. Phase 1 records completed baseline work and remaining bounded tasks; later phases are pending. Baseline instrumentation and isolated ownership probes are not a new engine implementation.
 
 The first milestone is **a vertical slice containing a virtual list, button actions, focus navigation, and cached layout**, using the existing `DrawList` and headless tests. Keep the existing path available until the slice passes its correctness and performance checks; do not build a permanent second engine.
 
-#### Phase 1 — Establish a trustworthy baseline
+#### Phase 1 — Finish a bounded, reproducible baseline
 
-See [storage comparison and baseline status](Benchmarks/StorageComparison/README.md).
+See [storage comparison and baseline status](Benchmarks/StorageComparison/README.md) for historical runs. This revised gate supersedes that report's requirement for allocation profiling and full phase separation before proceeding. The goal is enough evidence to compare the first engine slice—not a complete profiling platform.
+
+Completed evidence:
+
 - [x] Assert content replacement uses the new callbacks rather than require drawing as the mechanism (`replacingContentBeforeInputUsesNewCallbacks`).
-- [x] Run core, Examples, and Benchmarks tests before engine changes: 390, 53, and 3 tests passed; no remaining failures.
-- [x] Capture release interaction timings with revision/worktree, toolchain, hardware, viewport, item count, and event count. Report installation, cold frame, and warm input/render separately.
-- [ ] Separate layout, paint, and backend submission costs; warm render currently combines layout and paint.
-- [x] Add fixture counters for workload body evaluations, row measurements, and row draw calls.
-- [ ] Add engine-wide Block evaluation, registration/preparation, paint, visible-row, and storage-growth counters. Fixture draw calls are not distinct paint or visible-row counts.
-- [ ] Profile allocations alongside p50/p95 timings. The bounded Allocations recording failed to attach; do not treat its trace as valid evidence.
+- [x] Run core, Examples, and Benchmarks tests before engine changes: 390, 53, and 3 tests passed. The diagnostic follow-up reports 391, 53, and 3 passing tests.
+- [x] Capture all 36 release interaction cases with revision/worktree, toolchain, hardware, viewport, item count, and event count. Report installation, cold frame, and warm input/render separately.
+- [x] Add fixture counters and opt-in engine diagnostics for body evaluations, registration passes, primitive paint visits, visible lazy-row visits, and focus-array capacity growth. Their scope and timing overhead are documented; these are not allocation counts or fully separated layout/paint stages.
 - [x] Compare `Array<Node>` and `UniqueArray<Node>` under equivalent build/update/traversal workloads. Retain Array provisionally; results do not justify adding Swift Collections.
 
-Collection must stop on build/test failure (`set -e` or `&&`), use a freshly built release binary, and preserve results in a new directory. Limit `xctrace record` to `--time-limit 30s`; inspect recording errors before accepting a trace.
+Remaining work, in order:
 
-**Gate: not complete.** Tests are runnable and construction is distinguished from warm-frame cost, but phase-separated timings, engine-wide counters, and valid allocation profiling remain required.
+- [ ] Add an opt-in `ProfileRecorderServer` dependency to the benchmark executable, not the Chroma library. Pin/record the resolved version. Both desktop consumers already have server integration; reuse their configuration pattern rather than create a second profiling service.
+- [ ] Add benchmark case selection, diagnostics on/off, and a bounded profile-replay mode. Replay one named workload while sampling; keep UI work on `@MainActor` and allow the server to start/respond independently. Do not leave an infinite workload loop or profiler task running.
+- [ ] Add the timeout and cleanup rules below to collection scripts, including dependency resolution, tests, build, metadata commands, benchmark execution, readiness checks, capture, and conversion. Test failure/timeout handling as well as the success path.
+- [ ] Collect three fresh, unprofiled trials of a minimum matrix: 1,000 rows, eager/lazy, pointer/scroll/drag, eight events per rendered frame, 400×600 viewport, five warmups and 30 measured frames. Keep instrumentation settings identical across baseline/candidate. Use a separate diagnostic run for detailed counters; expand to 100/5,000 rows only after the minimum matrix completes.
+- [ ] Capture one eager and one lazy scroll replay with Swift Profile Recorder, preferably on Linux, using the same workload parameters. Save `.perf` output, request settings, process logs, and the corresponding build metadata. Keep sampling runs separate from latency trials.
+- [ ] Inspect profiles for actual stack samples and recognizable Chroma/workload frames. Record unresolved stacks, idle/waiting threads, and sampling overhead limitations; an HTTP success or nonempty file alone is not sufficient validation.
+- [ ] Summarize input/render p50/p95, diagnostic work counts, sampled hot paths, and known gaps. Record a profiling/platform blocker explicitly if capture cannot complete under the limits below.
+
+##### Profiler choice and scope
+
+Use [Apple Swift Profile Recorder](https://github.com/apple/swift-profile-recorder) for in-process stack sampling on Linux and macOS. It does not require `sudo`, `CAP_SYS_PTRACE`, or attaching Instruments to the target. Start `ProfileRecorderServer` only when `PROFILE_RECORDER_SERVER_URL_PATTERN` is set, on a per-run local Unix socket; do not expose a public TCP listener.
+
+Build the release executable before starting capture. Preserve symbol information and verify stack quality with the selected toolchain; record any frame-pointer/build flags rather than assume a flag intended for C also configures Swift code. Resolve dependency/API differences against the pinned package version.
+
+Swift Profile Recorder samples running **and waiting** threads. It is not an allocation profiler, exact phase timer, or GPU profiler. Analyze the UI/workload thread separately from profiler/NIO/idle stacks. Do not interpret inclusive stack sample percentages as exclusive CPU time or compare profiled timings with unprofiled timings.
+
+After the instrumented runner is implemented, launch its freshly built binary with:
+
+```sh
+PROFILE_RECORDER_SERVER_URL_PATTERN='unix:///tmp/chroma-profile-{PID}.sock' "$bin"
+```
+
+The collection wrapper must choose the bounded replay mode and track that process's actual PID; do not select an arbitrary socket by globbing. Wait for `/health` with a deadline, then request a short sample while the selected workload is active. Linux capture commands, for an existing `$socket` and a new `$out` directory (replace `timeout` with the macOS watchdog described below when needed):
+
+```sh
+set -eu
+curl --fail --silent --show-error --connect-timeout 2 --max-time 20 \
+  --unix-socket "$socket" \
+  -H 'Content-Type: application/json' \
+  --data '{"numberOfSamples":500,"timeInterval":"10ms"}' \
+  http://localhost/sample --output "$out/samples.raw.perf"
+timeout --signal=TERM --kill-after=5s 30s \
+  swift demangle --compact < "$out/samples.raw.perf" > "$out/samples.perf"
+```
+
+The sampling request is approximately five seconds; the HTTP timeout includes collection and response work. Retain raw output if conversion fails. Open the validated `.perf` in Speedscope or Firefox Profiler. Do not pipe capture into conversion in a way that masks a failed HTTP request.
+
+##### Timeout and completion policy
+
+These are wall-clock process limits, not performance targets. Enforce them externally as well as using tool-specific duration flags; a requested sample duration does not bound startup, symbolication, or shutdown.
+
+| Operation | Default deadline |
+|---|---:|
+| Dependency resolution | 5 minutes |
+| Each test package | 5 minutes |
+| Release build | 10 minutes |
+| Each metadata command | 30 seconds |
+| Each unprofiled minimum-matrix trial or diagnostic replay | 120 seconds |
+| Profiler `/health` readiness | 10 seconds total, at most 2 seconds per request |
+| Sampling | 500 samples at 10 ms; HTTP request capped at 20 seconds |
+| Demangling/profile validation | 30 seconds each |
+| Profile target process, including readiness/capture/conversion | 90 seconds |
+| Entire collection attempt | 30 minutes |
+
+- Use GNU `timeout --signal=TERM --kill-after=5s` on Linux; use an available `gtimeout` or a Python process-group watchdog on macOS. Do not assume `timeout` ships with macOS. Make deadlines configurable and record their values.
+- On timeout, terminate the owned process group, allow five seconds for cleanup, then force termination of remaining owned children and reap them. Never kill unrelated Swift/app processes by name. Trap interruption/exit to stop the launched target and remove only its socket.
+- Stop immediately on test/build failure; never run a stale executable. Resolve its path only after a successful fresh build. Preserve logs and partial artifacts in a new results directory on every exit.
+- Record each stage as `passed`, `failed`, `timed-out`, `blocked`, or `not-applicable`, with elapsed time and exit status. Timed-out samples/trials are invalid and must not be included in latency summaries.
+- Save hardware/OS, toolchain, resolved dependencies, build flags, workload and instrumentation settings, plus a source snapshot including relevant untracked files. `git diff` alone does not capture new diagnostic sources. Compare only matching configurations on the same platform/hardware.
+- Allow at most one targeted retry after an identifiable cause or workload/deadline adjustment. Record changed settings and do not silently mix smaller workloads with earlier baselines. A timeout or unavailable Linux host is a recorded blocker, not an invitation to keep collecting indefinitely.
+
+Allocation profiling is **deferred**, not satisfied by sampling. The failed `xctrace` attach attempts remain invalid evidence; do not repeat them to close this gate. Exact layout/paint separation belongs to the new lifecycle, broader cache/storage coverage to Phase 3, and actual backend/GPU measurements to backend validation. Headless submission cost is `not-applicable`, not zero GPU cost.
+
+**Completion gate:** passing relevant tests, a fresh reproducible minimum timing matrix, a diagnostic work-count run, and either validated sampled profiles or a concise blocker report with retained logs and one concrete follow-up. All owned processes must be stopped. Mark the result `baseline-ready` or `baseline-ready-with-profile-blocker`; the latter permits Phase 2 but does not claim profiling or Linux validation succeeded. Allocation tools and measurements that require the future architecture must not hold Phase 1 open indefinitely.
 
 #### Phase 2 — Prove the new lifecycle in one vertical slice
 
@@ -368,7 +431,7 @@ Collection must stop on build/test failure (`set -e` or `&&`), use a freshly bui
 
 #### Phase 6 — Optimize only measured remaining costs
 
-- [ ] Re-run the same baseline workloads and compare p50/p95, operation counts, allocations, and retained memory. Add regression tests for the improved work counts.
+- [ ] Re-run the same baseline workloads and compare p50/p95, operation counts, and sampled hot paths. Add regression tests for the improved work counts; collect allocation/retained-memory evidence separately when supported, without treating samples or capacity-growth counts as allocations.
 - [ ] Profile actual transcript streaming and input-to-presentation latency, not just synthetic draw-command replay.
 - [ ] Add bounded text-layout caching or finer invalidation only where profiles show a remaining cost.
 - [ ] Consider reusable scene segments or backend changes only if painting/submission is now a demonstrated bottleneck.
@@ -411,6 +474,7 @@ These observations describe the inspected working tree, including existing uncom
 
 - [Interaction Medium series](https://www.dgtlgrove.com/p/ui-part-1-the-interaction-medium), particularly Parts 2, 7, 8, and 9. Local copy: `/Users/zane/Desktop/interaction-medium`.
 - [Clay](https://github.com/nicbarker/clay). Local checkout: `/Users/zane/Developer/clay`.
+- [Swift Profile Recorder](https://github.com/apple/swift-profile-recorder): in-process Linux/macOS stack sampling, `ProfileRecorderServer`, `/health`, and `/sample`.
 - [Swift Collections](https://github.com/apple/swift-collections), particularly `BasicContainers.UniqueArray` and `RigidArray`; [1.7.1 release notes](https://github.com/apple/swift-collections/releases/tag/1.7.1) and the [`Ref` back-deployment workaround](https://github.com/apple/swift-collections/pull/739).
 - [SE-0519: `Ref` and `MutableRef`](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0519-ref-mutableref-types.md) and [SE-0447: `Span`](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0447-span-access-shared-contiguous-storage.md).
 - [GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui), particularly [`element.rs`](https://github.com/zed-industries/zed/blob/main/crates/gpui/src/element.rs) and [`window.rs`](https://github.com/zed-industries/zed/blob/main/crates/gpui/src/window.rs).
