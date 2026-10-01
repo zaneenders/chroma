@@ -5,9 +5,9 @@
 ## Examples
 
 ```sh
-swift run --package-path Example PlayDemo
-swift run --package-path Example ChatDemo
-swift run --package-path Example ImageDemo
+swift run --package-path Examples PlayDemo
+swift run --package-path Examples ChatDemo
+swift run --package-path Examples ImageDemo
 ```
 
 - **Play:** falling blocks with a ghost piece, next-piece queue, scoring, and increasing speed.
@@ -26,7 +26,7 @@ Scores and conversations last for the current app session. The old rendering/fon
 retained only as test fixtures.
 
 ```sh
-swift test --package-path Example
+swift test --package-path Examples
 ```
 
 ## Frame scheduling

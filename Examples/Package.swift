@@ -36,7 +36,7 @@ for demo in demos {
 }
 
 let package = Package(
-  name: "ChromaExample",
+  name: "ChromaExamples",
   platforms: [.macOS(.v27)],
   products: demos.map { .executable(name: $0, targets: [$0]) },
   dependencies: [
