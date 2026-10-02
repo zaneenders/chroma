@@ -14,6 +14,12 @@ struct HeadlessProcessFixture: HeadlessApp {
   private let model: Model
 
   init() {
+    if ProcessInfo.processInfo.environment["CHROMA_FIXTURE_FLOOD_STDERR"] == "1" {
+      // More than a pipe buffer: startup can only complete if the driver drains
+      // stderr concurrently with waiting for the first stdout response.
+      try? FileHandle.standardError.write(
+        contentsOf: Data((String(repeating: "diagnostic ", count: 32_768) + "\n").utf8))
+    }
     print("fixture: initializer print")
     model = Model()
   }

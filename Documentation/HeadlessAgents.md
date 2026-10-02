@@ -278,26 +278,46 @@ The transport preserves input order and provides explicit snapshots; it does not
 turn network requests, app-created tasks, or wall-clock-dependent application
 state into synchronous or deterministic operations.
 
-## Additional process regression fixture
+## Swift Subprocess E2E tests
 
 ```sh
 Tools/test_headless_fixture.sh
 ```
 
-This builds a separate headless-only consumer package in release mode and checks
-application initializer/callback/async logging isolation, main-actor progress
-while stdin is idle, EOF/quit, and broken output-pipe handling. Set `SWIFT` to a
-specific Swift executable when needed. The same wire protocol works with Swift
-Subprocess or any other streaming subprocess library: write each UTF-8 request
-plus a newline, parse stdout line by line, drain stderr separately, and close
-stdin or send `quit` when finished. No dependency on a particular client library
-is imposed on Chroma.
+This builds the demo and a standalone consumer in release mode, then runs Swift
+Testing end-to-end tests with the official
+[`swiftlang/swift-subprocess` 1.0.0](https://github.com/swiftlang/swift-subprocess/tree/1.0.0)
+package. Its [1.0 API](https://github.com/swiftlang/swift-subprocess/blob/1.0.0/README.md)
+requires Swift 6.2 or newer; this repository's Swift 6.4 toolchain is supported.
+The dependency is confined to `Tests/HeadlessProcessFixture`; production Chroma
+products gain no third-party runtime dependency. The fixture's `Package.resolved`
+records the exact Subprocess and Swift System revisions.
+
+The tests use `input: .inputWriter` and independent stdout/stderr `.sequence`
+streams. Stdout framing splits only on LF, preserving Unicode line-separator
+characters within JSON strings. They decode each response, wait for a correlated
+response before
+sending the next interactive request, and separately test a rapid ordered input
+burst. They also cover malformed-request recovery, EOF, application logging,
+main-actor async progress with stdin idle, output-pipe failure, and nonzero exits.
+Concurrent stream draining and deadline/cancellation cleanup are exercised with
+real child processes; cleanup checks verify that the child has been reaped.
+This replaces the small Python fixture suite. The broader dependency-free Python
+protocol suite and example client remain available.
+
+Set `SWIFT` to a particular Swift executable, or `CONFIGURATION=debug` to test a
+debug build. The wrapper builds and locates both executables before invoking
+`swift test`. No Foundation `Process` substitute or prerecorded output is used.
+The protocol remains usable with any streaming subprocess library: write each
+UTF-8 request plus a newline, parse stdout line by line, drain stderr separately,
+and close stdin or send `quit` when finished.
 
 ## Verification of this proposal
 
 On Linux with Swift 6.4, the full package release build and all 490 Swift tests
 (470 core, 13 Wayland backend, 7 headless session) pass. The release demo passes
-19 real-pipe protocol tests; the standalone release consumer passes 3 additional
-process tests. An optimized native-app fixture also runs its `--headless` branch
+19 real-pipe protocol tests; the standalone release consumer passes 11 Swift
+Subprocess E2E tests. An optimized native-app fixture also runs its `--headless`
+branch
 with display-related environment variables removed. macOS/Metal execution has
 not been verified; no native visual rendering or performance claim is made.

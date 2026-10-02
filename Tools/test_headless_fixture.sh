@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a standalone consumer package, then exercise its real stdin/stdout pipes.
+# Build real executables, then drive their pipes with swiftlang/swift-subprocess.
 # Usage: SWIFT=/path/to/swift Tools/test_headless_fixture.sh
 # SWIFTC=/path/to/swiftc also selects the adjacent swift executable.
 set -euo pipefail
@@ -16,6 +16,10 @@ fi
 configuration=${CONFIGURATION:-release}
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$fixture/.build/ModuleCache}"
 
+"$SWIFT" build --package-path "$root" --configuration "$configuration" --product ChromaHeadlessDemo
+demo_bin_path=$("$SWIFT" build --package-path "$root" --configuration "$configuration" --show-bin-path)
 "$SWIFT" build --package-path "$fixture" --configuration "$configuration" --product HeadlessProcessFixture
 bin_path=$("$SWIFT" build --package-path "$fixture" --configuration "$configuration" --show-bin-path)
-PYTHONDONTWRITEBYTECODE=1 "${PYTHON:-python3}" "$root/Tools/test_headless_fixture.py" "$bin_path/HeadlessProcessFixture" -v
+CHROMA_HEADLESS_DEMO="$demo_bin_path/ChromaHeadlessDemo" \
+CHROMA_HEADLESS_FIXTURE="$bin_path/HeadlessProcessFixture" \
+  "$SWIFT" test --package-path "$fixture" --configuration "$configuration"

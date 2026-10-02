@@ -8,3 +8,6 @@ Package.resolved
 .vscode/
 
 __pycache__/
+
+# Reproduce the standalone integration-test dependency graph.
+!Tests/HeadlessProcessFixture/Package.resolved
