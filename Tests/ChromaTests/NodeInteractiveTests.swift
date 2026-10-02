@@ -5,7 +5,10 @@ import Testing
 
 @MainActor
 struct NodeInteractiveTests {
-  private final class Counts { var builds = 0; var actions = 0 }
+  private final class Counts {
+    var builds = 0
+    var actions = 0
+  }
   @Observable final class Model { var label = "Initial" }
 
   @Test func phaseChangesRefreshBeforePaintAndUnchangedEventsReuseContent() throws {
@@ -25,7 +28,8 @@ struct NodeInteractiveTests {
     }
     #expect(counts.builds == hoveredBuilds)
     #expect(producer.paints == 0)
-    try producer.dispatch(InputState(pointerPosition: Point(x: 10, y: 10), pointerDown: true, pointerPressed: true), onChange: {})
+    try producer.dispatch(
+      InputState(pointerPosition: Point(x: 10, y: 10), pointerDown: true, pointerPressed: true), onChange: {})
     let beforePaint = counts.builds
     let frame = producer.paint()
     #expect(counts.builds == beforePaint)

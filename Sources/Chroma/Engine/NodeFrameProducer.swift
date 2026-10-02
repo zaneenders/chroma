@@ -68,7 +68,8 @@ final class NodeFrameProducer {
     let needsBuild = subscription?.isActive != true
     let textChanged = !needsBuild && scene.refreshEditorText(force: forceEditorText)
     guard
-      needsBuild || !scene.elementsAreValid || textChanged || scene.hasPendingScrollRequest || scene.hasPendingFocus || !scene.editorTextIsValid || !scene.boundariesAreValid
+      needsBuild || !scene.elementsAreValid || textChanged || scene.hasPendingScrollRequest || scene.hasPendingFocus
+        || !scene.editorTextIsValid || !scene.boundariesAreValid
         || self.viewport != viewport || metrics != context.fontMetrics
     else {
       return

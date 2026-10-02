@@ -26,7 +26,11 @@ struct EngineCutoverTests {
     let scene = NodeScene()
     let context = BlockContext()
     let content = VStack {
-      HStack { Text("Label"); Spacer(); Text("Value") }
+      HStack {
+        Text("Label")
+        Spacer()
+        Text("Value")
+      }
       Button("Visible") {}
     }
     try scene.update(content, context: context)

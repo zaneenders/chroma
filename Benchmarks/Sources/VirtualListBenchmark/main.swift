@@ -5,7 +5,10 @@ import Observation
 
 @Observable
 @MainActor
-final class Message { var text: String; init(_ text: String) { self.text = text } }
+final class Message {
+  var text: String
+  init(_ text: String) { self.text = text }
+}
 
 @main
 struct VirtualListBenchmark {
@@ -32,7 +35,8 @@ struct VirtualListBenchmark {
     if variable {
       host.content = VariableHeightList(snapshot: snapshot, estimatedHeight: 80) { id in
         builds += 1
-        let message = messages[id] ?? Message(String(repeating: "Message \(id): streaming transcript content. ", count: id % 8 + 1))
+        let message =
+          messages[id] ?? Message(String(repeating: "Message \(id): streaming transcript content. ", count: id % 8 + 1))
         messages[id] = message
         visibleMessage = message
         return Text(message.text).wrapping().padding(8)
@@ -59,15 +63,18 @@ struct VirtualListBenchmark {
       let start = ProcessInfo.processInfo.systemUptime
       if workload == "streaming", variable { visibleMessage?.text += " token" }
       for event in 0..<8 {
-        host.handleInput(InputState(
-          pointerPosition: Point(x: 10, y: Float(10 + event)), pointerDown: workload == "drag",
-          scrollDelta: workload == "scroll" ? Point(x: 0, y: -1) : .zero))
+        host.handleInput(
+          InputState(
+            pointerPosition: Point(x: 10, y: Float(10 + event)), pointerDown: workload == "drag",
+            scrollDelta: workload == "scroll" ? Point(x: 0, y: -1) : .zero))
       }
       commands = host.renderScheduled().commands.count
       timings.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
     }
     timings.sort()
     if workload == "pointer" { precondition(builds == previousBuilds, "Warm frames rebuilt rows") }
-    print("\(trial),\(workload),\(variable ? "variable" : "fixed"),\(count),\(snapshotMilliseconds),\(coldMilliseconds),\(timings[15]),\(timings[28]),\(builds - previousBuilds),\(commands)")
+    print(
+      "\(trial),\(workload),\(variable ? "variable" : "fixed"),\(count),\(snapshotMilliseconds),\(coldMilliseconds),\(timings[15]),\(timings[28]),\(builds - previousBuilds),\(commands)"
+    )
   }
 }

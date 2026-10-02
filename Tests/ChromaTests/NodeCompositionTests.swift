@@ -4,7 +4,10 @@ import Testing
 
 @MainActor
 struct NodeCompositionTests {
-  private final class Counts { var prepares = 0; var paints = 0 }
+  private final class Counts {
+    var prepares = 0
+    var paints = 0
+  }
   private struct Element: LifecycleElement {
     let counts: Counts
     var focusRule: FocusRule { .control }
@@ -69,7 +72,8 @@ struct NodeCompositionTests {
     let builds = producer.builds
     let textLayouts = producer.textLayoutBuilds
     for _ in 0..<8 {
-      try producer.dispatch(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -10)), onChange: {})
+      try producer.dispatch(
+        InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -10)), onChange: {})
     }
     #expect(producer.builds == builds)
     #expect(producer.textLayoutBuilds == textLayouts)

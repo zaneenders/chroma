@@ -143,7 +143,9 @@ private struct GameBoard: LifecycleElement {
   @MainActor func prepareInteraction(in rect: Rect, context: BlockContext) {
     let cell = min((rect.size.width - 12) / 10, (rect.size.height - 12) / 20).rounded(.down)
     guard cell >= 3 else { return }
-    let grid = Rect(x: rect.minX + (rect.size.width - cell * 10) / 2, y: rect.minY + (rect.size.height - cell * 20) / 2, width: cell * 10, height: cell * 20)
+    let grid = Rect(
+      x: rect.minX + (rect.size.width - cell * 10) / 2, y: rect.minY + (rect.size.height - cell * 20) / 2,
+      width: cell * 10, height: cell * 20)
     _ = context.buttonState(in: grid) {
       if state.phase != .playing { state.togglePause() }
       state.focus.focus()

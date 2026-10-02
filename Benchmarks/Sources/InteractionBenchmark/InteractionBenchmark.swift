@@ -42,9 +42,15 @@ struct InteractionBenchmark {
       ["all", "eager", "lazy"].contains(option("--layout", default: "all")),
       ["all", "pointer", "scroll", "drag"].contains(option("--workload", default: "all"))
     else { throw NSError(domain: "InteractionBenchmark.arguments", code: 1) }
-    let layouts = [false, true].filter { option("--layout", default: "all") == "all" || option("--layout", default: "all") == ($0 ? "lazy" : "eager") }
-    let workloads = InputWorkload.allCases.filter { option("--workload", default: "all") == "all" || option("--workload", default: "all") == $0.rawValue }
-    guard seconds == 0 || (layouts.count == 1 && workloads.count == 1) else { throw NSError(domain: "InteractionBenchmark.arguments", code: 1) }
+    let layouts = [false, true].filter {
+      option("--layout", default: "all") == "all" || option("--layout", default: "all") == ($0 ? "lazy" : "eager")
+    }
+    let workloads = InputWorkload.allCases.filter {
+      option("--workload", default: "all") == "all" || option("--workload", default: "all") == $0.rawValue
+    }
+    guard seconds == 0 || (layouts.count == 1 && workloads.count == 1) else {
+      throw NSError(domain: "InteractionBenchmark.arguments", code: 1)
+    }
     EngineDiagnostics.enabled = option("--diagnostics", default: "off") == "on"
     var server: Task<Void, Never>?
     if let pattern = ProcessInfo.processInfo.environment["PROFILE_RECORDER_SERVER_URL_PATTERN"] {
@@ -54,7 +60,8 @@ struct InteractionBenchmark {
       server = Task.detached {
         do {
           let configuration = try await ProfileRecorderServerConfiguration.parseFromEnvironment()
-          await ProfileRecorderServer(configuration: configuration).runIgnoringFailures(logger: Logger(label: "chroma.profile"))
+          await ProfileRecorderServer(configuration: configuration).runIgnoringFailures(
+            logger: Logger(label: "chroma.profile"))
         } catch { print("profile configuration failed: \(error)") }
       }
     }
@@ -67,7 +74,9 @@ struct InteractionBenchmark {
     await server?.value
   }
 
-  @MainActor private static func measure(count: Int, lazy: Bool, events: Int, workload: InputWorkload, replaySeconds: Double) {
+  @MainActor private static func measure(
+    count: Int, lazy: Bool, events: Int, workload: InputWorkload, replaySeconds: Double
+  ) {
     EngineDiagnostics.reset()
     let counters = InteractionWorkloadCounters()
     counters.enabled = EngineDiagnostics.enabled
@@ -77,8 +86,10 @@ struct InteractionBenchmark {
     let installed = ProcessInfo.processInfo.systemUptime
     host.renderScheduled()
     let coldEnd = ProcessInfo.processInfo.systemUptime
-    print(String(format: "construction install=%.3f cold-frame=%.3f ms viewport=400x600",
-      (installed - constructionStart) * 1000, (coldEnd - installed) * 1000))
+    print(
+      String(
+        format: "construction install=%.3f cold-frame=%.3f ms viewport=400x600",
+        (installed - constructionStart) * 1000, (coldEnd - installed) * 1000))
     if workload == .drag {
       host.handleInput(InputState(pointerPosition: Point(x: 40, y: 40), pointerDown: true, pointerPressed: true))
       host.renderScheduled()
@@ -119,17 +130,23 @@ struct InteractionBenchmark {
       }
     }
     if replaySeconds == 0 {
-    print("\(workload.rawValue) \(lazy ? "lazy" : "eager") rows=\(count) events/frame=\(events)")
-    print(
-      String(
-        format: "  input p50=%.3f p95=%.3f ms; render p50=%.3f p95=%.3f ms",
-        percentile(inputTimes, 0.5), percentile(inputTimes, 0.95),
-        percentile(renderTimes, 0.5), percentile(renderTimes, 0.95)))
-    print("  row draws/frame: input=\(inputDraws / inputTimes.count) render=\(renderDraws / renderTimes.count)")
-    print("  measurements/frame: input=\(inputMeasurements / inputTimes.count) render=\(renderMeasurements / renderTimes.count)")
-    print("  workload body evaluations/frame: input=\(inputEvaluations / inputTimes.count) render=\(renderEvaluations / renderTimes.count)")
+      print("\(workload.rawValue) \(lazy ? "lazy" : "eager") rows=\(count) events/frame=\(events)")
+      print(
+        String(
+          format: "  input p50=%.3f p95=%.3f ms; render p50=%.3f p95=%.3f ms",
+          percentile(inputTimes, 0.5), percentile(inputTimes, 0.95),
+          percentile(renderTimes, 0.5), percentile(renderTimes, 0.95)))
+      print("  row draws/frame: input=\(inputDraws / inputTimes.count) render=\(renderDraws / renderTimes.count)")
+      print(
+        "  measurements/frame: input=\(inputMeasurements / inputTimes.count) render=\(renderMeasurements / renderTimes.count)"
+      )
+      print(
+        "  workload body evaluations/frame: input=\(inputEvaluations / inputTimes.count) render=\(renderEvaluations / renderTimes.count)"
+      )
     }
-    print("diagnostics enabled=\(EngineDiagnostics.enabled) body=\(EngineDiagnostics.bodyEvaluations) registration=\(EngineDiagnostics.registrationPasses) primitive=\(EngineDiagnostics.primitivePaintVisits) lazy-row=\(EngineDiagnostics.visibleLazyRowVisits) focus-growth=\(EngineDiagnostics.focusArrayCapacityGrowth)")
+    print(
+      "diagnostics enabled=\(EngineDiagnostics.enabled) body=\(EngineDiagnostics.bodyEvaluations) registration=\(EngineDiagnostics.registrationPasses) primitive=\(EngineDiagnostics.primitivePaintVisits) lazy-row=\(EngineDiagnostics.visibleLazyRowVisits) focus-growth=\(EngineDiagnostics.focusArrayCapacityGrowth)"
+    )
     if workload == .drag {
       host.handleInput(InputState(pointerPosition: Point(x: 47, y: 54), pointerReleased: true))
       host.renderScheduled()

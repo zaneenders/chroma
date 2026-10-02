@@ -429,7 +429,8 @@ extension ScrollView {
         },
         key: { snapshot.ids[$0] }, index: { snapshot.index(of: $0) },
         row: { index in
-          rows.content(index).sizing(y: .fixed(rows.height)).padding(EdgeInsets(bottom: index + 1 < rows.count ? spacing : 0))
+          rows.content(index).sizing(y: .fixed(rows.height)).padding(
+            EdgeInsets(bottom: index + 1 < rows.count ? spacing : 0))
         })
     }
   }

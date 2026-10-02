@@ -230,7 +230,13 @@ final class NodeScene {
       return try lower(modifier.content, context: context)
     }
     if let reader = block as? any NodeThemeReader {
-      return Description(node: Node(content: .themeReader, context: context), children: [try lower(reader.nodeContent(theme: context.theme), context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))])
+      return Description(
+        node: Node(content: .themeReader, context: context),
+        children: [
+          try lower(
+            reader.nodeContent(theme: context.theme),
+            context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))
+        ])
     }
     if let theme = block as? ThemeBlock {
       return try lower(theme.content, context: context.withTheme(theme.theme))
@@ -246,10 +252,12 @@ final class NodeScene {
       switch modifier.operation {
       case .background(let block):
         guard let color = block as? Color else {
-          return Description(node: Node(content: .background, context: context), children: [
-            try lower(block, context: context.backgroundContext),
-            try lower(modifier.content, context: context.backgroundContentContext),
-          ])
+          return Description(
+            node: Node(content: .background, context: context),
+            children: [
+              try lower(block, context: context.backgroundContext),
+              try lower(modifier.content, context: context.backgroundContentContext),
+            ])
         }
         decoration = .fill(color)
         context = context.backgroundContentContext
@@ -330,16 +338,21 @@ final class NodeScene {
       return Description(node: Node(content: .variableList(rows), context: context))
     }
     if let scroll = block as? ScrollView, let content = scroll.nodeContent {
-      return Description(node: Node(content: .scroll(scroll), context: context), children: [try lower(content, context: context)])
+      return Description(
+        node: Node(content: .scroll(scroll), context: context), children: [try lower(content, context: context)])
     }
     if let group = block as? Group {
-      return Description(node: Node(content: .group(group.name), context: context), children: [try lower(group.content, context: context)])
+      return Description(
+        node: Node(content: .group(group.name), context: context),
+        children: [try lower(group.content, context: context)])
     }
     if let row = block as? any NodeTrailingControlsRow {
-      return Description(node: Node(content: .trailing(row.nodeSpacing), context: context), children: [
-        try lower(row.nodeInput, context: context.childScope(0)),
-        try lower(row.nodeControls, context: context.childScope(1)),
-      ])
+      return Description(
+        node: Node(content: .trailing(row.nodeSpacing), context: context),
+        children: [
+          try lower(row.nodeInput, context: context.childScope(0)),
+          try lower(row.nodeControls, context: context.childScope(1)),
+        ])
     }
     if let element = block as? any LifecycleElement {
       return Description(node: Node(content: .element(element), context: context))
@@ -347,7 +360,9 @@ final class NodeScene {
     if let tuple = block as? TupleBlock {
       return try lowerChildren(tuple.scopedChildren, content: .tuple, context: context)
     }
-    guard !(block is any PrimitiveBlock) else { throw BuildError.unsupportedPrimitive(String(describing: type(of: block))) }
+    guard !(block is any PrimitiveBlock) else {
+      throw BuildError.unsupportedPrimitive(String(describing: type(of: block)))
+    }
     return try lower(block.body, context: context)
   }
 
@@ -368,7 +383,9 @@ final class NodeScene {
   private static func sameInteraction(_ old: Node, _ new: Node) -> Bool {
     if case .text(let previous) = old.content, case .text(let current) = new.content,
       previous.isSelectable != current.isSelectable || previous.selectionID != current.selectionID
-    { return false }
+    {
+      return false
+    }
     switch (old.content, new.content) {
     case (.text, .text), (.image, .image), (.progress, .progress), (.marquee, .marquee), (.color, .color),
       (.empty, .empty), (.spacer, .spacer), (.stack, .stack), (.overlay, .overlay),
@@ -511,10 +528,13 @@ final class NodeScene {
     case .text(let text):
       guard text.wraps else { return text.sizeThatFits(proposal, context: node.context) }
       let cell = node.context.fontMetrics.cellAdvance * text.scale * node.context.textScale
-      let columns = proposal.width.isFinite && cell.isFinite && cell > 0
+      let columns =
+        proposal.width.isFinite && cell.isFinite && cell > 0
         ? Int(min(Float(Int32.max), max(1, proposal.width / cell))) : nil
       let layout = retainedTextLayout(id, text: text.content, columns: columns)
-      return Size(width: proposal.width, height: Float(layout.lines.count) * node.context.fontMetrics.lineAdvance * text.scale * node.context.textScale)
+      return Size(
+        width: proposal.width,
+        height: Float(layout.lines.count) * node.context.fontMetrics.lineAdvance * text.scale * node.context.textScale)
     case .button(let button): return button.sizeThatFits(proposal, context: node.context)
     case .editor(let editor):
       return editor.sizeThatFits(
@@ -527,7 +547,8 @@ final class NodeScene {
       let sizes = trailingSizes(id, spacing: spacing, proposal: proposal)
       return Size(width: proposal.width, height: max(sizes.0.height, sizes.1.height))
     case .background: return measure(store.children(of: id)![1], proposal: proposal)
-    case .themeReader, .interactive, .group, .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
+    case .themeReader, .interactive, .group, .scope, .boundary:
+      return measure(store.children(of: id)![0], proposal: proposal)
     case .scroll, .list, .variableList, .color, .spacer: return proposal
     case .empty: return .zero
     case .overlay, .tuple:
@@ -571,7 +592,11 @@ final class NodeScene {
   func refreshElements() {
     for id in elementSubscriptions.keys where !store.contains(id) || !elementSubscriptions[id]!.isActive {
       elementSubscriptions.removeValue(forKey: id)?.cancel()
-      if store.contains(id) { invalidateMeasurements(from: id); layoutDirty = true; prepared = false }
+      if store.contains(id) {
+        invalidateMeasurements(from: id)
+        layoutDirty = true
+        prepared = false
+      }
     }
   }
 
@@ -596,7 +621,8 @@ final class NodeScene {
   private func trailingSizes(_ id: NodeID, spacing: Float, proposal: Size) -> (Size, Size) {
     let children = store.children(of: id)!
     let controls = measure(children[1], proposal: proposal)
-    let input = measure(children[0], proposal: Size(width: max(0, proposal.width - controls.width - spacing), height: proposal.height))
+    let input = measure(
+      children[0], proposal: Size(width: max(0, proposal.width - controls.width - spacing), height: proposal.height))
     return (input, controls)
   }
 
@@ -689,13 +715,22 @@ final class NodeScene {
       node.scrollOffset = node.context.interaction.resolveScroll(
         id: node.context.widgetID, viewport: rect, contentSize: node.contentSize,
         controller: scroll.controller, sticksToBottom: scroll.sticksToBottom, horizontal: true)
-      try place(child, in: Rect(x: rect.minX - node.scrollOffset.x, y: rect.minY - node.scrollOffset.y, width: node.contentSize.width, height: node.contentSize.height))
+      try place(
+        child,
+        in: Rect(
+          x: rect.minX - node.scrollOffset.x, y: rect.minY - node.scrollOffset.y, width: node.contentSize.width,
+          height: node.contentSize.height))
     case .element: break
     case .trailing(let spacing):
       let children = store.children(of: id)!
       let sizes = trailingSizes(id, spacing: spacing, proposal: rect.size)
-      try place(children[0], in: Rect(x: rect.minX, y: rect.maxY - sizes.0.height, width: sizes.0.width, height: sizes.0.height))
-      try place(children[1], in: Rect(x: rect.maxX - sizes.1.width, y: rect.maxY - sizes.1.height, width: sizes.1.width, height: sizes.1.height))
+      try place(
+        children[0], in: Rect(x: rect.minX, y: rect.maxY - sizes.0.height, width: sizes.0.width, height: sizes.0.height)
+      )
+      try place(
+        children[1],
+        in: Rect(
+          x: rect.maxX - sizes.1.width, y: rect.maxY - sizes.1.height, width: sizes.1.width, height: sizes.1.height))
     case .background:
       for child in store.children(of: id)! { try place(child, in: rect) }
     case .themeReader, .interactive, .group, .scope, .boundary: try place(store.children(of: id)![0], in: rect)
@@ -747,16 +782,19 @@ final class NodeScene {
       let previousHeights = node.heightIndex
       let previousOffset = Double(previousState?.offset.y ?? 0)
       let previousAnchor = previousHeights?.row(at: previousOffset) ?? node.anchorIndex
-      let previousAnchorOffset = previousHeights.map { previousOffset - $0.position(of: previousAnchor) } ?? node.anchorOffset
-      var heights = node.heightIndex ?? VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
+      let previousAnchorOffset =
+        previousHeights.map { previousOffset - $0.position(of: previousAnchor) } ?? node.anchorOffset
+      var heights =
+        node.heightIndex ?? VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
       if node.measuredWidth != rect.size.width
         || node.measuredMetrics != node.context.fontMetrics
         || node.measuredTextScale != node.context.textScale
       {
         heights = VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
       }
-      if list.count > 0, node.heightIndex == nil || node.measuredWidth != rect.size.width
-        || node.measuredMetrics != node.context.fontMetrics || node.measuredTextScale != node.context.textScale
+      if list.count > 0,
+        node.heightIndex == nil || node.measuredWidth != rect.size.width
+          || node.measuredMetrics != node.context.fontMetrics || node.measuredTextScale != node.context.textScale
       {
         let restored = node.anchorKey.flatMap { list.index($0) } ?? min(previousAnchor, list.count - 1)
         interaction.scrollStates[scrollID, default: Interaction.ScrollState()].offset.y =
@@ -765,10 +803,12 @@ final class NodeScene {
       if let request = list.controller?.request, case .row(let key) = request, let index = list.index(key) {
         list.controller?.scroll(to: Float(heights.position(of: index)))
       }
-      var offset = Double(interaction.resolveScroll(
-        id: node.context.widgetID, viewport: rect,
-        contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
-        controller: list.controller, sticksToBottom: list.sticksToBottom).y)
+      var offset = Double(
+        interaction.resolveScroll(
+          id: node.context.widgetID, viewport: rect,
+          contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
+          controller: list.controller, sticksToBottom: list.sticksToBottom
+        ).y)
       let anchor = heights.row(at: offset)
       let anchorOffset = offset - heights.position(of: anchor)
       var range = heights.visibleRange(offset: offset, height: Double(rect.size.height), overscan: list.overscan)
@@ -815,16 +855,20 @@ final class NodeScene {
         indices = retainedRows(id, visible: range, index: list.index)
       }
       interaction.scrollStates[node.context.widgetID, default: Interaction.ScrollState()].offset.y = Float(offset)
-      node.offset = interaction.resolveScroll(
-        id: node.context.widgetID, viewport: rect,
-        contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
-        controller: list.controller, sticksToBottom: false).y
+      node.offset =
+        interaction.resolveScroll(
+          id: node.context.widgetID, viewport: rect,
+          contentSize: Size(width: rect.size.width, height: Float(heights.totalHeight)),
+          controller: list.controller, sticksToBottom: false
+        ).y
       node.anchorIndex = heights.row(at: Double(node.offset))
       node.anchorKey = list.count > 0 ? list.key(node.anchorIndex) : nil
       node.anchorOffset = Double(node.offset) - heights.position(of: node.anchorIndex)
       interaction.updateScrollLayout(
-        id: scrollID, layout: Interaction.ScrollLayout(
-          width: rect.size.width, spacing: 0, rows: .indexed(Interaction.IndexedScrollRows(heights: heights, index: list.index))))
+        id: scrollID,
+        layout: Interaction.ScrollLayout(
+          width: rect.size.width, spacing: 0,
+          rows: .indexed(Interaction.IndexedScrollRows(heights: heights, index: list.index))))
       node.heightIndex = heights
       node.measuredWidth = rect.size.width
       node.measuredMetrics = node.context.fontMetrics
@@ -834,9 +878,11 @@ final class NodeScene {
       node.rowKeys = indices.map(list.key)
       node.rowsDirty = false
       for (index, child) in zip(indices, store.children(of: id)!) {
-        try place(child, in: Rect(
-          x: rect.minX, y: rect.minY + Float(heights.position(of: index)) - node.offset,
-          width: rect.size.width, height: Float(heights.height(at: index))))
+        try place(
+          child,
+          in: Rect(
+            x: rect.minX, y: rect.minY + Float(heights.position(of: index)) - node.offset,
+            width: rect.size.width, height: Float(heights.height(at: index))))
       }
     case .tuple:
       for child in store.children(of: id)! { try place(child, in: rect) }
@@ -1026,7 +1072,10 @@ final class NodeScene {
         store.contains(key.node)
         && (!key.isPanel
           || store.withValue(for: key.node) {
-            switch $0.content { case .boundary, .interactive: true; default: false }
+            switch $0.content {
+            case .boundary, .interactive: true
+            default: false
+            }
           })
       if !valid { boundaries.removeValue(forKey: key)?.subscription.cancel() }
     }
@@ -1107,7 +1156,8 @@ final class NodeScene {
     case .color: bounds = expanded(node.rect, by: 2)
     case .element(let element): bounds = element.visualBounds(in: node.rect, context: node.context)
     case .empty, .spacer: break
-    case .themeReader, .interactive, .background, .scroll, .group, .trailing, .list, .variableList, .stack, .overlay, .tuple, .scope, .boundary:
+    case .themeReader, .interactive, .background, .scroll, .group, .trailing, .list, .variableList, .stack, .overlay,
+      .tuple, .scope, .boundary:
       for child in store.children(of: id)! { bounds = union(bounds, store.value(for: child)!.visualBounds) }
       switch node.content {
       case .scroll, .list, .variableList: bounds = bounds?.intersection(node.rect) ?? node.rect
@@ -1170,7 +1220,8 @@ final class NodeScene {
       for child in store.children(of: id)! { prepare(child) }
     case .scroll(let scroll):
       interaction.registerScrollInput(id: context.widgetID, rect: node.rect, horizontal: true)
-      interaction.beginGroup(rect: node.rect, scrollID: context.widgetID, navigationID: context.widgetID, navigationName: scroll.name)
+      interaction.beginGroup(
+        rect: node.rect, scrollID: context.widgetID, navigationID: context.widgetID, navigationName: scroll.name)
       interaction.pushClip(node.rect)
       prepare(store.children(of: id)![0])
       interaction.popClip()
@@ -1201,12 +1252,16 @@ final class NodeScene {
         let heights = node.heightIndex
         interaction.registerLogicalSelection(
           scrollID: context.widgetID, selectedKey: selection.selectedKey, select: selection.select,
-          move: selection.move, reveal: { key in
+          move: selection.move,
+          reveal: { key in
             guard let index = list.index(key), let heights else { return }
-            interaction.scrollStates[context.widgetID, default: Interaction.ScrollState()].offset.y = Float(heights.position(of: index))
+            interaction.scrollStates[context.widgetID, default: Interaction.ScrollState()].offset.y = Float(
+              heights.position(of: index))
           })
       }
-      interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: context.widgetID, navigationID: context.widgetID, navigationName: { if case .variableList(let list) = node.content { list.name } else { nil } }())
+      interaction.beginGroup(
+        rect: node.rect, axis: .vertical, scrollID: context.widgetID, navigationID: context.widgetID,
+        navigationName: { if case .variableList(let list) = node.content { list.name } else { nil } }())
       interaction.pushClip(node.rect)
       for (index, child) in zip(node.rowIndices, store.children(of: id)!) {
         prepare(child)
@@ -1281,7 +1336,8 @@ final class NodeScene {
       let interaction = node.context.interaction
       let leaf = interactive.nodeID ?? node.context.widgetID
       let state = interaction.untrackedLeafState
-      let phase: InteractionPhase = state.pressed == leaf && interaction.input.pointerDown
+      let phase: InteractionPhase =
+        state.pressed == leaf && interaction.input.pointerDown
         ? .pressed : state.hovered == leaf || state.selected == leaf ? .hovered : .idle
       if phase != node.phase {
         var context = node.context
@@ -1458,10 +1514,16 @@ final class NodeScene {
           held: state.pressed == id && interaction.input.pointerDown, clicked: false))
     case .scroll(let scroll):
       list.pushClip(node.rect)
-      paint(store.children(of: id)![0], into: &list, clip: clip.intersection(node.rect) ?? .zero, cullingEnabled: cullingEnabled)
+      paint(
+        store.children(of: id)![0], into: &list, clip: clip.intersection(node.rect) ?? .zero,
+        cullingEnabled: cullingEnabled)
       if scroll.showsIndicator {
-        scroll.drawIndicator(into: &list, in: node.rect, extent: node.contentSize.height, offset: node.scrollOffset.y, horizontal: false, style: context.theme.scrollView)
-        scroll.drawIndicator(into: &list, in: node.rect, extent: node.contentSize.width, offset: node.scrollOffset.x, horizontal: true, style: context.theme.scrollView)
+        scroll.drawIndicator(
+          into: &list, in: node.rect, extent: node.contentSize.height, offset: node.scrollOffset.y, horizontal: false,
+          style: context.theme.scrollView)
+        scroll.drawIndicator(
+          into: &list, in: node.rect, extent: node.contentSize.width, offset: node.scrollOffset.x, horizontal: true,
+          style: context.theme.scrollView)
       }
       list.popClip()
     case .list, .variableList:

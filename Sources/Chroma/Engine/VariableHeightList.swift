@@ -78,7 +78,10 @@ struct VirtualListSelection {
     }
     select = { selection.selectedID = $0.value as? ID }
     move = { distance in
-      guard snapshot.count > 0 else { selection.selectedID = nil; return nil }
+      guard snapshot.count > 0 else {
+        selection.selectedID = nil
+        return nil
+      }
       let index = selection.selectedID.flatMap { snapshot.index(of: $0) } ?? 0
       let next = max(0, min(snapshot.count - 1, index + distance))
       selection.selectedID = snapshot.ids[next]

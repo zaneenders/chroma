@@ -92,8 +92,9 @@ package final class WindowRuntime {
 
   package func handleInput(_ input: InputState) {
     if refreshNodes() {
-      do { try nodeProducer.dispatch(input, onChange: nodeOnChange) }
-      catch { preconditionFailure("Input content must support the retained lifecycle: \(error)") }
+      do { try nodeProducer.dispatch(input, onChange: nodeOnChange) } catch {
+        preconditionFailure("Input content must support the retained lifecycle: \(error)")
+      }
     } else {
       pendingInputs.append(input)
     }

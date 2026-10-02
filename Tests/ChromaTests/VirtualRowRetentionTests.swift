@@ -9,7 +9,9 @@ struct VirtualRowRetentionTests {
     let context = BlockContext()
     let selection = ScrollSelection(0)
     var routed: [Int] = []
-    let list = VariableHeightList(snapshot: VirtualListSnapshot(ids: 0..<100), estimatedHeight: 40, selection: selection) { id in
+    let list = VariableHeightList(
+      snapshot: VirtualListSnapshot(ids: 0..<100), estimatedHeight: 40, selection: selection
+    ) { id in
       Button("Row") {}.sizing(y: .fixed(40)).onCommand(.application("row")) {
         routed.append(id)
         return .handled
@@ -41,7 +43,9 @@ struct VirtualRowRetentionTests {
     let context = BlockContext()
     let selection = ScrollSelection(0)
     var actions: [String] = []
-    let list = VariableHeightList(snapshot: VirtualListSnapshot(ids: 0..<100), estimatedHeight: 40, selection: selection) { id in
+    let list = VariableHeightList(
+      snapshot: VirtualListSnapshot(ids: 0..<100), estimatedHeight: 40, selection: selection
+    ) { id in
       HStack {
         Button("A") { actions.append("A\(id)") }
         Button("B") { actions.append("B\(id)") }
@@ -74,7 +78,8 @@ struct VirtualRowRetentionTests {
       let row: @MainActor (Int) -> any Block = { _ in
         TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).sizing(y: .fixed(40))
       }
-      let content: any Block = variable
+      let content: any Block =
+        variable
         ? VariableHeightList(snapshot: snapshot, estimatedHeight: 40, overscan: 0, row: row)
         : FixedHeightList(snapshot: snapshot, rowHeight: 40, overscan: 0, row: row)
       let rect = Rect(x: 0, y: 0, width: 200, height: 40)
@@ -94,7 +99,8 @@ struct VirtualRowRetentionTests {
       #expect(context.interaction.tree?.findLeaf(editing!) != nil)
       try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 10), pointerDown: true, pointerPressed: true))
       let pressed = context.interaction.pressedLeaf
-      try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 100), pointerDown: true, scrollDelta: Point(x: 0, y: -1000)))
+      try scene.dispatch(
+        InputState(pointerPosition: Point(x: 10, y: 100), pointerDown: true, scrollDelta: Point(x: 0, y: -1000)))
       #expect(context.interaction.pressedLeaf == pressed)
       try scene.dispatch(InputState(pointerPosition: Point(x: 10, y: 100), pointerReleased: true))
       #expect(context.interaction.pressedLeaf == nil)
