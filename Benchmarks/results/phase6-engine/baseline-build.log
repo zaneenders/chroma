@@ -1,0 +1,172 @@
+Fetching https://github.com/apple/swift-profile-recorder.git from cache
+Fetching https://github.com/apple/swift-log.git from cache
+Fetched https://github.com/apple/swift-profile-recorder.git from cache (0.44s)
+Fetched https://github.com/apple/swift-log.git from cache (0.45s)
+Computing version for https://github.com/apple/swift-profile-recorder.git
+Computed https://github.com/apple/swift-profile-recorder.git at 0.3.16 (0.46s)
+Fetching https://github.com/apple/swift-configuration.git from cache
+Fetching https://github.com/apple/swift-protobuf.git from cache
+Fetching https://github.com/apple/swift-nio.git from cache
+Fetching https://github.com/apple/swift-nio-extras.git from cache
+Fetching https://github.com/apple/swift-argument-parser.git from cache
+Fetched https://github.com/apple/swift-argument-parser.git from cache (0.47s)
+Fetched https://github.com/apple/swift-configuration.git from cache (0.58s)
+Fetched https://github.com/apple/swift-protobuf.git from cache (0.60s)
+Fetched https://github.com/apple/swift-nio.git from cache (0.74s)
+Fetched https://github.com/apple/swift-nio-extras.git from cache (0.79s)
+Computing version for https://github.com/apple/swift-configuration.git
+Computed https://github.com/apple/swift-configuration.git at 1.2.1 (0.80s)
+Fetching https://github.com/apple/swift-system from cache
+Fetching https://github.com/swift-server/swift-service-lifecycle from cache
+Fetching https://github.com/apple/swift-collections from cache
+warning: 'swift-system': skipping cache due to an error: /tmp/chroma-phase6-baseline-IOR9Ud/chroma/Benchmarks/.build/repositories/swift-system-5815d4b7 doesn't exist in file system
+Fetched https://github.com/apple/swift-collections from cache (0.68s)
+Fetched https://github.com/swift-server/swift-service-lifecycle from cache (0.73s)
+[1/7065] Fetching swift-system
+Fetched https://github.com/apple/swift-system (1.26s)
+Computing version for https://github.com/swift-server/swift-service-lifecycle
+Computed https://github.com/swift-server/swift-service-lifecycle at 2.12.0 (1.27s)
+Fetching https://github.com/apple/swift-async-algorithms.git from cache
+Fetched https://github.com/apple/swift-async-algorithms.git from cache (0.40s)
+Computing version for https://github.com/apple/swift-log.git
+Computed https://github.com/apple/swift-log.git at 1.15.1 (0.41s)
+Computing version for https://github.com/apple/swift-async-algorithms.git
+Computed https://github.com/apple/swift-async-algorithms.git at 1.1.7 (0.01s)
+Computing version for https://github.com/apple/swift-collections
+Computed https://github.com/apple/swift-collections at 1.7.1 (0.01s)
+Computing version for https://github.com/apple/swift-protobuf.git
+Computed https://github.com/apple/swift-protobuf.git at 1.38.1 (0.01s)
+Computing version for https://github.com/apple/swift-system
+Computed https://github.com/apple/swift-system at 1.8.1 (0.00s)
+Computing version for https://github.com/apple/swift-nio-extras.git
+Computed https://github.com/apple/swift-nio-extras.git at 1.35.1 (0.01s)
+Fetching https://github.com/apple/swift-http-types.git from cache
+Fetching https://github.com/apple/swift-nio-ssl.git from cache
+Fetching https://github.com/apple/swift-atomics.git from cache
+Fetching https://github.com/apple/swift-asn1.git from cache
+Fetching https://github.com/apple/swift-algorithms.git from cache
+Fetching https://github.com/apple/swift-http-structured-headers.git from cache
+Fetching https://github.com/apple/swift-nio-http2.git from cache
+Fetching https://github.com/apple/swift-certificates.git from cache
+Fetched https://github.com/apple/swift-certificates.git from cache (0.32s)
+Fetched https://github.com/apple/swift-http-types.git from cache (0.38s)
+Fetched https://github.com/apple/swift-nio-ssl.git from cache (0.39s)
+Fetched https://github.com/apple/swift-http-structured-headers.git from cache (0.44s)
+Fetched https://github.com/apple/swift-atomics.git from cache (0.44s)
+Fetched https://github.com/apple/swift-algorithms.git from cache (0.45s)
+Fetched https://github.com/apple/swift-nio-http2.git from cache (0.45s)
+Fetched https://github.com/apple/swift-asn1.git from cache (0.47s)
+Computing version for https://github.com/apple/swift-algorithms.git
+Computed https://github.com/apple/swift-algorithms.git at 1.2.1 (0.48s)
+Fetching https://github.com/apple/swift-numerics.git from cache
+Fetched https://github.com/apple/swift-numerics.git from cache (0.41s)
+Computing version for https://github.com/apple/swift-atomics.git
+Computed https://github.com/apple/swift-atomics.git at 1.3.1 (0.42s)
+Computing version for https://github.com/apple/swift-numerics.git
+Computed https://github.com/apple/swift-numerics.git at 1.1.1 (0.00s)
+Computing version for https://github.com/apple/swift-http-structured-headers.git
+Computed https://github.com/apple/swift-http-structured-headers.git at 1.7.0 (0.00s)
+Computing version for https://github.com/apple/swift-http-types.git
+Computed https://github.com/apple/swift-http-types.git at 1.8.0 (0.00s)
+Computing version for https://github.com/apple/swift-asn1.git
+Computed https://github.com/apple/swift-asn1.git at 1.7.3 (0.00s)
+Computing version for https://github.com/apple/swift-nio-ssl.git
+Computed https://github.com/apple/swift-nio-ssl.git at 2.37.5 (0.00s)
+Computing version for https://github.com/apple/swift-nio.git
+Computed https://github.com/apple/swift-nio.git at 2.103.0 (0.01s)
+Computing version for https://github.com/apple/swift-certificates.git
+Computed https://github.com/apple/swift-certificates.git at 1.21.0 (0.00s)
+Fetching https://github.com/apple/swift-crypto.git from cache
+Fetched https://github.com/apple/swift-crypto.git from cache (0.35s)
+Computing version for https://github.com/apple/swift-crypto.git
+Computed https://github.com/apple/swift-crypto.git at 5.0.0 (0.36s)
+Computing version for https://github.com/apple/swift-nio-http2.git
+Computed https://github.com/apple/swift-nio-http2.git at 1.46.0 (0.00s)
+Computing version for https://github.com/apple/swift-argument-parser.git
+Computed https://github.com/apple/swift-argument-parser.git at 1.8.2 (0.00s)
+Creating working copy for https://github.com/apple/swift-profile-recorder.git
+Working copy of https://github.com/apple/swift-profile-recorder.git resolved at 0.3.16
+Creating working copy for https://github.com/apple/swift-nio-ssl.git
+Working copy of https://github.com/apple/swift-nio-ssl.git resolved at 2.37.5
+Creating working copy for https://github.com/apple/swift-collections
+Working copy of https://github.com/apple/swift-collections resolved at 1.7.1
+Creating working copy for https://github.com/apple/swift-http-structured-headers.git
+Working copy of https://github.com/apple/swift-http-structured-headers.git resolved at 1.7.0
+Creating working copy for https://github.com/apple/swift-protobuf.git
+Working copy of https://github.com/apple/swift-protobuf.git resolved at 1.38.1
+Creating working copy for https://github.com/apple/swift-nio.git
+Working copy of https://github.com/apple/swift-nio.git resolved at 2.103.0
+Creating working copy for https://github.com/apple/swift-configuration.git
+Working copy of https://github.com/apple/swift-configuration.git resolved at 1.2.1
+Creating working copy for https://github.com/apple/swift-algorithms.git
+Working copy of https://github.com/apple/swift-algorithms.git resolved at 1.2.1
+Creating working copy for https://github.com/apple/swift-nio-http2.git
+Working copy of https://github.com/apple/swift-nio-http2.git resolved at 1.46.0
+Creating working copy for https://github.com/apple/swift-asn1.git
+Working copy of https://github.com/apple/swift-asn1.git resolved at 1.7.3
+Creating working copy for https://github.com/apple/swift-argument-parser.git
+Working copy of https://github.com/apple/swift-argument-parser.git resolved at 1.8.2
+Creating working copy for https://github.com/apple/swift-crypto.git
+Working copy of https://github.com/apple/swift-crypto.git resolved at 5.0.0
+Creating working copy for https://github.com/apple/swift-numerics.git
+Working copy of https://github.com/apple/swift-numerics.git resolved at 1.1.1
+Creating working copy for https://github.com/apple/swift-system
+Working copy of https://github.com/apple/swift-system resolved at 1.8.1
+Creating working copy for https://github.com/apple/swift-http-types.git
+Working copy of https://github.com/apple/swift-http-types.git resolved at 1.8.0
+Creating working copy for https://github.com/apple/swift-log.git
+Working copy of https://github.com/apple/swift-log.git resolved at 1.15.1
+Creating working copy for https://github.com/apple/swift-nio-extras.git
+Working copy of https://github.com/apple/swift-nio-extras.git resolved at 1.35.1
+Creating working copy for https://github.com/apple/swift-async-algorithms.git
+Working copy of https://github.com/apple/swift-async-algorithms.git resolved at 1.1.7
+Creating working copy for https://github.com/apple/swift-certificates.git
+Working copy of https://github.com/apple/swift-certificates.git resolved at 1.21.0
+Creating working copy for https://github.com/swift-server/swift-service-lifecycle
+Working copy of https://github.com/swift-server/swift-service-lifecycle resolved at 2.12.0
+Creating working copy for https://github.com/apple/swift-atomics.git
+Working copy of https://github.com/apple/swift-atomics.git resolved at 1.3.1
+Building for production...
+[Computing dependencies]
+[Pre-planning 1 / 1488]
+[Planning deferred tasks]
+[288 / 515]
+[321 / 522] Atomics
+[331 / 523] _NIOBase64
+[337 / 523] CNIOAtomics
+[338 / 523] _NIODataStructures
+[343 / 523] NIOConcurrencyHelpers
+[353 / 523] InternalCollectionsUtilities
+[364 / 527] Logging
+[369 / 527] CompareBenchmarks-product
+[372 / 527] CompareBenchmarks-product
+[377 / 527] DequeModule
+[385 / 529] SystemPackage
+[393 / 531] Configuration
+[398 / 531] Chroma
+[412 / 537] InteractionFixtures
+[417 / 537] ChromaTesting
+[428 / 541] RenderFixtures
+[436 / 543] InputFrameBenchmark-product
+[439 / 543] InputFrameBenchmark-product
+[439 / 543] VirtualListBenchmark-product
+[442 / 543] VirtualListBenchmark-product
+[442 / 543] NIOCore
+[456 / 549] NIOFoundationEssentialsCompat
+[461 / 549] RenderBenchmark-product
+[464 / 549] RenderBenchmark-product
+[464 / 549] NIOEmbedded
+[469 / 549] SwiftProtobuf
+[474 / 549] NIOPosix
+[496 / 557] NIOFoundationCompat
+[501 / 557] NIOHTTP1
+[509 / 559] _NIOFileSystem
+[525 / 563] ProfileRecorderHelpers
+[536 / 567] ProfileRecorder
+[541 / 567] NIOExtras
+[546 / 567] ProfileRecorderPprofFormat
+[554 / 569] _ProfileRecorderSampleConversion
+[562 / 571] ProfileRecorderServer
+[570 / 573] InteractionBenchmark-product
+[573 / 573] InteractionBenchmark-product
+Build complete! (50.53 secs)

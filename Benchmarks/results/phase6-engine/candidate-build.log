@@ -1,0 +1,35 @@
+Building for production...
+[Computing dependencies]
+[Using on-disk description]
+[8 / 84] Chroma
+[11 / 86] DequeModule
+[12 / 82] Atomics
+[16 / 84] SystemPackage
+[20 / 86] Configuration
+[21 / 82] Chroma
+[33 / 98] InteractionFixtures
+[36 / 92] VirtualListBenchmark-product
+[40 / 95] RenderFixtures
+[44 / 94] InputFrameBenchmark-product
+[47 / 94] InputFrameBenchmark-product
+[47 / 94] VirtualListBenchmark-product
+[49 / 93] VirtualListBenchmark-product
+[49 / 93] NIOCore
+[59 / 104] NIOFoundationEssentialsCompat
+[60 / 103] RenderBenchmark-product
+[64 / 104] RenderBenchmark-product
+[64 / 104] NIOEmbedded
+[65 / 100] SwiftProtobuf
+[66 / 96] NIOPosix
+[82 / 114] NIOFoundationCompat
+[83 / 110] NIOHTTP1
+[88 / 113] _NIOFileSystem
+[100 / 120] ProfileRecorderPprofFormat
+[103 / 122] ProfileRecorderPprofFormat
+[104 / 121] ProfileRecorder
+[107 / 119] NIOExtras
+[112 / 122] _ProfileRecorderSampleConversion
+[117 / 125] ProfileRecorderServer
+[120 / 123] InteractionBenchmark-product
+[122 / 122] InteractionBenchmark-product
+Build complete! (48.54 secs)

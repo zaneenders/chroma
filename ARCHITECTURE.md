@@ -465,7 +465,13 @@ Shape Tree Desktop was subsequently found at `/home/zane/Projects/shape-tree/app
 
 **Revised gate:** Chroma's built-ins and custom-element hooks use explicit retained layout/interaction/paint; tests demonstrate bounded work and correct ordered input; the old execution path is removed. Backend presentation gaps are recorded separately. Consumer migrations above are deferred, not engine gates.
 
+Engine follow-up: `Group`, `TrailingControlsRow`, and block-content `ScrollView` now lower into retained nodes. Scrolling refreshes placement/preparation without rebuilding descriptions or painting during dispatch. `LifecycleElement` provides backend-neutral measurement, explicit interaction preparation, paint, and conservative optional visual bounds; unknown bounds disable culling. Custom element replacement conservatively invalidates measurement rather than assuming an identity implies unchanged layout. Removed the duplicated legacy selectable-Text paint/selection implementation; both paths now share the split helpers. Validation: 492 core tests, 14 Wayland input tests, 54 Examples tests, 1 benchmark test, and Linux release build passed.
+
+Phase 5 remains open: phase-dependent `Interactive`, legacy row-based ScrollView APIs, non-color backgrounds, and runtime fallback/BlockEngine removal are not migrated. Deleting those implementations now would break Chroma's own tests/examples, independently of deferred consumers.
+
 #### Phase 6 — Optimize only measured remaining costs
+
+Started with the existing release virtual-list matrix: baseline `e8519dc` and candidate each completed three trials/72 cases. Shared the existing bounded two-entry text-layout cache between wrapped Text measurement and placement; alternating-width regression tests verify two layout builds total. Variable streaming median p50/p95 improved from .149/.156 ms to .134/.137 ms in this collection; other cases are mixed, with small pointer regressions and unchanged bounded row-build counts. Raw timings, source/dependency metadata, build logs, and limitations are in `Benchmarks/results/phase6-engine`. No allocation, stack-sampling, real consumer transcript, or presentation-latency claim is made. Phase 6 remains open for those measurements.
 
 - [ ] Re-run the same baseline workloads and compare p50/p95, operation counts, and sampled hot paths. Add regression tests for the improved work counts; collect allocation/retained-memory evidence separately when supported, without treating samples or capacity-growth counts as allocations.
 - [ ] Profile actual transcript streaming and input-to-presentation latency, not just synthetic draw-command replay.

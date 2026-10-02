@@ -186,7 +186,7 @@ struct NodeBoundaryTests {
     let context = BlockContext()
     let producer = NodeFrameProducer()
     let content = UpdateBoundary {
-      if model.visible { Text("Retained") } else { ScrollView { Text("Unsupported") } }
+      if model.visible { Text("Retained") } else { Interactive(action: {}) { _ in Text("Unsupported") } }
     }
     try producer.refresh(content: content, viewport: viewport, context: context, onChange: {})
     let before = producer.paint().commands

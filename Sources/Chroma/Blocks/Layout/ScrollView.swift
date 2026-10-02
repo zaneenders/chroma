@@ -221,7 +221,7 @@ public struct ScrollView: PrimitiveBlock {
     drawList.popClip()
   }
 
-  private func drawIndicator(
+  func drawIndicator(
     into drawList: inout DrawList, in rect: Rect, extent: Float, offset: Float,
     horizontal: Bool, style: ScrollViewStyle
   ) {
@@ -399,5 +399,11 @@ public struct ScrollView: PrimitiveBlock {
     controller.lazyStackCache = LazyStackCache(
       structuralPath: context.structuralPath, width: width, environment: environment, rowKeys: rows.map(\.key),
       identities: rows.map(\.measurementIdentity), measurements: sizes)
+  }
+}
+
+extension ScrollView {
+  var nodeContent: (any Block)? {
+    if case .block(let block, _) = content { block } else { nil }
   }
 }

@@ -58,3 +58,16 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: PrimitiveBlock
     )
   }
 }
+
+@MainActor
+protocol NodeTrailingControlsRow {
+  var nodeSpacing: Float { get }
+  var nodeInput: any Block { get }
+  var nodeControls: any Block { get }
+}
+
+extension TrailingControlsRow: NodeTrailingControlsRow {
+  var nodeSpacing: Float { spacing }
+  var nodeInput: any Block { input }
+  var nodeControls: any Block { controls }
+}

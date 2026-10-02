@@ -98,7 +98,7 @@ struct NodeSceneTests {
     scene.prepare(viewport: rect.size)
     let before = scene.paint().commands
     do {
-      try scene.update(ScrollView { Text("Unsupported") }, context: BlockContext())
+      try scene.update(Interactive(action: {}) { _ in Text("Unsupported") }, context: BlockContext())
       Issue.record("Unsupported scrolling must fail before committing")
     } catch NodeScene.BuildError.unsupportedBlock {}
     #expect(scene.paint().commands == before)
@@ -172,7 +172,7 @@ struct NodeSceneTests {
       try scene.update(
         VStack {
           Text("New")
-          ScrollView { Text("Unsupported") }
+          Interactive(action: {}) { _ in Text("Unsupported") }
         }, context: context)
       Issue.record("Unsupported nested content must fail atomically")
     } catch NodeScene.BuildError.unsupportedBlock {}

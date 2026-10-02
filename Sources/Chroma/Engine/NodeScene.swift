@@ -16,6 +16,10 @@ final class NodeScene {
     case color(Color)
     case spacer
     case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
+    case scroll(ScrollView)
+    case group(String?)
+    case trailing(Float)
+    case element(any LifecycleElement)
     case overlay
     case tuple
     case scope(CommandScope)
@@ -41,6 +45,8 @@ final class NodeScene {
     case progress(Float)
     case marquee(String, Float)
     case stack(StackLayout.Axis, Float, Bool, Bool)
+    case scroll, group, element
+    case trailing(Float)
     case overlay, tuple, scope, boundary, empty, color, spacer
     case list(Int, Float, Int)
     case variableList(Int, Float, Int)
@@ -79,6 +85,8 @@ final class NodeScene {
     var measuredWidth: Float?
     var measuredMetrics: FontMetrics?
     var measuredTextScale: Float?
+    var scrollOffset: Point = .zero
+    var contentSize: Size = .zero
     var offset: Float = 0
     var rowsDirty = true
     var panelDirty = true
@@ -92,6 +100,10 @@ final class NodeScene {
       case .progress(let progress): .progress(progress.diameter)
       case .marquee(let marquee): .marquee(marquee.text, marquee.fontScale)
       case .stack(let axis, let spacing, let reversed, let bottom): .stack(axis, spacing, reversed, bottom)
+      case .scroll: .scroll
+      case .group: .group
+      case .trailing(let spacing): .trailing(spacing)
+      case .element: .element
       case .overlay: .overlay
       case .tuple: .tuple
       case .scope: .scope
@@ -284,6 +296,21 @@ final class NodeScene {
     if let stack = block as? ZStack {
       return try lowerChildren(stack.scopedChildren, content: .overlay, context: context)
     }
+    if let scroll = block as? ScrollView, let content = scroll.nodeContent {
+      return Description(node: Node(content: .scroll(scroll), context: context), children: [try lower(content, context: context)])
+    }
+    if let group = block as? Group {
+      return Description(node: Node(content: .group(group.name), context: context), children: [try lower(group.content, context: context)])
+    }
+    if let row = block as? any NodeTrailingControlsRow {
+      return Description(node: Node(content: .trailing(row.nodeSpacing), context: context), children: [
+        try lower(row.nodeInput, context: context.childScope(0)),
+        try lower(row.nodeControls, context: context.childScope(1)),
+      ])
+    }
+    if let element = block as? any LifecycleElement {
+      return Description(node: Node(content: .element(element), context: context))
+    }
     if let tuple = block as? TupleBlock {
       return try lowerChildren(tuple.scopedChildren, content: .tuple, context: context)
     }
@@ -300,7 +327,8 @@ final class NodeScene {
   }
 
   private static func sameLayout(_ old: Node, _ new: Node) -> Bool {
-    old.layoutContent == new.layoutContent && old.layoutOperations == new.layoutOperations
+    if case .element = new.content { return false }
+    return old.layoutContent == new.layoutContent && old.layoutOperations == new.layoutOperations
       && old.context.textScale == new.context.textScale
   }
 
@@ -351,6 +379,8 @@ final class NodeScene {
     result.rowIndices = old.rowIndices
     result.rowKeys = old.rowKeys
     result.visibleRange = old.visibleRange
+    result.scrollOffset = old.scrollOffset
+    result.contentSize = old.contentSize
     result.offset = old.offset
     if case .editor = old.content, case .editor = new.content { result.editorText = old.editorText }
     return result
@@ -443,15 +473,25 @@ final class NodeScene {
     case .image(let image): return image.sizeThatFits(proposal, context: node.context)
     case .progress(let progress): return progress.sizeThatFits(proposal, context: node.context)
     case .marquee(let marquee): return marquee.sizeThatFits(proposal, context: node.context)
-    case .text(let text): return text.sizeThatFits(proposal, context: node.context)
+    case .text(let text):
+      guard text.wraps else { return text.sizeThatFits(proposal, context: node.context) }
+      let cell = node.context.fontMetrics.cellAdvance * text.scale * node.context.textScale
+      let columns = proposal.width.isFinite && cell.isFinite && cell > 0
+        ? Int(min(Float(Int32.max), max(1, proposal.width / cell))) : nil
+      let layout = retainedTextLayout(id, text: text.content, columns: columns)
+      return Size(width: proposal.width, height: Float(layout.lines.count) * node.context.fontMetrics.lineAdvance * text.scale * node.context.textScale)
     case .button(let button): return button.sizeThatFits(proposal, context: node.context)
     case .editor(let editor):
       return editor.sizeThatFits(
         proposal, context: node.context,
         layout: editorTextLayout(
           id, editor: editor, text: node.editorText, width: proposal.width, context: node.context))
-    case .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
-    case .list, .variableList, .color, .spacer: return proposal
+    case .element(let element): return element.sizeThatFits(proposal, context: node.context)
+    case .trailing(let spacing):
+      let sizes = trailingSizes(id, spacing: spacing, proposal: proposal)
+      return Size(width: proposal.width, height: max(sizes.0.height, sizes.1.height))
+    case .group, .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
+    case .scroll, .list, .variableList, .color, .spacer: return proposal
     case .empty: return .zero
     case .overlay, .tuple:
       return store.children(of: id)!.reduce(Size.zero) {
@@ -471,7 +511,10 @@ final class NodeScene {
   private func editorTextLayout(
     _ id: NodeID, editor: TextEditor, text: String, width: Float, context: BlockContext
   ) -> TextLayout {
-    let columns = editor.columns(width: width, context: context)
+    retainedTextLayout(id, text: text, columns: editor.columns(width: width, context: context))
+  }
+
+  private func retainedTextLayout(_ id: NodeID, text: String, columns: Int?) -> TextLayout {
     if let layout = store.withValue(
       for: id,
       { node in
@@ -489,16 +532,25 @@ final class NodeScene {
     return layout
   }
 
+  private func trailingSizes(_ id: NodeID, spacing: Float, proposal: Size) -> (Size, Size) {
+    let children = store.children(of: id)!
+    let controls = measure(children[1], proposal: proposal)
+    let input = measure(children[0], proposal: Size(width: max(0, proposal.width - controls.width - spacing), height: proposal.height))
+    return (input, controls)
+  }
+
   private func expands(_ id: NodeID, axis: StackLayout.Axis) -> Bool {
     let node = store.value(for: id)!
     for decoration in node.decorations {
       if case .layout(.sizing(let x, let y)) = decoration { return (axis == .horizontal ? x : y) == .grow }
     }
     switch node.content {
-    case .color, .spacer, .list, .variableList: return true
+    case .scroll, .color, .spacer, .list, .variableList: return true
     case .editor, .marquee: return axis == .horizontal
     case .stack, .overlay, .tuple: return store.children(of: id)!.contains { expands($0, axis: axis) }
-    case .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
+    case .trailing: return axis == .horizontal
+    case .element(let element): return axis == .horizontal ? element.expandsHorizontally : element.expandsVertically
+    case .group, .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
     default: return false
     }
   }
@@ -546,8 +598,8 @@ final class NodeScene {
         let columns =
           text.wraps && rect.size.width.isFinite && cell.isFinite && cell > 0
           ? Int(min(Float(Int32.max), max(1, rect.size.width / cell))) : nil
-        let layout = TextLayout(text.content, columns: columns)
-        textLayoutBuilds += 1
+        let layout = retainedTextLayout(id, text: text.content, columns: columns)
+        node.textLayouts = store.value(for: id)!.textLayouts
         node.lines = layout.lines.map(\.text)
         node.selectionLayout = PlainTextLayout(
           text: text.content, rect: rect, cellWidth: cell,
@@ -561,7 +613,21 @@ final class NodeScene {
         id, editor: editor, text: node.editorText, width: rect.size.width, context: node.context)
       node.editorLayout = TextEditorLayout(editor: editor, layout: layout, rect: rect, context: node.context)
       node.textLayouts = store.value(for: id)!.textLayouts
-    case .scope, .boundary: try place(store.children(of: id)![0], in: rect)
+    case .scroll(let scroll):
+      let child = store.children(of: id)![0]
+      node.contentSize = measure(child, proposal: Size(width: rect.size.width, height: .greatestFiniteMagnitude))
+      scroll.controller?.restore(id: node.context.widgetID, interaction: node.context.interaction)
+      node.scrollOffset = node.context.interaction.resolveScroll(
+        id: node.context.widgetID, viewport: rect, contentSize: node.contentSize,
+        controller: scroll.controller, sticksToBottom: scroll.sticksToBottom, horizontal: true)
+      try place(child, in: Rect(x: rect.minX - node.scrollOffset.x, y: rect.minY - node.scrollOffset.y, width: node.contentSize.width, height: node.contentSize.height))
+    case .element: break
+    case .trailing(let spacing):
+      let children = store.children(of: id)!
+      let sizes = trailingSizes(id, spacing: spacing, proposal: rect.size)
+      try place(children[0], in: Rect(x: rect.minX, y: rect.maxY - sizes.0.height, width: sizes.0.width, height: sizes.0.height))
+      try place(children[1], in: Rect(x: rect.maxX - sizes.1.width, y: rect.maxY - sizes.1.height, width: sizes.1.width, height: sizes.1.height))
+    case .group, .scope, .boundary: try place(store.children(of: id)![0], in: rect)
     case .list(let list):
       let offset = node.context.interaction.resolveScroll(
         id: node.context.widgetID, viewport: rect,
@@ -962,11 +1028,12 @@ final class NodeScene {
           x: node.rect.minX, y: node.rect.minY + (node.rect.size.height - progress.diameter) / 2,
           width: progress.diameter, height: progress.diameter), by: 0)
     case .color: bounds = expanded(node.rect, by: 2)
+    case .element(let element): bounds = element.visualBounds(in: node.rect, context: node.context)
     case .empty, .spacer: break
-    case .list, .variableList, .stack, .overlay, .tuple, .scope, .boundary:
+    case .scroll, .group, .trailing, .list, .variableList, .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { bounds = union(bounds, store.value(for: child)!.visualBounds) }
       switch node.content {
-      case .list, .variableList: bounds = bounds?.intersection(node.rect) ?? node.rect
+      case .scroll, .list, .variableList: bounds = bounds?.intersection(node.rect) ?? node.rect
       default: break
       }
     }
@@ -1018,6 +1085,23 @@ final class NodeScene {
       if !context.focusLeafClaimed && !context.navigationIgnored {
         _ = context.buttonState(id: context.widgetID, in: node.rect)
       }
+    case .scroll(let scroll):
+      interaction.registerScrollInput(id: context.widgetID, rect: node.rect, horizontal: true)
+      interaction.beginGroup(rect: node.rect, scrollID: context.widgetID, navigationID: context.widgetID, navigationName: scroll.name)
+      interaction.pushClip(node.rect)
+      prepare(store.children(of: id)![0])
+      interaction.popClip()
+      interaction.endGroup()
+    case .element(let element):
+      element.prepareInteraction(in: node.rect, context: context)
+    case .group(let name):
+      interaction.beginGroup(rect: node.rect, navigationID: context.widgetID, navigationName: name)
+      prepare(store.children(of: id)![0])
+      interaction.endGroup()
+    case .trailing:
+      interaction.beginGroup(rect: node.rect)
+      for child in store.children(of: id)! { prepare(child) }
+      interaction.endGroup()
     case .editor(let editor):
       let text = node.editorText
       node.editorLayout?.prepare(editor: editor, context: context, text: { text })
@@ -1139,6 +1223,8 @@ final class NodeScene {
   private func scrollChanged(_ id: NodeID) -> Bool {
     let node = store.value(for: id)!
     switch node.content {
+    case .scroll:
+      if node.context.interaction.scrollStates[node.context.widgetID]?.offset != node.scrollOffset { return true }
     case .list, .variableList:
       if node.context.interaction.scrollStates[node.context.widgetID]?.offset.y != node.offset { return true }
     default: break
@@ -1238,13 +1324,23 @@ final class NodeScene {
         state: ButtonState(
           hovered: state.hovered == id, focused: state.selected == id,
           held: state.pressed == id && interaction.input.pointerDown, clicked: false))
+    case .scroll(let scroll):
+      list.pushClip(node.rect)
+      paint(store.children(of: id)![0], into: &list, clip: clip.intersection(node.rect) ?? .zero, cullingEnabled: cullingEnabled)
+      if scroll.showsIndicator {
+        scroll.drawIndicator(into: &list, in: node.rect, extent: node.contentSize.height, offset: node.scrollOffset.y, horizontal: false, style: context.theme.scrollView)
+        scroll.drawIndicator(into: &list, in: node.rect, extent: node.contentSize.width, offset: node.scrollOffset.x, horizontal: true, style: context.theme.scrollView)
+      }
+      list.popClip()
     case .list, .variableList:
       list.pushClip(node.rect)
       let clip = clip.intersection(node.rect) ?? .zero
       for child in store.children(of: id)! { paint(child, into: &list, clip: clip, cullingEnabled: cullingEnabled) }
       list.popClip()
     case .empty, .spacer: break
-    case .stack, .overlay, .tuple, .scope, .boundary:
+    case .element(let element):
+      element.paint(into: &list, in: node.rect, context: context)
+    case .group, .trailing, .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { paint(child, into: &list, clip: clip, cullingEnabled: cullingEnabled) }
     }
   }

@@ -62,58 +62,13 @@ public struct Text: PrimitiveBlock {
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let effectiveScale = scale * context.textScale
     if isSelectable {
-      let id = selectionID ?? context.widgetID
-      let interaction = context.interaction
-      let metrics = interaction.fontMetrics
-      let cellWidth = metrics.cellAdvance * effectiveScale
-      let lineHeight = metrics.lineAdvance * effectiveScale
       let layout = PlainTextLayout(
-        text: content, rect: rect, cellWidth: cellWidth,
-        lineHeight: lineHeight, scale: effectiveScale, columns: columns(width: rect.size.width, context: context))
-      interaction.textSelection.layoutRegistry.register(id, layout: layout)
-
-      var range: Range<Int>?
-      var caret: Int?
-      if !context.focusLeafClaimed, !context.navigationIgnored {
-        interaction.registerFocusTargets(context.focusTargets, id: id)
-        let state = interaction.registerTextInput(
-          id: id, rect: rect, text: { content }, onChange: { _ in },
-          pointerOffset: { point, _ in layout.hitTest(point: point) ?? 0 },
-          verticalOffset: { layout.verticalOffset($0, direction: $1) }, readOnly: true)
-        range = state.selectionRange
-        caret = state.caretOffset
-        BlockEngine.drawHighlight(for: id, into: &drawList, in: rect, context: context)
-      }
-      if range == nil, let selection = interaction.textSelection.selection(for: id) {
-        range = selection.from..<selection.to
-      }
-      drawText(into: &drawList, in: rect, color: color, scale: effectiveScale, context: context)
-      if let range, !range.isEmpty {
-        for line in layout.layout.lines {
-          let start = line.range.lowerBound
-          let end = line.range.upperBound
-          let lower = max(start, range.lowerBound)
-          let upper = min(end, range.upperBound)
-          if lower < upper {
-            let origin = layout.position(at: lower)
-            let highlight = Rect(
-              x: origin.x, y: origin.y,
-              width: Float(upper - lower) * cellWidth, height: lineHeight)
-            drawList.fillRect(highlight, color: context.theme.focus.selectionBackground)
-            drawList.pushClip(highlight)
-            drawText(
-              into: &drawList, in: rect, color: context.theme.focus.selectionForeground, scale: effectiveScale,
-              context: context)
-            drawList.popClip()
-          }
-        }
-      } else if let caret {
-        let point = layout.position(at: caret)
-        let caretRect = Rect(x: point.x, y: point.y, width: 1, height: lineHeight)
-        context.animate(into: &drawList) { list, _ in
-          if context.caretVisible { list.fillRect(caretRect, color: context.theme.focus.ring) }
-        }
-      }
+        text: content, rect: rect,
+        cellWidth: context.fontMetrics.cellAdvance * effectiveScale,
+        lineHeight: context.fontMetrics.lineAdvance * effectiveScale,
+        scale: effectiveScale, columns: columns(width: rect.size.width, context: context))
+      layout.prepare(text: self, context: context)
+      layout.paint(text: self, context: context, into: &drawList)
       return
     }
     drawText(into: &drawList, in: rect, color: color, scale: effectiveScale, context: context)
