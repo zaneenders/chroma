@@ -16,6 +16,8 @@ final class NodeScene {
     case color(Color)
     case spacer
     case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
+    case interactive(any NodeInteractive)
+    case background
     case scroll(ScrollView)
     case group(String?)
     case trailing(Float)
@@ -45,7 +47,7 @@ final class NodeScene {
     case progress(Float)
     case marquee(String, Float)
     case stack(StackLayout.Axis, Float, Bool, Bool)
-    case scroll, group, element
+    case interactive, background, scroll, group, element
     case trailing(Float)
     case overlay, tuple, scope, boundary, empty, color, spacer
     case list(Int, Float, Int)
@@ -60,6 +62,7 @@ final class NodeScene {
   }
 
   private struct Node {
+    var phase: InteractionPhase = .idle
     var content: Content
     var context: BlockContext
     var decorations: [Decoration] = []
@@ -100,6 +103,8 @@ final class NodeScene {
       case .progress(let progress): .progress(progress.diameter)
       case .marquee(let marquee): .marquee(marquee.text, marquee.fontScale)
       case .stack(let axis, let spacing, let reversed, let bottom): .stack(axis, spacing, reversed, bottom)
+      case .interactive: .interactive
+      case .background: .background
       case .scroll: .scroll
       case .group: .group
       case .trailing(let spacing): .trailing(spacing)
@@ -229,7 +234,12 @@ final class NodeScene {
       var context = context
       switch modifier.operation {
       case .background(let block):
-        guard let color = block as? Color else { throw BuildError.unsupportedBlock }
+        guard let color = block as? Color else {
+          return Description(node: Node(content: .background, context: context), children: [
+            try lower(block, context: context.backgroundContext),
+            try lower(modifier.content, context: context.backgroundContentContext),
+          ])
+        }
         decoration = .fill(color)
         context = context.backgroundContentContext
       case .roundedBackground(let color, let radii): decoration = .rounded(color, radii)
@@ -295,6 +305,9 @@ final class NodeScene {
     }
     if let stack = block as? ZStack {
       return try lowerChildren(stack.scopedChildren, content: .overlay, context: context)
+    }
+    if let interactive = block as? any NodeInteractive {
+      return Description(node: Node(content: .interactive(interactive), context: context))
     }
     if let scroll = block as? ScrollView, let content = scroll.nodeContent {
       return Description(node: Node(content: .scroll(scroll), context: context), children: [try lower(content, context: context)])
@@ -390,7 +403,7 @@ final class NodeScene {
   private func reconcile(_ descriptions: [Description], of parent: NodeID, updatingRows: Bool = false) -> Bool {
     if !updatingRows {
       switch store.value(for: parent)!.content {
-      case .list, .variableList, .boundary:
+      case .interactive, .list, .variableList, .boundary:
         layoutDirty = true
         return false
       default: break
@@ -490,7 +503,8 @@ final class NodeScene {
     case .trailing(let spacing):
       let sizes = trailingSizes(id, spacing: spacing, proposal: proposal)
       return Size(width: proposal.width, height: max(sizes.0.height, sizes.1.height))
-    case .group, .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
+    case .background: return measure(store.children(of: id)![1], proposal: proposal)
+    case .interactive, .group, .scope, .boundary: return measure(store.children(of: id)![0], proposal: proposal)
     case .scroll, .list, .variableList, .color, .spacer: return proposal
     case .empty: return .zero
     case .overlay, .tuple:
@@ -550,7 +564,8 @@ final class NodeScene {
     case .stack, .overlay, .tuple: return store.children(of: id)!.contains { expands($0, axis: axis) }
     case .trailing: return axis == .horizontal
     case .element(let element): return axis == .horizontal ? element.expandsHorizontally : element.expandsVertically
-    case .group, .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
+    case .background: return expands(store.children(of: id)![1], axis: axis)
+    case .interactive, .group, .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
     default: return false
     }
   }
@@ -627,7 +642,9 @@ final class NodeScene {
       let sizes = trailingSizes(id, spacing: spacing, proposal: rect.size)
       try place(children[0], in: Rect(x: rect.minX, y: rect.maxY - sizes.0.height, width: sizes.0.width, height: sizes.0.height))
       try place(children[1], in: Rect(x: rect.maxX - sizes.1.width, y: rect.maxY - sizes.1.height, width: sizes.1.width, height: sizes.1.height))
-    case .group, .scope, .boundary: try place(store.children(of: id)![0], in: rect)
+    case .background:
+      for child in store.children(of: id)! { try place(child, in: rect) }
+    case .interactive, .group, .scope, .boundary: try place(store.children(of: id)![0], in: rect)
     case .list(let list):
       let offset = node.context.interaction.resolveScroll(
         id: node.context.widgetID, viewport: rect,
@@ -813,6 +830,12 @@ final class NodeScene {
 
   private func installPanels(_ id: NodeID) throws {
     let node = store.value(for: id)!
+    if case .interactive(let interactive) = node.content, node.panelDirty {
+      var context = node.context
+      context.focusTargets = []
+      context.focusLeafClaimed = true
+      _ = try installBoundary(id, content: { interactive.nodeContent(node.phase) }, context: context)
+    }
     if case .boundary(let boundary) = node.content, node.panelDirty {
       try installBoundary(id, content: boundary.content, context: node.context)
     }
@@ -949,7 +972,7 @@ final class NodeScene {
         store.contains(key.node)
         && (!key.isPanel
           || store.withValue(for: key.node) {
-            if case .boundary = $0.content { true } else { false }
+            switch $0.content { case .boundary, .interactive: true; default: false }
           })
       if !valid { boundaries.removeValue(forKey: key)?.subscription.cancel() }
     }
@@ -1030,7 +1053,7 @@ final class NodeScene {
     case .color: bounds = expanded(node.rect, by: 2)
     case .element(let element): bounds = element.visualBounds(in: node.rect, context: node.context)
     case .empty, .spacer: break
-    case .scroll, .group, .trailing, .list, .variableList, .stack, .overlay, .tuple, .scope, .boundary:
+    case .interactive, .background, .scroll, .group, .trailing, .list, .variableList, .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { bounds = union(bounds, store.value(for: child)!.visualBounds) }
       switch node.content {
       case .scroll, .list, .variableList: bounds = bounds?.intersection(node.rect) ?? node.rect
@@ -1085,6 +1108,11 @@ final class NodeScene {
       if !context.focusLeafClaimed && !context.navigationIgnored {
         _ = context.buttonState(id: context.widgetID, in: node.rect)
       }
+    case .interactive(let interactive):
+      _ = context.buttonState(id: interactive.nodeID ?? context.widgetID, in: node.rect, action: interactive.nodeAction)
+      prepare(store.children(of: id)![0])
+    case .background:
+      for child in store.children(of: id)! { prepare(child) }
     case .scroll(let scroll):
       interaction.registerScrollInput(id: context.widgetID, rect: node.rect, horizontal: true)
       interaction.beginGroup(rect: node.rect, scrollID: context.widgetID, navigationID: context.widgetID, navigationName: scroll.name)
@@ -1163,6 +1191,7 @@ final class NodeScene {
     let node = store.value(for: id)!
     if ids.contains(node.context.widgetID) { return true }
     if case .text(let text) = node.content, let id = text.selectionID, ids.contains(id) { return true }
+    if case .interactive(let interactive) = node.content, let id = interactive.nodeID, ids.contains(id) { return true }
     if case .button(let button) = node.content, let id = button.id, ids.contains(id) { return true }
     return store.children(of: id)!.contains { containsLeaf($0, ids: ids) }
   }
@@ -1174,10 +1203,40 @@ final class NodeScene {
     if case .text(let text) = node.content, let id = text.selectionID {
       interaction.recordScrollRow(id: scrollID, leafID: id, rowKey: key, rect: node.rect)
     }
+    if case .interactive(let interactive) = node.content, let id = interactive.nodeID {
+      interaction.recordScrollRow(id: scrollID, leafID: id, rowKey: key, rect: node.rect)
+    }
     if case .button(let button) = node.content, let id = button.id {
       interaction.recordScrollRow(id: scrollID, leafID: id, rowKey: key, rect: node.rect)
     }
     for child in store.children(of: id)! { recordRowLeaves(child, scrollID: scrollID, key: key) }
+  }
+
+  func refreshInteractiveContent() throws {
+    guard let root else { return }
+    try refreshInteractiveContent(root)
+    if layoutDirty, let layoutRect { try layout(in: layoutRect) }
+    prepareIfNeeded()
+  }
+
+  private func refreshInteractiveContent(_ id: NodeID) throws {
+    let node = store.value(for: id)!
+    if case .interactive(let interactive) = node.content {
+      let interaction = node.context.interaction
+      let leaf = interactive.nodeID ?? node.context.widgetID
+      let state = interaction.untrackedLeafState
+      let phase: InteractionPhase = state.pressed == leaf && interaction.input.pointerDown
+        ? .pressed : state.hovered == leaf || state.selected == leaf ? .hovered : .idle
+      if phase != node.phase {
+        var context = node.context
+        context.focusTargets = []
+        context.focusLeafClaimed = true
+        _ = try installBoundary(id, content: { interactive.nodeContent(phase) }, context: context)
+        store.modify(id) { $0.phase = phase }
+        prepared = false
+      }
+    }
+    for child in store.children(of: id)! { try refreshInteractiveContent(child) }
   }
 
   func dispatch(_ input: InputState) throws {
@@ -1186,6 +1245,7 @@ final class NodeScene {
     processInput(input)
     if refreshEditorText(force: true), let layoutRect { try layout(in: layoutRect) }
     try refreshScroll()
+    try refreshInteractiveContent()
     prepareIfNeeded()
   }
 
@@ -1340,7 +1400,7 @@ final class NodeScene {
     case .empty, .spacer: break
     case .element(let element):
       element.paint(into: &list, in: node.rect, context: context)
-    case .group, .trailing, .stack, .overlay, .tuple, .scope, .boundary:
+    case .interactive, .background, .group, .trailing, .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { paint(child, into: &list, clip: clip, cullingEnabled: cullingEnabled) }
     }
   }
@@ -1348,7 +1408,7 @@ final class NodeScene {
   private func paintHighlight(_ node: borrowing Node, into list: inout DrawList) {
     let context = node.context
     if !context.focusLeafClaimed && !context.navigationIgnored {
-      BlockEngine.drawHighlight(for: context.widgetID, into: &list, in: node.rect, context: context)
+      FocusHighlight.paint(for: context.widgetID, into: &list, in: node.rect, context: context)
     }
   }
 }

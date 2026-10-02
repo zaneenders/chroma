@@ -18,7 +18,7 @@ extension PlainTextLayout {
     let editing = acceptsInput && interaction.editingLeaf == id
     let caret = editing ? interaction.caretOffset : nil
     var range = editing ? interaction.textSelectionRange : nil
-    if acceptsInput { BlockEngine.drawHighlight(for: id, into: &list, in: rect, context: context) }
+    if acceptsInput { FocusHighlight.paint(for: id, into: &list, in: rect, context: context) }
     if range == nil, let selection = interaction.textSelection.selection(for: id) {
       range = selection.from..<selection.to
     }

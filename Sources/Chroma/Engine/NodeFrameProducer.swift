@@ -84,6 +84,7 @@ final class NodeFrameProducer {
     try scene.refreshBoundaries()
     try scene.layout(in: Rect(origin: .zero, size: viewport))
     scene.prepareIfNeeded(viewport: viewport)
+    try scene.refreshInteractiveContent()
     self.viewport = viewport
     metrics = context.fontMetrics
   }
@@ -100,6 +101,7 @@ final class NodeFrameProducer {
       try scene.layout(in: Rect(origin: .zero, size: viewport))
     }
     try scene.refreshScroll()
+    try scene.refreshInteractiveContent()
     scene.prepareIfNeeded()
   }
 

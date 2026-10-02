@@ -51,3 +51,16 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
     BlockEngine.draw(content(state.phase), into: &drawList, in: rect, context: context)
   }
 }
+
+@MainActor
+protocol NodeInteractive {
+  var nodeID: WidgetID? { get }
+  var nodeAction: @MainActor () -> Void { get }
+  func nodeContent(_ phase: InteractionPhase) -> any Block
+}
+
+extension Interactive: NodeInteractive {
+  var nodeID: WidgetID? { id }
+  var nodeAction: @MainActor () -> Void { action }
+  func nodeContent(_ phase: InteractionPhase) -> any Block { content(phase) }
+}

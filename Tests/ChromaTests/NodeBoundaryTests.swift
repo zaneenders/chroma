@@ -21,6 +21,12 @@ struct NodeBoundaryTests {
 
   private let viewport = Size(width: 240, height: 160)
 
+  private struct LegacyOnly: PrimitiveBlock {
+    var focusRule: FocusRule { .decorative }
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
+  }
+
   @Test func oneObservedRowRebuildsWithoutRebuildingOtherRowsOrRoot() throws {
     let producer = NodeFrameProducer()
     let context = BlockContext()
@@ -186,7 +192,7 @@ struct NodeBoundaryTests {
     let context = BlockContext()
     let producer = NodeFrameProducer()
     let content = UpdateBoundary {
-      if model.visible { Text("Retained") } else { Interactive(action: {}) { _ in Text("Unsupported") } }
+      if model.visible { Text("Retained") } else { LegacyOnly() }
     }
     try producer.refresh(content: content, viewport: viewport, context: context, onChange: {})
     let before = producer.paint().commands

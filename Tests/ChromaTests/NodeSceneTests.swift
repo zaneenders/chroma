@@ -6,6 +6,12 @@ import Testing
 struct NodeSceneTests {
   private let rect = Rect(x: 0, y: 0, width: 120, height: 40)
 
+  private struct LegacyOnly: PrimitiveBlock {
+    var focusRule: FocusRule { .decorative }
+    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
+  }
+
   @Test func buttonPaintMatchesExistingOutputWithoutRegisteringOrExecutingActions() throws {
     let context = BlockContext()
     var actions = 0
@@ -98,7 +104,7 @@ struct NodeSceneTests {
     scene.prepare(viewport: rect.size)
     let before = scene.paint().commands
     do {
-      try scene.update(Interactive(action: {}) { _ in Text("Unsupported") }, context: BlockContext())
+      try scene.update(LegacyOnly(), context: BlockContext())
       Issue.record("Unsupported scrolling must fail before committing")
     } catch NodeScene.BuildError.unsupportedBlock {}
     #expect(scene.paint().commands == before)
@@ -172,7 +178,7 @@ struct NodeSceneTests {
       try scene.update(
         VStack {
           Text("New")
-          Interactive(action: {}) { _ in Text("Unsupported") }
+          LegacyOnly()
         }, context: context)
       Issue.record("Unsupported nested content must fail atomically")
     } catch NodeScene.BuildError.unsupportedBlock {}

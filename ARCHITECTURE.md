@@ -467,7 +467,9 @@ Shape Tree Desktop was subsequently found at `/home/zane/Projects/shape-tree/app
 
 Engine follow-up: `Group`, `TrailingControlsRow`, and block-content `ScrollView` now lower into retained nodes. Scrolling refreshes placement/preparation without rebuilding descriptions or painting during dispatch. `LifecycleElement` provides backend-neutral measurement, explicit interaction preparation, paint, and conservative optional visual bounds; unknown bounds disable culling. Custom element replacement conservatively invalidates measurement rather than assuming an identity implies unchanged layout. Removed the duplicated legacy selectable-Text paint/selection implementation; both paths now share the split helpers. Validation: 492 core tests, 14 Wayland input tests, 54 Examples tests, 1 benchmark test, and Linux release build passed.
 
-Phase 5 remains open: phase-dependent `Interactive`, legacy row-based ScrollView APIs, non-color backgrounds, and runtime fallback/BlockEngine removal are not migrated. Deleting those implementations now would break Chroma's own tests/examples, independently of deferred consumers.
+Further engine coverage: phase-dependent `Interactive` now owns an observed subtree that refreshes outside paint only when its phase or dependencies change. Eight unchanged hover events perform no builder calls or paint. Non-color backgrounds lower to retained background/content nodes with preserved modifier order and focus ownership. Focus highlighting is a standalone renderer helper, no longer a retained-paint dependency on `BlockEngine`. Tests cover hover/press/release action delivery, phase subtree observation without root rebuild, background command equivalence, and idle windows with no scheduled frames. Validation: 496 core tests, 14 Wayland input tests, 54 Examples tests, 1 benchmark test, and Linux release build passed.
+
+Phase 5 remains open only for legacy row-based ScrollView lowering and runtime fallback/BlockEngine removal, including migration of Chroma's legacy-only custom test/example elements. These are engine-local remaining tasks, not deferred consumer requirements.
 
 #### Phase 6 — Optimize only measured remaining costs
 

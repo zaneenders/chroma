@@ -133,7 +133,7 @@ public struct BlockContext {
     }
     let id = widgetID
     let state = buttonState(in: rect, role: role, action: action)
-    BlockEngine.drawHighlight(for: id, into: &drawList, in: rect, context: self)
+    FocusHighlight.paint(for: id, into: &drawList, in: rect, context: self)
     return state
   }
 
