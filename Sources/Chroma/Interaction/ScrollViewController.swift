@@ -28,6 +28,18 @@ public final class ScrollViewController {
 
   var request: ScrollRequest?
   @ObservationIgnored var lazyStackCache = LazyStackCache()
+  @ObservationIgnored var uniformRowIdentity: UniformRowIdentity?
+
+  func rowIdentity<Data: RandomAccessCollection>(for data: Data) -> UniformRowIdentity
+  where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    let ids = data.map(\.id)
+    if let cached = uniformRowIdentity, let previous = cached.ids as? [Data.Element.ID], previous == ids {
+      return cached
+    }
+    let identity = UniformRowIdentity(ids: ids)
+    uniformRowIdentity = identity
+    return identity
+  }
 
   public init() {}
   func scrollToRowKey(_ key: StructuralKey) { request = .row(key) }
@@ -37,4 +49,23 @@ public final class ScrollViewController {
   public func scrollToBottom() { request = .bottom }
   public func scroll(to offset: Float) { request = .offset(offset) }
   public func scrollToVisible(_ rect: Rect) { request = .visible(rect) }
+}
+
+final class UniformRowIdentity: Equatable {
+  let ids: Any
+  let keys: [StructuralKey]
+  let indices: [StructuralKey: Int]
+
+  init<ID: Hashable & Sendable>(ids: [ID]) {
+    self.ids = ids
+    keys = ids.map { StructuralKey($0) }
+    var indices: [StructuralKey: Int] = [:]
+    indices.reserveCapacity(keys.count)
+    for (index, key) in keys.enumerated() {
+      precondition(indices.updateValue(index, forKey: key) == nil, "Duplicate lazy collection element ID")
+    }
+    self.indices = indices
+  }
+
+  static func == (lhs: UniformRowIdentity, rhs: UniformRowIdentity) -> Bool { lhs === rhs }
 }

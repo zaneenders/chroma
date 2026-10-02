@@ -139,7 +139,7 @@ package final class Interaction {
 
   struct ScrollLayout: Equatable {
     enum Rows: Equatable {
-      case uniform(count: Int, height: Float, keys: [StructuralKey]?)
+      case uniform(count: Int, height: Float, keys: UniformRowIdentity?)
       case variable(VariableScrollRows)
 
       static func == (lhs: Self, rhs: Self) -> Bool {
@@ -158,7 +158,7 @@ package final class Interaction {
     func index(of key: StructuralKey) -> Int? {
       switch rows {
       case .uniform(let count, _, let keys):
-        if let keys { return keys.firstIndex(of: key) }
+        if let keys { return keys.indices[key] }
         guard let index = key.value as? Int, index >= 0, index < count else { return nil }
         return index
       case .variable(let rows): return rows.keys.firstIndex(of: key)
