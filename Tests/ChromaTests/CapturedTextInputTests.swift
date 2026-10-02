@@ -15,7 +15,7 @@ struct CapturedTextInputTests {
     var range: Range<Int>?
   }
 
-  struct Editor: PrimitiveBlock {
+  struct Editor: LifecycleElement {
     let text: String
     let model: Model
     let capture: Capture
@@ -24,7 +24,8 @@ struct CapturedTextInputTests {
 
     func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
+    func prepareInteraction(in rect: Rect, context: BlockContext) {
       let state = context.textInputState(
         id: WidgetID("editor"), in: rect, text: { text }, onChange: { model.text = $0 })
       capture.range = state.selectionRange

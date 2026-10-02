@@ -1,5 +1,7 @@
 @MainActor
 public struct VariableHeightList: Block {
+  var name: String?
+  var showsIndicator = false
   let snapshotIdentity: ObjectIdentifier
   let selection: VirtualListSelection?
   let controller: ScrollViewController?

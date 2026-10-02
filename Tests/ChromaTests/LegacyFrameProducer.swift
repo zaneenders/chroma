@@ -1,42 +1,9 @@
 import Foundation
 import Observation
-import Synchronization
-
-final class FrameTrackingSubscription: Observable, Sendable {
-  private let registrar = ObservationRegistrar()
-  private let callback: Mutex<(@MainActor @Sendable () -> Void)?>
-
-  init(_ onChange: @escaping @MainActor @Sendable () -> Void) {
-    callback = Mutex(onChange)
-  }
-
-  var isActive: Bool {
-    callback.withLock { $0 != nil }
-  }
-
-  private var isCancelled: Bool {
-    callback.withLock { $0 == nil }
-  }
-
-  func trackCancellation() {
-    registrar.access(self, keyPath: \.isCancelled)
-  }
-
-  func cancel() {
-    callback.withLock { $0 = nil }
-    registrar.withMutation(of: self, keyPath: \.isCancelled) {}
-  }
-
-  func takeCallback() -> (@MainActor @Sendable () -> Void)? {
-    callback.withLock { callback in
-      defer { callback = nil }
-      return callback
-    }
-  }
-}
+@testable import Chroma
 
 @MainActor
-package final class FrameProducer {
+final class FrameProducer {
   private var generation: UInt64 = 0
   private var subscription: FrameTrackingSubscription?
   private var registrationSubscription: FrameTrackingSubscription?
@@ -46,13 +13,13 @@ package final class FrameProducer {
   private let clock: @MainActor () -> Double
   private var cachedCommands: [DrawCommand] = []
   private var animationPaints: [AnimationPaint] = []
-  package var needsAnimationFrame: Bool { !animationPaints.isEmpty }
+  var needsAnimationFrame: Bool { !animationPaints.isEmpty }
 
-  package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
+  init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
     self.clock = clock
   }
 
-  package func reset() {
+  func reset() {
     cachedCommands = []
     animationPaints = []
     interaction?.resetRegistrations()
@@ -74,7 +41,7 @@ package final class FrameProducer {
     registrationSubscription?.cancel()
   }
 
-  package func render(
+  func render(
     content: (any Block)?,
     viewport: Size,
     input: InputState,
@@ -132,7 +99,7 @@ package final class FrameProducer {
     return result
   }
 
-  package func renderAnimations() -> DrawList {
+  func renderAnimations() -> DrawList {
     let frame = AnimationFrame(timestamp: clock())
     interaction?.animationFrame = frame
     var commands: [DrawCommand] = []
@@ -148,7 +115,7 @@ package final class FrameProducer {
     return DrawList(commands: commands)
   }
 
-  package func refreshRegistrations(
+  func refreshRegistrations(
     _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = []
   ) {
     let interaction = context.interaction
@@ -161,7 +128,7 @@ package final class FrameProducer {
     interaction.endFrame()
   }
 
-  package func registrationsAreValid(viewport: Size) -> Bool {
+  func registrationsAreValid(viewport: Size) -> Bool {
     registrationViewport == viewport && registrationSubscription?.isActive == true
   }
 

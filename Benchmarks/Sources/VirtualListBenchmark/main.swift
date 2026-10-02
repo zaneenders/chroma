@@ -26,7 +26,6 @@ struct VirtualListBenchmark {
     let snapshot = VirtualListSnapshot(ids: 0..<count)
     let snapshotMilliseconds = (ProcessInfo.processInfo.systemUptime - start) * 1000
     let host = HeadlessHost(size: Size(width: 400, height: 600))
-    host.usesNodeLifecycle = true
     var builds = 0
     var messages: [Int: Message] = [:]
     var visibleMessage: Message?

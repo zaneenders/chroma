@@ -257,7 +257,7 @@ private struct UUIDList: Block {
   }
 }
 
-private struct ShapeCanvas: PrimitiveBlock {
+private struct ShapeCanvas: LifecycleElement {
   let state: PerformanceDemoState
 
   var focusRule: FocusRule { .standard }
@@ -267,7 +267,7 @@ private struct ShapeCanvas: PrimitiveBlock {
 
   func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: Color(r: 0.025, g: 0.035, b: 0.065, a: 1))
 
     let area = Rect(

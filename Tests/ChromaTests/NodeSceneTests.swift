@@ -106,7 +106,7 @@ struct NodeSceneTests {
     do {
       try scene.update(LegacyOnly(), context: BlockContext())
       Issue.record("Unsupported scrolling must fail before committing")
-    } catch NodeScene.BuildError.unsupportedBlock {}
+    } catch NodeScene.BuildError.unsupportedPrimitive {}
     #expect(scene.paint().commands == before)
   }
 
@@ -181,7 +181,7 @@ struct NodeSceneTests {
           LegacyOnly()
         }, context: context)
       Issue.record("Unsupported nested content must fail atomically")
-    } catch NodeScene.BuildError.unsupportedBlock {}
+    } catch NodeScene.BuildError.unsupportedPrimitive {}
     #expect(scene.paint().commands == before)
   }
 

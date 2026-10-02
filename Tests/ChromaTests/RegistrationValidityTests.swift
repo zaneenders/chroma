@@ -18,7 +18,7 @@ struct RegistrationValidityTests {
     var activatedValue: Int?
   }
 
-  struct Control: PrimitiveBlock {
+  struct Control: LifecycleElement {
     let model: Model
     let counters: Counters
     var focusRule: FocusRule { .control }
@@ -27,7 +27,9 @@ struct RegistrationValidityTests {
       Size(width: model.width, height: 100)
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
+
+    func prepareInteraction(in rect: Rect, context: BlockContext) {
       counters.draws += 1
       let value = model.callbackValue
       let hitRect = Rect(x: rect.minX, y: rect.minY, width: model.width, height: 100)

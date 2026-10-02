@@ -78,7 +78,7 @@ struct InteractionWorkloadTests {
     for _ in 0..<8 {
       host.handleInput(InputState(pointerPosition: point, scrollDelta: Point(x: 0, y: -28)))
     }
-    #expect(counters.rowDraws > 0)
+    #expect(counters.rowDraws == 0)
     host.handleInput(InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
     host.handleInput(InputState(pointerPosition: point, pointerReleased: true))
     #expect(counters.lastActivatedRow == 9)
@@ -116,7 +116,7 @@ struct InteractionWorkloadTests {
           pointerPosition: Point(x: 40, y: Float(row) * 28 + 12),
           pointerPressPosition: origin, pointerDown: true))
     }
-    #expect(counters.rowDraws > 0)
+    #expect(counters.rowDraws == 0)
     host.handleInput(InputState(pointerPosition: Point(x: 40, y: 264), pointerReleased: true))
     host.renderScheduled()
     #expect(counters.activations == 0)

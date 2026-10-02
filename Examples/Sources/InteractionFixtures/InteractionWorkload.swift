@@ -60,7 +60,7 @@ public struct InteractionWorkload: Block {
   }
 }
 
-private struct InteractionRow: PrimitiveBlock {
+private struct InteractionRow: LifecycleElement {
   let index: Int
   let counters: InteractionWorkloadCounters
   var focusRule: FocusRule { .control }
@@ -71,10 +71,15 @@ private struct InteractionRow: PrimitiveBlock {
     return Size(width: proposal.width, height: 28)
   }
 
-  @MainActor func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func prepareInteraction(in rect: Rect, context: BlockContext) {
+    _ = context.buttonState(in: rect) { counters.activate(row: index) }
+  }
+
+  @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
     counters.recordDraw()
-    let state = context.buttonState(in: rect) { counters.activate(row: index) }
-    list.fillRoundedRect(rect, radius: 3, color: state.hovered ? .yellow : .black)
+    let hovered = context.isHovered
+
+    list.fillRoundedRect(rect, radius: 3, color: hovered ? .yellow : .black)
     list.text("Session \(index)", at: Point(x: rect.minX + 8, y: rect.minY + 6), color: .white, scale: 0.6)
   }
 }

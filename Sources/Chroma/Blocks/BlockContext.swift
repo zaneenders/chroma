@@ -8,6 +8,12 @@ public struct BlockContext {
   var focusLeafClaimed = false
   var navigationIgnored = false
 
+  public func paintFocusHighlight(into list: inout DrawList, in rect: Rect) {
+    FocusHighlight.paint(for: widgetID, into: &list, in: rect, context: self)
+  }
+
+  public var isHovered: Bool { interaction.untrackedLeafState.hovered == widgetID }
+
   public var hoverStyle: HoverStyle?
 
   public func childScope(_ slot: Int) -> BlockContext {

@@ -54,7 +54,6 @@ struct NodeInteractiveTests {
 
   @Test func inactiveRetainedWindowHasNoScheduledFrames() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     runtime.content = Interactive(action: {}) { _ in Text("Idle") }
     _ = runtime.renderScheduled(.content, viewport: Size(width: 100, height: 40), onChange: {})
     #expect(!runtime.needsAnimationFrame)

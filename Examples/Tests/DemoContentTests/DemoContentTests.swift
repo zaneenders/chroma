@@ -376,10 +376,9 @@ extension DemoContentTests {
     func tintRects() -> [Rect] {
       renderer.render(input: parked).commands.compactMap { command -> Rect? in
         if case .strokeRect(let rect, let width, let color) = command,
-          width == 2, color == ChromaTheme.dark.focus.ring
-        {
-          return rect
-        }
+          width == 2, color == ChromaTheme.dark.focus.ring { return rect }
+        if case .strokeRoundedRect(let rect, _, let width, let color) = command,
+          width == 2, color == ChromaTheme.dark.focus.ring, rect.size.height < 53 { return rect }
         return nil
       }
     }

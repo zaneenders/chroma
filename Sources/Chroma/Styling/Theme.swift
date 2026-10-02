@@ -230,3 +230,12 @@ extension Block {
     ThemeBlock(content: self, theme: theme)
   }
 }
+
+@MainActor
+protocol NodeThemeReader {
+  func nodeContent(theme: ChromaTheme) -> any Block
+}
+
+extension ThemeReader: NodeThemeReader {
+  func nodeContent(theme: ChromaTheme) -> any Block { content(theme) }
+}

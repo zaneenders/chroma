@@ -29,7 +29,6 @@ struct NodeRuntimeTests {
 
   @Test func modalOpeningBetweenEventsRefreshesWithoutPainting() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     let model = Model()
     runtime.content = Content(model: model)
     let viewport = Size(width: 200, height: 100)
@@ -45,7 +44,6 @@ struct NodeRuntimeTests {
 
   @Test func eightQueuedEventsShareOneScheduledPaintAndOneBuild() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     var actions: [Int] = []
     runtime.content = Button("Run") { actions.append(actions.count) }
     _ = runtime.render(viewport: Size(width: 100, height: 40), input: InputState(), onChange: {})
@@ -63,7 +61,6 @@ struct NodeRuntimeTests {
 
   @Test func listSliceRefreshesObservedRowsBetweenEventsWithoutPainting() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     let model = Model()
     runtime.content = FixedHeightList(count: 1000, rowHeight: 30, overscan: 0) { index in
       Button("\(model.label)-\(index)") {
@@ -91,7 +88,6 @@ struct NodeRuntimeTests {
 
   @Test func panelOpeningBetweenEventsRefreshesWithoutRootBuildOrPaint() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     let model = Model()
     runtime.content = VStack {
       UpdateBoundary {
@@ -120,7 +116,6 @@ struct NodeRuntimeTests {
 
   @Test func replacementRemovalAndResizeRefreshTheRuntimeSnapshot() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     var actions = 0
     let viewport = Size(width: 200, height: 60)
     runtime.content = Button("Run") { actions += 1 }
@@ -138,7 +133,6 @@ struct NodeRuntimeTests {
 
   @Test func clearingContentImmediatelyReleasesRegisteredActions() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     var actions = 0
     runtime.content = Button("Run") { actions += 1 }
     _ = runtime.render(viewport: Size(width: 100, height: 40), input: InputState(), onChange: {})
@@ -152,7 +146,6 @@ struct NodeRuntimeTests {
 
   @Test func resetImmediatelyClearsTheNodeInteractionSnapshot() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     runtime.content = Button("Run") {}
     _ = runtime.render(viewport: Size(width: 100, height: 40), input: InputState(), onChange: {})
     #expect(!runtime.interaction.registrations.buttonActions.isEmpty)
@@ -163,7 +156,6 @@ struct NodeRuntimeTests {
 
   @Test func scopesRouteCommandsWithoutPaintingAndSupportEntryAndExit() {
     let runtime = WindowRuntime()
-    runtime.nodeLifecycleEnabled = true
     var actions = 0
     runtime.content = VStack {
       Button("Run") { actions += 1 }

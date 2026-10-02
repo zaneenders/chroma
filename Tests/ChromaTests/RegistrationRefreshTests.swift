@@ -11,19 +11,20 @@ struct RegistrationRefreshTests {
     var inputs: [InputState] = []
   }
 
-  struct InputProbe: PrimitiveBlock {
+  struct InputProbe: LifecycleElement {
     let capture: InputCapture
 
     var focusRule: FocusRule { .control }
 
     func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      capture.inputs.append(context.input)
-      if context.buttonState(id: WidgetID("probe"), in: rect).clicked {
-        capture.clicks += 1
-      }
+    func prepareInteraction(in rect: Rect, context: BlockContext) {
+      _ = context.buttonState(id: WidgetID("probe"), in: rect, action: { capture.clicks += 1 })
     }
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+      capture.inputs.append(context.input)
+    }
+
   }
 
   @Test func registrationRefreshDoesNotReplayClickOrInput() {
@@ -38,7 +39,7 @@ struct RegistrationRefreshTests {
     let textInput = InputState(textEvents: [.insert("x")])
     renderer.render(input: textInput)
     #expect(capture.clicks == 1)
-    #expect(capture.inputs == [InputState(), textInput])
+    #expect(capture.inputs == [textInput])
 
     renderer.render(
       input: InputState(
@@ -59,6 +60,6 @@ struct RegistrationRefreshTests {
     capture.inputs = []
     let input = InputState(pointerDown: true, textEvents: [.insert("x")])
     renderer.render(input: input)
-    #expect(capture.inputs == [InputState(), input])
+    #expect(capture.inputs == [input])
   }
 }

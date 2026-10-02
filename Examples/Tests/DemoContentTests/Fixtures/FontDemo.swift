@@ -97,7 +97,7 @@ extension String {
   fileprivate var leftPaddedToFour: String { String(repeating: "0", count: max(0, 4 - count)) + self }
 }
 
-struct GlyphExplorer: PrimitiveBlock {
+struct GlyphExplorer: LifecycleElement {
   let state: PerformanceDemoState
   static let glyphs = Array(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?@#$%&*()[]{}ÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜàáâãäåèéêëìíîïòóôõöùúûüÇçÑñÝýÿČčŠšŽžĀāĂăĄą"
@@ -111,14 +111,32 @@ struct GlyphExplorer: PrimitiveBlock {
     return Size(width: proposal.width, height: Float((Self.glyphs.count + columns - 1) / columns) * cell)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func prepareInteraction(in rect: Rect, context: BlockContext) {
     let columns = max(1, Int(rect.size.width / cell))
     let rows = (Self.glyphs.count + columns - 1) / columns
     context.withFocusGroup(in: rect, axis: .vertical) {
       for row in 0..<rows {
+        let rowRect = Rect(x: rect.minX, y: rect.minY + Float(row) * cell, width: rect.size.width, height: cell)
+        context.withFocusGroup(in: rowRect, axis: .horizontal) {
+          for column in 0..<columns {
+            let index = row * columns + column
+            guard index < Self.glyphs.count else { break }
+            let box = Rect(x: rowRect.minX + Float(column) * cell, y: rowRect.minY, width: cell, height: cell)
+            _ = context.childScope(index).buttonState(in: box) { state.inspectedGlyph = String(Self.glyphs[index]) }
+          }
+        }
+      }
+    }
+  }
+
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    let columns = max(1, Int(rect.size.width / cell))
+    let rows = (Self.glyphs.count + columns - 1) / columns
+    do {
+      for row in 0..<rows {
         let rowRect = Rect(
           x: rect.minX, y: rect.minY + Float(row) * cell, width: rect.size.width, height: cell)
-        context.withFocusGroup(in: rowRect, axis: .horizontal) {
+        do {
           for column in 0..<columns {
             let index = row * columns + column
             guard index < Self.glyphs.count else { break }
@@ -127,12 +145,11 @@ struct GlyphExplorer: PrimitiveBlock {
             let text = String(Self.glyphs[index])
             if state.inspectedGlyph == text { drawList.fillRect(box, color: context.theme.elevatedSurface) }
             drawList.strokeRect(box, width: 0.5, color: context.theme.border)
+            context.childScope(index).paintFocusHighlight(into: &drawList, in: box)
             drawList.text(
               text, at: Point(x: box.minX + 10, y: box.minY + 6),
               color: state.inspectedGlyph == text ? context.theme.accent : context.theme.foreground)
-            context.childScope(index).focusable(in: box, into: &drawList) {
-              state.inspectedGlyph = text
-            }
+
           }
         }
       }
@@ -140,7 +157,7 @@ struct GlyphExplorer: PrimitiveBlock {
   }
 }
 
-struct GlyphInspection: PrimitiveBlock {
+struct GlyphInspection: LifecycleElement {
   let glyph: String
 
   var focusRule: FocusRule { .standard }
@@ -149,7 +166,7 @@ struct GlyphInspection: PrimitiveBlock {
     Size(width: 200, height: 240)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let origin = Point(x: rect.minX + 16, y: rect.minY + 8)
     for column in 0...20 {
       drawList.fillRect(
@@ -169,7 +186,7 @@ struct GlyphInspection: PrimitiveBlock {
   }
 }
 
-struct TerminalSpecimen: PrimitiveBlock {
+struct TerminalSpecimen: LifecycleElement {
   static let rows = ["╭────╮ ┌────┐ ░▒▓█", "│    │ │    │ ←↑→↓", "╰────╯ └────┘ ⠁⠃⠇⠏"]
 
   var focusRule: FocusRule { .standard }
@@ -178,7 +195,7 @@ struct TerminalSpecimen: PrimitiveBlock {
     Size(width: 360, height: 84)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     for (row, text) in Self.rows.enumerated() {
       drawList.text(
         text, at: Point(x: rect.minX, y: rect.minY + Float(row) * 28),

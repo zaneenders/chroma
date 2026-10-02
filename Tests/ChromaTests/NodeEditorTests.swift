@@ -195,7 +195,6 @@ struct NodeEditorTests {
     let counts = Counts()
     let model = Model()
     let runtime = WindowRuntime(clock: { counts.now })
-    runtime.nodeLifecycleEnabled = true
     runtime.content = TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 })
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.handleInput(InputState(commands: [.navigation(.nextFocus)]))
@@ -270,7 +269,6 @@ struct NodeEditorTests {
     let model = Model()
     let counts = Counts()
     let runtime = WindowRuntime(clock: { counts.now })
-    runtime.nodeLifecycleEnabled = true
     weak var removed: LifetimeProbe?
     func content() -> any Block {
       guard model.visible else { return EmptyBlock() }
@@ -306,7 +304,6 @@ struct NodeEditorTests {
     let counts = Counts()
     var text = "Old"
     let runtime = WindowRuntime(clock: { counts.now })
-    runtime.nodeLifecycleEnabled = true
     runtime.content = TextEditor(
       singleLine: true,
       text: {
@@ -332,7 +329,6 @@ struct NodeEditorTests {
   @Test func animationResizeRelayoutsBeforeReusingCaretSegments() {
     let counts = Counts()
     let runtime = WindowRuntime(clock: { counts.now })
-    runtime.nodeLifecycleEnabled = true
     runtime.content = TextEditor(text: { "abc" }, onChange: { _ in })
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.handleInput(InputState(commands: [.navigation(.nextFocus)]))
@@ -350,7 +346,6 @@ struct NodeEditorTests {
     let counts = Counts()
     let model = Model()
     let runtime = WindowRuntime(clock: { counts.now })
-    runtime.nodeLifecycleEnabled = true
     runtime.content = TextEditor(
       singleLine: true, text: { model.text },
       onChange: {

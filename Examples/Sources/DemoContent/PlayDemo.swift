@@ -132,7 +132,7 @@ struct PlayDemo: Block {
   }
 }
 
-private struct GameBoard: PrimitiveBlock {
+private struct GameBoard: LifecycleElement {
   let state: PlayState
   var focusRule: FocusRule { .control }
   var expandsHorizontally: Bool { true }
@@ -140,16 +140,22 @@ private struct GameBoard: PrimitiveBlock {
 
   func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  @MainActor func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func prepareInteraction(in rect: Rect, context: BlockContext) {
+    let cell = min((rect.size.width - 12) / 10, (rect.size.height - 12) / 20).rounded(.down)
+    guard cell >= 3 else { return }
+    let grid = Rect(x: rect.minX + (rect.size.width - cell * 10) / 2, y: rect.minY + (rect.size.height - cell * 20) / 2, width: cell * 10, height: cell * 20)
+    _ = context.buttonState(in: grid) {
+      if state.phase != .playing { state.togglePause() }
+      state.focus.focus()
+    }
+  }
+
+  @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
     let cell = min((rect.size.width - 12) / 10, (rect.size.height - 12) / 20).rounded(.down)
     guard cell >= 3 else { return }
     let grid = Rect(
       x: rect.minX + (rect.size.width - cell * 10) / 2,
       y: rect.minY + (rect.size.height - cell * 20) / 2, width: cell * 10, height: cell * 20)
-    _ = context.buttonState(in: grid) {
-      if state.phase != .playing { state.togglePause() }
-      state.focus.focus()
-    }
     list.fillRoundedRect(grid, radius: 5, color: DemoStyle.background)
     list.pushClip(grid)
     for row in 0..<FallingBlocksGame.height {
@@ -208,7 +214,7 @@ private struct GameBoard: PrimitiveBlock {
   }
 }
 
-private struct PiecePreview: PrimitiveBlock {
+private struct PiecePreview: LifecycleElement {
   let pieces: [Tetromino]
   var focusRule: FocusRule { .decorative }
 
@@ -216,7 +222,7 @@ private struct PiecePreview: PrimitiveBlock {
     Size(width: proposal.width, height: 138)
   }
 
-  func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
     for (index, piece) in pieces.enumerated() {
       let cells = piece.cells
       let minY = cells.map(\.y).min() ?? 0
