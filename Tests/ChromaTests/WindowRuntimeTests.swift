@@ -143,6 +143,35 @@ struct WindowRuntimeTests {
     runtime.reset()
   }
 
+  @Test func hoverEventsShareTheLastFrameUntilPresentation() {
+    final class Counter { var draws = 0 }
+    struct Probe: PrimitiveBlock {
+      let counter: Counter
+      var focusRule: FocusRule { .standard }
+      func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+      func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+        counter.draws += 1
+        list.fillRect(rect, color: .white)
+      }
+    }
+    let counter = Counter()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let viewport = Size(width: 200, height: 200)
+    runtime.content = Probe(counter: counter)
+    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    counter.draws = 0
+    for x in 1...100 {
+      runtime.handleInput(InputState(pointerPosition: Point(x: Float(x), y: 10)))
+    }
+    #expect(counter.draws == 0)
+    #expect(runtime.interaction.hoveredLeafID != nil)
+    #expect(runtime.interaction.input.pointerPosition == Point(x: 100, y: 10))
+    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    #expect(counter.draws == 1)
+    #expect(runtime.scheduler.nextFrame == nil)
+  }
+
   @Test func staticIndicatorsDoNotScheduleIdleFrames() throws {
     let clock = FrameSchedulerTests.Clock()
     let runtime = WindowRuntime(clock: { clock.now })
@@ -163,6 +192,33 @@ struct WindowRuntimeTests {
     #expect(first.commands == second.commands)
     #expect(runtime.scheduler.nextFrame == nil)
     runtime.reset()
+  }
+
+  @Test(ControlledObservationDelivery())
+  func scrollingAndHoverReturnToIdleAfterObservationDelivery() async {
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let controller = ScrollViewController()
+    let viewport = Size(width: 200, height: 200)
+    runtime.content = DeferredBlock {
+      ScrollView(data: 0..<1_000, rowHeight: 20, controller: controller) { index in
+        Text("Row \(index)")
+      }
+    }
+    let onChange: @MainActor @Sendable () -> Void = { runtime.scheduler.requestContent() }
+    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: onChange)
+    await drainObservationChanges()
+    #expect(runtime.scheduler.nextFrame == nil)
+    for input in [
+      InputState(pointerPosition: Point(x: 10, y: 10)),
+      InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -20)),
+    ] {
+      runtime.handleInput(input)
+      _ = runtime.renderScheduled(.content, viewport: viewport, onChange: onChange)
+      await drainObservationChanges()
+      #expect(runtime.scheduler.nextFrame == nil)
+    }
+    #expect(controller.offset == 20)
   }
 
   @Test func eventsBeforeInitialFrameAreReplayedInOrder() {

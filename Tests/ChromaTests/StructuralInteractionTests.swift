@@ -373,7 +373,10 @@ struct StructuralInteractionTests {
     let harness = Harness()
     let target = FocusTarget()
     let field = TextEditor(singleLine: true, text: { "hello" }, onChange: { _ in })
-    let expected = BlockEngine.resolve(field, context: harness.context).context.widgetID
+    let bareHarness = Harness()
+    bareHarness.render(field)
+    let expected = bareHarness.context.interaction.selectedLeafID
+    #expect(expected != nil)
     target.focus(editing: true)
     harness.render(field.padding(4).focusTarget(target))
     #expect(harness.context.interaction.editingLeaf == expected)

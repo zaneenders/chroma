@@ -101,7 +101,7 @@ package final class FrameScheduler {
         self.isProducing = true
         self.onFrame?(kind)
         self.isProducing = false
-        if self.lastFrameTime != nil { self.recordProducedFrame() }
+        // takeFrame records the start; rendering must count toward the frame interval.
       }
       self.schedule()
     }

@@ -20,20 +20,10 @@ public struct TupleBlock: PrimitiveBlock {
   }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    var result = Size.zero
-    for (index, child) in scopedChildren.enumerated() {
-      let context = context.childContext(for: child, at: index)
-      let size = BlockEngine.measure(child, proposal: proposal, context: context)
-      result.width = max(result.width, size.width)
-      result.height = max(result.height, size.height)
-    }
-    return result
+    prepareLayout(context: context).sizeThatFits(proposal)
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    for (index, child) in scopedChildren.enumerated() {
-      let context = context.childContext(for: child, at: index)
-      BlockEngine.draw(child, into: &drawList, in: rect, context: context)
-    }
+    prepareLayout(context: context).draw(into: &drawList, in: rect)
   }
 }

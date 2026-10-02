@@ -4,6 +4,35 @@ import Testing
 
 @MainActor
 struct PointerScrollFocusTests {
+  @Test func recoveringFocusAfterVirtualScrollDoesNotMoveTheNextClickTarget() {
+    let context = BlockContext()
+    let producer = FrameProducer()
+    let controller = ScrollViewController()
+    var clicks: [Int] = []
+    let content = ScrollView(data: 0..<30, rowHeight: 30, controller: controller) { index in
+      Interactive(action: { clicks.append(index) }) { _ in Text("Row \(index)") }
+    }
+    func render(_ input: InputState = InputState()) {
+      _ = producer.render(
+        content: content, viewport: Size(width: 200, height: 100), input: input,
+        context: context, onChange: {})
+    }
+    render()
+    let first = Point(x: 10, y: 10)
+    render(InputState(pointerPosition: first, pointerPressed: true))
+    render(InputState(pointerPosition: first, pointerReleased: true))
+    #expect(clicks == [0])
+
+    controller.scrollToBottom()
+    render()
+    #expect(controller.offset == 800)
+    let last = Point(x: 10, y: 80)
+    render(InputState(pointerPosition: last, pointerPressed: true))
+    #expect(controller.offset == 800)
+    render(InputState(pointerPosition: last, pointerReleased: true))
+    #expect(clicks == [0, 29])
+  }
+
   @Test(arguments: [false, true])
   func pressingOversizedRowPreservesScrollOffset(hasControl: Bool) {
     let context = BlockContext()

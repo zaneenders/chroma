@@ -108,7 +108,7 @@ public struct ScrollView: PrimitiveBlock {
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
     let identity = controller.rowIdentity(for: data)
-    let ids = identity.ids as! [Data.Element.ID]
+    let ids = identity.ids
     self.init(
       data: data, keys: identity,
       selection: LogicalSelection(
@@ -158,12 +158,13 @@ public struct ScrollView: PrimitiveBlock {
     controller?.restore(id: id, interaction: interaction)
     let contentSize: Size
     let horizontal: Bool
+    var resolvedContent: BlockEngine.Resolved?
     switch content {
     case .block(let block, _):
       horizontal = true
-      contentSize = BlockEngine.measure(
-        block,
-        proposal: Size(width: rect.size.width, height: .greatestFiniteMagnitude), context: context)
+      let resolved = BlockEngine.resolve(block, context: context)
+      resolvedContent = resolved
+      contentSize = resolved.sizeThatFits(Size(width: rect.size.width, height: .greatestFiniteMagnitude))
     case .rows(let rows, let controller):
       horizontal = false
       updateCache(rows: rows, controller: controller, width: rect.size.width, context: context)
@@ -205,12 +206,12 @@ public struct ScrollView: PrimitiveBlock {
       rect: rect, axis: horizontal ? nil : .vertical,
       scrollID: id, navigationID: id, navigationName: name)
     switch content {
-    case .block(let block, _):
-      BlockEngine.draw(
-        block, into: &drawList,
+    case .block:
+      resolvedContent!.draw(
+        into: &drawList,
         in: Rect(
           x: rect.minX - offsets.x, y: rect.minY - offsets.y,
-          width: contentSize.width, height: contentSize.height), context: context)
+          width: contentSize.width, height: contentSize.height))
     case .rows, .uniform:
       drawRows(into: &drawList, in: rect, context: context, id: id, offset: offsets.y)
     }

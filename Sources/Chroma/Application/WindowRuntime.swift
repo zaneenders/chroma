@@ -71,8 +71,14 @@ package final class WindowRuntime {
   }
 
   private func processInput(_ input: InputState) {
-    producer.refreshRegistrations(
-      content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+    // Hover can use the last frame's geometry. Actionable events need current callbacks
+    // and layout, including between events whose presentation is coalesced.
+    if input.pointerDown || input.pointerPressed || input.pointerReleased || input.scrollDelta != .zero
+      || !input.commands.isEmpty || !input.textEvents.isEmpty
+    {
+      producer.refreshRegistrations(
+        content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+    }
     interaction.processInput(input)
     interaction.finishInput()
   }

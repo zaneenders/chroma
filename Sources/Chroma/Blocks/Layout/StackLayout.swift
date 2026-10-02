@@ -5,10 +5,6 @@ struct StackLayout {
 
     var main: WritableKeyPath<Size, Float> { self == .horizontal ? \.width : \.height }
     var cross: WritableKeyPath<Size, Float> { self == .horizontal ? \.height : \.width }
-
-    @MainActor func expands(_ child: any PrimitiveBlock) -> Bool {
-      self == .horizontal ? child.expandsHorizontally : child.expandsVertically
-    }
   }
 
   var axis: Axis
@@ -16,11 +12,10 @@ struct StackLayout {
   var bottomAligned = false
 
   private func layout(
-    _ children: [BlockEngine.Resolved], originals: [any Block], proposal: Size,
-    context: BlockContext
+    _ children: [BlockEngine.Resolved], spacers: [Bool], proposal: Size
   ) -> [Size] {
     var sizes = children.map { $0.sizeThatFits(proposal) }
-    for index in sizes.indices where BlockEngine.isSpacer(originals[index]) {
+    for index in sizes.indices where spacers[index] {
       sizes[index][keyPath: axis.cross] = 0
     }
     let expands = children.map { axis == .horizontal ? $0.expandsHorizontally : $0.expandsVertically }
@@ -41,32 +36,53 @@ struct StackLayout {
         childProposal[keyPath: axis.main] = share
         sizes[index] = children[index].sizeThatFits(childProposal)
         sizes[index][keyPath: axis.main] = share
-        if BlockEngine.isSpacer(originals[index]) { sizes[index][keyPath: axis.cross] = 0 }
+        if spacers[index] { sizes[index][keyPath: axis.cross] = 0 }
       }
     }
     return sizes
   }
 
   func measure(_ children: [any Block], proposal: Size, context: BlockContext) -> Size {
-    guard !children.isEmpty else { return .zero }
-    let sizes = layout(
-      children.enumerated().map { index, child in
-        BlockEngine.resolve(child, context: context.childContext(for: child, at: index))
-      }, originals: children, proposal: proposal, context: context)
-    var result = Size.zero
-    result[keyPath: axis.main] = sizes.reduce(0) { $0 + $1[keyPath: axis.main] } + spacing * Float(sizes.count - 1)
-    result[keyPath: axis.cross] = sizes.map { $0[keyPath: axis.cross] }.max() ?? 0
-    return result
+    prepare(children, reversed: false, context: context).sizeThatFits(proposal)
   }
 
   func draw(
     _ originals: [any Block], reversed: Bool, into drawList: inout DrawList,
     in rect: Rect, context: BlockContext
   ) {
+    prepare(originals, reversed: reversed, context: context).draw(into: &drawList, in: rect)
+  }
+
+  func prepare(_ originals: [any Block], reversed: Bool, context: BlockContext) -> BlockEngine.Resolved {
     let children = originals.enumerated().map { index, child in
       BlockEngine.resolve(child, context: context.childContext(for: child, at: index))
     }
-    let sizes = layout(children, originals: originals, proposal: rect.size, context: context)
+    let spacers = originals.map(BlockEngine.isSpacer)
+    return BlockEngine.Resolved(
+      expandsHorizontally: {
+        children.indices.contains { (axis == .horizontal || !spacers[$0]) && children[$0].expandsHorizontally }
+      },
+      expandsVertically: {
+        children.indices.contains { (axis == .vertical || !spacers[$0]) && children[$0].expandsVertically }
+      },
+      measure: { proposal in
+        guard !children.isEmpty else { return .zero }
+        let sizes = layout(children, spacers: spacers, proposal: proposal)
+        var result = Size.zero
+        result[keyPath: axis.main] = sizes.reduce(0) { $0 + $1[keyPath: axis.main] } + spacing * Float(sizes.count - 1)
+        result[keyPath: axis.cross] = sizes.map { $0[keyPath: axis.cross] }.max() ?? 0
+        return result
+      },
+      draw: { list, rect in
+        let sizes = layout(children, spacers: spacers, proposal: rect.size)
+        place(children, sizes: sizes, reversed: reversed, into: &list, in: rect, context: context)
+      })
+  }
+
+  private func place(
+    _ children: [BlockEngine.Resolved], sizes: [Size], reversed: Bool,
+    into drawList: inout DrawList, in rect: Rect, context: BlockContext
+  ) {
     let interaction = context.interaction
     interaction.beginGroup(
       rect: rect, axis: axis == .horizontal ? .horizontal : .vertical)

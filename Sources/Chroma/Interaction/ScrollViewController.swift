@@ -30,13 +30,13 @@ public final class ScrollViewController {
   @ObservationIgnored var lazyStackCache = LazyStackCache()
   @ObservationIgnored var uniformRowIdentity: UniformRowIdentity?
 
-  func rowIdentity<Data: RandomAccessCollection>(for data: Data) -> UniformRowIdentity
+  func rowIdentity<Data: RandomAccessCollection>(for data: Data) -> TypedUniformRowIdentity<Data.Element.ID>
   where Data.Element: Identifiable, Data.Element.ID: Sendable {
     let ids = data.map(\.id)
-    if let cached = uniformRowIdentity, let previous = cached.ids as? [Data.Element.ID], previous == ids {
+    if let cached = uniformRowIdentity as? TypedUniformRowIdentity<Data.Element.ID>, cached.ids == ids {
       return cached
     }
-    let identity = UniformRowIdentity(ids: ids)
+    let identity = TypedUniformRowIdentity(ids: ids)
     uniformRowIdentity = identity
     return identity
   }
@@ -51,13 +51,11 @@ public final class ScrollViewController {
   public func scrollToVisible(_ rect: Rect) { request = .visible(rect) }
 }
 
-final class UniformRowIdentity: Equatable {
-  let ids: Any
+class UniformRowIdentity: Equatable {
   let keys: [StructuralKey]
   let indices: [StructuralKey: Int]
 
   init<ID: Hashable & Sendable>(ids: [ID]) {
-    self.ids = ids
     keys = ids.map { StructuralKey($0) }
     var indices: [StructuralKey: Int] = [:]
     indices.reserveCapacity(keys.count)
@@ -68,4 +66,13 @@ final class UniformRowIdentity: Equatable {
   }
 
   static func == (lhs: UniformRowIdentity, rhs: UniformRowIdentity) -> Bool { lhs === rhs }
+}
+
+final class TypedUniformRowIdentity<ID: Hashable & Sendable>: UniformRowIdentity {
+  let ids: [ID]
+
+  init(ids: [ID]) {
+    self.ids = ids
+    super.init(ids: ids)
+  }
 }
