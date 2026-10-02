@@ -6,3 +6,5 @@ Benchmarks/results/
 .swiftpm/
 Package.resolved
 .vscode/
+
+__pycache__/
