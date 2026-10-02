@@ -12,6 +12,15 @@ public struct ScrollView: PrimitiveBlock {
       self.key = StructuralKey(id)
       self.content = content
     }
+
+    /// Invalidates persistent measurement after an unobserved value used by this row changes.
+    /// Measurements are reused only while row identity, layout environment, and observed
+    /// dependencies remain valid. Replacing `content` invalidates automatically; mutations
+    /// captured outside Observation require this explicit invalidation. Registration still
+    /// resolves current content and callbacks on each update, independently of measurement reuse.
+    public mutating func invalidateMeasurement() {
+      measurementIdentity = LazyRowIdentity()
+    }
   }
 
   private enum Content {
@@ -152,7 +161,53 @@ public struct ScrollView: PrimitiveBlock {
   public var expandsVertically: Bool { true }
   public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
+  private struct ScrollGeometry {
+    let id: WidgetID
+    let contentSize: Size
+    let horizontal: Bool
+    let offsets: Point
+    let resolvedContent: BlockEngine.Resolved?
+  }
+
+  /// Placement events are shared by registration and presentation. No event requires painting.
+  private enum Placement {
+    case content(BlockEngine.Resolved, Rect)
+    case rowFocus(BlockContext, Rect)
+  }
+
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
+    let geometry = prepareScroll(in: rect, context: context)
+    placeContent(in: rect, context: context, geometry: geometry) { placement in
+      switch placement {
+      case .content(let resolved, let rect): resolved.register(in: rect)
+      case .rowFocus(let context, let rect): context.registerFocusable(in: rect)
+      }
+    }
+  }
+
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    let geometry = prepareScroll(in: rect, context: context)
+    drawList.pushClip(rect)
+    placeContent(in: rect, context: context, geometry: geometry) { placement in
+      switch placement {
+      case .content(let resolved, let rect): resolved.draw(into: &drawList, in: rect)
+      case .rowFocus(let context, let rect): context.focusable(in: rect, into: &drawList)
+      }
+    }
+    if showsIndicator {
+      drawIndicator(
+        into: &drawList, in: rect, extent: geometry.contentSize.height, offset: geometry.offsets.y,
+        horizontal: false, style: context.theme.scrollView)
+      if geometry.horizontal {
+        drawIndicator(
+          into: &drawList, in: rect, extent: geometry.contentSize.width, offset: geometry.offsets.x,
+          horizontal: true, style: context.theme.scrollView)
+      }
+    }
+    drawList.popClip()
+  }
+
+  @MainActor private func prepareScroll(in rect: Rect, context: BlockContext) -> ScrollGeometry {
     let id = context.widgetID
     let interaction = context.interaction
     controller?.restore(id: id, interaction: interaction)
@@ -200,34 +255,33 @@ public struct ScrollView: PrimitiveBlock {
     let offsets = interaction.resolveScroll(
       id: id, viewport: rect, contentSize: contentSize, controller: controller,
       sticksToBottom: sticksToBottom, horizontal: horizontal)
-    drawList.pushClip(rect)
+    return ScrollGeometry(
+      id: id, contentSize: contentSize, horizontal: horizontal, offsets: offsets,
+      resolvedContent: resolvedContent)
+  }
+
+  @MainActor private func placeContent(
+    in rect: Rect, context: BlockContext, geometry: ScrollGeometry,
+    visit: (Placement) -> Void
+  ) {
+    let interaction = context.interaction
     interaction.pushClip(rect)
     interaction.beginGroup(
-      rect: rect, axis: horizontal ? nil : .vertical,
-      scrollID: id, navigationID: id, navigationName: name)
+      rect: rect, axis: geometry.horizontal ? nil : .vertical,
+      scrollID: geometry.id, navigationID: geometry.id, navigationName: name)
     switch content {
     case .block:
-      resolvedContent!.draw(
-        into: &drawList,
-        in: Rect(
-          x: rect.minX - offsets.x, y: rect.minY - offsets.y,
-          width: contentSize.width, height: contentSize.height))
+      visit(
+        .content(
+          geometry.resolvedContent!,
+          Rect(
+            x: rect.minX - geometry.offsets.x, y: rect.minY - geometry.offsets.y,
+            width: geometry.contentSize.width, height: geometry.contentSize.height)))
     case .rows, .uniform:
-      drawRows(into: &drawList, in: rect, context: context, id: id, offset: offsets.y)
+      placeRows(in: rect, context: context, id: geometry.id, offset: geometry.offsets.y, visit: visit)
     }
     interaction.endGroup()
     interaction.popClip()
-    if showsIndicator {
-      drawIndicator(
-        into: &drawList, in: rect, extent: contentSize.height, offset: offsets.y,
-        horizontal: false, style: context.theme.scrollView)
-      if horizontal {
-        drawIndicator(
-          into: &drawList, in: rect, extent: contentSize.width, offset: offsets.x,
-          horizontal: true, style: context.theme.scrollView)
-      }
-    }
-    drawList.popClip()
   }
 
   private func drawIndicator(
@@ -250,8 +304,9 @@ public struct ScrollView: PrimitiveBlock {
     drawList.fillRect(thumb, color: style.indicator)
   }
 
-  @MainActor private func drawRows(
-    into drawList: inout DrawList, in rect: Rect, context: BlockContext, id: WidgetID, offset: Float
+  @MainActor private func placeRows(
+    in rect: Rect, context: BlockContext, id: WidgetID, offset: Float,
+    visit: (Placement) -> Void
   ) {
     let interaction = context.interaction
     let visibleTop = offset
@@ -277,14 +332,14 @@ public struct ScrollView: PrimitiveBlock {
       let end = min(uniformRows.count, visibleEnd + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
-          drawRow(
-            uniformRows.content(index), into: &drawList,
+          placeRow(
+            uniformRows.content(index),
             in: Rect(
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
               width: rect.size.width, height: uniformRows.height),
             context: uniformRows.keys.map { context.scoped([.key($0.keys[index])]) } ?? context.childScope(index),
             interaction: interaction, offset: offset, scrollID: id,
-            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index))
+            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index), visit: visit)
         }
       }
     case .rows(let rows, let controller):
@@ -295,33 +350,32 @@ public struct ScrollView: PrimitiveBlock {
       let end = min(rows.count, positions.firstRow(startingAfter: visibleBottom) + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
-          drawRow(
+          placeRow(
             rows[index].content,
-            into: &drawList,
             in: Rect(
               x: rect.minX, y: rect.minY + positions.starts[index] - offset,
               width: rect.size.width, height: positions.heights[index]),
             context: context.scoped([.key(rows[index].key)]),
-            interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key)
+            interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key, visit: visit)
         }
       }
     }
   }
 
-  @MainActor private func drawRow(
-    _ content: any Block, into drawList: inout DrawList, in rect: Rect,
+  @MainActor private func placeRow(
+    _ content: any Block, in rect: Rect,
     context rowContext: BlockContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
-    rowKey: StructuralKey
+    rowKey: StructuralKey, visit: (Placement) -> Void
   ) {
     guard let group = interaction.builderStack.last else {
-      preconditionFailure("drawRow outside of a frame; call beginFrame first")
+      preconditionFailure("placeRow outside of a frame; call beginFrame first")
     }
     let children = group.children.count
     var rowContext = rowContext
     rowContext.focusLeafClaimed = true
-    BlockEngine.draw(content, into: &drawList, in: rect, context: rowContext)
+    visit(.content(BlockEngine.resolve(content, context: rowContext), rect))
     if group.children.count == children {
-      rowContext.focusable(in: rect, into: &drawList)
+      visit(.rowFocus(rowContext, rect))
     }
     recordScrollRows(
       in: group.children[children...], offset: offset, scrollID: scrollID,

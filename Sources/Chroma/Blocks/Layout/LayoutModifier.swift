@@ -68,18 +68,17 @@ struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
     into drawList: inout DrawList, in rect: Rect, context: BlockContext,
     drawContent: (inout DrawList, Rect, BlockContext) -> Void
   ) {
+    drawContent(&drawList, placedContent(in: rect), context)
+  }
+
+  func placedContent(in rect: Rect) -> Rect {
     switch operation {
     case .padding(let insets):
-      drawContent(
-        &drawList,
-        Rect(
-          x: rect.minX + insets.leading,
-          y: rect.minY + insets.top,
-          width: rect.size.width - insets.leading - insets.trailing,
-          height: rect.size.height - insets.top - insets.bottom
-        ), context)
-    case .sizing:
-      drawContent(&drawList, rect, context)
+      Rect(
+        x: rect.minX + insets.leading, y: rect.minY + insets.top,
+        width: rect.size.width - insets.leading - insets.trailing,
+        height: rect.size.height - insets.top - insets.bottom)
+    case .sizing: rect
     }
   }
 

@@ -35,6 +35,7 @@ public final class HeadlessHost: Host {
 
   public init(size: Size = Size(width: 800, height: 600)) {
     self.viewport = size
+    interaction.onRedrawRequested = { [weak self] in self?.requestRedraw() }
   }
 
   public func launch<A: App>(_ app: A) throws {
@@ -49,15 +50,44 @@ public final class HeadlessHost: Host {
   @discardableResult
   public func render(input: InputState = InputState()) -> HeadlessFrame {
     runtime.scheduler.recordProducedFrame()
+    runtime.scheduler.consumeContentRequest()
     let drawList = runtime.render(
       viewport: viewport, input: input,
-      onChange: { [weak self] in self?.onRedrawRequested?() })
+      onChange: { [weak self] in self?.requestRedraw() })
     _ = interaction.consumeRedrawRequest()
     runtime.observe(drawList, viewport: viewport)
 
     let frame = HeadlessFrame(viewport: viewport, commands: drawList.commands)
     lastFrame = frame
     return frame
+  }
+
+  /// Applies one input event through the runtime without presenting a frame.
+  /// Events before the first frame are queued in their original order.
+  public func sendInput(_ input: InputState) {
+    runtime.handleInput(input)
+  }
+
+  /// Presents pending work immediately, ignoring the native frame deadline.
+  /// Returns nil when idle, making coalesced input and scheduling testable without
+  /// a native event loop or artificial sleeps.
+  @discardableResult
+  public func renderIfNeeded() -> HeadlessFrame? {
+    guard let scheduled = runtime.scheduler.nextFrame else { return nil }
+    runtime.scheduler.recordProducedFrame()
+    let drawList = runtime.renderScheduled(
+      scheduled.kind, viewport: viewport,
+      onChange: { [weak self] in self?.requestRedraw() })
+    _ = interaction.consumeRedrawRequest()
+    runtime.observe(drawList, viewport: viewport)
+    let frame = HeadlessFrame(viewport: viewport, commands: drawList.commands)
+    lastFrame = frame
+    return frame
+  }
+
+  private func requestRedraw() {
+    runtime.scheduler.requestContent()
+    onRedrawRequested?()
   }
 
   public func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {

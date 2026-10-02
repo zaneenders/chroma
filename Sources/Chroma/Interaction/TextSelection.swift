@@ -1,14 +1,25 @@
 import Observation
 
 struct PlainTextLayout: Equatable {
-  var text: String
-  var rect: Rect
-  var cellWidth: Float
-  var lineHeight: Float
-  var scale: Float
+  let text: String
+  let rect: Rect
+  let cellWidth: Float
+  let lineHeight: Float
+  let scale: Float
+  let columns: Int?
+  /// Immutable snapshot shared by hit testing, caret motion, selection painting, and text painting.
+  /// The registry replaces it during every update; it is never keyed by identity alone.
+  let layout: TextLayout
 
-  var columns: Int? = nil
-  var layout: TextLayout { TextLayout(text, columns: columns) }
+  init(text: String, rect: Rect, cellWidth: Float, lineHeight: Float, scale: Float, columns: Int? = nil) {
+    self.text = text
+    self.rect = rect
+    self.cellWidth = cellWidth
+    self.lineHeight = lineHeight
+    self.scale = scale
+    self.columns = columns
+    self.layout = TextLayout(text, columns: columns)
+  }
 
   func hitTest(point: Point) -> Int? {
     guard rect.contains(point), cellWidth > 0, cellWidth.isFinite else { return nil }

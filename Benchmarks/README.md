@@ -2,6 +2,28 @@
 
 Run commands from the repository root. Use release builds and consistent hardware, toolchain, and workloads when comparing results.
 
+## Paint-free registration
+
+```sh
+swift test --package-path Benchmarks
+swift run --package-path Benchmarks -c release RegistrationBenchmark \
+  --rows 10000 --samples 40 --warmup 5 --idle-polls 1000
+```
+
+`RegistrationBenchmark` compares the migrated registration path with an explicit legacy draw-to-register adapter in **the same binary**. Both modes use the same deferred root, fixed increment button, 480×360 viewport, and identified uniform virtualized list (30-point rows, 1-point spacing). The baseline adds one identity-preserving custom primitive; this wrapper overhead is included and disclosed. It is a mechanism comparison, not a benchmark of a separately built historical revision.
+
+The JSON report separates:
+
+- `initial-frame`: a fresh host for every sample, including initial registration and painting, but excluding fixture allocation. These are not process-cold startup measurements.
+- `pre-input-two-activations`: two activation events without a presentation between them. Each action captures the current count while resolving the deferred root; a stale callback fails a precondition.
+- `pre-input-scroll`: one ordered scroll event, including registration and dispatch but no presentation.
+- `active-presentation`: one coalesced presentation after those three events. It must not replay an action.
+- `idle-scheduler-polls`: repeated no-input scheduling checks, which must produce zero frames. This verifies synchronous scheduling behavior, not native idle CPU or asynchronous observation delivery.
+
+Mode order alternates across samples. Timing and work counters use separate identical replays so enabled instrumentation overhead is excluded from p50/p95 timings. Work counts include body evaluations, measurement requests/cache hits, resolved-node rectangle visits, registration/paint visits, emitted commands, compatibility fallbacks, and live/peak resolved nodes and observation subscription objects. Fresh-host tests verify subscriptions and resolved nodes are released after close. Rows are built only near the viewport, while identified row metadata is still scanned across the whole collection each root evaluation.
+
+`PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved nodes and proposal-dependent measurement caches remain **traversal-scoped**. The gauges do not imply persistent retained layout. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
+
 ## Input frames
 
 ```sh
@@ -39,12 +61,12 @@ swift test --filter StackEvaluationTests
 1. The backend snapshots native input and queues it on the main actor.
 2. `WindowRuntime` applies events in order. Clicks, dragging, scrolling, commands, and text edits first rebuild registrations to obtain current callbacks and hit-test geometry. Plain hover uses the last frame's geometry.
 3. `FrameScheduler` coalesces requests and caps frame starts at `maximumRefreshRate` (60 Hz by default). Rendering time counts toward that interval. With no requests or Wayland scroll momentum, it schedules nothing.
-4. `FrameProducer` evaluates the deferred body, measures and draws blocks, builds the interaction tree, and tracks observable properties. A change to a tracked property requests another frame.
+4. `FrameProducer` refreshes input registrations through `BlockEngine.register`, then evaluates, measures, and paints the presentation while tracking observable properties. Painting still rebuilds presentation-time registrations for compatibility. A change to a tracked property requests another frame.
 5. The backend culls and encodes the draw commands, then submits them to the GPU.
 
-Registration refresh currently traverses and draws the UI into a discarded command list. Coalescing presentation therefore does not eliminate the CPU work for each actionable input event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
+Registration refresh traverses migrated built-ins without painting. Custom primitives that have not implemented `register(in:context:)` use an explicit counted adapter that draws into a temporary command list. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
 
-The remaining architectural work is to separate layout and hit-test registration from painting, retain them with explicit invalidation, and update only affected subtrees. Geometry, current action closures, text-editing state, and structural identity must all stay current before dispatching input; simply skipping registration refresh would break that contract. Identified collections also need explicit revisions or change sets before their ID scans can safely be skipped.
+The remaining architectural work includes migrating any application-specific compatibility adapters, then retaining layout with explicit invalidation and updating only affected subtrees. Geometry, current action closures, text-editing state, and structural identity must all stay current before dispatching input; simply skipping registration refresh would break that contract. Identified collections also need explicit revisions or change sets before their ID scans can safely be skipped.
 
 The scheduler and hover regressions are covered without wall-clock performance thresholds:
 
@@ -66,7 +88,7 @@ Use `--help` for scenes and measurement options.
 
 ## Profiling ShapeTree on macOS
 
-ShapeTree's desktop package uses the neighboring Chroma checkout. Build optimized code with symbols, then record the actual app:
+Verify which Chroma revision ShapeTree's desktop package resolves before profiling. A remote revision pin does not use the neighboring checkout; deliberately configure a local override for integration and restore the intended dependency before delivery. Build optimized code with symbols, then record the actual app:
 
 ```sh
 swift build --package-path ../shape-tree/apps/shape-tree-desktop \

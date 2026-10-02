@@ -3,10 +3,12 @@ import Observation
 import Synchronization
 
 final class FrameTrackingSubscription: Observable, Sendable {
+  private let metricsLifetime: PipelineMetricLifetime?
   private let registrar = ObservationRegistrar()
   private let callback: Mutex<(@MainActor @Sendable () -> Void)?>
 
-  init(_ onChange: @escaping @MainActor @Sendable () -> Void) {
+  init(_ onChange: @escaping @MainActor @Sendable () -> Void, metricsLifetime: PipelineMetricLifetime? = nil) {
+    self.metricsLifetime = metricsLifetime
     callback = Mutex(onChange)
   }
 
@@ -82,7 +84,8 @@ package final class FrameProducer {
       refreshRegistrations(content, viewport: viewport, context: context, commands: input.commands)
     }
     interaction.beginFrame(input: input, processingInput: processingInput)
-    let subscription = FrameTrackingSubscription(onChange)
+    let subscription = FrameTrackingSubscription(
+      onChange, metricsLifetime: PipelineMetrics.trackLifetime(.observationSubscription))
     self.subscription = subscription
     let enqueue = ObservationDelivery.enqueue
     let drawList = withObservationTracking(options: .didSet) {
@@ -103,7 +106,9 @@ package final class FrameProducer {
     }
     interaction.endFrame()
     var result = drawList
-    interaction.paintNavigation(into: &result, theme: context.theme)
+    BlockEngine.countDrawingCommands(into: &result) { list in
+      interaction.paintNavigation(into: &list, theme: context.theme)
+    }
     return result
   }
 
@@ -115,9 +120,8 @@ package final class FrameProducer {
     interaction.beginFrame(input: InputState(commands: commands))
     interaction.refreshingRegistrations = true
     defer { interaction.refreshingRegistrations = false }
-    var discarded = DrawList()
     if let content {
-      BlockEngine.draw(content, into: &discarded, in: Rect(origin: .zero, size: viewport), context: context)
+      BlockEngine.register(content, in: Rect(origin: .zero, size: viewport), context: context)
     }
     interaction.endFrame()
   }

@@ -13,6 +13,11 @@ public protocol PrimitiveBlock: Block where Body == Never {
   /// the result within a traversal; drawing must not depend on how often measurement was called.
   @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size
 
+  /// Reconciles current input behavior and geometry without painting. The default adapter
+  /// preserves source compatibility for custom primitives by drawing into a temporary list;
+  /// override this method to remove that explicitly instrumented compatibility work.
+  @MainActor func register(in rect: Rect, context: BlockContext)
+
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext)
 
   @MainActor var expandsHorizontally: Bool { get }
@@ -25,4 +30,21 @@ extension PrimitiveBlock {
   public var body: Never { fatalError("\(Self.self) is a primitive block") }
   public var expandsHorizontally: Bool { false }
   public var expandsVertically: Bool { false }
+}
+
+extension PrimitiveBlock {
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
+    if let prepared = self as? any LayoutPreparingBlock {
+      prepared.prepareLayout(context: context).register(in: rect)
+      return
+    }
+    // Legacy custom primitives may install commands, focus, or editing callbacks in draw.
+    // Do not silently skip them based on focusRule, which does not describe those effects.
+    PipelineMetrics.recordCompatibilityFallback(Self.self)
+    PipelineMetrics.record(.paint)
+    var discarded = DrawList()
+    BlockEngine.countDrawingCommands(into: &discarded) { list in
+      draw(into: &list, in: rect, context: context)
+    }
+  }
 }

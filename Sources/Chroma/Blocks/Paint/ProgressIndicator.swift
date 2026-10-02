@@ -18,6 +18,8 @@ public struct ProgressIndicator: PrimitiveBlock {
     Size(width: diameter, height: diameter)
   }
 
+  public func register(in rect: Rect, context: BlockContext) {}
+
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let dot = diameter / 5
     let radius = (diameter - dot) / 2

@@ -42,12 +42,24 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
     BlockEngine.measure(content(.idle), proposal: proposal, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor private func registeredContent(
+    in rect: Rect, context: BlockContext
+  ) -> (content: Content, context: BlockContext) {
     let id = id ?? context.widgetID
     let state = context.buttonState(id: id, in: rect, action: action)
     var context = context
     context.focusTargets = []
     context.focusLeafClaimed = true
-    BlockEngine.draw(content(state.phase), into: &drawList, in: rect, context: context)
+    return (content(state.phase), context)
+  }
+
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
+    let registered = registeredContent(in: rect, context: context)
+    BlockEngine.register(registered.content, in: rect, context: registered.context)
+  }
+
+  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    let registered = registeredContent(in: rect, context: context)
+    BlockEngine.draw(registered.content, into: &drawList, in: rect, context: registered.context)
   }
 }

@@ -122,6 +122,17 @@ public struct BlockContext {
       id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
   }
 
+  /// Registers a focus leaf and current behavior without emitting a visual highlight.
+  @discardableResult
+  public func registerFocusable(
+    in rect: Rect, role: ActionRole = .normal, action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    guard !navigationIgnored else {
+      return ButtonState(hovered: false, held: false, clicked: false)
+    }
+    return buttonState(in: rect, role: role, action: action)
+  }
+
   @discardableResult
   public func focusable(
     in rect: Rect, into drawList: inout DrawList,

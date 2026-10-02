@@ -14,6 +14,10 @@ UI Library in swift
 
 The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma-examples) repository.
 
+## Architecture
+
+[Registration without painting](Documentation/RegistrationPipeline.md) describes the input-update path, cache validity, and custom primitive migration.
+
 ## Inspired by
 
 - Immediate mode UI

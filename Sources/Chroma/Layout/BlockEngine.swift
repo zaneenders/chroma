@@ -7,28 +7,34 @@ public enum BlockEngine {
       expandsHorizontally: @escaping () -> Bool,
       expandsVertically: @escaping () -> Bool,
       measure: @escaping (Size) -> Size,
+      register: @escaping (Rect) -> Void,
       draw: @escaping (inout DrawList, Rect) -> Void
     ) {
       horizontalExpansion = expandsHorizontally
       verticalExpansion = expandsVertically
       self.measure = measure
+      self.update = register
       self.paint = draw
     }
 
     convenience init(
       child: Resolved,
+      register: @escaping (Rect) -> Void,
       draw: @escaping (inout DrawList, Rect) -> Void
     ) {
       self.init(
         expandsHorizontally: { child.expandsHorizontally },
         expandsVertically: { child.expandsVertically },
         measure: child.sizeThatFits,
+        register: register,
         draw: draw)
     }
 
+    private let metricsLifetime = PipelineMetrics.trackLifetime(.resolvedNode)
     private let horizontalExpansion: () -> Bool
     private let verticalExpansion: () -> Bool
     private let measure: (Size) -> Size
+    private let update: (Rect) -> Void
     private let paint: (inout DrawList, Rect) -> Void
     private var measurements: [(proposal: Size, size: Size)] = []
 
@@ -36,14 +42,26 @@ public enum BlockEngine {
     lazy var expandsVertically = verticalExpansion()
 
     func sizeThatFits(_ proposal: Size) -> Size {
-      if let cached = measurements.first(where: { $0.proposal == proposal }) { return cached.size }
+      PipelineMetrics.record(.measurement)
+      if let cached = measurements.first(where: { $0.proposal == proposal }) {
+        PipelineMetrics.record(.measurementCacheHit)
+        return cached.size
+      }
       let size = measure(proposal)
       measurements.append((proposal, size))
       return size
     }
 
+    func register(in rect: Rect) {
+      PipelineMetrics.record(.placement)
+      PipelineMetrics.record(.registration)
+      update(rect)
+    }
+
     func draw(into drawList: inout DrawList, in rect: Rect) {
-      paint(&drawList, rect)
+      PipelineMetrics.record(.placement)
+      PipelineMetrics.record(.paint)
+      BlockEngine.countDrawingCommands(into: &drawList) { list in paint(&list, rect) }
     }
   }
 
@@ -62,9 +80,29 @@ public enum BlockEngine {
         expandsHorizontally: { primitive.expandsHorizontally },
         expandsVertically: { primitive.expandsVertically },
         measure: { primitive.sizeThatFits($0, context: context) },
+        register: { rect in registerResolved(primitive, in: rect, context: context) },
         draw: { list, rect in drawResolved(primitive, into: &list, in: rect, context: context) })
     }
+    PipelineMetrics.record(.bodyEvaluation)
     return resolve(block.body, context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))
+  }
+
+  private static var paintingDepth = 0
+
+  /// Count once at the outermost drawing boundary, including nested legacy adapters.
+  static func countDrawingCommands(
+    into drawList: inout DrawList, _ body: (inout DrawList) -> Void
+  ) {
+    guard PipelineMetrics.isEnabled else {
+      body(&drawList)
+      return
+    }
+    let outermost = paintingDepth == 0
+    let before = drawList.commands.count
+    paintingDepth += 1
+    body(&drawList)
+    paintingDepth -= 1
+    if outermost { PipelineMetrics.record(.drawingCommands, count: drawList.commands.count - before) }
   }
 
   static func isSpacer(_ block: any Block) -> Bool {
@@ -89,6 +127,30 @@ public enum BlockEngine {
   ) {
     let resolved = resolve(block, context: context)
     resolved.draw(into: &drawList, in: rect)
+  }
+
+  /// Builds one consistent interaction update from fresh block values. The resolved tree and
+  /// proposal caches live only for this call; identity alone never retains callbacks or layout.
+  public static func register(_ block: any Block, in rect: Rect, context: BlockContext) {
+    resolve(block, context: context).register(in: rect)
+  }
+
+  static func registerResolved(_ primitive: any PrimitiveBlock, in rect: Rect, context: BlockContext) {
+    let parent = context.interaction.builderStack.last
+    let registered = parent?.children.count
+    primitive.register(in: rect, context: context)
+    guard let parent, parent.children.count == registered else { return }
+    switch primitive.focusRule {
+    case .control:
+      preconditionFailure(
+        "\(String(describing: type(of: primitive))) declares focusRule .control but registered no focus leaf; "
+          + "call buttonState while registering")
+    case .standard:
+      guard !context.focusLeafClaimed, !context.navigationIgnored else { return }
+      context.registerFocusable(in: rect)
+    case .container, .decorative:
+      break
+    }
   }
 
   static func drawResolved(

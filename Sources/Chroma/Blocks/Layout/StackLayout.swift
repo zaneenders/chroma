@@ -73,15 +73,23 @@ struct StackLayout {
         result[keyPath: axis.cross] = sizes.map { $0[keyPath: axis.cross] }.max() ?? 0
         return result
       },
+      register: { rect in
+        let sizes = layout(children, spacers: spacers, proposal: rect.size)
+        place(children, sizes: sizes, reversed: reversed, in: rect, context: context) { child, rect in
+          child.register(in: rect)
+        }
+      },
       draw: { list, rect in
         let sizes = layout(children, spacers: spacers, proposal: rect.size)
-        place(children, sizes: sizes, reversed: reversed, into: &list, in: rect, context: context)
+        place(children, sizes: sizes, reversed: reversed, in: rect, context: context) { child, rect in
+          child.draw(into: &list, in: rect)
+        }
       })
   }
 
   private func place(
     _ children: [BlockEngine.Resolved], sizes: [Size], reversed: Bool,
-    into drawList: inout DrawList, in rect: Rect, context: BlockContext
+    in rect: Rect, context: BlockContext, visit: (BlockEngine.Resolved, Rect) -> Void
   ) {
     let interaction = context.interaction
     interaction.beginGroup(
@@ -95,7 +103,7 @@ struct StackLayout {
         axis == .horizontal
         ? Point(x: cursor, y: bottomAligned ? rect.maxY - size.height : rect.minY)
         : Point(x: rect.minX, y: cursor)
-      child.draw(into: &drawList, in: Rect(origin: origin, size: size))
+      visit(child, Rect(origin: origin, size: size))
       cursor += reversed ? -spacing : extent + spacing
     }
     interaction.endGroup()

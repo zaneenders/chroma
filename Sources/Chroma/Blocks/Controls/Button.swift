@@ -45,9 +45,17 @@ public struct Button: PrimitiveBlock {
       height: textSize.height + padding.top + padding.bottom)
   }
 
+  @MainActor private func interactionState(in rect: Rect, context: BlockContext) -> ButtonState {
+    context.buttonState(id: id ?? context.widgetID, in: rect, role: role, action: action)
+  }
+
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
+    _ = interactionState(in: rect, context: context)
+  }
+
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let style = style ?? context.theme.button
-    let state = context.buttonState(id: id ?? context.widgetID, in: rect, role: role) { action() }
+    let state = interactionState(in: rect, context: context)
 
     let background: Color
     switch state.phase {

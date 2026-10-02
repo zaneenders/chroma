@@ -22,6 +22,8 @@ public struct Image: PrimitiveBlock {
   public var expandsHorizontally: Bool { false }
   public var expandsVertically: Bool { false }
 
+  public func register(in rect: Rect, context: BlockContext) {}
+
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.image(resource, in: rect, scaling: scaling, alignment: alignment)
   }

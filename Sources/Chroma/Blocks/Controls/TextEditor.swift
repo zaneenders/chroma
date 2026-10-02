@@ -54,36 +54,60 @@ public struct TextEditor: PrimitiveBlock {
     return Size(width: proposal.width, height: Float(count) * context.fontMetrics.lineAdvance * scale + 2 * padding)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  /// A fresh, immutable text/geometry snapshot for one registration or paint operation.
+  /// Pointer and vertical movement handlers retain this same layout until registration is refreshed.
+  private struct PreparedText {
+    let text: String
+    let scale: Float
+    let cellWidth: Float
+    let lineHeight: Float
+    let layout: TextLayout
+    let inner: Rect
+    let visibleCount: Int
+    let singleLine: Bool
+
+    func horizontalOffset(_ caret: Int?) -> Float {
+      guard singleLine, let caret else { return 0 }
+      return min(0, inner.size.width - cellWidth - Float(caret) * cellWidth)
+    }
+
+    func firstRow(_ caret: Int?) -> Int {
+      guard let caret else { return 0 }
+      return max(0, min(layout.lines.count - visibleCount, layout.row(containing: caret) - visibleCount + 1))
+    }
+  }
+
+  @MainActor private func prepareText(in rect: Rect, context: BlockContext) -> PreparedText? {
     let text = getText()
     let scale = fontScale * context.textScale
     let cellWidth = context.fontMetrics.cellAdvance * scale
     let lineHeight = context.fontMetrics.lineAdvance * scale
-    guard cellWidth.isFinite, cellWidth > 0, lineHeight.isFinite, lineHeight > 0 else { return }
+    guard cellWidth.isFinite, cellWidth > 0, lineHeight.isFinite, lineHeight > 0 else { return nil }
     let layout = layout(text, width: singleLine ? .infinity : rect.size.width, cellWidth: cellWidth)
     let inner = Rect(
       x: rect.minX + padding, y: rect.minY + padding + (singleLine ? 1 : 0),
       width: max(0, rect.size.width - padding * 2),
       height: singleLine ? context.fontMetrics.glyphHeight * scale : max(0, rect.size.height - padding * 2))
     let visibleCount = singleLine ? 1 : max(1, Int(inner.size.height / lineHeight))
-    let horizontalOffset: (Int?) -> Float = { caret in
-      guard singleLine, let caret else { return 0 }
-      return min(0, inner.size.width - cellWidth - Float(caret) * cellWidth)
-    }
-    let firstRow: (Int?) -> Int = { caret in
-      guard let caret else { return 0 }
-      return max(0, min(layout.lines.count - visibleCount, layout.row(containing: caret) - visibleCount + 1))
-    }
+    return PreparedText(
+      text: text, scale: scale, cellWidth: cellWidth, lineHeight: lineHeight,
+      layout: layout, inner: inner, visibleCount: visibleCount, singleLine: singleLine)
+  }
+
+  @MainActor private func register(
+    _ prepared: PreparedText, in rect: Rect, context: BlockContext
+  ) -> (state: TextInputState, viewportRow: Int) {
     let interaction = context.interaction
     let viewportRow =
       interaction.textDragViewportRow
-      ?? firstRow(
+      ?? prepared.firstRow(
         interaction.editingLeaf == context.widgetID
           ? interaction.caretOffset : nil)
     if !singleLine && interaction.isDragging, interaction.textDragViewportRow != nil {
-      if interaction.dragCurrent.y >= inner.maxY {
-        interaction.textDragViewportRow = min(max(0, layout.lines.count - visibleCount), viewportRow + 1)
-      } else if interaction.dragCurrent.y < inner.minY {
+      if interaction.dragCurrent.y >= prepared.inner.maxY {
+        interaction.textDragViewportRow = min(
+          max(0, prepared.layout.lines.count - prepared.visibleCount), viewportRow + 1)
+      } else if interaction.dragCurrent.y < prepared.inner.minY {
         interaction.textDragViewportRow = max(0, viewportRow - 1)
       }
     }
@@ -95,15 +119,35 @@ public struct TextEditor: PrimitiveBlock {
         if !singleLine && context.interaction.isProcessingDrag && context.interaction.textDragViewportRow == nil {
           context.interaction.textDragViewportRow = viewportRow
         }
-        return layout.offset(
+        return prepared.layout.offset(
           row: singleLine
             ? 0
-            : (context.interaction.textDragViewportRow ?? firstRow(caret))
-              + Int(((point.y - inner.minY) / lineHeight).rounded(.down)),
-          column: Int(((point.x - inner.minX - horizontalOffset(caret)) / cellWidth).rounded(.toNearestOrAwayFromZero)))
+            : (context.interaction.textDragViewportRow ?? prepared.firstRow(caret))
+              + Int(((point.y - prepared.inner.minY) / prepared.lineHeight).rounded(.down)),
+          column: Int(
+            ((point.x - prepared.inner.minX - prepared.horizontalOffset(caret)) / prepared.cellWidth)
+              .rounded(.toNearestOrAwayFromZero)))
       },
-      verticalOffset: { layout.verticalOffset($0, direction: $1) },
+      verticalOffset: { prepared.layout.verticalOffset($0, direction: $1) },
       submitInsertsNewline: !singleLine && onSubmit == nil)
+    return (state, viewportRow)
+  }
+
+  public func register(in rect: Rect, context: BlockContext) {
+    guard let prepared = prepareText(in: rect, context: context) else { return }
+    _ = register(prepared, in: rect, context: context)
+  }
+
+  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    guard let prepared = prepareText(in: rect, context: context) else { return }
+    let (state, viewportRow) = register(prepared, in: rect, context: context)
+    let text = prepared.text
+    let scale = prepared.scale
+    let cellWidth = prepared.cellWidth
+    let lineHeight = prepared.lineHeight
+    let layout = prepared.layout
+    let inner = prepared.inner
+    let visibleCount = prepared.visibleCount
     let style = style ?? context.theme.textEditor
     drawList.textInputBackground(in: rect, style: style, editing: state.editing)
     if state.focused {
@@ -118,11 +162,11 @@ public struct TextEditor: PrimitiveBlock {
     }
     let first =
       context.interaction.isProcessingDrag
-      ? context.interaction.textDragViewportRow ?? viewportRow : firstRow(state.caretOffset)
+      ? context.interaction.textDragViewportRow ?? viewportRow : prepared.firstRow(state.caretOffset)
     for index in first..<min(layout.lines.count, first + visibleCount) {
       let line = layout.lines[index]
       let origin = Point(
-        x: inner.minX + horizontalOffset(state.caretOffset),
+        x: inner.minX + prepared.horizontalOffset(state.caretOffset),
         y: inner.minY + Float(index - first) * lineHeight)
       let selection = state.selectionRange.flatMap { selection -> Rect? in
         let lower = max(line.range.lowerBound, selection.lowerBound)
@@ -140,7 +184,7 @@ public struct TextEditor: PrimitiveBlock {
     if let caret = state.caretOffset, state.selectionRange == nil {
       let row = layout.row(containing: caret)
       let caretRect = Rect(
-        x: inner.minX + horizontalOffset(state.caretOffset)
+        x: inner.minX + prepared.horizontalOffset(state.caretOffset)
           + Float(caret - layout.lines[row].range.lowerBound) * cellWidth,
         y: inner.minY + Float(row - first) * lineHeight, width: max(1, scale), height: lineHeight)
       drawList.fillRect(caretRect, color: style.caret)

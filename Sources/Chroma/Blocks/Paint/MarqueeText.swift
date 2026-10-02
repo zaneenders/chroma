@@ -20,6 +20,8 @@ public struct MarqueeText: PrimitiveBlock {
     Size(width: proposal.width, height: context.fontMetrics.measure(text, scale: fontScale * context.textScale).height)
   }
 
+  public func register(in rect: Rect, context: BlockContext) {}
+
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let scale = fontScale * context.textScale
     drawList.pushClip(rect)
