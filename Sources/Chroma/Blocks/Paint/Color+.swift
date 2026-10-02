@@ -1,4 +1,4 @@
-extension Color: PrimitiveBlock {
+extension Color: PaintableBlock {
   public var focusRule: FocusRule { .standard }
   public var expandsHorizontally: Bool { true }
   public var expandsVertically: Bool { true }
@@ -6,6 +6,10 @@ extension Color: PrimitiveBlock {
   public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
   public func register(in rect: Rect, context: BlockContext) {}
+
+  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    draw(into: &drawList, in: rect, context: context)
+  }
 
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: self)

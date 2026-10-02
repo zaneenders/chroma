@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ProgressIndicator: PrimitiveBlock {
+public struct ProgressIndicator: PaintableBlock {
   public var color: Color
   public var diameter: Float
   public var isActive: Bool
@@ -19,6 +19,10 @@ public struct ProgressIndicator: PrimitiveBlock {
   }
 
   public func register(in rect: Rect, context: BlockContext) {}
+
+  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    draw(into: &drawList, in: rect, context: context)
+  }
 
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let dot = diameter / 5

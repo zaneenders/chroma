@@ -1,4 +1,4 @@
-public struct TextEditor: PrimitiveBlock {
+public struct TextEditor: PaintableBlock {
   public var placeholder: String
   public var fontScale: Float
   public var lineLimits: ClosedRange<Int>
@@ -37,31 +37,40 @@ public struct TextEditor: PrimitiveBlock {
   public var focusRule: FocusRule { .control }
   public var expandsHorizontally: Bool { true }
 
-  private func layout(_ text: String, width: Float, cellWidth: Float) -> TextLayout {
+  private func columns(width: Float, cellWidth: Float) -> Int? {
     let columns =
       cellWidth.isFinite && cellWidth > 0 && width.isFinite
       ? Int(min(Float(Int32.max), max(1, (width - 2 * padding) / cellWidth))) : nil
-    return TextLayout(text, columns: columns)
+    return columns
   }
 
   public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    sizeThatFits(proposal, context: context, preparation: TextLayoutPreparation())
+  }
+
+  @MainActor private func sizeThatFits(
+    _ proposal: Size, context: BlockContext, preparation: TextLayoutPreparation
+  ) -> Size {
     let scale = fontScale * context.textScale
     if singleLine {
       return Size(width: proposal.width, height: context.fontMetrics.glyphHeight * scale + 2 * padding + 2)
     }
-    let layout = layout(getText(), width: proposal.width, cellWidth: context.fontMetrics.cellAdvance * scale)
+    let layout = preparation.resolve(
+      getText(), columns: columns(width: proposal.width, cellWidth: context.fontMetrics.cellAdvance * scale)
+    ).layout
     let count = min(lineLimits.upperBound, max(lineLimits.lowerBound, layout.lines.count))
     return Size(width: proposal.width, height: Float(count) * context.fontMetrics.lineAdvance * scale + 2 * padding)
   }
 
-  /// A fresh, immutable text/geometry snapshot for one registration or paint operation.
-  /// Pointer and vertical movement handlers retain this same layout until registration is refreshed.
+  /// Immutable geometry for the current operation. Its text shaping is shared with
+  /// measurement and painting; installed handlers retain this exact update snapshot.
   private struct PreparedText {
     let text: String
     let scale: Float
     let cellWidth: Float
     let lineHeight: Float
-    let layout: TextLayout
+    let snapshot: TextLayoutSnapshot
+    var layout: TextLayout { snapshot.layout }
     let inner: Rect
     let visibleCount: Int
     let singleLine: Bool
@@ -77,13 +86,16 @@ public struct TextEditor: PrimitiveBlock {
     }
   }
 
-  @MainActor private func prepareText(in rect: Rect, context: BlockContext) -> PreparedText? {
+  @MainActor private func prepareText(
+    in rect: Rect, context: BlockContext, preparation: TextLayoutPreparation
+  ) -> PreparedText? {
     let text = getText()
     let scale = fontScale * context.textScale
     let cellWidth = context.fontMetrics.cellAdvance * scale
     let lineHeight = context.fontMetrics.lineAdvance * scale
     guard cellWidth.isFinite, cellWidth > 0, lineHeight.isFinite, lineHeight > 0 else { return nil }
-    let layout = layout(text, width: singleLine ? .infinity : rect.size.width, cellWidth: cellWidth)
+    let snapshot = preparation.resolve(
+      text, columns: columns(width: singleLine ? .infinity : rect.size.width, cellWidth: cellWidth))
     let inner = Rect(
       x: rect.minX + padding, y: rect.minY + padding + (singleLine ? 1 : 0),
       width: max(0, rect.size.width - padding * 2),
@@ -91,12 +103,12 @@ public struct TextEditor: PrimitiveBlock {
     let visibleCount = singleLine ? 1 : max(1, Int(inner.size.height / lineHeight))
     return PreparedText(
       text: text, scale: scale, cellWidth: cellWidth, lineHeight: lineHeight,
-      layout: layout, inner: inner, visibleCount: visibleCount, singleLine: singleLine)
+      snapshot: snapshot, inner: inner, visibleCount: visibleCount, singleLine: singleLine)
   }
 
   @MainActor private func register(
     _ prepared: PreparedText, in rect: Rect, context: BlockContext
-  ) -> (state: TextInputState, viewportRow: Int) {
+  ) {
     let interaction = context.interaction
     let viewportRow =
       interaction.textDragViewportRow
@@ -111,18 +123,18 @@ public struct TextEditor: PrimitiveBlock {
         interaction.textDragViewportRow = max(0, viewportRow - 1)
       }
     }
-    let state = context.textInputState(
+    _ = context.textInputState(
       in: rect, text: getText, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing,
       onTextEvent: onTextEvent,
-      pointerOffset: { point, caret in
-        if !singleLine && context.interaction.isProcessingDrag && context.interaction.textDragViewportRow == nil {
-          context.interaction.textDragViewportRow = viewportRow
+      pointerOffset: { [weak interaction] point, caret in
+        if !singleLine, let interaction, interaction.isProcessingDrag, interaction.textDragViewportRow == nil {
+          interaction.textDragViewportRow = viewportRow
         }
         return prepared.layout.offset(
           row: singleLine
             ? 0
-            : (context.interaction.textDragViewportRow ?? prepared.firstRow(caret))
+            : (interaction?.textDragViewportRow ?? prepared.firstRow(caret))
               + Int(((point.y - prepared.inner.minY) / prepared.lineHeight).rounded(.down)),
           column: Int(
             ((point.x - prepared.inner.minX - prepared.horizontalOffset(caret)) / prepared.cellWidth)
@@ -130,17 +142,47 @@ public struct TextEditor: PrimitiveBlock {
       },
       verticalOffset: { prepared.layout.verticalOffset($0, direction: $1) },
       submitInsertsNewline: !singleLine && onSubmit == nil)
-    return (state, viewportRow)
   }
 
   public func register(in rect: Rect, context: BlockContext) {
-    guard let prepared = prepareText(in: rect, context: context) else { return }
-    _ = register(prepared, in: rect, context: context)
+    guard
+      let prepared = prepareText(
+        in: rect, context: context, preparation: TextLayoutPreparation())
+    else { return }
+    register(prepared, in: rect, context: context)
   }
 
   public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    guard let prepared = prepareText(in: rect, context: context) else { return }
-    let (state, viewportRow) = register(prepared, in: rect, context: context)
+    guard
+      let prepared = prepareText(
+        in: rect, context: context, preparation: TextLayoutPreparation())
+    else { return }
+    register(prepared, in: rect, context: context)
+    paint(prepared, into: &drawList, in: rect, context: context)
+  }
+
+  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    guard
+      let prepared = prepareText(
+        in: rect, context: context, preparation: TextLayoutPreparation())
+    else { return }
+    paint(prepared, into: &drawList, in: rect, context: context)
+  }
+
+  @MainActor private func paint(
+    _ prepared: PreparedText, into drawList: inout DrawList, in rect: Rect, context: BlockContext
+  ) {
+    var state = context.textInputVisualState()
+    // Direct paint may follow a binding mutation without an update. Keep visual offsets
+    // safe locally; only registration is allowed to reconcile the actual editing state.
+    if let caret = state.caretOffset {
+      state.caretOffset = max(0, min(prepared.layout.characterCount, caret))
+    }
+    if let range = state.selectionRange {
+      let lower = max(0, min(prepared.layout.characterCount, range.lowerBound))
+      let upper = max(lower, min(prepared.layout.characterCount, range.upperBound))
+      state.selectionRange = lower == upper ? nil : lower..<upper
+    }
     let text = prepared.text
     let scale = prepared.scale
     let cellWidth = prepared.cellWidth
@@ -162,7 +204,12 @@ public struct TextEditor: PrimitiveBlock {
     }
     let first =
       context.interaction.isProcessingDrag
-      ? context.interaction.textDragViewportRow ?? viewportRow : prepared.firstRow(state.caretOffset)
+      ? max(
+        0,
+        min(
+          max(0, layout.lines.count - visibleCount),
+          context.interaction.textDragViewportRow ?? prepared.firstRow(state.caretOffset)))
+      : prepared.firstRow(state.caretOffset)
     for index in first..<min(layout.lines.count, first + visibleCount) {
       let line = layout.lines[index]
       let origin = Point(
@@ -189,5 +236,37 @@ public struct TextEditor: PrimitiveBlock {
         y: inner.minY + Float(row - first) * lineHeight, width: max(1, scale), height: lineHeight)
       drawList.fillRect(caretRect, color: style.caret)
     }
+  }
+}
+
+extension TextEditor: LayoutPreparingBlock {
+  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    let preparation = TextLayoutPreparation()
+    // Registration commits this operation's text and geometry. Its matching paint
+    // does not read the application binding again, so editing and pixels cannot use
+    // different versions. A later input/update resolves a fresh operation.
+    var registered: (rect: Rect, text: PreparedText)?
+    return BlockEngine.Resolved(
+      expandsHorizontally: { true }, expandsVertically: { false },
+      measure: { proposal in sizeThatFits(proposal, context: context, preparation: preparation) },
+      register: { rect in
+        registered = nil
+        guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
+        registered = (rect, prepared)
+        register(prepared, in: rect, context: context)
+      },
+      paint: { list, rect in
+        if let registered, registered.rect == rect {
+          paint(registered.text, into: &list, in: rect, context: context)
+          return
+        }
+        guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
+        paint(prepared, into: &list, in: rect, context: context)
+      },
+      draw: { list, rect in
+        guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
+        register(prepared, in: rect, context: context)
+        paint(prepared, into: &list, in: rect, context: context)
+      })
   }
 }

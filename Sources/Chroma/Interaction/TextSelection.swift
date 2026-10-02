@@ -9,16 +9,25 @@ struct PlainTextLayout: Equatable {
   let columns: Int?
   /// Immutable snapshot shared by hit testing, caret motion, selection painting, and text painting.
   /// The registry replaces it during every update; it is never keyed by identity alone.
-  let layout: TextLayout
+  let snapshot: TextLayoutSnapshot
+  var layout: TextLayout { snapshot.layout }
 
-  init(text: String, rect: Rect, cellWidth: Float, lineHeight: Float, scale: Float, columns: Int? = nil) {
+  init(
+    text: String, rect: Rect, cellWidth: Float, lineHeight: Float, scale: Float,
+    columns: Int? = nil, snapshot: TextLayoutSnapshot? = nil
+  ) {
     self.text = text
     self.rect = rect
     self.cellWidth = cellWidth
     self.lineHeight = lineHeight
     self.scale = scale
     self.columns = columns
-    self.layout = TextLayout(text, columns: columns)
+    if let snapshot {
+      precondition(snapshot.text == text && snapshot.columns == columns)
+      self.snapshot = snapshot
+    } else {
+      self.snapshot = TextLayoutSnapshot(text, columns: columns)
+    }
   }
 
   func hitTest(point: Point) -> Int? {

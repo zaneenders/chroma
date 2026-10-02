@@ -58,6 +58,28 @@ struct StackLayout {
       BlockEngine.resolve(child, context: context.childContext(for: child, at: index))
     }
     let spacers = originals.map(BlockEngine.isSpacer)
+    let retained = context.retainedLayoutScope?.makeNode(type: StackLayout.self, context: context)
+    var placed: [(proposal: Size, rects: [Rect])] = []
+    func placements(_ proposal: Size) -> [Rect] {
+      if let cached = placed.first(where: { $0.proposal == proposal }) { return cached.rects }
+      let compute = {
+        rectangles(
+          sizes: layout(children, spacers: spacers, proposal: proposal),
+          reversed: reversed, proposal: proposal)
+      }
+      let result = retained?.placement(proposal: proposal, compute: compute) ?? compute()
+      placed.append((proposal, result))
+      return result
+    }
+    func visit(_ rect: Rect, _ body: (BlockEngine.Resolved, Rect) -> Void) {
+      for (child, placement) in zip(children, placements(rect.size)) {
+        body(
+          child,
+          Rect(
+            x: rect.minX + placement.minX, y: rect.minY + placement.minY,
+            width: placement.size.width, height: placement.size.height))
+      }
+    }
     return BlockEngine.Resolved(
       expandsHorizontally: {
         children.indices.contains { (axis == .horizontal || !spacers[$0]) && children[$0].expandsHorizontally }
@@ -74,38 +96,31 @@ struct StackLayout {
         return result
       },
       register: { rect in
-        let sizes = layout(children, spacers: spacers, proposal: rect.size)
-        place(children, sizes: sizes, reversed: reversed, in: rect, context: context) { child, rect in
-          child.register(in: rect)
+        context.withFocusGroup(in: rect, axis: axis == .horizontal ? .horizontal : .vertical) {
+          visit(rect) { child, rect in child.register(in: rect) }
         }
       },
+      paint: { list, rect in
+        visit(rect) { child, rect in child.paint(into: &list, in: rect) }
+      },
       draw: { list, rect in
-        let sizes = layout(children, spacers: spacers, proposal: rect.size)
-        place(children, sizes: sizes, reversed: reversed, in: rect, context: context) { child, rect in
-          child.draw(into: &list, in: rect)
+        context.withFocusGroup(in: rect, axis: axis == .horizontal ? .horizontal : .vertical) {
+          visit(rect) { child, rect in child.draw(into: &list, in: rect) }
         }
       })
   }
 
-  private func place(
-    _ children: [BlockEngine.Resolved], sizes: [Size], reversed: Bool,
-    in rect: Rect, context: BlockContext, visit: (BlockEngine.Resolved, Rect) -> Void
-  ) {
-    let interaction = context.interaction
-    interaction.beginGroup(
-      rect: rect, axis: axis == .horizontal ? .horizontal : .vertical)
-    var cursor = axis == .horizontal ? rect.minX : rect.minY
-    if reversed { cursor += rect.size[keyPath: axis.main] }
-    for (child, size) in zip(children, sizes) {
+  private func rectangles(sizes: [Size], reversed: Bool, proposal: Size) -> [Rect] {
+    var cursor: Float = reversed ? proposal[keyPath: axis.main] : 0
+    return sizes.map { size in
       let extent = size[keyPath: axis.main]
       if reversed { cursor -= extent }
       let origin =
         axis == .horizontal
-        ? Point(x: cursor, y: bottomAligned ? rect.maxY - size.height : rect.minY)
-        : Point(x: rect.minX, y: cursor)
-      visit(child, Rect(origin: origin, size: size))
+        ? Point(x: cursor, y: bottomAligned ? proposal.height - size.height : 0)
+        : Point(x: 0, y: cursor)
       cursor += reversed ? -spacing : extent + spacing
+      return Rect(origin: origin, size: size)
     }
-    interaction.endGroup()
   }
 }

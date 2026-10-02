@@ -1,71 +1,91 @@
-# Registration separation: Linux validation, 2026-10-02
+# Architecture validation: Linux, 2026-10-02
 
-The migrated pre-input path performs **zero painting** in the virtualized control fixture, while preserving fresh callbacks between coalesced events. These measurements do **not** demonstrate a wall-clock speedup. Full collection identity scans still dominate the 10,000-row fixture, and the separately built historical nested-layout benchmarks show modest regressions.
+The final implementation provides fresh, ordered input through paint-free registration, operation-owned painting snapshots, and explicit bounded geometry reuse. The cache removes repeated measurement/placement computations in the opted-in fixture while preserving fresh bodies and callbacks. **These results do not establish an overall latency improvement.** Historical nested-layout medians regress, and the application input tail is worse.
 
-See [pipeline and migration contract](RegistrationPipeline.md), [benchmark instructions](../Benchmarks/README.md#paint-free-registration), and the [complete aggregate JSON](../Benchmarks/reports/registration-linux-2026-10-02.json).
+See the [pipeline and migration contract](RegistrationPipeline.md), [handoff checklist](ArchitectureHandoffChecklist.md), and [benchmark instructions](../Benchmarks/README.md#paint-free-registration). Raw reports, binary hashes, source hashes, aggregation scripts and validation logs are supplied in the separate core evidence archive; application evidence and its migration patch are a separate companion archive. Earlier milestone and pre-optimization measurements are not the final results below.
 
-## Environment and method
+## Method and provenance
 
-- Debian 13.6 x86_64, Swift 6.4 release, virtualized AMD EPYC 9V74 allocation with 9 visible logical processors and approximately 10 GiB RAM. Native checks used matching Wayland 1.26.0 headers and libraries.
-- Historical baseline: main `e46e475ded8be5d4df569d534b94a32102e48d23`. The pristine archive used for baseline execution was `ce73c99ae055b6ba1ba75cfcd91f338d91fd539d`; `Sources`, `Tests`, `Benchmarks`, and `Package.swift` are identical between those revisions.
-- Baseline and candidate used the same release configuration, datasets, viewport, input sequence, warmup, and sampling method. Compilation finished before timing; no competing builds or tests ran during either window. The JSON records binary SHA-256 hashes and UTC windows.
-- Existing nested-layout benchmarks: 20 session-style rows, 400×300 viewport, depths 1/3/5, 3 warmup frames, then 20 timed frames per case, repeated in 5 trials. Tables show the median of trial p50s and the median of trial p95s, not a pooled percentile.
-- Existing input benchmark: 200×200 viewport, 1,000/100,000/1,000,000 rows, identified/unkeyed and deferred/replaced roots. Five trials yield 5 cold and 25 warm samples per case; their percentiles are pooled. Full results are in the JSON.
+- Debian 13.6 x86_64, Swift 6.4 release, virtualized AMD EPYC 9V74 allocation, 9 visible logical processors and approximately 10 GiB RAM; matching Wayland 1.26 headers/libraries.
+- Historical baseline: pristine `ce73c99ae055b6ba1ba75cfcd91f338d91fd539d`, with implementation equivalent to published `6242fe8` / merged main `e46e475`. Candidate measurements use the final source freeze, including the bounded plain-text/background/snapshot optimizations.
+- Both revisions use identical release configurations, datasets, viewports, input sequences, warmup and sampling. Binaries were built before measurement; no competing compiler, tests, or profiler ran during timing. Timings disable pipeline instrumentation; separate matching captures collect work counters.
+- Original layout fixtures: 20 rows, 400×300 viewport, depths 1/3/5, 3 warmup frames, 20 timed frames per case, 5 trials. Reported values are the median of trial p50s/p95s. A rendered no-input frame is not an idle-CPU measurement.
+- Original input fixture: 200×200 viewport, 1k/100k/1m identified or unkeyed rows, deferred/replaced roots. Five trials pool 5 cold or 25 warm samples per workload.
 
 ## Historical before/after
 
-Times are milliseconds. The selected scroll workloads preserve their row-body and output-command counts.
+Milliseconds; selected depth-5 row-body and drawing-command counts are unchanged.
 
-| Workload | Baseline p50 / p95 | Candidate p50 / p95 | p50 change | Row bodies / output commands |
+| Workload | Baseline p50 / p95 | Final p50 / p95 | p50 change | Bodies / output commands |
 |---|---:|---:|---:|---:|
-| Ordinary layout, depth 1, scroll | 1.228 / 1.355 | 1.247 / 1.395 | +1.5% | 40 / 65 |
-| Ordinary layout, depth 5, scroll | 1.487 / 1.689 | 1.550 / 1.821 | +4.3% | 40 / 64 |
-| Interactive layout, depth 1, scroll | 1.845 / 2.140 | 1.902 / 2.076 | +3.1% | 80 / 64 |
-| Interactive layout, depth 5, scroll | 6.451 / 6.862 | 6.574 / 7.024 | +1.9% | 240 / 64 |
-| 1,000 identified rows, deferred root, warm | 0.269 / 0.300 | 0.282 / 0.340 | +4.8% | — / 16 |
-| 1,000,000 identified rows, deferred root, warm | 127.426 / 131.365 | 126.061 / 130.503 | −1.1% | — / 16 |
+| Ordinary depth 5, no input | 0.772 / 1.025 | 0.844 / 0.943 | +9.3% | 20 / 64 |
+| Ordinary depth 5, scroll | 1.497 / 1.747 | 1.623 / 1.745 | +8.4% | 40 / 64 |
+| Interactive depth 5, no input | 3.233 / 3.832 | 3.488 / 3.808 | +7.9% | 120 / 64 |
+| Interactive depth 5, scroll | 6.338 / 6.919 | 6.815 / 7.574 | +7.5% | 240 / 64 |
+| 1m unkeyed, deferred root, warm | 0.101 / 0.147 | 0.149 / 0.179 | +47.2% | — / 16 |
+| 1m identified, deferred root, warm | 126.137 / 133.394 | 126.106 / 135.101 | −0.02% | — / 16 |
 
-The ordinary depth-5 scroll trial-p50 ranges were 1.471–1.509 ms before and 1.514–1.604 ms after. The interactive depth-5 scroll ranges were 6.249–7.004 ms before and 6.434–6.894 ms after. These are modest measured regressions, with overlapping ranges in the interactive case. This single-host, sequential comparison does not isolate every source of overhead or establish statistical significance. It must not be presented as an application speedup.
+The unkeyed increase is approximately 0.048 ms in absolute terms. Ordinary depth-5 scroll trial-p50 ranges were 1.477–1.561 ms before and 1.617–1.629 ms after; interactive scroll ranges were 6.181–7.288 and 6.698–7.873 ms. This sequential, single-host comparison does not establish statistical significance or an application speedup. Full collection identity scans remain a separate cost.
 
-## Same-binary mechanism comparison
+A bounded overhead investigation removed repeated opaque-wrapper child construction, reused prepared background nodes directly, and avoided snapshot allocations for plain nonwrapping/nonselectable text. The final figures include those changes. The remaining cost buys explicit phase isolation and correctness; this proposal does not justify enabling retained geometry everywhere or claiming a general performance improvement.
 
-`RegistrationBenchmark` uses an identical deferred root containing a fixed increment button and 10,000 identified virtualized rows (30 points high, 1-point spacing) in a 480×360 viewport. The legacy mode adds one identity-preserving custom primitive whose default registration adapter paints the underlying tree. Its small wrapper overhead is included; this is a mechanism baseline, not another historical executable.
+## Three-mode registration fixture
 
-Each of 5 trials contains 40 samples per mode, alternating mode order. Every sample starts a fresh host, measures its initial frame, warms up for 5 activation-pair/scroll/presentation cycles, then measures two activations, one scroll event, one coalesced presentation, and 1,000 idle scheduling polls. Timing runs with metrics disabled; a separate identical replay collects counters. Initial-frame timing excludes fixture allocation and is not process-cold startup.
+One binary renders the same deferred root: a fixed increment button and 10,000 identified virtualized rows, 30-point height plus 1-point spacing, in a 480×360 viewport. The legacy variant adds an identity-preserving draw-to-register adapter; the cached variant wraps the fresh root in `CachedLayout`. These are same-binary mechanism comparisons, not additional historical executables.
 
-| Phase | Legacy p50 / p95 (ms) | Paint-free p50 / p95 (ms) | Legacy → paint-free paints | Legacy → paint-free emitted commands |
-|---|---:|---:|---:|---:|
-| Initial frame | 5.458 / 6.097 | 5.380 / 6.694 | 52 → 25 | 80 → 41 |
-| Two activations, no presentation | 1.438 / 1.688 | 1.433 / 1.673 | 52 → 0 | 81 → 0 |
-| Scroll input, no presentation | 0.711 / 0.847 | 0.708 / 0.849 | 26 → 0 | 40 → 0 |
-| Active presentation | 0.729 / 0.922 | 0.726 / 0.829 | 26 → 25 | 43 → 43 |
-| 1,000 idle scheduling polls | 0.035 / 0.035 | 0.035 / 0.035 | 0 → 0 | 0 → 0 |
+Five trials contain 40 samples per mode with alternating mode order, 5 warmup activation-pair/scroll/presentation cycles, and separate counter replays. Initial timing excludes fixture allocation. Values below are median trial p50/p95, milliseconds.
 
-For the activation pair, the legacy/native trial-p50 ranges were 1.424–1.482 / 1.411–1.458 ms. For scroll input they were 0.706–0.732 / 0.703–0.721 ms. Those overlapping ranges do not support a meaningful latency improvement.
+| Phase | Legacy adapter | Paint-free | Paint-free + cache |
+|---|---:|---:|---:|
+| Initial frame | 5.485 / 6.288 | 5.484 / 6.793 | 5.628 / 6.318 |
+| Two activations before presentation | 1.456 / 1.713 | 1.485 / 1.650 | 1.518 / 1.815 |
+| Scroll before presentation | 0.720 / 0.797 | 0.726 / 0.870 | 0.739 / 0.920 |
+| Coalesced presentation | 0.745 / 0.863 | 0.759 / 0.948 | 0.765 / 0.920 |
+| Explicit invalidation then input | 0.739 / 0.890 | 0.738 / 0.866 | 0.797 / 0.955 |
+| 1,000 idle scheduler polls | 0.034 / 0.039 | 0.035 / 0.053 | 0.035 / 0.036 |
 
-Counters are deterministic across all 5 trials:
+Work counts are identical across all five trials. “Computations” below means resolved measurement requests minus cache hits, not only primitive calls.
 
-- Both modes evaluate 2 bodies, make 6 measurement requests, and construct 22 visible row controls per activation pair. One scroll event halves those counts. Identified row metadata still scans the entire collection on each deferred-root evaluation.
-- Dedicated registration visits for an activation pair are 2 in the compatibility mode and 50 in the migrated mode. Compatibility installs behavior during the 52 counted paint visits; registration visits are not a count of individual installed handlers.
-- The migrated path has zero compatibility fallbacks in every phase. The baseline reports the exact caller, `RegistrationFixtures.LegacyRegistrationRoot`, twice per activation pair and once per scroll or initial registration.
-- The migrated/legacy peak resolved-node counts are 5/6, and live resolved nodes return to zero at every phase boundary. These nodes and proposal caches are traversal-scoped, not a persistent retained tree.
-- Each live fixture has one frame observation subscription object; closing it releases that object. Both lifetime gauges are asserted to be zero after every close.
-- Initial output has 41 commands and active output has 43 in both modes. The extra legacy commands above are produced during registration and discarded.
-- Idle produces zero frames and zero pipeline work. This is a synchronous scheduler assertion, not a native idle-CPU or asynchronous event-loop measurement.
+| Phase | Measurement computations: uncached → cached | Cached placement hits | Bodies / rows built, both modes |
+|---|---:|---:|---:|
+| Initial frame | 6 → 3 | 1 | 2 / 22 |
+| Two activations | 6 → 0 | 2 | 2 / 22 |
+| Scroll input | 3 → 0 | 1 | 1 / 11 |
+| Presentation | 3 → 0 | 1 | 1 / 11 |
+| Explicit invalidation then input | 3 → 3 | 0 | 1 / 11 |
 
-Every activation closure captures the prior counter value during reconciliation. Two events without presentation must increment it by two; every replay asserts this, and presentation must not replay either action.
+- Registration painting is eliminated: activation-pair paint visits/commands fall from 52/81 to 0/0; scroll falls from 26/40 to 0/0. Both migrated modes have zero compatibility fallbacks. Only `LegacyRegistrationRoot` deliberately uses the adapter.
+- Placement-cache hits avoid requesting sizes at all, so steady cached phases have zero retained **measurement** hits as well as zero measurement computations. Fresh bodies, row construction and identity scanning remain.
+- Both migrated modes emit 41 commands initially and 43 in active presentation. Two captured-count actions before presentation must increment by two; every replay checks this and checks that presentation does not replay actions.
+- Cached mode keeps 3 geometry nodes and 6 subscription objects; uncached/legacy modes keep 0 geometry nodes and 1 frame subscription. Resolved nodes return to zero at phase boundaries. Every close asserts zero retained nodes, resolved nodes and subscriptions.
+- Explicit invalidation is followed immediately by input without queued observation delivery. Idle produces zero frames and zero pipeline work; this synchronous check does not measure native idle CPU. Separate controlled-observation tests cover asynchronous return to idle.
+
+## Real ShapeTree application graph
+
+The companion follows ShapeTree `4e5432d99687af4714169ee419d344d680d61fc0` and Scribe `589b312a952db70b0a06a303bbf035f7e9a86501`, preserving their NativeApp integration. Its freshly built release test process exercises actual application blocks with 1,000 sessions, 40 transcript messages and an 1180×820 viewport. Each of 5 trials per variant warms up for 5 cycles, then measures 20 cycles of four ±60-point sidebar scroll events followed by presentation. The legacy wrapper preserves identity. Both variants include the small sidebar cache adoption.
+
+These application percentiles are **pooled** across 100 measured cycles per variant (first frame: 5 fresh hosts); p95 uses linear interpolation. They are not the synthetic fixture's median-of-trial aggregation.
+
+| Phase | Legacy p50 / p95 (ms) | Explicit phases p50 / p95 (ms) |
+|---|---:|---:|
+| Fresh-host first frame | 47.881 / 51.928 | 46.810 / 57.640 |
+| Four scroll events before presentation | 90.054 / 100.638 | 89.083 / 120.619 |
+| Coalesced presentation | 22.870 / 27.778 | 22.830 / 27.049 |
+
+Application medians are near-flat; the input-batch p95 increases from **100.638 to 120.619 ms**. No overall latency improvement is claimed.
+
+Per four-event batch, paint visits fall **2,793 → 0**, emitted commands **1,327 → 0**, compatibility fallbacks **4 → 0**, and text-layout constructions **329 → 20**. Bodies remain **643**, measurement requests **6,011** with **377** hits, retained nodes **6**, and subscriptions **28**. The large graph-reconciliation/measurement cost remains visible. Both variants produce zero idle frames, offsets 0/240, and 332 initial output commands. Private application source is supplied only in the companion patch.
 
 ## Validation and limits
 
-- Native root suite: **433 tests passed**, comprising 421 Chroma tests and 12 WaylandBackend tests. This includes the actual Linux backend and app targets.
-- Benchmark package: **7 tests passed**, including virtualized paint-free/legacy comparison, identical initial output, current coalesced callbacks, initial-frame event ordering, and idle behavior.
-- ShapeTree desktop: **161 tests passed**, and the native `ShapeTreeDesktop` release build with `-Xswiftc -g` passed, with an unpublished companion migration patch. No private application source is included in this repository.
-- New headless scheduling tests explicitly drain controlled observation delivery, verify observed changes and focus requests schedule frames, and verify return to idle. Benchmark idle polls alone would not establish those asynchronous semantics.
-- Live GUI smoothness, macOS/Metal behavior, GPU time, native event latency, and native idle CPU were **not validated**. No display server was available for an interactive ShapeTree run. Native backend unit tests do not substitute for that validation.
+- **463 Chroma + 13 Wayland tests**, **7 benchmark-package tests**, and **172 optimized ShapeTree release tests** pass. The native application release executable and benchmark products build successfully; the application executable includes debug symbols.
+- Changed Swift files pass strict formatting. Whole-tree lint still reports seven unchanged baseline warnings. Two identity-diagnostic stderr assertions fail only in optimized core release tests and reproduce on the unmodified published baseline; those tests were not weakened.
+- Independent final review closed the raw-key freshness and selectable-text ordering findings and reviewed the final bounded fast paths. Source hashes and logs accompany the evidence.
+- Native interactive smoothness, native event latency/idle CPU, GPU timing and macOS/Metal execution remain **unverified**. The Linux compositor's socket creation is blocked by `EPERM`; the permitted CPU-profiler attempt collected zero samples. Headless graph measurements are not a native GUI profile.
 
 ## Reproduce
 
-Install a Swift 6.4 toolchain and the repository's native Linux dependencies (including compatible Wayland headers/libraries), or run on a supported macOS environment. From the repository root:
+Use Swift 6.4 with the repository's native dependencies. Build and test before timing; keep other builds, tests and profilers idle.
 
 ```sh
 swift test
@@ -73,12 +93,11 @@ swift test --package-path Benchmarks
 swift build --package-path Benchmarks -c release
 bin_dir=$(swift build --package-path Benchmarks -c release --show-bin-path)
 for trial in 1 2 3 4 5; do
-  "$bin_dir/RegistrationBenchmark" --rows 10000 --samples 40 --warmup 5 --idle-polls 1000 \
-    > "registration-$trial.json"
+  "$bin_dir/RegistrationBenchmark" --rows 10000 --samples 40 --warmup 5 --idle-polls 1000 > "registration-$trial.json"
   "$bin_dir/LayoutBenchmark" > "layout-$trial.json"
   "$bin_dir/LayoutBenchmark" --interactive > "interactive-$trial.json"
   "$bin_dir/InputFrameBenchmark" > "input-$trial.txt"
 done
 ```
 
-For a historical comparison, repeat the existing layout/input commands against a pristine baseline release build using the same machine and toolchain. The old benchmark package requires its checkout directory to be named `chroma`; the candidate manifest explicitly names the local dependency and removes that directory-name dependency. Build both revisions before starting measurements and keep other builds, tests, and profiling idle. Preserve executable hashes and the raw reports; do not compare these Linux numbers directly with earlier macOS handoff measurements.
+Repeat the original layout/input workloads against a pristine historical release build with identical settings. Its checkout directory must be named `chroma`; the current benchmark manifest supports other names. Preserve binary hashes and raw reports. The supplied core archive includes the runners and aggregation scripts; the companion includes the application fixture, exact dependency receipt and reproduction instructions. Do not compare these Linux timings directly with historical macOS profiles.

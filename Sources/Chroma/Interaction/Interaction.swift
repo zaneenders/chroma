@@ -100,7 +100,7 @@ package final class Interaction {
 
   package func copyText() -> String? {
     if let text = editableSelectionText() { return text }
-    if let text = onCopy?(), !text.isEmpty { return text }
+    if let text = (registrations.copyProvider ?? onCopy)?(), !text.isEmpty { return text }
     return textSelection.selectedText()
   }
 
@@ -110,7 +110,7 @@ package final class Interaction {
       textSelectionRange = editingText.isEmpty ? nil : 0..<editingText.count
       return
     }
-    if onSelectAll?() == true { return }
+    if (registrations.selectAll ?? onSelectAll)?() == true { return }
     textSelection.selectAll(at: point)
   }
 
@@ -262,9 +262,12 @@ package final class Interaction {
   @ObservationIgnored var activatedLeaf: WidgetID?
 
   struct FrameRegistrations {
+    var copyProvider: (@MainActor () -> String?)?
+    var selectAll: (@MainActor () -> Bool)?
     var commandHandlers: [ScopedCommandHandler] = []
     var keyBindingScopes: [ScopedKeyBindings] = []
     var actionRoles: [ScopedActionRole] = []
+    var inputObservers: [@MainActor (InputState) -> Void] = []
     var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
     var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
     var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
@@ -284,6 +287,8 @@ package final class Interaction {
 
     registrations = FrameRegistrations()
     building = FrameRegistrations()
+    onCopy = nil
+    onSelectAll = nil
     textSelection.clear()
     textSelection.layoutRegistry.clear()
     pendingFocus = nil
@@ -344,11 +349,16 @@ package final class Interaction {
 
   @ObservationIgnored var refreshingRegistrations = false
 
+  func restoreInputAfterRegistration(_ input: InputState) {
+    self.input = input
+    hoveredLeafID = tree?.hitTest(input.pointerPosition).flatMap { tree?.node(at: $0)?.leafID }
+  }
+
   package func beginFrame(input: InputState, processingInput: Bool = true) {
     building = FrameRegistrations()
     buildingLogicalSelections = [:]
 
-    if processingInput { processInput(input) } else { self.input = input }
+    if processingInput { processInput(input, notifyingObservers: input != InputState()) } else { self.input = input }
     let root = FocusNode(kind: .group, rect: .zero)
     builderRoot = root
     builderStack = [root]
@@ -357,7 +367,7 @@ package final class Interaction {
     textSelection.layoutRegistry.clear()
   }
 
-  package func processInput(_ input: InputState) {
+  package func processInput(_ input: InputState, notifyingObservers: Bool = true) {
     self.input = input
     activatePending = false
     enterTextPending = false
@@ -398,6 +408,7 @@ package final class Interaction {
         activatedLeaf = id
         registrations.buttonActions[id]?()
       }
+      if notifyingObservers { for observer in registrations.inputObservers { observer(input) } }
     }
 
     guard let tree else { return }

@@ -34,7 +34,7 @@ struct RegistrationFixturesTests {
     #expect(work.liveResolvedNodes == 0)
     #expect(work.peakResolvedNodes > 0)
     switch mode {
-    case .paintFree:
+    case .paintFree, .cachedLayout:
       #expect(work.paints == 0)
       #expect(work.drawingCommands == 0)
       #expect(work.compatibilityFallbacks == 0)
@@ -44,8 +44,15 @@ struct RegistrationFixturesTests {
       #expect(work.compatibilityFallbacks == 2)
       #expect(work.compatibilityFallbackTypes == [String(reflecting: LegacyRegistrationRoot.self): 2])
     }
+    if mode == .cachedLayout {
+      #expect(work.retainedPlacementHits > 0)
+      #expect(work.liveRetainedNodes > 0)
+    } else {
+      #expect(work.liveRetainedNodes == 0)
+    }
     fixture.close()
     #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
+    #expect(PipelineMetrics.snapshot.liveRetainedNodes == 0)
     #expect(PipelineMetrics.snapshot.liveObservationSubscriptions == 0)
   }
 
@@ -67,10 +74,20 @@ struct RegistrationFixturesTests {
   @Test func modesPaintTheSameInitialFrame() {
     let current = RegistrationFixture(mode: .paintFree, rows: 100)
     let baseline = RegistrationFixture(mode: .legacyPaintTraversal, rows: 100)
+    let cached = RegistrationFixture(mode: .cachedLayout, rows: 100)
     defer {
       current.close()
       baseline.close()
+      cached.close()
     }
-    #expect(current.host.renderIfNeeded() == baseline.host.renderIfNeeded())
+    let frame = current.host.renderIfNeeded()
+    #expect(frame == baseline.host.renderIfNeeded())
+    #expect(frame == cached.host.renderIfNeeded())
+    #expect(current.rowConstructions == cached.rowConstructions)
+    current.selectIncrement()
+    cached.selectIncrement()
+    current.activateTwice()
+    cached.activateTwice()
+    #expect(current.rowConstructions == cached.rowConstructions)
   }
 }

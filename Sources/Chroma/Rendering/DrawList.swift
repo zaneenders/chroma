@@ -3,6 +3,8 @@ public struct DrawList: Sendable, Codable {
 
   public init() {}
 
+  mutating func append(_ other: DrawList) { commands.append(contentsOf: other.commands) }
+
   public init(commands: [DrawCommand]) {
     self.commands = commands
   }

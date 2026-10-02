@@ -83,7 +83,12 @@ public final class WaylandHost: Chroma.Host {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
     runtime.scheduler.onFrame = { [weak self] kind in self?.renderFrame(kind) }
-    keyboard.resolve = { [weak self] input, _ in self?.runtime.resolve(input) }
+    keyboard.dispatch = { [weak self] input, deliver in
+      self?.runtime.handleKeyboardInput(input) { [weak self] resolved in
+        guard let self else { return }
+        deliver(resolved, interaction.isTextEditing, interaction.editingSessionGeneration)
+      }
+    }
     keyboard.onInputAvailable = { [weak self] in self?.receiveInput() }
     keyboard.onCopy = { [weak self] in self?.clipboard.copyToClipboard() }
     keyboard.onCut = { [weak self] in self?.clipboard.copyEditableSelectionToClipboard() ?? false }

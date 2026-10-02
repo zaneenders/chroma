@@ -48,3 +48,9 @@ extension PrimitiveBlock {
     }
   }
 }
+
+/// A primitive whose presentation only emits commands from its current update.
+/// Implement registration/input effects in `register`, never in `paint`.
+public protocol PaintableBlock: PrimitiveBlock {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext)
+}

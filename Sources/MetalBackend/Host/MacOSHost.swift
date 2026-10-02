@@ -109,16 +109,18 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   private var pendingTextEvents: [TextEditEvent] = []
 
   func handleKey(_ input: KeyboardInput, frameInput: InputState) {
-    guard let resolved = runtime.resolve(input) else { return }
-    var input = frameInput
-    switch resolved {
-    case .command(let command): input.commands = [command]
-    case .text(let event):
-      applyTextEvent(event)
-      input.textEvents = pendingTextEvents
-      pendingTextEvents.removeAll(keepingCapacity: true)
+    runtime.handleKeyboardInput(input) { [weak self] resolved in
+      guard let self else { return }
+      var input = frameInput
+      switch resolved {
+      case .command(let command): input.commands = [command]
+      case .text(let event):
+        applyTextEvent(event)
+        input.textEvents = pendingTextEvents
+        pendingTextEvents.removeAll(keepingCapacity: true)
+      }
+      runtime.handleInput(input)
     }
-    runtime.handleInput(input)
   }
 
   private func applyTextEvent(_ event: TextEditEvent) {

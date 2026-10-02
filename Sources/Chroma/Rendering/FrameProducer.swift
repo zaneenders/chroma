@@ -12,7 +12,7 @@ final class FrameTrackingSubscription: Observable, Sendable {
     callback = Mutex(onChange)
   }
 
-  private var isCancelled: Bool {
+  var isCancelled: Bool {
     callback.withLock { $0 == nil }
   }
 
@@ -35,11 +35,13 @@ final class FrameTrackingSubscription: Observable, Sendable {
 
 @MainActor
 package final class FrameProducer {
+  private let retainedLayouts = RetainedLayoutStore()
   private var generation: UInt64 = 0
   private var subscription: FrameTrackingSubscription?
   private weak var interaction: Interaction?
 
   package func reset() {
+    retainedLayouts.reset()
     interaction?.resetRegistrations()
     interaction = nil
     resetTracking()
@@ -51,7 +53,10 @@ package final class FrameProducer {
     subscription = nil
   }
 
-  deinit { subscription?.cancel() }
+  isolated deinit {
+    subscription?.cancel()
+    retainedLayouts.reset()
+  }
 
   package func render(
     content: (any Block)?,
@@ -91,9 +96,20 @@ package final class FrameProducer {
     let drawList = withObservationTracking(options: .didSet) {
       subscription.trackCancellation()
       var drawList = DrawList()
+      var context = context
+      let prepared = PreparedPaintScope()
+      context.preparedPaintScope = prepared
+      context.retainedLayoutStore = retainedLayouts
+      retainedLayouts.beginPass()
+      defer {
+        prepared.reset()
+        retainedLayouts.endPass()
+      }
       if let content {
-        BlockEngine.draw(
-          content, into: &drawList, in: Rect(origin: .zero, size: viewport), context: context)
+        let resolved = BlockEngine.resolve(content, context: context)
+        let rect = Rect(origin: .zero, size: viewport)
+        resolved.register(in: rect)
+        resolved.paint(into: &drawList, in: rect)
       }
       return drawList
     } onChange: { [weak self, weak subscription] event in
@@ -113,8 +129,15 @@ package final class FrameProducer {
   }
 
   package func refreshRegistrations(
-    _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = []
+    _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = [],
+    keyboardNavigationOverscan: Bool = false
   ) {
+    var context = context
+    context.keyboardNavigationOverscan = keyboardNavigationOverscan
+    context.retainedLayoutStore = retainedLayouts
+    context.preparedPaintScope = nil
+    retainedLayouts.beginPass()
+    defer { retainedLayouts.endPass() }
     let interaction = context.interaction
     interaction.refreshingRegistrations = interaction.tree != nil
     interaction.beginFrame(input: InputState(commands: commands))

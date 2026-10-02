@@ -1,100 +1,138 @@
-# Registration without painting
+# Explicit update, input, geometry, and painting
 
-This change implements the first architecture-handoff milestone: fresh ordered input
-through a registration path that does not paint migrated primitives. It deliberately
-does not introduce a retained subtree engine or infer validity from stable identity.
+Chroma uses one block engine. Fresh behavior is reconciled before actionable input;
+painting consumes that update's prepared children, geometry, and text snapshots.
+An opt-in bounded cache retains geometry across updates, never blocks or callbacks.
 
-## Data flow
+## Data flow and ownership
 
-Before each actionable event, `WindowRuntime` asks `FrameProducer` to refresh
-registration. A fresh `BlockEngine.Resolved` tree reconciles current body values,
-measures proposal-dependent sizes, places children, and calls `register(in:context:)`.
-The resulting focus tree, hit regions, clipping, scroll layout, command scopes,
-current callbacks, and text-editing layout are published together by `endFrame`.
-The event is then dispatched once against that update. Passive hover still reuses
-the last geometry until presentation; presentation can coalesce without coalescing
-actions. Events before the initial frame continue through the existing ordered queue.
+1. Before each actionable event, `WindowRuntime` refreshes a consistent registration
+   snapshot: current blocks, measurement/placement, clipping, focus/command scopes,
+   scroll regions, text layouts, and callbacks. Passive hover keeps its existing
+   last-frame reuse policy.
+2. Native raw keys refresh registration **before** resolving scoped bindings and
+   editing mode, then dispatch within the same update scope. Keyboard refresh uses
+   one clipped buffer row in each direction so navigation needs no second traversal.
+   Wayland stamps the resulting text event with the refreshed editing-session ID.
+   Raw keys and already-resolved events queued before the initial frame retain their
+   mixed ordering. Standalone resolution stays conservative; no freshness promise
+   survives arbitrary changes between separate API calls.
+3. Input is applied once in order. Registered raw-input observers run after core
+   handlers/actions and before release/drag cleanup. They never run for neutral
+   presentation. Pre-initial-frame events remain queued in their original order.
+4. Presentation reconciles a fresh update under Observation, calls registration,
+   then pure painting, then publishes the completed interaction frame and draws
+   navigation decoration. Presentation carries no replayed event edges/actions.
+5. `PaintableBlock.paint` emits drawing commands. It does not install handlers,
+   consume focus/scroll requests, mutate application state, or advance drag state.
+   Those effects belong to explicit registration/update or input callbacks.
 
-Presentation still traverses `draw` with input edges cleared by the scheduled
-runtime. Its existing registration side effects remain compatible in this milestone.
-Separating presentation effects entirely is follow-up work; this change does not
-claim painting is yet a pure read-only operation.
+`Resolved` body values and its proposal memoization still last only for one
+operation. Containers share their placement arithmetic and operation-local child
+rectangles between update and paint. `Interactive` measures idle content but
+registers and paints the actual current-phase child snapshot, including structural
+differences. It never paints the cached idle tree merely because identity is stable.
 
-Prepared containers use the same placement arithmetic for registration and drawing.
-`Interactive` measures idle content but resolves current-phase content independently
-for either traversal, preserving structurally different hover/pressed children.
-`TextEditor` owns one immutable text-layout snapshot per update, shared by its pointer
-and vertical-motion callbacks and, when painting, its visual commands. Selectable
-`Text` likewise shares an immutable `PlainTextLayout` snapshot rather than repeatedly
-shaping it for hit tests and selection highlights.
+Opaque custom wrappers use paired `BlockEngine.register` / `BlockEngine.paintRegistered`
+calls in the same child order. `PreparedPaintScope` carries those newly prepared
+children only through the corresponding operation. The runtime clears it explicitly
+at the end, breaking context/child closure cycles. It is not a retained UI tree.
 
-## Cache validity and ownership
+Text measurement, input hit testing/caret motion, and painting share immutable
+`TextLayoutSnapshot` values. A one-entry operation-local preparation cache checks
+exact text and column count; metrics, rectangle, padding, and editor configuration
+form the current placement snapshot. A later update rebuilds snapshots from fresh
+values. Pure painting neither rereads the editor binding nor reshapes committed text.
 
-| Object | Validity and invalidation | Owner and release |
+## Opt-in retained geometry
+
+Keep a `LayoutCache` token stable and wrap a subtree in `CachedLayout(cache) { ... }`.
+Its builder and all behavior are evaluated fresh each update. The window retains
+only sizes by proposal and relative stack-child rectangles.
+
+The contract is explicit:
+
+- Read observable layout dependencies **inside** the content builder or measurement.
+  Their notifications synchronously invalidate the boundary, before queued redraw
+  delivery. An immediate following input therefore cannot use already-invalid sizes.
+- Call `cache.invalidate()` when geometry depends on unobserved mutable values,
+  closures, or ambient state. Observation cannot make arbitrary captured values safe.
+- Callback-only changes do not require invalidation when geometry is unchanged.
+  Callbacks always reconcile, including the captured-count two-activation case.
+- Type/structural-path and layout-environment signatures validate each fresh tree;
+  proposals key measurements. Changed text, metrics, theme, constraints, or structure
+  cannot inherit unrelated geometry. Nested boundaries share their outer boundary's
+  invalidation scope and token signature rather than creating a dependency graph.
+- Dirty geometry invalidates that explicit boundary. Uncached parents recompute
+  dependent size and sibling placement; independent unchanged boundaries can reuse
+  geometry. This is deliberately coarse and predictable, not arbitrary leaf-local
+  retained rendering.
+- Dynamic children discovered after a boundary's reconciliation are conservative.
+  For example, ordinary scrolling's dynamically resolved content is not implicitly
+  retained by an outer boundary. Place an explicit boundary where dependencies are
+  known; no automatic cross-frame reuse is inferred from a stable ID.
+
+| Retained state | Owner / validity | Release |
 |---|---|---|
-| Resolved body/child values and proposal measurements | One operation only. Reconciled again before actionable input, including unobserved captured values. Proposal is part of measurement lookup. | Local traversal; released on return. No cross-frame subscription or node retention. |
-| Text input/selection layout snapshot | Current text, metrics, width, and configuration at registration. Replaced before next actionable event. | Current input-handler/selection registry; replaced during consistent registration update or root reset. |
-| Variable-row measurements | Same row measurement identity, width, structural path, theme/font/text scale, and valid observed dependencies. Content assignment or `Row.invalidateMeasurement()` changes identity. | Existing `ScrollViewController` cache; replacing/removing rows releases their measurements and observation subscriptions. Controller disposal releases the cache. |
-| Frame observation | One-shot subscription for current presentation generation. Cancellation/rearming and generation checks are unchanged. | `FrameProducer`; previous subscription cancelled on render/reset, stale queued delivery rejected. |
+| Cached boundary sizes and relative placements | Window store; current token, fresh structure/environment signature, valid observed dependencies or explicit revision | Swept when absent from a complete update, root reset, or owning runtime destruction |
+| Variable-row measurements | Existing `ScrollViewController`; row measurement identity, width/path/environment, observed dependencies | Row replacement/removal from cache or controller disposal |
+| Current handlers, focus, copy/select-all providers and text snapshots | Current consistent interaction registration | Next registration, root reset, or owning runtime destruction |
+| Frame observation | Current producer generation, one-shot subscription | Rearmed/cancelled per frame/reset; stale queued delivery rejected |
 
-Stable IDs preserve interaction identity; they do not establish that callbacks,
-labels, child structure, theme, or intrinsic sizes are unchanged. Callbacks always
-reconcile conservatively. Variable-row content whose size depends on unobserved
-mutable state must call `invalidateMeasurement()` on that row (or replace `content`).
-Observable changes synchronously mark row measurement invalid before asynchronous
-redraw delivery, so immediate input cannot use an already-invalid measurement.
+Persistent geometry is bounded to 64 boundaries per window, 256 nodes per boundary,
+and 4 measurement plus 4 placement proposals per node. Overflow falls back to
+conservative computation. Proposal eviction conservatively invalidates the whole
+boundary; its next reconciliation clears/rearms dependencies. This avoids complex
+subscription-dependency machinery. Unchanged frames do not accumulate subscriptions.
+UI-owned state stays on the main actor; notification validity uses checked
+`Synchronization.Mutex`, without `@unchecked`.
 
-No new unbounded persistent cache is introduced. Existing uniform-row identity scans
-and lightweight application metadata assembly are unchanged. This work does not
-claim every operation is proportional to visible rows.
+Variable rows also expose `row.invalidateMeasurement()` for unobserved geometry
+changes. Assigning `row.content` invalidates automatically. Keeping a controller
+alive intentionally keeps its current row cache; no claim is made that external
+controller-owned state disappears before its owner releases it.
 
-## Custom primitive migration
+## Compatibility and migration
 
-`PrimitiveBlock.register(in:context:)` is a source-compatible requirement. Its default
-implementation is an explicit legacy adapter that calls `draw` into a temporary list.
-It preserves custom primitive behavior, but is counted as both a compatibility
-fallback and painting. Declaring `.decorative` is not enough to skip a custom draw:
-that method might install commands or mutate ambient context.
+Existing `PrimitiveBlock.draw` remains a source-compatible combined operation.
+A primitive adopts `PaintableBlock` to promise pure presentation, implements
+`register` for current behavior/geometry, and implements `paint` for commands.
+Use `BlockContext.registerFocusable` without drawing a focus highlight, and
+`registerInputHandler` for raw event behavior. A custom wrapper must preserve child
+visitation order between registration and painting. These engine calls operate
+inside a Host update, not as standalone frame builders.
 
-A migrated primitive should update current behavior and geometry in `register` and
-use `BlockEngine.register` for its children. Like `BlockEngine.draw`, this is a
-traversal entry point inside an active runtime frame, not a standalone frame builder.
-Use `HeadlessHost.sendInput` and `renderIfNeeded` to exercise the complete update/
-dispatch/presentation lifecycle in application tests. Use `BlockContext.registerFocusable`
-when a focus leaf is needed without a painted highlight. Reuse placement/context
-helpers between `register` and `draw`; do not implement registration by passing a
-throwaway drawing sink through the normal paint path. Keep application actions in
-registered input callbacks, not measurement or registration. During migration,
-existing draw-time input/lifecycle effects must be preserved deliberately and listed
-as remaining work.
+For unmigrated custom primitives, the explicit adapter remains measurable:
 
-All built-in primitives, prepared containers/modifiers, command scopes, focus targets,
-text controls, and ordinary/virtualized scrolling support the new path. Unmigrated
-application primitives still use the adapter, including ShapeTree wrappers until
-its companion changes are adopted. A Chroma-only upgrade therefore does not make
-all of ShapeTree paint-free.
+- Before input, the default registration adapter calls legacy `draw` into a discarded
+  list, preserving old custom behavior conservatively.
+- During presentation update, legacy drawing runs once and its commands are captured.
+  The painting phase appends those commands without replaying actions or registration.
 
-## Diagnostics and validation
+This fallback is intentionally not called paint-free. `PipelineMetrics` names its
+concrete callers. All built-ins use separated registration/painting; the companion
+ShapeTree patch migrates all twelve application primitives, including TranscriptView's
+former body-time lifecycle effects. Legacy public entry points remain for external
+callers; the runtime's migrated path does not invoke their combined traversal.
 
-`PipelineMetrics.isEnabled` enables opt-in counters without logging. Snapshot counts
-body evaluation, measurement requests/cache hits, assigned-rectangle visits,
-registration/paint visits, emitted commands, and compatibility fallbacks by concrete type. Lifetime
-gauges distinguish traversal-local resolved nodes from live frame/row subscriptions;
-they are not counts of a retained UI tree. Capture includes only objects created
-while enabled. `reset()` preserves live gauges; disabling avoids token allocation.
+ShapeTree's ambient render/workspace context is re-established for every update and
+paint. Selection, viewport and command registration, focus reconciliation, and drag
+continuation live in update; Escape/modal/press/release effects live in ordered input.
+The sidebar retains its 30-point uniform rows with 1-point spacing and constructs
+expensive controls only for visible rows. Uniform identity and lightweight metadata
+still scan the full collection; no O(visible rows) claim is made for those operations.
 
-Commands are counted once at the outermost instrumented drawing boundary, including
-legacy adapters and navigation painting. Direct writes to unrelated `DrawList`s are
-outside the capture boundary. A zero-command count alone is not proof of no painting:
-also require zero paint visits and zero compatibility fallbacks.
+## Evidence
 
-Regression coverage preserves the existing ordered-input, callback freshness,
-initial-frame, input replay, text layout, identity/cancellation, observation lifetime,
-frame pacing, and focus-recovery tests. New tests cover paint-free built-in paths,
-proposal sharing with operation-scoped lifetime, changed leaf geometry repositioning
-siblings, virtualization/clipping, explicit and observed row invalidation, and
-current callbacks despite cached variable-row geometry.
+Opt-in `PipelineMetrics` reports bodies, measurements/hits, retained placement hits,
+registration, painting, commands, text layouts, named fallbacks, and live/peak node
+and subscription counts. Timing and counter capture are separate. Disabled captures
+avoid logging and lifetime-token allocation. Counters distinguish transient prepared
+nodes from retained geometry; cached closures are not an optimization strategy.
 
-See the benchmark README and the measured results accompanying this change for
-reproduction commands and platform limitations. Linux tests cannot establish macOS
-Metal rendering or subjective ShapeTree application smoothness.
+See [the acceptance checklist](ArchitectureHandoffChecklist.md) and
+[measured results](RegistrationResults.md). Tests cover ordered input, fresh callbacks,
+text-layout freshness, phase structure, measurement purity, cache invalidation and
+parent/sibling propagation, clipping/scroll/focus recovery, stale delivery, resource
+release, legacy adaptation, and idle scheduling. Native graphics validation is
+separate from these headless block-graph checks.

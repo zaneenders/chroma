@@ -1,4 +1,4 @@
-public struct Interactive<Content: Block>: PrimitiveBlock {
+public struct Interactive<Content: Block>: PaintableBlock {
   var id: WidgetID?
   public var action: @MainActor () -> Void
   public var content: @MainActor (InteractionPhase) -> Content
@@ -61,5 +61,51 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let registered = registeredContent(in: rect, context: context)
     BlockEngine.draw(registered.content, into: &drawList, in: rect, context: registered.context)
+  }
+
+  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    var childContext = context
+    childContext.focusTargets = []
+    childContext.focusLeafClaimed = true
+    BlockEngine.paintRegistered(into: &drawList, in: rect, context: childContext)
+  }
+}
+
+extension Interactive: LayoutPreparingBlock {
+  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    // Layout queries intentionally use the idle tree. The current-phase tree belongs
+    // to this operation and is shared by registration and painting, never a later event.
+    let idle = BlockEngine.resolve(content(.idle), context: context)
+    var childContext = context
+    childContext.focusTargets = []
+    childContext.focusLeafClaimed = true
+    var active: BlockEngine.Resolved?
+    var activePhase: InteractionPhase?
+    func current(_ phase: InteractionPhase) -> BlockEngine.Resolved {
+      if let active, activePhase == phase { return active }
+      let resolved = BlockEngine.resolve(content(phase), context: childContext)
+      active = resolved
+      activePhase = phase
+      return resolved
+    }
+    let id = id ?? context.widgetID
+    return BlockEngine.Resolved(
+      expandsHorizontally: { idle.expandsHorizontally },
+      expandsVertically: { idle.expandsVertically },
+      measure: idle.sizeThatFits,
+      register: { rect in
+        let state = context.buttonState(id: id, in: rect, action: action)
+        current(state.phase).register(in: rect)
+      },
+      paint: { list, rect in
+        // Canonical update has prepared this exact phase; direct standalone paint may
+        // prepare a fresh visual tree, but never installs its handlers or focus leaves.
+        let child = active ?? current(context.buttonVisualState(id: id).phase)
+        child.paint(into: &list, in: rect)
+      },
+      draw: { list, rect in
+        let state = context.buttonState(id: id, in: rect, action: action)
+        current(state.phase).draw(into: &list, in: rect)
+      })
   }
 }
