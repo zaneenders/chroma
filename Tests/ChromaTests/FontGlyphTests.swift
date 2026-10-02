@@ -184,6 +184,23 @@ struct FontGlyphTests {
     }
   }
 
+  @Test(arguments: [UInt32(0x2248), UInt32(0x1F44D), UInt32(0x2718)])
+  func reportedMissingGlyphsHaveDistinctInk(scalar: UInt32) throws {
+    let atlas = HighResolutionFontAtlas()
+    let character = Character(String(try #require(UnicodeScalar(scalar))))
+    let index = try #require(atlas.characterIndices[scalar])
+    #expect(atlas.glyphUV(character) != atlas.glyphUV("�"))
+    #expect(atlas.glyphUV(character) != atlas.glyphUV(" "))
+    let x = (index % HighResolutionFontAtlas.columns) * atlas.cellWidth + HighResolutionFontAtlas.padding
+    let y = (index / HighResolutionFontAtlas.columns) * atlas.cellHeight + HighResolutionFontAtlas.padding
+    let pixels = (0..<atlas.glyphHeight).flatMap { row in
+      Array(atlas.pixels[((y + row) * atlas.width + x)..<((y + row) * atlas.width + x + atlas.glyphWidth)])
+    }
+    #expect(pixels.contains(255))
+    #expect(pixels.contains { $0 > 0 && $0 < 255 })
+    #expect(atlas.glyphUV("≈") != atlas.glyphUV("👍"))
+  }
+
   @Test func coversPrintableASCII() {
     let atlas = HighResolutionFontAtlas()
     for codepoint in UInt32(0x20)...UInt32(0x7E) {
@@ -193,7 +210,7 @@ struct FontGlyphTests {
 
   @Test func bundledPixelsRemainUnchanged() {
     let atlas = HighResolutionFontAtlas()
-    #expect(atlas.characterIndices.count == 763)
+    #expect(atlas.characterIndices.count == 766)
     var hash: UInt64 = 14_695_981_039_346_656_037
     for scalar in atlas.characterIndices.sorted(by: { $0.value < $1.value }).map(\.key) {
       for shift in stride(from: 0, to: 32, by: 8) {
@@ -203,7 +220,7 @@ struct FontGlyphTests {
     for level in atlas.mipLevels() {
       for pixel in level.pixels { hash = (hash ^ UInt64(pixel)) &* 1_099_511_628_211 }
     }
-    #expect(hash == 10_942_404_915_680_660_513)
+    #expect(hash == 8_629_550_733_249_507_719)
     let uv = atlas.glyphUV(" ")
     let x = Int((uv.0 * Float(atlas.width)).rounded())
     let y = Int((uv.1 * Float(atlas.height)).rounded())

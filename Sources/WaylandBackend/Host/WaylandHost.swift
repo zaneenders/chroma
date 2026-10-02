@@ -213,7 +213,7 @@ public final class WaylandHost: Chroma.Host {
     guard running else { return }
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
     runtime.handleInput(input.frameInput())
-    runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
+    runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
 
   private func renderFrame(_ kind: FrameScheduler.FrameKind) {
@@ -677,7 +677,7 @@ public final class WaylandHost: Chroma.Host {
     if interaction.consumeRedrawRequest() { requestFrame() }
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
-    runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
+    runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
 
   private func updateFrameRate() {

@@ -133,6 +133,5 @@ struct TextInputPaintingTests {
       #expect(depth >= 0)
     }
     #expect(depth == 0)
-    context.interaction.caretClock.setActive(false)
   }
 }

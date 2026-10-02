@@ -6,7 +6,7 @@ import Testing
 struct FrameSchedulerTests {
   final class Clock { var now = 100.0 }
 
-  @Test func idleDoesNotProduceFramesAndAnimationsUseMinimumRate() throws {
+  @Test func idleDoesNotProduceFramesAndMomentumUsesMinimumRate() throws {
     let clock = Clock()
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.setRefreshRates(minimum: 30, maximum: 60)
@@ -15,26 +15,26 @@ struct FrameSchedulerTests {
     scheduler.requestContent()
     #expect(scheduler.takeFrame() == .content)
     #expect(scheduler.nextFrame == nil)
-    scheduler.animationsActive = true
+    scheduler.scrollMomentumActive = true
     let next = try #require(scheduler.nextFrame)
     #expect(next.deadline == 100 + 1.0 / 30)
-    #expect(next.kind == .animation)
+    #expect(next.kind == .content)
     #expect(next.priority == .utility)
     clock.now = 100 + 1.0 / 60
     #expect(scheduler.takeFrame() == nil)
     clock.now = next.deadline
-    #expect(scheduler.takeFrame() == .animation)
+    #expect(scheduler.takeFrame() == .content)
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 30)
-    scheduler.animationsActive = false
+    scheduler.scrollMomentumActive = false
     #expect(scheduler.nextFrame == nil)
   }
 
-  @Test func contentDemandCoalescesAndSupersedesAnimationWithinGlobalCap() throws {
+  @Test func contentDemandCoalescesAndSupersedesMomentumWithinGlobalCap() throws {
     let clock = Clock()
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.requestContent()
     #expect(scheduler.takeFrame() == .content)
-    scheduler.animationsActive = true
+    scheduler.scrollMomentumActive = true
     clock.now += 0.001
     for _ in 0..<100 { scheduler.requestContent() }
     let next = try #require(scheduler.nextFrame)
@@ -44,11 +44,11 @@ struct FrameSchedulerTests {
     #expect(scheduler.takeFrame() == nil)
     clock.now = next.deadline
     #expect(scheduler.takeFrame() == .content)
-    #expect(scheduler.nextFrame?.kind == .animation)
+    #expect(scheduler.nextFrame?.kind == .content)
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 30)
     #expect(scheduler.takeFrame() == nil)
     clock.now = try #require(scheduler.nextFrame).deadline
-    #expect(scheduler.takeFrame() == .animation)
+    #expect(scheduler.takeFrame() == .content)
     scheduler.requestContent()
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
     #expect(scheduler.takeFrame() == nil)
@@ -59,9 +59,9 @@ struct FrameSchedulerTests {
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.requestContent()
     #expect(scheduler.takeFrame() == .content)
-    scheduler.animationsActive = true
+    scheduler.scrollMomentumActive = true
     clock.now += 2
-    #expect(scheduler.takeFrame() == .animation)
+    #expect(scheduler.takeFrame() == .content)
     #expect(scheduler.takeFrame() == nil)
     clock.now += 0.1
     scheduler.recordProducedFrame()
@@ -72,12 +72,12 @@ struct FrameSchedulerTests {
     #expect(scheduler.lastFrameTime == nil)
   }
 
-  @Test func rateChangesAndContentAnimationsRemainCapped() throws {
+  @Test func rateChangesAndScrollMomentumRemainCapped() throws {
     let clock = Clock()
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.requestContent()
     #expect(scheduler.takeFrame() == .content)
-    scheduler.contentAnimationActive = true
+    scheduler.scrollMomentumActive = true
     scheduler.setRefreshRates(minimum: 20, maximum: 40)
     #expect(scheduler.nextFrame?.deadline == 100 + 1.0 / 20)
     #expect(scheduler.nextFrame?.kind == .content)
@@ -99,7 +99,7 @@ struct FrameSchedulerTests {
       scheduler.onFrame = { kind in
         frames.append((kind, Task.currentPriority, clock.now))
         switch frames.count {
-        case 1: scheduler.animationsActive = true
+        case 1: scheduler.scrollMomentumActive = true
         case 2: scheduler.requestContent()
         default:
           scheduler.isReady = false
@@ -109,7 +109,7 @@ struct FrameSchedulerTests {
       scheduler.isReady = true
       scheduler.requestContent()
     }
-    #expect(frames.map { $0.0 } == [.content, .animation, .content])
+    #expect(frames.map { $0.0 } == [.content, .content, .content])
     #expect(frames.map { $0.1 } == [.userInitiated, .utility, .userInitiated])
     #expect(frames[0].2.duration(to: frames[1].2) >= .seconds(1.0 / 30))
     #expect(frames[1].2.duration(to: frames[2].2) >= .seconds(1.0 / 60))

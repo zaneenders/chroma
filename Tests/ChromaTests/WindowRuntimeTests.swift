@@ -121,7 +121,7 @@ struct WindowRuntimeTests {
     #expect(runtime.interaction.caretOffset == 1)
   }
 
-  @Test func queuedInputSupersedesAnAlreadyRunnableAnimation() {
+  @Test func queuedInputIsFlushedBeforeRendering() {
     let runtime = WindowRuntime()
     let model = InputModel()
     let viewport = Size(width: 100, height: 100)
@@ -132,7 +132,7 @@ struct WindowRuntimeTests {
       runtime.scheduler.requestContent()
     }
     runtime.dispatchInput { model.text += "b" }
-    let list = runtime.renderScheduled(.animation, viewport: viewport, onChange: {})
+    let list = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     #expect(model.text == "ab")
     #expect(
       list.commands.contains {
@@ -143,22 +143,25 @@ struct WindowRuntimeTests {
     runtime.reset()
   }
 
-  @Test func backendReadinessNotificationsDoNotTurnAnimationIntoContent() {
-    let runtime = WindowRuntime()
-    let viewport = Size(width: 100, height: 100)
-    var builds = 0
-    var notifications = 0
-    runtime.content = DeferredBlock {
-      builds += 1
-      return ProgressIndicator()
+  @Test func staticIndicatorsDoNotScheduleIdleFrames() throws {
+    let clock = FrameSchedulerTests.Clock()
+    let runtime = WindowRuntime(clock: { clock.now })
+    let target = FocusTarget()
+    runtime.content = VStack {
+      ProgressIndicator()
+      MarqueeText("Overflowing text that stays still")
+      TextEditor(text: { "draft" }, onChange: { _ in }).focusTarget(target)
     }
-    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
-    runtime.scheduler.consumeContentRequest()
-    let initialBuilds = builds
-    runtime.dispatchInput(requestsFrame: false) { notifications += 1 }
-    _ = runtime.renderScheduled(.animation, viewport: viewport, onChange: {})
-    #expect(notifications == 1)
-    #expect(builds == initialBuilds)
+    let viewport = Size(width: 100, height: 100)
+    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    runtime.context.focus(try #require(target.boundID), editing: true)
+    let first = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    runtime.scheduler.recordProducedFrame()
+    #expect(runtime.scheduler.nextFrame == nil)
+    clock.now += 10
+    let second = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    #expect(first.commands == second.commands)
+    #expect(runtime.scheduler.nextFrame == nil)
     runtime.reset()
   }
 

@@ -8,11 +8,8 @@ public enum InteractionMode: Equatable, Sendable {
 @Observable
 @MainActor
 package final class Interaction {
-  let caretClock = CaretClock()
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
-  @ObservationIgnored var animationFrame = AnimationFrame(timestamp: 0)
-  @ObservationIgnored var animationPaints: [AnimationPaint] = []
 
   package let textSelection = TextSelectionManager()
 
@@ -291,7 +288,6 @@ package final class Interaction {
     textSelection.layoutRegistry.clear()
     pendingFocus = nil
     scrollStates = [:]
-    animationPaints = []
     tree = nil
     navigation = nil
     navigationPath = []
@@ -302,7 +298,6 @@ package final class Interaction {
     selectedLeafID = nil
     pressedLeaf = nil
 
-    caretClock.setActive(false)
   }
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
@@ -468,7 +463,6 @@ package final class Interaction {
 
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
-    caretClock.setActive(editingLeaf != nil && textSelectionRange == nil, timestamp: animationFrame.timestamp)
     registrations = building
     logicalSelections = buildingLogicalSelections
     builderRoot = nil

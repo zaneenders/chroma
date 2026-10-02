@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 package final class WindowRuntime {
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
-    producer = FrameProducer(clock: clock)
+    producer = FrameProducer()
     scheduler = FrameScheduler(clock: clock)
   }
 
@@ -17,18 +17,12 @@ package final class WindowRuntime {
   package var content: (any Block)? {
     didSet {
       producer.reset()
-      scheduler.animationsActive = false
-      scheduler.contentAnimationActive = false
+      scheduler.scrollMomentumActive = false
       scheduler.requestContent()
     }
   }
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
-  package var nextAnimationDeadline: Double? {
-    guard needsAnimationFrame, let lastFrameTime = scheduler.lastFrameTime else { return nil }
-    return lastFrameTime + 1 / scheduler.minimumRefreshRate
-  }
-  package var needsAnimationFrame: Bool { producer.needsAnimationFrame }
   package var context: BlockContext { BlockContext(interaction: interaction) }
 
   package func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
@@ -89,7 +83,6 @@ package final class WindowRuntime {
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     flushInput()
-    if kind == .animation && !scheduler.hasContentRequest { return renderAnimations() }
     _ = interaction.consumeRedrawRequest()
     if !pendingInputs.isEmpty {
       _ = render(viewport: viewport, input: InputState(), onChange: onChange)
@@ -115,12 +108,7 @@ package final class WindowRuntime {
     let list = producer.render(
       content: content, viewport: viewport, input: input, context: context,
       processingInput: processingInput, onChange: onChange)
-    scheduler.animationsActive = producer.needsAnimationFrame
     return list
-  }
-
-  package func renderAnimations() -> DrawList {
-    producer.renderAnimations()
   }
 
   package func observe(_ list: DrawList, viewport: Size, rasterScale: Point? = nil) {

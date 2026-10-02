@@ -74,18 +74,4 @@ struct FrameUpdateTests {
     renderer.close()
   }
 
-  @Test func caretClockUsesHostFrameTimeWithoutATask() {
-    let clock = CaretClock()
-    #expect(clock.isVisible(at: 100))
-    clock.setActive(true, timestamp: 100)
-    #expect(clock.isVisible(at: 100.7))
-    #expect(!clock.isVisible(at: 100.8))
-    #expect(clock.isVisible(at: 101.3))
-    clock.setActive(true, timestamp: 101.3)
-    #expect(!clock.isVisible(at: 102.0))
-    clock.setActive(false)
-    #expect(clock.isVisible(at: 102.0))
-    clock.setActive(true, timestamp: 102.0)
-    #expect(clock.isVisible(at: 102.1))
-  }
 }

@@ -110,9 +110,7 @@ public struct Text: PrimitiveBlock {
       } else if let caret {
         let point = layout.position(at: caret)
         let caretRect = Rect(x: point.x, y: point.y, width: 1, height: lineHeight)
-        context.animate(into: &drawList) { list, _ in
-          if context.caretVisible { list.fillRect(caretRect, color: context.theme.focus.ring) }
-        }
+        drawList.fillRect(caretRect, color: context.theme.focus.ring)
       }
       return
     }
