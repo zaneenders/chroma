@@ -1,5 +1,6 @@
 @MainActor
 public struct FixedHeightList: Block {
+  var index: @MainActor (StructuralKey) -> Int?
   let count: Int
   let rowHeight: Float
   let overscan: Int
@@ -21,6 +22,7 @@ public struct FixedHeightList: Block {
       count: snapshot.count, rowHeight: rowHeight, overscan: overscan,
       key: { StructuralKey(snapshot.ids[$0]) },
       row: { row(snapshot.ids[$0]) })
+    index = { key in (key.value as? ID).flatMap { snapshot.index(of: $0) } }
   }
 
   init(
@@ -30,6 +32,7 @@ public struct FixedHeightList: Block {
   ) {
     precondition(count >= 0 && rowHeight.isFinite && rowHeight > 0 && overscan >= 0)
     precondition((Float(count) * rowHeight).isFinite)
+    index = { key in (key.value as? Int).flatMap { (0..<count).contains($0) ? $0 : nil } }
     self.count = count
     self.rowHeight = rowHeight
     self.overscan = overscan

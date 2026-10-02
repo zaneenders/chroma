@@ -1,4 +1,4 @@
-db427c14f05378326ac25649f2902cc25da2b4e2
+8f0272b221bb2a20f33f54a99008b0da8c6bc5e3
 Swift version 6.4 (swift-6.4-RELEASE)
 Target: x86_64-unknown-linux-gnu
 Linux tower 7.2.3-arch1-3 #1 SMP PREEMPT_DYNAMIC Sun, 06 Sep 2026 13:01:04 +0000 x86_64 GNU/Linux
@@ -17,6 +17,6 @@ Core(s) per socket:                      10
 Socket(s):                               1
 Stepping:                                2
 Microcode version:                       0x3e
-CPU(s) scaling MHz:                      81%
+CPU(s) scaling MHz:                      68%
 CPU max MHz:                             4900.0000
 CPU min MHz:                             800.0000

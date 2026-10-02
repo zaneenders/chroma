@@ -62,6 +62,8 @@ final class NodeScene {
     var editorLayout: TextEditorLayout?
     var editorText = ""
     var editorDirty = true
+    var rowIndices: [Int] = []
+    var rowKeys: [StructuralKey] = []
     var visibleRange: Range<Int>?
     var anchorKey: StructuralKey?
     var anchorIndex: Int = 0
@@ -325,6 +327,8 @@ final class NodeScene {
     result.anchorKey = old.anchorKey
     result.anchorIndex = old.anchorIndex
     result.anchorOffset = old.anchorOffset
+    result.rowIndices = old.rowIndices
+    result.rowKeys = old.rowKeys
     result.visibleRange = old.visibleRange
     result.offset = old.offset
     if case .editor = old.content, case .editor = new.content { result.editorText = old.editorText }
@@ -534,15 +538,16 @@ final class NodeScene {
         controller: nil, sticksToBottom: false
       ).y
       let range = list.visibleRange(offset: offset, height: rect.size.height)
-      if range != node.visibleRange || node.rowsDirty {
+      let indices = retainedRows(id, visible: range, index: list.index)
+      if indices != node.rowIndices || node.rowsDirty {
         var tracked: [TrackedDescription] = []
         var committed = false
         defer { if !committed { for row in tracked { row.subscription.cancel() } } }
-        for index in range {
+        for index in indices {
           tracked.append(try track({ list.row(index) }, context: node.context.scoped([.key(list.key(index))])))
         }
         reconcile(tracked.map(\.description), of: id, updatingRows: true)
-        for ((index, child), row) in zip(zip(range, store.children(of: id)!), tracked) {
+        for ((index, child), row) in zip(zip(indices, store.children(of: id)!), tracked) {
           boundaries[BoundaryID(node: child, isPanel: false)]?.subscription.cancel()
           boundaries[BoundaryID(node: child, isPanel: false)] = Boundary(
             content: { list.row(index) }, context: node.context.scoped([.key(list.key(index))]),
@@ -552,9 +557,11 @@ final class NodeScene {
         committed = true
         node.rowsDirty = false
         node.visibleRange = range
+        node.rowIndices = indices
+        node.rowKeys = indices.map(list.key)
       }
       node.offset = offset
-      for (index, child) in zip(range, store.children(of: id)!) {
+      for (index, child) in zip(indices, store.children(of: id)!) {
         let rowRect = Rect(
           x: rect.minX, y: rect.minY + Float(index) * list.rowHeight - offset,
           width: rect.size.width, height: list.rowHeight)
@@ -597,18 +604,19 @@ final class NodeScene {
       let anchor = heights.row(at: offset)
       let anchorOffset = offset - heights.position(of: anchor)
       var range = heights.visibleRange(offset: offset, height: Double(rect.size.height), overscan: list.overscan)
-      var builtRange = node.visibleRange
+      var indices = retainedRows(id, visible: range, index: list.index)
+      var builtIndices = node.rowIndices
       var dirty = node.rowsDirty
       while true {
-        if range != builtRange || dirty {
+        if indices != builtIndices || dirty {
           var tracked: [TrackedDescription] = []
           var committed = false
           defer { if !committed { for row in tracked { row.subscription.cancel() } } }
-          for index in range {
+          for index in indices {
             tracked.append(try track({ list.row(index) }, context: node.context.scoped([.key(list.key(index))])))
           }
           reconcile(tracked.map(\.description), of: id, updatingRows: true)
-          for ((index, child), row) in zip(zip(range, store.children(of: id)!), tracked) {
+          for ((index, child), row) in zip(zip(indices, store.children(of: id)!), tracked) {
             let boundary = BoundaryID(node: child, isPanel: false)
             boundaries[boundary]?.subscription.cancel()
             boundaries[boundary] = Boundary(
@@ -617,10 +625,10 @@ final class NodeScene {
           }
           releaseRemovedBoundaries()
           committed = true
-          builtRange = range
+          builtIndices = indices
           dirty = false
         }
-        for (index, child) in zip(range, store.children(of: id)!) {
+        for (index, child) in zip(indices, store.children(of: id)!) {
           try installPanels(child)
           _ = refreshEditorText(child)
           let size = measure(child, proposal: Size(width: rect.size.width, height: .infinity))
@@ -636,6 +644,7 @@ final class NodeScene {
         let expanded = min(range.lowerBound, next.lowerBound)..<max(range.upperBound, next.upperBound)
         if expanded == range { break }
         range = expanded
+        indices = retainedRows(id, visible: range, index: list.index)
       }
       interaction.scrollStates[node.context.widgetID, default: Interaction.ScrollState()].offset.y = Float(offset)
       node.offset = interaction.resolveScroll(
@@ -653,8 +662,10 @@ final class NodeScene {
       node.measuredMetrics = node.context.fontMetrics
       node.measuredTextScale = node.context.textScale
       node.visibleRange = range
+      node.rowIndices = indices
+      node.rowKeys = indices.map(list.key)
       node.rowsDirty = false
-      for (index, child) in zip(range, store.children(of: id)!) {
+      for (index, child) in zip(indices, store.children(of: id)!) {
         try place(child, in: Rect(
           x: rect.minX, y: rect.minY + Float(heights.position(of: index)) - node.offset,
           width: rect.size.width, height: Float(heights.height(at: index))))
@@ -990,7 +1001,7 @@ final class NodeScene {
       }
       interaction.beginGroup(rect: node.rect, axis: .vertical, scrollID: context.widgetID, navigationID: context.widgetID)
       interaction.pushClip(node.rect)
-      for (index, child) in zip(node.visibleRange ?? 0..<0, store.children(of: id)!) {
+      for (index, child) in zip(node.rowIndices, store.children(of: id)!) {
         prepare(child)
         if case .variableList(let list) = node.content {
           recordRowLeaves(child, scrollID: context.widgetID, key: list.key(index))
@@ -1008,6 +1019,28 @@ final class NodeScene {
       for child in store.children(of: id)! { prepare(child) }
       interaction.endGroup()
     }
+  }
+
+  private func retainedRows(
+    _ id: NodeID, visible: Range<Int>, index: (StructuralKey) -> Int?
+  ) -> [Int] {
+    let node = store.value(for: id)!
+    let interaction = node.context.interaction
+    let active = [interaction.editingLeaf, interaction.pressedLeaf].compactMap { $0 }
+    guard !active.isEmpty else { return Array(visible) }
+    var indices = Set(visible)
+    for (key, child) in zip(node.rowKeys, store.children(of: id)!) {
+      guard containsLeaf(child, ids: active) else { continue }
+      if let retained = index(key) { indices.insert(retained) }
+    }
+    return indices.sorted()
+  }
+
+  private func containsLeaf(_ id: NodeID, ids: [WidgetID]) -> Bool {
+    let node = store.value(for: id)!
+    if ids.contains(node.context.widgetID) { return true }
+    if case .button(let button) = node.content, let id = button.id, ids.contains(id) { return true }
+    return store.children(of: id)!.contains { containsLeaf($0, ids: ids) }
   }
 
   private func recordRowLeaves(_ id: NodeID, scrollID: WidgetID, key: StructuralKey) {
