@@ -31,6 +31,24 @@ public struct VariableHeightList: Block {
     self.row = { row(snapshot.ids[$0]) }
   }
 
+  init(
+    identity: ObjectIdentifier, count: Int, estimatedHeight: Float,
+    controller: ScrollViewController, sticksToBottom: Bool,
+    selection: VirtualListSelection?, key: @escaping @MainActor (Int) -> StructuralKey,
+    index: @escaping @MainActor (StructuralKey) -> Int?, row: @escaping @MainActor (Int) -> any Block
+  ) {
+    snapshotIdentity = identity
+    self.count = count
+    self.estimatedHeight = estimatedHeight
+    overscan = 1
+    self.controller = controller
+    self.sticksToBottom = sticksToBottom
+    self.selection = selection
+    self.key = key
+    self.index = index
+    self.row = row
+  }
+
   public var body: Never { fatalError("VariableHeightList is lowered by NodeScene") }
 }
 
@@ -39,6 +57,16 @@ struct VirtualListSelection {
   let selectedKey: @MainActor () -> StructuralKey?
   let select: @MainActor (StructuralKey) -> Void
   let move: @MainActor (Int) -> StructuralKey?
+
+  init(
+    selectedKey: @escaping @MainActor () -> StructuralKey?,
+    select: @escaping @MainActor (StructuralKey) -> Void,
+    move: @escaping @MainActor (Int) -> StructuralKey?
+  ) {
+    self.selectedKey = selectedKey
+    self.select = select
+    self.move = move
+  }
 
   init<ID: Hashable & Sendable>(snapshot: VirtualListSnapshot<ID>, selection: ScrollSelection<ID>) {
     selectedKey = {

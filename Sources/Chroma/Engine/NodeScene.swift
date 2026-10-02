@@ -309,6 +309,9 @@ final class NodeScene {
     if let interactive = block as? any NodeInteractive {
       return Description(node: Node(content: .interactive(interactive), context: context))
     }
+    if let scroll = block as? ScrollView, let rows = scroll.nodeRows {
+      return Description(node: Node(content: .variableList(rows), context: context))
+    }
     if let scroll = block as? ScrollView, let content = scroll.nodeContent {
       return Description(node: Node(content: .scroll(scroll), context: context), children: [try lower(content, context: context)])
     }
@@ -379,6 +382,7 @@ final class NodeScene {
     if case .variableList(let previous) = old.content,
       case .variableList(let current) = new.content,
       previous.snapshotIdentity == current.snapshotIdentity,
+      previous.count == current.count,
       previous.estimatedHeight == current.estimatedHeight
     {
       result.heightIndex = old.heightIndex
@@ -1260,9 +1264,24 @@ final class NodeScene {
   }
 
   func refreshScroll() throws {
-    guard let root, scrollChanged(root) else { return }
+    guard let root, scrollChanged(root) || hasPendingScrollRequest else { return }
     prepared = false
     try place(root, in: layoutRect!)
+  }
+
+  var hasPendingScrollRequest: Bool {
+    guard let root else { return false }
+    return hasPendingScrollRequest(root)
+  }
+
+  private func hasPendingScrollRequest(_ id: NodeID) -> Bool {
+    let node = store.value(for: id)!
+    switch node.content {
+    case .scroll(let scroll): if scroll.controller?.request != nil { return true }
+    case .variableList(let list): if list.controller?.request != nil { return true }
+    default: break
+    }
+    return store.children(of: id)!.contains { hasPendingScrollRequest($0) }
   }
 
   var hasPendingFocus: Bool {

@@ -12,6 +12,7 @@ final class NodeFrameProducer {
   private var cachedCommands: [DrawCommand] = []
   private var animationPaints: [AnimationPaint] = []
   private var scene = NodeScene()
+  private var generation: UInt64 = 0
   private var subscription: FrameTrackingSubscription?
   private var viewport: Size?
   private var metrics: FontMetrics?
@@ -31,6 +32,7 @@ final class NodeFrameProducer {
   var preparations: Int { scene.preparations }
 
   func reset() {
+    generation &+= 1
     cachedCommands = []
     animationPaints = []
     interaction?.animationPaints = []
@@ -61,21 +63,27 @@ final class NodeFrameProducer {
     let needsBuild = subscription?.isActive != true
     let textChanged = !needsBuild && scene.refreshEditorText(force: forceEditorText)
     guard
-      needsBuild || textChanged || scene.hasPendingFocus || !scene.editorTextIsValid || !scene.boundariesAreValid
+      needsBuild || textChanged || scene.hasPendingScrollRequest || scene.hasPendingFocus || !scene.editorTextIsValid || !scene.boundariesAreValid
         || self.viewport != viewport || metrics != context.fontMetrics
     else {
       return
     }
     if needsBuild {
       reset()
+      let generation = generation
       let subscription = FrameTrackingSubscription(onChange)
       self.subscription = subscription
       try withObservationTracking(options: .didSet) {
         subscription.trackCancellation()
         try scene.update(content, context: context)
-      } onChange: { [weak subscription] event in
+      } onChange: { [weak self, weak subscription] event in
         event.cancel()
-        if let callback = subscription?.takeCallback() { ObservationDelivery.enqueue(callback) }
+        if let callback = subscription?.takeCallback() {
+          ObservationDelivery.enqueue { [weak self] in
+            guard self?.generation == generation else { return }
+            callback()
+          }
+        }
       }
       builds += 1
     }
@@ -83,6 +91,7 @@ final class NodeFrameProducer {
     scene.onChange = onChange
     try scene.refreshBoundaries()
     try scene.layout(in: Rect(origin: .zero, size: viewport))
+    try scene.refreshScroll()
     scene.prepareIfNeeded(viewport: viewport)
     try scene.refreshInteractiveContent()
     self.viewport = viewport

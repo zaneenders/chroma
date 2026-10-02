@@ -406,4 +406,32 @@ extension ScrollView {
   var nodeContent: (any Block)? {
     if case .block(let block, _) = content { block } else { nil }
   }
+  @MainActor var nodeRows: VariableHeightList? {
+    switch content {
+    case .block: return nil
+    case .rows(let rows, let controller):
+      let keys = rows.map(\.key)
+      let snapshot = VirtualListSnapshot(ids: keys)
+      return VariableHeightList(
+        identity: ObjectIdentifier(snapshot), count: rows.count, estimatedHeight: 20,
+        controller: controller, sticksToBottom: sticksToBottom, selection: nil,
+        key: { keys[$0] }, index: { snapshot.index(of: $0) },
+        row: { index in
+          rows[index].content.padding(EdgeInsets(bottom: index + 1 < rows.count ? spacing : 0))
+        })
+    case .uniform(let rows, let controller):
+      let snapshot = VirtualListSnapshot(ids: rows.keys ?? (0..<rows.count).map(StructuralKey.init))
+      return VariableHeightList(
+        identity: ObjectIdentifier(snapshot), count: rows.count, estimatedHeight: max(1, rows.height + spacing),
+        controller: controller, sticksToBottom: sticksToBottom,
+        selection: rows.selection.map {
+          VirtualListSelection(selectedKey: $0.selectedKey, select: $0.select, move: $0.move)
+        },
+        key: { snapshot.ids[$0] }, index: { snapshot.index(of: $0) },
+        row: { index in
+          rows.content(index).sizing(y: .fixed(rows.height)).padding(EdgeInsets(bottom: index + 1 < rows.count ? spacing : 0))
+        })
+    }
+  }
+
 }
