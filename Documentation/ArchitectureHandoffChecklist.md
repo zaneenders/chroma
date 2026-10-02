@@ -8,7 +8,7 @@ This checklist maps the complete [handoff](https://github.com/zaneenders/chroma/
 - [x] Preserve subsequent upstream application work. Companion integration follows ShapeTree `4e5432d99687af4714169ee419d344d680d61fc0`, including its Scribe `589b312a952db70b0a06a303bbf035f7e9a86501` dependency and NativeApp entry points.
 - [x] Read repository constraints; introduce no `@unchecked`. Native dependencies remain outside core profiling code.
 - [x] Restore all five verified latest-baseline manifest/entrypoint blobs; Scribe checkout remains clean at its exact pin. The 16-file companion migration patch forward-applies to that baseline.
-- [ ] Publish/fetch the simplified Chroma revision and update companion pin instructions. ShapeTree publication remains separate.
+- [x] Simplified Chroma implementation published and fetched back with an exact tree match; companion instructions use the final published hash. ShapeTree publication remains separate.
 
 ## Pipeline responsibilities and preserved behavior
 
@@ -74,7 +74,7 @@ The companion patch contains the application audit, tests and exact dependency i
 - [x] Fresh original/a3ca/simplified core release comparison and preserved-a3ca/revised application comparison use matching fixtures, disabled timing instrumentation and separately captured counters; first-frame, active input/presentation and idle remain distinct.
 - [x] Actual application-graph measurements use verified old/new symbol-bearing runners with linkage receipts. The combined app revision improves this workload; no core-only, GUI or mixed-interaction CPU ratio is claimed.
 - [x] Independent core/application contract review and changed-file strict formatting completed. Direct combined-draw legacy adaptation is fixed with valid-frame before/after evidence; prepared focus responsibility is explicit and tested.
-- [ ] Updated remote tree and exact-commit CI/status receipt verified.
+- [x] Updated remote tree and exact-commit CI/status lookup verified. No commit statuses or pull-request workflow runs are reported, so no CI pass is claimed; final receipt accompanies delivery.
 
 See [results](RegistrationResults.md) and the supplied publication/dependency receipts for final evidence. Strict formatting passes changed Swift files; seven unchanged whole-tree lint warnings remain in baseline Metal data fields and UniformRowIdentityTests.
 
