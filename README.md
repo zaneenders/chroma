@@ -13,10 +13,6 @@ UI Library in swift
 
 The runnable demos and their tests live in the sibling [chroma-examples](../chroma-examples) repository.
 
-```sh
-swift run --package-path ../chroma-examples ChessDemo
-```
-
 ## Inspired by
 
 - Immediate mode UI
