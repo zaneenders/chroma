@@ -443,7 +443,11 @@ Validation: 479 core tests, 14 Wayland input tests, 54 Examples tests, and 1 ben
 
 **Gate:** viewport work remains bounded for unchanged collections, and scrolling/navigation remain stable as rows appear, disappear, or change height.
 
-#### Phase 5 — Migrate real consumers and retire the old path
+#### Phase 5 — Complete the new engine and retire the old path
+
+Scope update: prioritize Chroma's retained engine, bounded work, and correctness. Shape Tree and other consumer migrations are deferred and are no longer completion gates for engine work. Do not retain a hot-path compatibility implementation merely for external consumers; remove the legacy path after Chroma's built-ins and explicit custom-element lifecycle hooks are covered.
+
+Selectable `Text` now uses retained Unicode/wrapped line layout for interaction preparation and paint. Pointer hit testing, keyboard selection, copy, and read-only caret replay share that layout; paint does not register interaction or build text layout. Tests cover legacy command equivalence, eight ordered selection events before paint with zero layout builds, Unicode drag/copy, read-only mutation rejection, caret demand, and unmount cleanup. Core validation: 488 tests plus 14 Wayland input tests passed on Linux. These are correctness/work-count results, not latency claims.
 
 - [ ] Move remaining built-in primitives and custom-element hooks to the new lifecycle, preserving backend-neutral measurement, interaction preparation, and painting.
 - [ ] Point Scribe's desktop package at the candidate Chroma checkout; migrate the transcript, Markdown/text selection, composer, and reveal behavior.
@@ -459,7 +463,7 @@ Validation: Linux release build, 483 core tests, 14 Wayland input tests, 54 Exam
 
 Shape Tree Desktop was subsequently found at `/home/zane/Projects/shape-tree/apps/shape-tree-desktop`. Testing against the candidate was blocked at package validation: its manifest requires `HeadlessBackend`, which this checkout does not expose. The temporary edit and generated lockfile changes were removed. Both consumers also contain custom primitives that measure and register interaction through `BlockEngine.draw`; these must migrate before traversal removal. No configured display session is available for live Wayland/OpenGL validation, and macOS/Metal validation is unavailable on this Linux host. Follow-up: migrate Shape Tree's headless dependency/API and both consumers' custom primitives, then run their node-engine interaction tests and platform presentation checks. Selectable text, scrolling/composition primitives, custom-element hooks, consumer migration, and legacy-path removal remain open. **Phase 5 is in progress, not complete.**
 
-**Gate:** both consumers use the new engine, both backends are validated, and the old execution path is removed.
+**Revised gate:** Chroma's built-ins and custom-element hooks use explicit retained layout/interaction/paint; tests demonstrate bounded work and correct ordered input; the old execution path is removed. Backend presentation gaps are recorded separately. Consumer migrations above are deferred, not engine gates.
 
 #### Phase 6 — Optimize only measured remaining costs
 

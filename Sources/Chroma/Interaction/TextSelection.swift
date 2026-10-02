@@ -8,7 +8,8 @@ struct PlainTextLayout: Equatable {
   var scale: Float
 
   var columns: Int? = nil
-  var layout: TextLayout { TextLayout(text, columns: columns) }
+  var retainedLayout: TextLayout?
+  var layout: TextLayout { retainedLayout ?? TextLayout(text, columns: columns) }
 
   func hitTest(point: Point) -> Int? {
     guard rect.contains(point), cellWidth > 0, cellWidth.isFinite else { return nil }

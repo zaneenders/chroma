@@ -65,6 +65,7 @@ final class NodeScene {
     var lineMetrics: FontMetrics?
     var measurements: [Measurement] = []
     var textLayouts: [(columns: Int?, layout: TextLayout)] = []
+    var selectionLayout: PlainTextLayout?
     var editorLayout: TextEditorLayout?
     var editorText = ""
     var editorDirty = true
@@ -248,7 +249,6 @@ final class NodeScene {
       return Description(node: Node(content: .list(list), context: context))
     }
     if let text = block as? Text {
-      guard !text.isSelectable else { throw BuildError.unsupportedBlock }
       return Description(node: Node(content: .text(text), context: context))
     }
     if let image = block as? Image { return Description(node: Node(content: .image(image), context: context)) }
@@ -305,6 +305,9 @@ final class NodeScene {
   }
 
   private static func sameInteraction(_ old: Node, _ new: Node) -> Bool {
+    if case .text(let previous) = old.content, case .text(let current) = new.content,
+      previous.isSelectable != current.isSelectable || previous.selectionID != current.selectionID
+    { return false }
     switch (old.content, new.content) {
     case (.text, .text), (.image, .image), (.progress, .progress), (.marquee, .marquee), (.color, .color),
       (.empty, .empty), (.spacer, .spacer), (.stack, .stack), (.overlay, .overlay),
@@ -329,6 +332,7 @@ final class NodeScene {
       result.lineMetrics = old.lineMetrics
       result.measurements = old.measurements
       result.textLayouts = old.textLayouts
+      result.selectionLayout = old.selectionLayout
       result.editorLayout = old.editorLayout
     }
     if case .variableList(let previous) = old.content,
@@ -542,9 +546,16 @@ final class NodeScene {
         let columns =
           text.wraps && rect.size.width.isFinite && cell.isFinite && cell > 0
           ? Int(min(Float(Int32.max), max(1, rect.size.width / cell))) : nil
-        node.lines = TextLayout(text.content, columns: columns).lines.map(\.text)
+        let layout = TextLayout(text.content, columns: columns)
+        textLayoutBuilds += 1
+        node.lines = layout.lines.map(\.text)
+        node.selectionLayout = PlainTextLayout(
+          text: text.content, rect: rect, cellWidth: cell,
+          lineHeight: node.context.fontMetrics.lineAdvance * text.scale * node.context.textScale,
+          scale: text.scale * node.context.textScale, columns: columns, retainedLayout: layout)
         node.lineMetrics = node.context.fontMetrics
       }
+      node.selectionLayout?.rect = rect
     case .editor(let editor):
       let layout = editorTextLayout(
         id, editor: editor, text: node.editorText, width: rect.size.width, context: node.context)
@@ -1001,6 +1012,8 @@ final class NodeScene {
     }
     defer { for _ in 0..<clipCount { interaction.popClip() } }
     switch node.content {
+    case .text(let text) where text.isSelectable:
+      if let layout = node.selectionLayout { layout.prepare(text: text, context: context) }
     case .text, .image, .marquee, .color:
       if !context.focusLeafClaimed && !context.navigationIgnored {
         _ = context.buttonState(id: context.widgetID, in: node.rect)
@@ -1065,6 +1078,7 @@ final class NodeScene {
   private func containsLeaf(_ id: NodeID, ids: [WidgetID]) -> Bool {
     let node = store.value(for: id)!
     if ids.contains(node.context.widgetID) { return true }
+    if case .text(let text) = node.content, let id = text.selectionID, ids.contains(id) { return true }
     if case .button(let button) = node.content, let id = button.id, ids.contains(id) { return true }
     return store.children(of: id)!.contains { containsLeaf($0, ids: ids) }
   }
@@ -1073,6 +1087,9 @@ final class NodeScene {
     let node = store.value(for: id)!
     let interaction = node.context.interaction
     interaction.recordScrollRow(id: scrollID, leafID: node.context.widgetID, rowKey: key, rect: node.rect)
+    if case .text(let text) = node.content, let id = text.selectionID {
+      interaction.recordScrollRow(id: scrollID, leafID: id, rowKey: key, rect: node.rect)
+    }
     if case .button(let button) = node.content, let id = button.id {
       interaction.recordScrollRow(id: scrollID, leafID: id, rowKey: key, rect: node.rect)
     }
@@ -1094,7 +1111,7 @@ final class NodeScene {
     node.context.interaction.processInput(input)
     node.context.interaction.finishInput()
     node.context.interaction.caretClock.setActive(
-      node.context.interaction.isTextEditing && node.context.interaction.textSelectionRange == nil,
+      node.context.interaction.editingLeaf != nil && node.context.interaction.textSelectionRange == nil,
       timestamp: node.context.interaction.animationFrame.timestamp)
   }
 
@@ -1186,6 +1203,8 @@ final class NodeScene {
   ) {
     let context = node.context
     switch node.content {
+    case .text(let text) where text.isSelectable:
+      node.selectionLayout?.paint(text: text, context: context, into: &list)
     case .text(let text):
       let scale = text.scale * context.textScale
       for (row, line) in node.lines.enumerated() {

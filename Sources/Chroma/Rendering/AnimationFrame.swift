@@ -9,6 +9,7 @@ public struct AnimationFrame: Equatable, Sendable {
 @MainActor
 struct AnimationPaint {
   var requiresEditing = false
+  var allowsReadOnly = false
   let range: Range<Int>
   let paint: @MainActor (inout DrawList, AnimationFrame) -> Void
 }
@@ -17,13 +18,14 @@ extension BlockContext {
   public var animationTimestamp: Double { interaction.animationFrame.timestamp }
 
   func animateCaret(
-    into drawList: inout DrawList,
+    into drawList: inout DrawList, readOnly: Bool = false,
     _ paint: @escaping @MainActor (inout DrawList, AnimationFrame) -> Void
   ) {
     let count = interaction.animationPaints.count
-    animate(into: &drawList, isActive: interaction.isTextEditing, paint)
+    animate(into: &drawList, isActive: interaction.isTextEditing || (readOnly && interaction.editingLeaf != nil), paint)
     if interaction.animationPaints.count > count {
       interaction.animationPaints[count].requiresEditing = true
+      interaction.animationPaints[count].allowsReadOnly = readOnly
     }
   }
 

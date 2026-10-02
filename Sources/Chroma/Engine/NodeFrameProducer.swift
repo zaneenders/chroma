@@ -20,7 +20,9 @@ final class NodeFrameProducer {
   var textLayoutBuilds: Int { scene.textLayoutBuilds }
   var needsAnimationFrame: Bool {
     animationPaints.contains {
-      !$0.requiresEditing || (interaction?.isTextEditing == true && interaction?.textSelectionRange == nil)
+      !$0.requiresEditing
+        || (interaction?.editingLeaf != nil && (interaction?.isTextEditing == true || $0.allowsReadOnly)
+          && interaction?.textSelectionRange == nil)
     }
   }
   var boundaryBuilds: Int { scene.boundaryBuilds }
