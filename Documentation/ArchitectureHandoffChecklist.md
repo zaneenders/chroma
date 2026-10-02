@@ -8,7 +8,7 @@ This checklist maps the complete [handoff](https://github.com/zaneenders/chroma/
 - [x] Preserve subsequent upstream application work. Companion integration follows ShapeTree `4e5432d99687af4714169ee419d344d680d61fc0`, including its Scribe `589b312a952db70b0a06a303bbf035f7e9a86501` dependency and NativeApp entry points.
 - [x] Read repository constraints; introduce no `@unchecked`. Native dependencies remain outside core profiling code.
 - [x] Final dependency/source receipt and restored production manifests verified against all five imported upstream Git blobs; exact Scribe checkout is clean. Evidence accompanies the companion patch.
-- [ ] Publish and verify final Chroma hash, then put that exact hash in companion pin instructions. ShapeTree publication remains a separate user decision.
+- [x] Chroma implementation published and fetched back with an exact tree match. Companion pin instructions identify the final published Chroma revision; ShapeTree publication remains a separate user decision.
 
 ## Pipeline responsibilities and preserved behavior
 
@@ -69,9 +69,9 @@ The companion patch contains the application audit, tests and exact dependency i
 - [x] Final comparable release tables include first-frame, active input/presentation, explicit invalidation and idle; timings run without instrumentation or competing builds, counters captured separately.
 - [x] Final actual headless application graph workload uses newly built, hash-verified binaries with preserved debug sections; no historical mixed-interaction CPU ratio is claimed.
 - [x] Independent final source review and changed-file strict formatting completed; prior correctness findings fixed and all existing assertions preserved.
-- [ ] Remote-tree verification and exact-commit CI/status receipt accompany publication.
+- [x] Remote-tree verification and exact-commit CI/status lookup completed. No commit statuses or pull-request workflow runs were reported; this is not a CI pass. The final receipt accompanies publication.
 
-Pending evidence boxes are completed only when their final artifacts exist; see [results](RegistrationResults.md). Strict formatting passes changed Swift files; seven unchanged whole-tree lint warnings remain in baseline Metal data fields and UniformRowIdentityTests.
+See [results](RegistrationResults.md) and the supplied publication/dependency receipts for final evidence. Strict formatting passes changed Swift files; seven unchanged whole-tree lint warnings remain in baseline Metal data fields and UniformRowIdentityTests.
 
 ## Explicitly unverified external criteria
 
