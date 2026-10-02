@@ -19,7 +19,9 @@ final class NodeFrameProducer {
   private(set) var paints = 0
   var textLayoutBuilds: Int { scene.textLayoutBuilds }
   var needsAnimationFrame: Bool {
-    !animationPaints.isEmpty && interaction?.isTextEditing == true && interaction?.textSelectionRange == nil
+    animationPaints.contains {
+      !$0.requiresEditing || (interaction?.isTextEditing == true && interaction?.textSelectionRange == nil)
+    }
   }
   var boundaryBuilds: Int { scene.boundaryBuilds }
   var measurements: Int { scene.measurements }

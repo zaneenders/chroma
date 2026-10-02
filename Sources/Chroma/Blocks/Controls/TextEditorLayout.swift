@@ -107,7 +107,7 @@ struct TextEditorLayout {
       let caretRect = Rect(
         x: inner.minX + horizontalOffset(caret) + Float(caret - layout.lines[row].range.lowerBound) * cellWidth,
         y: inner.minY + Float(row - first) * lineHeight, width: max(1, scale), height: lineHeight)
-      context.animate(into: &list, isActive: interaction.isTextEditing) { list, _ in
+      context.animateCaret(into: &list) { list, _ in
         if !interaction.isTextEditing || context.caretVisible { list.fillRect(caretRect, color: style.caret) }
       }
     }

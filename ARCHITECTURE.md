@@ -453,6 +453,12 @@ Validation: 479 core tests, 14 Wayland input tests, 54 Examples tests, and 1 ben
 - [ ] Validate Metal on macOS and OpenGL/Wayland on Linux, including ordered input and resource lifetime. Record any unavailable platform validation as a blocker.
 - [ ] Delete obsolete `Resolved` traversal and registration-through-draw once all callers are migrated; avoid leaving compatibility code on the hot path.
 
+First increment: `Image`, `ProgressIndicator`, and `MarqueeText` now lower into retained nodes with separate measurement, interaction preparation, and paint. Image pixel replacements reuse layout while submitted commands retain their original resources. Progress and marquee animations replay command segments without rebuilding or laying out; caret-only demand remains conditional on editing and selection. Regression tests compare legacy output, retained resource ownership, animation replay, and inactive animation demand.
+
+Validation: Linux release build, 483 core tests, 14 Wayland input tests, 54 Examples tests, and 1 benchmark test passed. These are headless checks, not live OpenGL/GPU validation. Scribe's 56 `ScribeBlocksTests` passed against this candidate using `swift package edit chroma --path /home/zane/Developer/chroma`; this validates compatibility through the existing execution path, not consumer migration to nodes. The temporary edit was removed and its existing `Package.resolved` changes preserved.
+
+Shape Tree Desktop was subsequently found at `/home/zane/Projects/shape-tree/apps/shape-tree-desktop`. Testing against the candidate was blocked at package validation: its manifest requires `HeadlessBackend`, which this checkout does not expose. The temporary edit and generated lockfile changes were removed. Both consumers also contain custom primitives that measure and register interaction through `BlockEngine.draw`; these must migrate before traversal removal. No configured display session is available for live Wayland/OpenGL validation, and macOS/Metal validation is unavailable on this Linux host. Follow-up: migrate Shape Tree's headless dependency/API and both consumers' custom primitives, then run their node-engine interaction tests and platform presentation checks. Selectable text, scrolling/composition primitives, custom-element hooks, consumer migration, and legacy-path removal remain open. **Phase 5 is in progress, not complete.**
+
 **Gate:** both consumers use the new engine, both backends are validated, and the old execution path is removed.
 
 #### Phase 6 — Optimize only measured remaining costs

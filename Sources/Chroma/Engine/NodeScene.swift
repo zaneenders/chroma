@@ -10,6 +10,9 @@ final class NodeScene {
     case text(Text)
     case button(Button)
     case editor(TextEditor)
+    case image(Image)
+    case progress(ProgressIndicator)
+    case marquee(MarqueeText)
     case color(Color)
     case spacer
     case stack(axis: StackLayout.Axis, spacing: Float, reversed: Bool, bottomAligned: Bool)
@@ -34,6 +37,9 @@ final class NodeScene {
     case text(String, Float, Bool)
     case button(String, Float, EdgeInsets)
     case editor(Float, ClosedRange<Int>, Bool, Float)
+    case image(Size)
+    case progress(Float)
+    case marquee(String, Float)
     case stack(StackLayout.Axis, Float, Bool, Bool)
     case overlay, tuple, scope, boundary, empty, color, spacer
     case list(Int, Float, Int)
@@ -81,6 +87,9 @@ final class NodeScene {
       case .text(let text): .text(text.content, text.scale, text.wraps)
       case .button(let button): .button(button.label, button.fontScale, button.padding)
       case .editor(let editor): .editor(editor.fontScale, editor.lineLimits, editor.singleLine, editor.padding)
+      case .image(let image): .image(image.resource.size)
+      case .progress(let progress): .progress(progress.diameter)
+      case .marquee(let marquee): .marquee(marquee.text, marquee.fontScale)
       case .stack(let axis, let spacing, let reversed, let bottom): .stack(axis, spacing, reversed, bottom)
       case .overlay: .overlay
       case .tuple: .tuple
@@ -242,6 +251,13 @@ final class NodeScene {
       guard !text.isSelectable else { throw BuildError.unsupportedBlock }
       return Description(node: Node(content: .text(text), context: context))
     }
+    if let image = block as? Image { return Description(node: Node(content: .image(image), context: context)) }
+    if let progress = block as? ProgressIndicator {
+      return Description(node: Node(content: .progress(progress), context: context))
+    }
+    if let marquee = block as? MarqueeText {
+      return Description(node: Node(content: .marquee(marquee), context: context))
+    }
     if let editor = block as? TextEditor {
       return Description(node: Node(content: .editor(editor), context: context))
     }
@@ -290,7 +306,8 @@ final class NodeScene {
 
   private static func sameInteraction(_ old: Node, _ new: Node) -> Bool {
     switch (old.content, new.content) {
-    case (.text, .text), (.color, .color), (.empty, .empty), (.spacer, .spacer), (.stack, .stack), (.overlay, .overlay),
+    case (.text, .text), (.image, .image), (.progress, .progress), (.marquee, .marquee), (.color, .color),
+      (.empty, .empty), (.spacer, .spacer), (.stack, .stack), (.overlay, .overlay),
       (.tuple, .tuple):
       return old.context.widgetID == new.context.widgetID
         && old.context.navigationIgnored == new.context.navigationIgnored
@@ -419,6 +436,9 @@ final class NodeScene {
       return measureDecorations(node, id: id, index: index + 1, proposal: proposal)
     }
     switch node.content {
+    case .image(let image): return image.sizeThatFits(proposal, context: node.context)
+    case .progress(let progress): return progress.sizeThatFits(proposal, context: node.context)
+    case .marquee(let marquee): return marquee.sizeThatFits(proposal, context: node.context)
     case .text(let text): return text.sizeThatFits(proposal, context: node.context)
     case .button(let button): return button.sizeThatFits(proposal, context: node.context)
     case .editor(let editor):
@@ -472,7 +492,7 @@ final class NodeScene {
     }
     switch node.content {
     case .color, .spacer, .list, .variableList: return true
-    case .editor: return axis == .horizontal
+    case .editor, .marquee: return axis == .horizontal
     case .stack, .overlay, .tuple: return store.children(of: id)!.contains { expands($0, axis: axis) }
     case .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
     default: return false
@@ -676,7 +696,7 @@ final class NodeScene {
       for child in store.children(of: id)! {
         try place(child, in: Rect(origin: rect.origin, size: measure(child, proposal: rect.size)))
       }
-    case .button, .color, .spacer, .empty: break
+    case .button, .image, .progress, .marquee, .color, .spacer, .empty: break
     case .stack(let axis, let spacing, let reversed, let bottomAligned):
       let sizes = stackSizes(id, axis: axis, spacing: spacing, proposal: rect.size)
       var cursor = axis == .horizontal ? rect.minX : rect.minY
@@ -924,6 +944,12 @@ final class NodeScene {
     case .editor(let editor):
       bounds = expanded(node.rect, by: max(2, (editor.style ?? node.context.theme.textEditor).borderWidth))
       if let layout = node.editorLayout { bounds = union(bounds, expanded(layout.inner, by: 0)) }
+    case .image, .marquee: bounds = expanded(node.rect, by: 2)
+    case .progress(let progress):
+      bounds = expanded(
+        Rect(
+          x: node.rect.minX, y: node.rect.minY + (node.rect.size.height - progress.diameter) / 2,
+          width: progress.diameter, height: progress.diameter), by: 0)
     case .color: bounds = expanded(node.rect, by: 2)
     case .empty, .spacer: break
     case .list, .variableList, .stack, .overlay, .tuple, .scope, .boundary:
@@ -975,7 +1001,7 @@ final class NodeScene {
     }
     defer { for _ in 0..<clipCount { interaction.popClip() } }
     switch node.content {
-    case .text, .color:
+    case .text, .image, .marquee, .color:
       if !context.focusLeafClaimed && !context.navigationIgnored {
         _ = context.buttonState(id: context.widgetID, in: node.rect)
       }
@@ -1009,7 +1035,7 @@ final class NodeScene {
       }
       interaction.popClip()
       interaction.endGroup()
-    case .empty, .spacer: break
+    case .empty, .spacer, .progress: break
     case .stack(let axis, _, _, _):
       interaction.beginGroup(rect: node.rect, axis: axis == .horizontal ? .horizontal : .vertical)
       for child in store.children(of: id)! { prepare(child) }
@@ -1170,6 +1196,14 @@ final class NodeScene {
             y: node.rect.minY + Float(row) * context.fontMetrics.lineAdvance * scale), color: text.color,
           scale: scale)
       }
+      paintHighlight(node, into: &list)
+    case .image(let image):
+      image.draw(into: &list, in: node.rect, context: context)
+      paintHighlight(node, into: &list)
+    case .progress(let progress):
+      progress.draw(into: &list, in: node.rect, context: context)
+    case .marquee(let marquee):
+      marquee.draw(into: &list, in: node.rect, context: context)
       paintHighlight(node, into: &list)
     case .color(let color):
       list.fillRect(node.rect, color: color)

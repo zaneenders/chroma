@@ -8,12 +8,24 @@ public struct AnimationFrame: Equatable, Sendable {
 
 @MainActor
 struct AnimationPaint {
+  var requiresEditing = false
   let range: Range<Int>
   let paint: @MainActor (inout DrawList, AnimationFrame) -> Void
 }
 
 extension BlockContext {
   public var animationTimestamp: Double { interaction.animationFrame.timestamp }
+
+  func animateCaret(
+    into drawList: inout DrawList,
+    _ paint: @escaping @MainActor (inout DrawList, AnimationFrame) -> Void
+  ) {
+    let count = interaction.animationPaints.count
+    animate(into: &drawList, isActive: interaction.isTextEditing, paint)
+    if interaction.animationPaints.count > count {
+      interaction.animationPaints[count].requiresEditing = true
+    }
+  }
 
   public func animate(
     into drawList: inout DrawList,
