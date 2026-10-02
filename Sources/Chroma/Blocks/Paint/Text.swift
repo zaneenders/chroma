@@ -195,7 +195,7 @@ public struct Text: PaintableBlock {
 }
 
 extension Text: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     if !wraps, !isSelectable {
       return BlockEngine.Resolved(
         expandsHorizontally: { false }, expandsVertically: { false },

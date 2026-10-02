@@ -240,7 +240,7 @@ public struct TextEditor: PaintableBlock {
 }
 
 extension TextEditor: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let preparation = TextLayoutPreparation()
     // Registration commits this operation's text and geometry. Its matching paint
     // does not read the application binding again, so editing and pixels cannot use

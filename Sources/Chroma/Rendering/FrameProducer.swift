@@ -35,13 +35,11 @@ final class FrameTrackingSubscription: Observable, Sendable {
 
 @MainActor
 package final class FrameProducer {
-  private let retainedLayouts = RetainedLayoutStore()
   private var generation: UInt64 = 0
   private var subscription: FrameTrackingSubscription?
   private weak var interaction: Interaction?
 
   package func reset() {
-    retainedLayouts.reset()
     interaction?.resetRegistrations()
     interaction = nil
     resetTracking()
@@ -55,7 +53,6 @@ package final class FrameProducer {
 
   isolated deinit {
     subscription?.cancel()
-    retainedLayouts.reset()
   }
 
   package func render(
@@ -97,14 +94,7 @@ package final class FrameProducer {
       subscription.trackCancellation()
       var drawList = DrawList()
       var context = context
-      let prepared = PreparedPaintScope()
-      context.preparedPaintScope = prepared
-      context.retainedLayoutStore = retainedLayouts
-      retainedLayouts.beginPass()
-      defer {
-        prepared.reset()
-        retainedLayouts.endPass()
-      }
+      context.isPresentationUpdate = true
       if let content {
         let resolved = BlockEngine.resolve(content, context: context)
         let rect = Rect(origin: .zero, size: viewport)
@@ -134,10 +124,7 @@ package final class FrameProducer {
   ) {
     var context = context
     context.keyboardNavigationOverscan = keyboardNavigationOverscan
-    context.retainedLayoutStore = retainedLayouts
-    context.preparedPaintScope = nil
-    retainedLayouts.beginPass()
-    defer { retainedLayouts.endPass() }
+    context.isPresentationUpdate = false
     let interaction = context.interaction
     interaction.refreshingRegistrations = interaction.tree != nil
     interaction.beginFrame(input: InputState(commands: commands))

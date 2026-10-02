@@ -10,7 +10,7 @@ swift run --package-path Benchmarks -c release RegistrationBenchmark \
   --rows 10000 --samples 40 --warmup 5 --idle-polls 1000
 ```
 
-`RegistrationBenchmark` compares explicit legacy draw-to-register, migrated paint-free registration, and opt-in retained geometry in **the same binary**. The legacy, paint-free, and cached-layout modes use the same deferred root, fixed increment button, 480×360 viewport, and identified uniform virtualized list (30-point rows, 1-point spacing). The baseline adds one identity-preserving custom primitive; this wrapper overhead is included and disclosed. It is a mechanism comparison, not a benchmark of a separately built historical revision.
+`RegistrationBenchmark` compares explicit legacy draw-to-register and migrated paint-free registration in **the same binary**. Both modes use the same deferred root, fixed increment button, 480×360 viewport, and identified uniform virtualized list (30-point rows, 1-point spacing). The baseline adds one identity-preserving custom primitive; this wrapper overhead is included and disclosed. It is a mechanism comparison, not a benchmark of a separately built historical revision.
 
 The JSON report separates:
 
@@ -18,12 +18,11 @@ The JSON report separates:
 - `pre-input-two-activations`: two activation events without a presentation between them. Each action captures the current count while resolving the deferred root; a stale callback fails a precondition.
 - `pre-input-scroll`: one ordered scroll event, including registration and dispatch but no presentation.
 - `active-presentation`: one coalesced presentation after those three events. It must not replay an action.
-- `explicit-layout-invalidation`: invalidate the retained boundary before the next event, without awaiting observation delivery, then drain presentation.
 - `idle-scheduler-polls`: repeated no-input scheduling checks, which must produce zero frames. This verifies synchronous scheduling behavior, not native idle CPU or asynchronous observation delivery.
 
 Mode order alternates across samples. Timing and work counters use separate identical replays so enabled instrumentation overhead is excluded from p50/p95 timings. Work counts include body evaluations, measurement requests/cache hits, resolved-node rectangle visits, registration/paint visits, emitted commands, compatibility fallbacks, and live/peak resolved nodes and observation subscription objects. Fresh-host tests verify subscriptions and resolved nodes are released after close. Rows are built only near the viewport, while identified row metadata is still scanned across the whole collection each root evaluation.
 
-`PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved block values and their ordinary proposal caches remain **traversal-scoped**. The cached mode retains only bounded geometry under the explicit `CachedLayout` contract; retained measurement/placement hits and live geometry nodes are reported separately. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
+`PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved block values and their ordinary proposal caches remain **traversal-scoped**. No cross-frame subtree geometry cache is retained. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
 
 ## Input frames
 
@@ -67,7 +66,7 @@ swift test --filter StackEvaluationTests
 
 Registration refresh traverses migrated built-ins without painting. Custom primitives that have not implemented `register(in:context:)` use an explicit counted adapter that draws into a temporary command list. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
 
-`CachedLayout` retains bounded geometry under observable dependencies and explicit invalidation for unobserved changes. Bodies and callbacks still reconcile conservatively; stable identity alone never establishes validity. The ShapeTree companion migrates its custom primitives, while external legacy callers retain the measured adapter. Identified collections still need explicit revisions or change sets before their ID scans can safely be skipped. See [the validity contract](../Documentation/RegistrationPipeline.md).
+Bodies, callbacks and geometry reconcile conservatively; stable identity alone never establishes validity. Prepared custom children are owned locally through one operation, without paired traversal bookkeeping. The experimental broad geometry cache was removed after measurements showed no end-to-end benefit. The ShapeTree companion migrates its custom primitives, while external legacy callers retain the measured adapter. Identified collections still need explicit revisions or change sets before their ID scans can safely be skipped. See [the validity contract](../Documentation/RegistrationPipeline.md).
 
 The scheduler and hover regressions are covered without wall-clock performance thresholds:
 

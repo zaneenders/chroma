@@ -1,8 +1,6 @@
 @MainActor
 public struct BlockContext {
-  var preparedPaintScope: PreparedPaintScope?
-  var retainedLayoutStore: RetainedLayoutStore?
-  var retainedLayoutScope: RetainedLayoutScope?
+  var isPresentationUpdate = false
   var keyboardNavigationOverscan = false
   var structuralPath = StructuralPath()
   var widgetID: WidgetID { WidgetID(path: structuralPath) }
@@ -286,4 +284,12 @@ extension Host {
 }
 
 extension BlockContext {
+}
+
+extension BlockContext {
+  /// Registers an ordered event observer. It runs once after core input dispatch,
+  /// before release/drag cleanup; presentation never invokes it.
+  public func registerInputHandler(_ handler: @escaping @MainActor (InputState) -> Void) {
+    interaction.building.inputObservers.append(handler)
+  }
 }

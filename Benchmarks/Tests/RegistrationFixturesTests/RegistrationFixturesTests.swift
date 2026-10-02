@@ -34,7 +34,7 @@ struct RegistrationFixturesTests {
     #expect(work.liveResolvedNodes == 0)
     #expect(work.peakResolvedNodes > 0)
     switch mode {
-    case .paintFree, .cachedLayout:
+    case .paintFree:
       #expect(work.paints == 0)
       #expect(work.drawingCommands == 0)
       #expect(work.compatibilityFallbacks == 0)
@@ -44,16 +44,31 @@ struct RegistrationFixturesTests {
       #expect(work.compatibilityFallbacks == 2)
       #expect(work.compatibilityFallbackTypes == [String(reflecting: LegacyRegistrationRoot.self): 2])
     }
-    if mode == .cachedLayout {
-      #expect(work.retainedPlacementHits > 0)
-      #expect(work.liveRetainedNodes > 0)
-    } else {
-      #expect(work.liveRetainedNodes == 0)
-    }
     fixture.close()
     #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
-    #expect(PipelineMetrics.snapshot.liveRetainedNodes == 0)
     #expect(PipelineMetrics.snapshot.liveObservationSubscriptions == 0)
+  }
+
+  @Test(arguments: RegistrationMode.allCases)
+  func idlePollsProduceNoFramesOrPipelineWork(mode: RegistrationMode) {
+    PipelineMetrics.isEnabled = true
+    defer { PipelineMetrics.isEnabled = false }
+    let fixture = RegistrationFixture(mode: mode, rows: 100)
+    defer { fixture.close() }
+    #expect(fixture.host.renderIfNeeded() != nil)
+    fixture.selectIncrement()
+    fixture.activateTwice()
+    fixture.scroll()
+    #expect(fixture.host.renderIfNeeded() != nil)
+    PipelineMetrics.reset()
+    let before = PipelineMetrics.snapshot
+    let rowsBefore = fixture.rowConstructions
+    for _ in 0..<1_000 {
+      #expect(fixture.host.renderIfNeeded() == nil)
+    }
+    #expect(PipelineMetrics.snapshot == before)
+    #expect(fixture.rowConstructions == rowsBefore)
+    #expect(fixture.actions == 2)
   }
 
   @Test(arguments: RegistrationMode.allCases)
@@ -71,23 +86,26 @@ struct RegistrationFixturesTests {
     #expect(fixture.host.renderIfNeeded() == nil)
   }
 
-  @Test func modesPaintTheSameInitialFrame() {
+  @Test func modesPaintTheSameFramesForTheSameInputSequence() {
     let current = RegistrationFixture(mode: .paintFree, rows: 100)
     let baseline = RegistrationFixture(mode: .legacyPaintTraversal, rows: 100)
-    let cached = RegistrationFixture(mode: .cachedLayout, rows: 100)
     defer {
       current.close()
       baseline.close()
-      cached.close()
     }
     let frame = current.host.renderIfNeeded()
     #expect(frame == baseline.host.renderIfNeeded())
-    #expect(frame == cached.host.renderIfNeeded())
-    #expect(current.rowConstructions == cached.rowConstructions)
-    current.selectIncrement()
-    cached.selectIncrement()
-    current.activateTwice()
-    cached.activateTwice()
-    #expect(current.rowConstructions == cached.rowConstructions)
+    #expect(current.rowConstructions == baseline.rowConstructions)
+    for fixture in [current, baseline] {
+      fixture.selectIncrement()
+      fixture.activateTwice()
+      fixture.scroll()
+    }
+    #expect(current.actions == baseline.actions)
+    #expect(current.actions == 2)
+    #expect(current.host.renderIfNeeded() == baseline.host.renderIfNeeded())
+    #expect(current.actions == 2)
+    #expect(baseline.actions == 2)
+    #expect(current.rowConstructions == baseline.rowConstructions)
   }
 }

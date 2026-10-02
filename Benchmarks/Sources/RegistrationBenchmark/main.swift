@@ -27,8 +27,6 @@ private struct Work: Encodable {
   let measurements: Double
   let measurementCacheHits: Double
   let measurementComputations: Double
-  let retainedMeasurementHits: Double
-  let retainedPlacementHits: Double
   let placements: Double
   let registrations: Double
   let paints: Double
@@ -38,8 +36,6 @@ private struct Work: Encodable {
   let rowConstructions: Double
   let frameCommands: Double
   let maxLiveResolvedNodesAtBoundary: Int
-  let maxLiveRetainedNodesAtBoundary: Int
-  let peakRetainedNodes: Int
   let maxLiveObservationSubscriptionsAtBoundary: Int
   let peakResolvedNodes: Int
   let peakObservationSubscriptions: Int
@@ -118,13 +114,6 @@ private func capture(_ configuration: Configuration, instrumented: Bool) -> [Sam
         })
       precondition(fixture.actions == actionsBeforePresentation, "Presentation replayed an input action")
       results.append(
-        measure("explicit-layout-invalidation", fixture: fixture, mode: mode, instrumented: instrumented) {
-          fixture.invalidateLayout()
-          fixture.host.sendInput(InputState(commands: [.navigation(.up)]))
-          return 0
-        })
-      _ = fixture.host.renderIfNeeded()
-      results.append(
         measure("idle-scheduler-polls", fixture: fixture, mode: mode, instrumented: instrumented) {
           for _ in 0..<configuration.idlePolls {
             precondition(fixture.host.renderIfNeeded() == nil, "Idle fixture scheduled a frame")
@@ -135,7 +124,6 @@ private func capture(_ configuration: Configuration, instrumented: Bool) -> [Sam
       if instrumented {
         let afterClose = PipelineMetrics.snapshot
         precondition(afterClose.liveResolvedNodes == 0, "Resolved nodes outlived the closed fixture")
-        precondition(afterClose.liveRetainedNodes == 0, "Retained geometry outlived the closed fixture")
         precondition(afterClose.liveObservationSubscriptions == 0, "Observation subscriptions outlived the fixture")
       }
       PipelineMetrics.isEnabled = false
@@ -147,7 +135,7 @@ private func capture(_ configuration: Configuration, instrumented: Bool) -> [Sam
 private func summarize(timings: [Sample], counters: [Sample]) -> [Result] {
   let phases = [
     "initial-frame", "pre-input-two-activations", "pre-input-scroll", "active-presentation",
-    "explicit-layout-invalidation", "idle-scheduler-polls",
+    "idle-scheduler-polls",
   ]
   return RegistrationMode.allCases.flatMap { mode in
     phases.map { phase in
@@ -173,16 +161,13 @@ private func summarize(timings: [Sample], counters: [Sample]) -> [Result] {
           bodyEvaluations: mean(\.bodyEvaluations), measurements: mean(\.measurements),
           measurementCacheHits: mean(\.measurementCacheHits),
           measurementComputations: mean(\.measurements) - mean(\.measurementCacheHits),
-          retainedMeasurementHits: mean(\.retainedMeasurementHits),
-          retainedPlacementHits: mean(\.retainedPlacementHits), placements: mean(\.placements),
+          placements: mean(\.placements),
           registrations: mean(\.registrations), paints: mean(\.paints),
           drawingCommands: mean(\.drawingCommands), compatibilityFallbacks: mean(\.compatibilityFallbacks),
           compatibilityFallbackTypes: fallbackTypes,
           rowConstructions: Double(work.reduce(0) { $0 + $1.rowConstructions }) / Double(work.count),
           frameCommands: Double(work.reduce(0) { $0 + $1.frameCommands }) / Double(work.count),
           maxLiveResolvedNodesAtBoundary: peak(\.liveResolvedNodes),
-          maxLiveRetainedNodesAtBoundary: peak(\.liveRetainedNodes),
-          peakRetainedNodes: peak(\.peakRetainedNodes),
           maxLiveObservationSubscriptionsAtBoundary: peak(\.liveObservationSubscriptions),
           peakResolvedNodes: peak(\.peakResolvedNodes),
           peakObservationSubscriptions: peak(\.peakObservationSubscriptions)))
@@ -220,7 +205,7 @@ private struct RegistrationBenchmark {
     let report = Report(
       configuration: configuration,
       notes: [
-        "Same binary, dataset, viewport, warmup and ordered input sequence for all three modes.",
+        "Same binary, dataset, viewport, warmup and ordered input sequence for both modes.",
         "Timing replay disables PipelineMetrics; a separate identical replay collects work counters.",
         "Legacy mode adds one identity-preserving custom primitive to force the draw-to-register adapter. It is a same-binary mechanism baseline, not a historical executable comparison.",
         "Initial-frame samples use fresh hosts and exclude fixture allocation; they are not process-cold startup timings.",
@@ -228,12 +213,9 @@ private struct RegistrationBenchmark {
         "Active presentation coalesces the two activations and scroll event. Presentation is asserted not to replay actions.",
         "Idle samples check scheduling synchronously and require zero frames. They do not measure native idle CPU or asynchronous event-loop delivery.",
         "The fixture uses 30-point identified virtualized rows with 1-point spacing. Identity scans still cover all rows on each deferred-root evaluation.",
-        "Cached-layout mode wraps the same fresh root with CachedLayout. Body evaluation and behavior reconciliation still run; only static proposal measurements and stack placement geometry persist.",
-        "Dynamic ScrollView row construction remains conservative. The retained cache does not skip the full collection identity scan or visible row reconciliation.",
-        "Explicit invalidation dirties the layout token before a navigation event, without waiting for queued observation delivery; its resulting presentation is drained before the idle sample.",
-        "measurementComputations is resolved measurement requests minus cache hits. It is not a count of only primitive measurements; retainedPlacementHits count reused stack placement arrays.",
-        "Resolved nodes remain traversal-scoped. Live retained nodes count only geometry in explicit boundaries; neither cache retains content or callbacks.",
-        "Each closed fixture is checked for zero observed live resolved nodes, retained geometry nodes and observation subscription objects.",
+        "measurementComputations is resolved measurement requests minus cache hits. It is not a count of only primitive measurements.",
+        "Resolved nodes and proposal measurement caches remain traversal-scoped. Each event conservatively reconciles current content and callbacks.",
+        "Each closed fixture is checked for zero observed live resolved nodes and observation subscription objects.",
       ], results: summarize(timings: timings, counters: counters))
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

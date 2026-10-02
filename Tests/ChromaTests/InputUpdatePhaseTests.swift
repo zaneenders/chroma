@@ -96,22 +96,17 @@ struct InputUpdatePhaseTests {
   }
 
   @Test func opaquePaintingDoesNotConstructItsChildAgain() {
-    struct Factory: PaintableBlock {
+    struct Factory: LayoutPreparingBlock {
       let state: State
       var focusRule: FocusRule { .container }
       @MainActor var child: some Block {
         state.updates += 1
         return Text(String(state.updates))
       }
-      func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      func register(in rect: Rect, context: BlockContext) {
-        BlockEngine.register(child, in: rect, context: context)
-      }
-      func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-        BlockEngine.paintRegistered(into: &list, in: rect, context: context)
-      }
-      func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-        BlockEngine.draw(child, into: &list, in: rect, context: context)
+      func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+        let prepared = BlockEngine.prepare(child, context: context)
+        return BlockEngine.Resolved(
+          measure: { $0 }, register: prepared.register, paint: prepared.paint)
       }
     }
     let state = State()

@@ -24,6 +24,8 @@ public struct TupleBlock: PrimitiveBlock {
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    var context = context
+    context.isPresentationUpdate = true
     prepareLayout(context: context).draw(into: &drawList, in: rect)
   }
 }

@@ -1,4 +1,4 @@
-public struct ScrollView: PaintableBlock {
+public struct ScrollView: PrimitiveBlock {
   public struct Row: Identifiable {
     public let id: AnyHashable
     public var content: any Block {
@@ -184,7 +184,7 @@ public struct ScrollView: PaintableBlock {
     let placements: [Placement]
   }
 
-  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     var prepared: PreparedScroll?
     return BlockEngine.Resolved(
       expandsHorizontally: { true }, expandsVertically: { true },
@@ -199,10 +199,6 @@ public struct ScrollView: PaintableBlock {
 
   @MainActor public func register(in rect: Rect, context: BlockContext) {
     _ = registerContent(in: rect, context: context)
-  }
-
-  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    BlockEngine.paintRegistered(into: &drawList, in: rect, context: context)
   }
 
   @MainActor private func registerContent(in rect: Rect, context: BlockContext) -> PreparedScroll {
@@ -231,6 +227,8 @@ public struct ScrollView: PaintableBlock {
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    var context = context
+    context.isPresentationUpdate = true
     let geometry = prepareScroll(in: rect, context: context)
     drawList.pushClip(rect)
     placeContent(in: rect, context: context, geometry: geometry) { placement in

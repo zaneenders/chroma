@@ -1,4 +1,4 @@
-public struct Interactive<Content: Block>: PaintableBlock {
+public struct Interactive<Content: Block>: PrimitiveBlock {
   var id: WidgetID?
   public var action: @MainActor () -> Void
   public var content: @MainActor (InteractionPhase) -> Content
@@ -63,16 +63,10 @@ public struct Interactive<Content: Block>: PaintableBlock {
     BlockEngine.draw(registered.content, into: &drawList, in: rect, context: registered.context)
   }
 
-  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    var childContext = context
-    childContext.focusTargets = []
-    childContext.focusLeafClaimed = true
-    BlockEngine.paintRegistered(into: &drawList, in: rect, context: childContext)
-  }
 }
 
 extension Interactive: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     // Layout queries intentionally use the idle tree. The current-phase tree belongs
     // to this operation and is shared by registration and painting, never a later event.
     let idle = BlockEngine.resolve(content(.idle), context: context)

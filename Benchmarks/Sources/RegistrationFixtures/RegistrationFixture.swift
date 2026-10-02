@@ -26,7 +26,6 @@ public struct LegacyRegistrationRoot: PrimitiveBlock {
 
 public enum RegistrationMode: String, Codable, CaseIterable, Sendable {
   case paintFree = "paint-free"
-  case cachedLayout = "cached-layout"
   case legacyPaintTraversal = "legacy-paint-traversal"
 }
 
@@ -34,7 +33,6 @@ public enum RegistrationMode: String, Codable, CaseIterable, Sendable {
 public final class RegistrationFixture {
   public let host: HeadlessHost
   public let controller = ScrollViewController()
-  private let layoutCache = LayoutCache()
   public private(set) var actions = 0
   public private(set) var rowConstructions = 0
   public let rowCount: Int
@@ -59,7 +57,6 @@ public final class RegistrationFixture {
     }
     switch mode {
     case .paintFree: host.content = content
-    case .cachedLayout: host.content = CachedLayout(layoutCache) { return content }
     case .legacyPaintTraversal: host.content = LegacyRegistrationRoot(content)
     }
   }
@@ -82,8 +79,6 @@ public final class RegistrationFixture {
     host.sendInput(
       InputState(pointerPosition: Point(x: 200, y: 180), scrollDelta: Point(x: 0, y: -3)))
   }
-
-  public func invalidateLayout() { layoutCache.invalidate() }
 
   public func close() { host.close() }
 }

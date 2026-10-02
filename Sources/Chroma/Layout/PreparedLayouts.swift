@@ -1,11 +1,32 @@
 /// A traversal owns its resolved children and measurements. Nothing is reused across input events or frames.
+///
+/// This low-level extension point owns all registration and painting, including focus behavior:
+/// the engine does not apply the generic `PrimitiveBlock.focusRule` fallback to its prepared result.
+/// Forward to prepared children, or explicitly register and paint any focus owned by this block.
+/// Prefer `PaintableBlock` for ordinary leaves that need automatic primitive focus handling.
+public protocol LayoutPreparingBlock: PrimitiveBlock {
+  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved
+}
+
+/// Default entry points preserve direct primitive use; the engine prepares once and
+/// owns this object through measurement, registration, and painting of one update.
 @MainActor
-protocol LayoutPreparingBlock: PrimitiveBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved
+extension LayoutPreparingBlock {
+  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    prepareLayout(context: context).sizeThatFits(proposal)
+  }
+  public func register(in rect: Rect, context: BlockContext) {
+    prepareLayout(context: context).register(in: rect)
+  }
+  public func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    var context = context
+    context.isPresentationUpdate = true
+    prepareLayout(context: context).draw(into: &list, in: rect)
+  }
 }
 
 extension LayoutModifier: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content, context: context)
     return BlockEngine.Resolved(
       expandsHorizontally: {
@@ -28,7 +49,7 @@ extension LayoutModifier: LayoutPreparingBlock {
 }
 
 extension PaintModifier: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let childContext: BlockContext
     if case .background = operation { childContext = context.backgroundContentContext } else { childContext = context }
     let child = BlockEngine.resolve(content, context: childContext)
@@ -79,7 +100,7 @@ extension PaintModifier: LayoutPreparingBlock {
 }
 
 extension ContextModifier: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     var context = context
     switch operation {
     case .hover(let style): context.hoverStyle = style
@@ -90,7 +111,7 @@ extension ContextModifier: LayoutPreparingBlock {
 }
 
 extension CommandScope: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content, context: context)
     return BlockEngine.Resolved(
       child: child,
@@ -107,7 +128,7 @@ extension CommandScope: LayoutPreparingBlock {
 }
 
 extension Group: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content, context: context)
     return BlockEngine.Resolved(
       child: child,
@@ -126,13 +147,13 @@ extension Group: LayoutPreparingBlock {
 }
 
 extension ThemeBlock: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     BlockEngine.resolve(content, context: context.withTheme(theme))
   }
 }
 
 extension ThemeReader: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content(context.theme), context: context)
     return BlockEngine.Resolved(
       expandsHorizontally: { false }, expandsVertically: { false },
@@ -143,7 +164,7 @@ extension ThemeReader: LayoutPreparingBlock {
 }
 
 extension FocusTargetBlock: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     var context = context
     context.focusTargets.append(target)
     let child = BlockEngine.resolve(content, context: context)
@@ -162,27 +183,27 @@ extension FocusTargetBlock: LayoutPreparingBlock {
 }
 
 extension HStack: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     StackLayout(axis: .horizontal, spacing: spacing, bottomAligned: alignment == .bottom)
       .prepare(scopedChildren, reversed: isLayoutReversed, context: context)
   }
 }
 
 extension VStack: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     StackLayout(axis: .vertical, spacing: spacing)
       .prepare(scopedChildren, reversed: isLayoutReversed, context: context)
   }
 }
 
 extension TupleBlock: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     BlockEngine.prepareOverlay(scopedChildren, group: false, context: context)
   }
 }
 
 extension ZStack: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     BlockEngine.prepareOverlay(scopedChildren, group: true, context: context)
   }
 }
@@ -227,7 +248,7 @@ extension BlockEngine {
 }
 
 extension TrailingControlsRow: LayoutPreparingBlock {
-  func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let input = BlockEngine.resolve(input, context: context.childScope(0))
     let controls = BlockEngine.resolve(controls, context: context.childScope(1))
     func sizes(_ proposal: Size) -> (input: Size, controls: Size) {

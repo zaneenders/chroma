@@ -7,8 +7,8 @@ This checklist maps the complete [handoff](https://github.com/zaneenders/chroma/
 - [x] Start from the published fixes. The branch is based on merged Chroma `e46e475`; relevant code matches handoff `6242fe8` / document commit `ce73c99`.
 - [x] Preserve subsequent upstream application work. Companion integration follows ShapeTree `4e5432d99687af4714169ee419d344d680d61fc0`, including its Scribe `589b312a952db70b0a06a303bbf035f7e9a86501` dependency and NativeApp entry points.
 - [x] Read repository constraints; introduce no `@unchecked`. Native dependencies remain outside core profiling code.
-- [x] Final dependency/source receipt and restored production manifests verified against all five imported upstream Git blobs; exact Scribe checkout is clean. Evidence accompanies the companion patch.
-- [x] Chroma implementation published and fetched back with an exact tree match. Companion pin instructions identify the final published Chroma revision; ShapeTree publication remains a separate user decision.
+- [x] Restore all five verified latest-baseline manifest/entrypoint blobs; Scribe checkout remains clean at its exact pin. The 16-file companion migration patch forward-applies to that baseline.
+- [ ] Publish/fetch the simplified Chroma revision and update companion pin instructions. ShapeTree publication remains separate.
 
 ## Pipeline responsibilities and preserved behavior
 
@@ -35,20 +35,25 @@ This checklist maps the complete [handoff](https://github.com/zaneenders/chroma/
 
 Evidence: existing WindowRuntime, RegistrationRefresh, StructuralInteraction, PointerScrollFocus, FramePacing and text suites; new RawKeyboardFreshness, InputUpdatePhase, ControlPaintIsolation and ScrollPaint suites.
 
-## Persistent geometry validity
+## Revised cache scope after article review
 
-- [x] Small opt-in `CachedLayout` / `LayoutCache` boundary retains only sizes and relative placement, not callbacks or block values.
-- [x] Fresh behavior can change while known unchanged geometry reuses results.
-- [x] Observable builder/measurement changes synchronously invalidate before queued notification delivery; unobserved changes require explicit invalidation.
-- [x] Type/path, nested token identity, theme/font/text-scale/hover environment and proposals establish validity. Structural changes cannot inherit unrelated results.
-- [x] Changed child size updates dependent parent/sibling geometry; independent sibling boundaries retain valid results.
-- [x] Scroll offsets refresh transforms, clipping, visibility and hit regions; variable-row text/content changes invalidate measurement.
-- [x] One-shot observations rearm and dispose. Removed boundaries release geometry/subscriptions; replaced roots reject queued stale invalidations.
-- [x] UI state is main-actor owned, with checked synchronized validity delivery.
-- [x] Explicit bounds cover boundaries, nodes and proposals. Eviction conservatively invalidates the boundary rather than keeping unbounded history.
-- [x] No inference of universal paint-only hover or transparent validity for arbitrary closures. Dynamically discovered children outside a sealed boundary remain conservative.
+- [x] Remove the experimental `CachedLayout` / `LayoutCache`, retained geometry store,
+  proposal eviction and per-boundary observation machinery: measured cache hits did
+  not translate into reduced graph construction or application latency.
+- [x] Preserve safe operation-local proposal/placement sharing and specialized text
+  and virtual-row caches with their existing validity rules.
+- [x] Replace cache-specific tests with direct observed/unobserved geometry freshness,
+  parent/sibling placement, callbacks, environment, scroll/clipping, delayed observation
+  and resource-release coverage. Existing freshness assertions are not weakened.
+- [x] Keep stable control/application identity separate from geometry validity and
+  offscreen cache residency; durable selection still belongs to its application owner.
+- [x] Custom wrappers own prepared children locally. Remove positional visitation
+  pairing and its scope/cleanup machinery; registration and compositing order may differ.
 
-Evidence: RetainedLayoutTests, ScrollRegistrationTests, ObservationLifetimeTests, ObservationDeliveryTests, and resource-release checks in InputUpdatePhase/ScrollPaint.
+The original handoff's persistent subtree-geometry milestone is **superseded by the
+user-requested simplification following Ryan Fleury's UI series**. It is not claimed
+as an implemented feature. A future cross-frame cache needs demonstrated benefit
+before reintroducing its invalidation and lifetime costs.
 
 ## ShapeTree boundaries
 
@@ -57,19 +62,19 @@ Evidence: RetainedLayoutTests, ScrollRegistrationTests, ObservationLifetimeTests
 - [x] Viewport registration, command installation, focus/editing transitions, pending reveal, transcript owner/cache/selection-document reconciliation are explicit update work.
 - [x] Escape, modal suppression, command-picker actions and selection press/release/drag are ordered input work. Stationary selection autoscroll continues in explicit updates.
 - [x] Markdown selection/painting shares a layout only under a complete value key; removed rows are released.
-- [x] A real sidebar tool strip adopts the retained boundary with documented observed dependencies and fresh callbacks.
+- [x] Remove the unearned sidebar geometry-cache boundary; eliminate a repeated full-session lookup for every metadata row by using its already available session value. Preserve running-state behavior with regression coverage.
 
 The companion patch contains the application audit, tests and exact dependency instructions. It is intentionally not copied into this repository's core sources.
 
 ## Measurement and final evidence
 
-- [x] Counters can be disabled and cover bodies, measurements/cache hits, placement reuse, registration, paint/commands, text layouts, compatibility callers, live nodes and observation subscriptions.
-- [x] Final native runs after the last source change: 463 Chroma tests, 13 Wayland tests, and 7 benchmark-package tests pass.
-- [x] Latest-baseline ShapeTree symbol-bearing release executable builds against verified local Chroma sources; all 172 optimized desktop tests pass.
-- [x] Final comparable release tables include first-frame, active input/presentation, explicit invalidation and idle; timings run without instrumentation or competing builds, counters captured separately.
-- [x] Final actual headless application graph workload uses newly built, hash-verified binaries with preserved debug sections; no historical mixed-interaction CPU ratio is claimed.
-- [x] Independent final source review and changed-file strict formatting completed; prior correctness findings fixed and all existing assertions preserved.
-- [x] Remote-tree verification and exact-commit CI/status lookup completed. No commit statuses or pull-request workflow runs were reported; this is not a CI pass. The final receipt accompanies publication.
+- [x] Counters can be disabled and cover bodies, measurements/cache hits, placement reuse, registration, paint/commands, text layouts, compatibility callers, live transient nodes and observation subscriptions.
+- [x] Final simplified-revision native runs: 470 Chroma tests and 13 Wayland tests pass; all 8 benchmark-package tests pass.
+- [x] Latest-baseline ShapeTree native release build and all 173 tests pass in debug and optimized release; its compile receipt matches all 131 final Chroma source files.
+- [x] Fresh original/a3ca/simplified core release comparison and preserved-a3ca/revised application comparison use matching fixtures, disabled timing instrumentation and separately captured counters; first-frame, active input/presentation and idle remain distinct.
+- [x] Actual application-graph measurements use verified old/new symbol-bearing runners with linkage receipts. The combined app revision improves this workload; no core-only, GUI or mixed-interaction CPU ratio is claimed.
+- [x] Independent core/application contract review and changed-file strict formatting completed. Direct combined-draw legacy adaptation is fixed with valid-frame before/after evidence; prepared focus responsibility is explicit and tested.
+- [ ] Updated remote tree and exact-commit CI/status receipt verified.
 
 See [results](RegistrationResults.md) and the supplied publication/dependency receipts for final evidence. Strict formatting passes changed Swift files; seven unchanged whole-tree lint warnings remain in baseline Metal data fields and UniformRowIdentityTests.
 

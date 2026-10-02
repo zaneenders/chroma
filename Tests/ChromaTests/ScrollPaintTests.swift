@@ -50,18 +50,12 @@ struct ScrollPaintTests {
     }
   }
 
-  private struct Wrapper: PaintableBlock {
+  private struct Wrapper: LayoutPreparingBlock {
     let content: any Block
     var focusRule: FocusRule { .container }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func register(in rect: Rect, context: BlockContext) {
-      BlockEngine.register(content, in: rect, context: context)
-    }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      BlockEngine.paintRegistered(into: &list, in: rect, context: context)
-    }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      BlockEngine.draw(content, into: &list, in: rect, context: context)
+    func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+      let child = BlockEngine.prepare(content, context: context)
+      return BlockEngine.Resolved(measure: { $0 }, register: child.register, paint: child.paint)
     }
   }
 

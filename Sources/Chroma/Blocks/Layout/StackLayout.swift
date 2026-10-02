@@ -50,6 +50,8 @@ struct StackLayout {
     _ originals: [any Block], reversed: Bool, into drawList: inout DrawList,
     in rect: Rect, context: BlockContext
   ) {
+    var context = context
+    context.isPresentationUpdate = true
     prepare(originals, reversed: reversed, context: context).draw(into: &drawList, in: rect)
   }
 
@@ -58,16 +60,12 @@ struct StackLayout {
       BlockEngine.resolve(child, context: context.childContext(for: child, at: index))
     }
     let spacers = originals.map(BlockEngine.isSpacer)
-    let retained = context.retainedLayoutScope?.makeNode(type: StackLayout.self, context: context)
     var placed: [(proposal: Size, rects: [Rect])] = []
     func placements(_ proposal: Size) -> [Rect] {
       if let cached = placed.first(where: { $0.proposal == proposal }) { return cached.rects }
-      let compute = {
-        rectangles(
-          sizes: layout(children, spacers: spacers, proposal: proposal),
-          reversed: reversed, proposal: proposal)
-      }
-      let result = retained?.placement(proposal: proposal, compute: compute) ?? compute()
+      let result = rectangles(
+        sizes: layout(children, spacers: spacers, proposal: proposal),
+        reversed: reversed, proposal: proposal)
       placed.append((proposal, result))
       return result
     }

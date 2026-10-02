@@ -3,8 +3,7 @@ import Synchronization
 /// Opt-in work counters for the layout, registration, and painting pipeline.
 ///
 /// Enable these only around a diagnostic or benchmark capture. The disabled path is
-/// a Boolean check, without logging or lifetime-token allocation. These metrics do
-/// distinguish traversal-local resolved nodes from opt-in retained geometry.
+/// a Boolean check, without logging or lifetime-token allocation.
 @MainActor
 public enum PipelineMetrics {
   /// Enabling starts a fresh capture. Disabling stops recording new work, while
@@ -24,8 +23,6 @@ public enum PipelineMetrics {
     var result = counters
     if let lifetimes {
       let live = lifetimes.snapshot
-      result.liveRetainedNodes = live.retainedNodes
-      result.peakRetainedNodes = live.peakRetainedNodes
       result.liveResolvedNodes = live.resolvedNodes
       result.liveObservationSubscriptions = live.observationSubscriptions
       result.peakResolvedNodes = live.peakResolvedNodes
@@ -48,8 +45,6 @@ public enum PipelineMetrics {
     public internal(set) var measurementCacheHits = 0
     /// Immutable text line-layout snapshots prepared for built-in text controls.
     public internal(set) var textLayouts = 0
-    public internal(set) var retainedMeasurementHits = 0
-    public internal(set) var retainedPlacementHits = 0
     /// Visits to resolved nodes with an assigned rectangle, in either traversal.
     public internal(set) var placements = 0
     public internal(set) var registrations = 0
@@ -62,10 +57,7 @@ public enum PipelineMetrics {
     public internal(set) var compatibilityFallbackTypes: [String: Int] = [:]
     /// Traversal-scoped resolved nodes, not a persistent retained-tree size.
     public internal(set) var liveResolvedNodes = 0
-    /// Geometry-only nodes in explicit CachedLayout boundaries.
-    public internal(set) var liveRetainedNodes = 0
-    public internal(set) var peakRetainedNodes = 0
-    /// Frame, row, and explicit layout-cache subscriptions that are still alive.
+    /// Frame and row observation subscriptions that are still alive.
     public internal(set) var liveObservationSubscriptions = 0
     public internal(set) var peakResolvedNodes = 0
     public internal(set) var peakObservationSubscriptions = 0
@@ -78,8 +70,6 @@ public enum PipelineMetrics {
     case measurement
     case measurementCacheHit
     case textLayout
-    case retainedMeasurementHit
-    case retainedPlacementHit
     case placement
     case registration
     case paint
@@ -93,8 +83,6 @@ public enum PipelineMetrics {
     case .measurement: counters.measurements += count
     case .measurementCacheHit: counters.measurementCacheHits += count
     case .textLayout: counters.textLayouts += count
-    case .retainedMeasurementHit: counters.retainedMeasurementHits += count
-    case .retainedPlacementHit: counters.retainedPlacementHits += count
     case .placement: counters.placements += count
     case .registration: counters.registrations += count
     case .paint: counters.paints += count
@@ -122,7 +110,6 @@ public enum PipelineMetrics {
 final class PipelineMetricLifetime: Sendable {
   enum Kind: Sendable {
     case resolvedNode
-    case retainedNode
     case observationSubscription
   }
 
@@ -141,8 +128,6 @@ final class PipelineMetricLifetime: Sendable {
 private final class PipelineMetricLifetimes: Sendable {
   struct Counts: Sendable {
     var resolvedNodes = 0
-    var retainedNodes = 0
-    var peakRetainedNodes = 0
     var observationSubscriptions = 0
     var peakResolvedNodes = 0
     var peakObservationSubscriptions = 0
@@ -158,9 +143,6 @@ private final class PipelineMetricLifetimes: Sendable {
       case .resolvedNode:
         counts.resolvedNodes += delta
         counts.peakResolvedNodes = max(counts.peakResolvedNodes, counts.resolvedNodes)
-      case .retainedNode:
-        counts.retainedNodes += delta
-        counts.peakRetainedNodes = max(counts.peakRetainedNodes, counts.retainedNodes)
       case .observationSubscription:
         counts.observationSubscriptions += delta
         counts.peakObservationSubscriptions = max(counts.peakObservationSubscriptions, counts.observationSubscriptions)
@@ -170,7 +152,6 @@ private final class PipelineMetricLifetimes: Sendable {
 
   func resetPeaks() {
     counts.withLock { counts in
-      counts.peakRetainedNodes = counts.retainedNodes
       counts.peakResolvedNodes = counts.resolvedNodes
       counts.peakObservationSubscriptions = counts.observationSubscriptions
     }
