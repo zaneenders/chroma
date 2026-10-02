@@ -1,68 +1,49 @@
 @MainActor
 public enum BlockEngine {
+  /// Owned by one traversal. Expansion, measurement, and painting share the same body values.
+  /// Proposal-dependent sizes are discarded with the tree, so the next traversal observes fresh state.
   @MainActor final class Resolved {
-    init(primitive: any PrimitiveBlock, context: BlockContext, child: Resolved?) {
-      self.primitive = primitive
-      self.context = context
-      self.child = child
-    }
-    let primitive: any PrimitiveBlock
-    let context: BlockContext
-    let child: Resolved?
-
-    var expandsHorizontally: Bool {
-      if let layout = primitive as? LayoutModifier {
-        if case .sizing(let x, _) = layout.operation { return x == .grow }
-      }
-      if let child { return child.expandsHorizontally }
-      return primitive.expandsHorizontally
+    init(
+      expandsHorizontally: @escaping () -> Bool,
+      expandsVertically: @escaping () -> Bool,
+      measure: @escaping (Size) -> Size,
+      draw: @escaping (inout DrawList, Rect) -> Void
+    ) {
+      horizontalExpansion = expandsHorizontally
+      verticalExpansion = expandsVertically
+      self.measure = measure
+      self.paint = draw
     }
 
-    var expandsVertically: Bool {
-      if let layout = primitive as? LayoutModifier {
-        if case .sizing(_, let y) = layout.operation { return y == .grow }
-      }
-      if let child { return child.expandsVertically }
-      return primitive.expandsVertically
+    convenience init(
+      child: Resolved,
+      draw: @escaping (inout DrawList, Rect) -> Void
+    ) {
+      self.init(
+        expandsHorizontally: { child.expandsHorizontally },
+        expandsVertically: { child.expandsVertically },
+        measure: child.sizeThatFits,
+        draw: draw)
     }
+
+    private let horizontalExpansion: () -> Bool
+    private let verticalExpansion: () -> Bool
+    private let measure: (Size) -> Size
+    private let paint: (inout DrawList, Rect) -> Void
+    private var measurements: [(proposal: Size, size: Size)] = []
+
+    lazy var expandsHorizontally = horizontalExpansion()
+    lazy var expandsVertically = verticalExpansion()
 
     func sizeThatFits(_ proposal: Size) -> Size {
-      guard let child else { return primitive.sizeThatFits(proposal, context: context) }
-      if let layout = primitive as? LayoutModifier {
-        return layout.sizeThatFits(proposal, context: context) { proposal in child.sizeThatFits(proposal) }
-      }
-      return child.sizeThatFits(proposal)
+      if let cached = measurements.first(where: { $0.proposal == proposal }) { return cached.size }
+      let size = measure(proposal)
+      measurements.append((proposal, size))
+      return size
     }
 
     func draw(into drawList: inout DrawList, in rect: Rect) {
-      guard let child else {
-        BlockEngine.drawResolved(primitive, into: &drawList, in: rect, context: context)
-        return
-      }
-      if let layout = primitive as? LayoutModifier {
-        layout.draw(into: &drawList, in: rect, context: context) { list, rect, _ in
-          child.draw(into: &list, in: rect)
-        }
-      } else if let paint = primitive as? PaintModifier {
-        paint.draw(into: &drawList, in: rect, context: context) { list, rect, _ in
-          child.draw(into: &list, in: rect)
-        }
-      } else if let modifier = primitive as? ContextModifier {
-        modifier.draw(into: &drawList, in: rect, context: context) { list, rect, modified in
-          child.withContext(modified).draw(into: &list, in: rect)
-        }
-      } else if let scope = primitive as? CommandScope {
-        scope.draw(into: &drawList, in: rect, context: context) { list, rect, _ in
-          child.draw(into: &list, in: rect)
-        }
-      }
-    }
-
-    func withContext(_ context: BlockContext) -> Resolved {
-      var updated = self.context
-      updated.hoverStyle = context.hoverStyle
-      updated.navigationIgnored = context.navigationIgnored
-      return Resolved(primitive: primitive, context: updated, child: child?.withContext(context))
+      paint(&drawList, rect)
     }
   }
 
@@ -70,27 +51,20 @@ public enum BlockEngine {
     if let scoped = block as? ScopedBlock {
       return resolve(scoped.content, context: context.scoped(scoped.path))
     }
-    let context = (block as? any PrimitiveBlock)?.preservesContentIdentity == true
-      ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
     if let primitive = block as? any PrimitiveBlock {
-      var content: (any Block)?
-      if let layout = primitive as? LayoutModifier { content = layout.content }
-      if let paint = primitive as? PaintModifier { content = paint.content }
-      if let modifier = primitive as? ContextModifier { content = modifier.content }
-      if let scope = primitive as? CommandScope { content = scope.content }
-      if let content {
-        let childContext: BlockContext
-        if let paint = primitive as? PaintModifier, case .background = paint.operation {
-          childContext = context.backgroundContentContext
-        } else {
-          childContext = context
-        }
-        return Resolved(primitive: primitive, context: context,
-                        child: resolve(content, context: childContext))
+      let context =
+        primitive.preservesContentIdentity
+        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
+      if let container = primitive as? any LayoutPreparingBlock {
+        return container.prepareLayout(context: context)
       }
-      return Resolved(primitive: primitive, context: context, child: nil)
+      return Resolved(
+        expandsHorizontally: { primitive.expandsHorizontally },
+        expandsVertically: { primitive.expandsVertically },
+        measure: { primitive.sizeThatFits($0, context: context) },
+        draw: { list, rect in drawResolved(primitive, into: &list, in: rect, context: context) })
     }
-    return resolve(block.body, context: context)
+    return resolve(block.body, context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))
   }
 
   static func isSpacer(_ block: any Block) -> Bool {

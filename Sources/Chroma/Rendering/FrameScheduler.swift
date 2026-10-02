@@ -1,9 +1,8 @@
 import Foundation
 
-/// Owns frame demand and timing; backends only gate presentation readiness.
 @MainActor
 package final class FrameScheduler {
-  package enum FrameKind: Sendable { case content, animation }
+  package enum FrameKind: Sendable { case content }
 
   package struct ScheduledFrame: Equatable {
     package let deadline: Double
@@ -19,8 +18,7 @@ package final class FrameScheduler {
   package private(set) var lastFrameTime: Double?
   package private(set) var minimumRefreshRate = 30.0
   package private(set) var maximumRefreshRate = 60.0
-  package var animationsActive = false { didSet { schedule() } }
-  package var contentAnimationActive = false { didSet { schedule() } }
+  package var scrollMomentumActive = false { didSet { schedule() } }
   package var inputPending = false { didSet { schedule() } }
   package var isReady = false { didSet { schedule() } }
   package var onFrame: (@MainActor (FrameKind) -> Void)? { didSet { schedule() } }
@@ -49,10 +47,10 @@ package final class FrameScheduler {
         deadline: lastFrameTime.map { $0 + 1 / maximumRefreshRate } ?? pendingSince,
         kind: .content, priority: .userInitiated)
     }
-    guard animationsActive || contentAnimationActive, let lastFrameTime else { return nil }
+    guard scrollMomentumActive, let lastFrameTime else { return nil }
     return ScheduledFrame(
       deadline: lastFrameTime + 1 / minimumRefreshRate,
-      kind: contentAnimationActive ? .content : .animation, priority: .utility)
+      kind: .content, priority: .utility)
   }
 
   package func takeFrame() -> FrameKind? {
@@ -79,8 +77,7 @@ package final class FrameScheduler {
     scheduled = nil
     pendingSince = nil
     lastFrameTime = nil
-    animationsActive = false
-    contentAnimationActive = false
+    scrollMomentumActive = false
     inputPending = false
   }
 
@@ -104,7 +101,7 @@ package final class FrameScheduler {
         self.isProducing = true
         self.onFrame?(kind)
         self.isProducing = false
-        if self.lastFrameTime != nil { self.recordProducedFrame() }
+        // takeFrame records the start; rendering must count toward the frame interval.
       }
       self.schedule()
     }

@@ -20,28 +20,10 @@ public struct ZStack: PrimitiveBlock {
   }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    var result = Size.zero
-    for (index, child) in scopedChildren.enumerated() {
-      let context = context.childContext(for: child, at: index)
-      let size = BlockEngine.measure(child, proposal: proposal, context: context)
-      result.width = max(result.width, size.width)
-      result.height = max(result.height, size.height)
-    }
-    return result
+    prepareLayout(context: context).sizeThatFits(proposal)
   }
 
   @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    let interaction = context.interaction
-    interaction.beginGroup(rect: rect)
-    for (index, child) in scopedChildren.enumerated() {
-      let context = context.childContext(for: child, at: index)
-      let size = BlockEngine.measure(child, proposal: rect.size, context: context)
-      BlockEngine.draw(
-        child,
-        into: &drawList,
-        in: Rect(x: rect.minX, y: rect.minY, width: size.width, height: size.height),
-        context: context)
-    }
-    interaction.endGroup()
+    prepareLayout(context: context).draw(into: &drawList, in: rect)
   }
 }

@@ -3,9 +3,12 @@ import PackageDescription
 
 var products: [Product] = [
   .library(name: "Chroma", targets: ["Chroma"]),
+  .library(name: "ChromaApp", targets: ["ChromaApp"]),
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
   .library(name: "ChromaTesting", targets: ["ChromaTesting"]),
 ]
+
+var appDependencies: [Target.Dependency] = ["Chroma"]
 
 var targets: [Target] = [
   .testTarget(
@@ -13,14 +16,13 @@ var targets: [Target] = [
     dependencies: ["Chroma", "ChromaFont", "ChromaTesting"]
   ),
   .target(name: "Chroma", swiftSettings: [.strictMemorySafety()]),
-  .executableTarget(
-    name: "InputFrameBenchmark", dependencies: ["Chroma"], path: "Benchmarks/Sources/InputFrameBenchmark"),
   .target(
     name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")],
     swiftSettings: [.strictMemorySafety()]),
   .target(name: "ChromaTesting", dependencies: ["Chroma"]),
 ]
 #if os(macOS)
+appDependencies.append("MetalBackend")
 products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))
 targets.append(contentsOf: [
   .testTarget(name: "MetalBackendTests", dependencies: ["MetalBackend"]),
@@ -35,6 +37,7 @@ targets.append(contentsOf: [
 #endif
 
 #if os(Linux)
+appDependencies.append("WaylandBackend")
 products.append(.library(name: "WaylandBackend", targets: ["WaylandBackend"]))
 targets.append(contentsOf: [
   .testTarget(
@@ -98,6 +101,10 @@ targets.append(contentsOf: [
   ),
 ])
 #endif
+
+targets.append(
+  .target(name: "ChromaApp", dependencies: appDependencies, swiftSettings: [.strictMemorySafety()])
+)
 
 #if os(macOS) || os(Linux)
 targets.append(contentsOf: [

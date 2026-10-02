@@ -9,6 +9,8 @@ public protocol PrimitiveBlock: Block where Body == Never {
   var focusRule: FocusRule { get }
   var preservesContentIdentity: Bool { get }
 
+  /// Measures without changing application or interaction state. Identical proposals may reuse
+  /// the result within a traversal; drawing must not depend on how often measurement was called.
   @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size
 
   @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext)

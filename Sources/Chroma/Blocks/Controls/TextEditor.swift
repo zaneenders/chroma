@@ -143,9 +143,7 @@ public struct TextEditor: PrimitiveBlock {
         x: inner.minX + horizontalOffset(state.caretOffset)
           + Float(caret - layout.lines[row].range.lowerBound) * cellWidth,
         y: inner.minY + Float(row - first) * lineHeight, width: max(1, scale), height: lineHeight)
-      context.animate(into: &drawList) { list, _ in
-        if context.caretVisible { list.fillRect(caretRect, color: style.caret) }
-      }
+      drawList.fillRect(caretRect, color: style.caret)
     }
   }
 }

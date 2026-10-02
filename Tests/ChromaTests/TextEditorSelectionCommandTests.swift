@@ -11,7 +11,8 @@ struct TextEditorSelectionCommandTests {
       content: TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }),
       keyBindings: .modalNavigation)
     let point = Point(x: 45, y: 15)
-    test.host.render(input: InputState(pointerPosition: point, pointerPressPosition: point, pointerDown: true, pointerPressed: true))
+    test.host.render(
+      input: InputState(pointerPosition: point, pointerPressPosition: point, pointerDown: true, pointerPressed: true))
     test.host.render(input: InputState(pointerPosition: point, pointerPressPosition: point, pointerReleased: true))
     let interaction = test.host.runtime.interaction
     #expect(interaction.isTextEditing)
@@ -32,14 +33,16 @@ struct TextEditorSelectionCommandTests {
       size: Size(width: 100, height: 44))
     focus.focus(editing: true)
     let frame = test.host.render(input: InputState(textEvents: [.moveCaretToEnd]))
-    #expect(frame.commands.contains {
-      if case .text(_, let value, _, _) = $0 { return value == text }
-      return false
-    })
-    #expect(!frame.commands.contains {
-      if case .text(_, let value, _, _) = $0 { return value == "abcdefg" }
-      return false
-    })
+    #expect(
+      frame.commands.contains {
+        if case .text(_, let value, _, _) = $0 { return value == text }
+        return false
+      })
+    #expect(
+      !frame.commands.contains {
+        if case .text(_, let value, _, _) = $0 { return value == "abcdefg" }
+        return false
+      })
     test.host.render(input: InputState(textEvents: [.submit]))
     #expect(text == "abcdefghijklmnopqrstuvwxyz")
   }

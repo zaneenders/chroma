@@ -8,11 +8,8 @@ public enum InteractionMode: Equatable, Sendable {
 @Observable
 @MainActor
 package final class Interaction {
-  let caretClock = CaretClock()
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
-  @ObservationIgnored var animationFrame = AnimationFrame(timestamp: 0)
-  @ObservationIgnored var animationPaints: [AnimationPaint] = []
 
   package let textSelection = TextSelectionManager()
 
@@ -142,7 +139,7 @@ package final class Interaction {
 
   struct ScrollLayout: Equatable {
     enum Rows: Equatable {
-      case uniform(count: Int, height: Float, keys: [StructuralKey]?)
+      case uniform(count: Int, height: Float, keys: UniformRowIdentity?)
       case variable(VariableScrollRows)
 
       static func == (lhs: Self, rhs: Self) -> Bool {
@@ -161,7 +158,7 @@ package final class Interaction {
     func index(of key: StructuralKey) -> Int? {
       switch rows {
       case .uniform(let count, _, let keys):
-        if let keys { return keys.firstIndex(of: key) }
+        if let keys { return keys.indices[key] }
         guard let index = key.value as? Int, index >= 0, index < count else { return nil }
         return index
       case .variable(let rows): return rows.keys.firstIndex(of: key)
@@ -291,7 +288,6 @@ package final class Interaction {
     textSelection.layoutRegistry.clear()
     pendingFocus = nil
     scrollStates = [:]
-    animationPaints = []
     tree = nil
     navigation = nil
     navigationPath = []
@@ -302,7 +298,6 @@ package final class Interaction {
     selectedLeafID = nil
     pressedLeaf = nil
 
-    caretClock.setActive(false)
   }
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
@@ -468,7 +463,6 @@ package final class Interaction {
 
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
-    caretClock.setActive(editingLeaf != nil && textSelectionRange == nil, timestamp: animationFrame.timestamp)
     registrations = building
     logicalSelections = buildingLogicalSelections
     builderRoot = nil

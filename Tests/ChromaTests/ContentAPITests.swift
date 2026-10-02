@@ -38,37 +38,6 @@ struct ContentAPITests {
     #expect(layout.textInRange(from: 1, to: 3) == "bc")
   }
 
-  @Test func spinnerDemandDisappearsWithContent() {
-    let producer = FrameProducer(clock: { 100 })
-    let context = BlockContext()
-    func render(_ content: any Block) {
-      _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 40), input: InputState(),
-        context: context, onChange: {})
-    }
-    render(
-      HStack {
-        ProgressIndicator()
-        ProgressIndicator()
-        ProgressIndicator()
-        ProgressIndicator()
-      })
-    #expect(producer.needsAnimationFrame)
-    render(ProgressIndicator(isActive: false))
-    #expect(!producer.needsAnimationFrame)
-    render(ProgressIndicator())
-    producer.reset()
-    #expect(!producer.needsAnimationFrame)
-  }
-
-  @Test func nonOverflowingMarqueeDoesNotAnimate() {
-    let producer = FrameProducer(clock: { 100 })
-    _ = producer.render(
-      content: MarqueeText("short"), viewport: Size(width: 500, height: 40), input: InputState(),
-      context: BlockContext(), onChange: {})
-    #expect(!producer.needsAnimationFrame)
-  }
-
   @Test func editorInsertsNewlineAtCaretAndReplacesSelection() {
     let producer = FrameProducer()
     let context = BlockContext()

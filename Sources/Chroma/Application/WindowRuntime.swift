@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 package final class WindowRuntime {
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
-    producer = FrameProducer(clock: clock)
+    producer = FrameProducer()
     scheduler = FrameScheduler(clock: clock)
   }
 
@@ -17,18 +17,12 @@ package final class WindowRuntime {
   package var content: (any Block)? {
     didSet {
       producer.reset()
-      scheduler.animationsActive = false
-      scheduler.contentAnimationActive = false
+      scheduler.scrollMomentumActive = false
       scheduler.requestContent()
     }
   }
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
-  package var nextAnimationDeadline: Double? {
-    guard needsAnimationFrame, let lastFrameTime = scheduler.lastFrameTime else { return nil }
-    return lastFrameTime + 1 / scheduler.minimumRefreshRate
-  }
-  package var needsAnimationFrame: Bool { producer.needsAnimationFrame }
   package var context: BlockContext { BlockContext(interaction: interaction) }
 
   package func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
@@ -77,9 +71,14 @@ package final class WindowRuntime {
   }
 
   private func processInput(_ input: InputState) {
-    // Presentation can coalesce, but each event needs current callbacks and hit-test geometry.
-    producer.refreshRegistrations(
-      content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+    // Hover can use the last frame's geometry. Actionable events need current callbacks
+    // and layout, including between events whose presentation is coalesced.
+    if input.pointerDown || input.pointerPressed || input.pointerReleased || input.scrollDelta != .zero
+      || !input.commands.isEmpty || !input.textEvents.isEmpty
+    {
+      producer.refreshRegistrations(
+        content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+    }
     interaction.processInput(input)
     interaction.finishInput()
   }
@@ -89,12 +88,9 @@ package final class WindowRuntime {
     viewport: Size,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
-    // A timer may already be runnable when input arrives. Never paint stale animation first.
     flushInput()
-    if kind == .animation && !scheduler.hasContentRequest { return renderAnimations() }
     _ = interaction.consumeRedrawRequest()
     if !pendingInputs.isEmpty {
-      // Establish the viewport, then refresh registrations between queued events too.
       _ = render(viewport: viewport, input: InputState(), onChange: onChange)
       for input in pendingInputs { processInput(input) }
       pendingInputs.removeAll(keepingCapacity: true)
@@ -118,12 +114,7 @@ package final class WindowRuntime {
     let list = producer.render(
       content: content, viewport: viewport, input: input, context: context,
       processingInput: processingInput, onChange: onChange)
-    scheduler.animationsActive = producer.needsAnimationFrame
     return list
-  }
-
-  package func renderAnimations() -> DrawList {
-    producer.renderAnimations()
   }
 
   package func observe(_ list: DrawList, viewport: Size, rasterScale: Point? = nil) {

@@ -36,19 +36,21 @@ struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
   ) -> Size {
     switch operation {
     case .padding(let insets):
-      let childSize = measure(Size(
-        width: max(0, proposal.width - insets.leading - insets.trailing),
-        height: max(0, proposal.height - insets.top - insets.bottom)
-      ))
+      let childSize = measure(
+        Size(
+          width: max(0, proposal.width - insets.leading - insets.trailing),
+          height: max(0, proposal.height - insets.top - insets.bottom)
+        ))
       return Size(
         width: childSize.width + insets.leading + insets.trailing,
         height: childSize.height + insets.top + insets.bottom
       )
     case .sizing(let x, let y):
-      let childSize = measure(Size(
-        width: proposedSize(for: x, available: proposal.width),
-        height: proposedSize(for: y, available: proposal.height)
-      ))
+      let childSize = measure(
+        Size(
+          width: proposedSize(for: x, available: proposal.width),
+          height: proposedSize(for: y, available: proposal.height)
+        ))
       return Size(
         width: resolvedSize(for: x, available: proposal.width, fitted: childSize.width),
         height: resolvedSize(for: y, available: proposal.height, fitted: childSize.height)
@@ -69,11 +71,12 @@ struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
     switch operation {
     case .padding(let insets):
       drawContent(
-        &drawList, Rect(
+        &drawList,
+        Rect(
           x: rect.minX + insets.leading,
           y: rect.minY + insets.top,
           width: rect.size.width - insets.leading - insets.trailing,
-        height: rect.size.height - insets.top - insets.bottom
+          height: rect.size.height - insets.top - insets.bottom
         ), context)
     case .sizing:
       drawContent(&drawList, rect, context)

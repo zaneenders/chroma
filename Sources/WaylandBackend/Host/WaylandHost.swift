@@ -137,8 +137,6 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private func queueDisplayRead() {
-    // DispatchSource can notify again before the high-priority task drains the socket.
-    // Queue one read only: a second wl_display_dispatch could block on an already drained fd.
     guard running, !displayReadQueued else { return }
     displayReadQueued = true
     runtime.dispatchInput(requestsFrame: false) { [weak self] in
@@ -215,7 +213,7 @@ public final class WaylandHost: Chroma.Host {
     guard running else { return }
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
     runtime.handleInput(input.frameInput())
-    runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
+    runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
 
   private func renderFrame(_ kind: FrameScheduler.FrameKind) {
@@ -679,7 +677,7 @@ public final class WaylandHost: Chroma.Host {
     if interaction.consumeRedrawRequest() { requestFrame() }
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
     _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
-    runtime.scheduler.contentAnimationActive = input.hasScrollMomentum
+    runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
 
   private func updateFrameRate() {

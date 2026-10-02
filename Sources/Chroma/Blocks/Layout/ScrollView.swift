@@ -29,7 +29,7 @@ public struct ScrollView: PrimitiveBlock {
   private struct UniformRows {
     let count: Int
     let height: Float
-    let keys: [StructuralKey]?
+    let keys: UniformRowIdentity?
     let selection: LogicalSelection?
     let content: @MainActor (Int) -> any Block
   }
@@ -96,7 +96,7 @@ public struct ScrollView: PrimitiveBlock {
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
     self.init(
-      data: data, keys: data.map { StructuralKey($0.id) }, selection: nil, rowHeight: rowHeight, spacing: spacing,
+      data: data, keys: controller.rowIdentity(for: data), selection: nil, rowHeight: rowHeight, spacing: spacing,
       showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
     self.name = name
   }
@@ -107,16 +107,25 @@ public struct ScrollView: PrimitiveBlock {
     controller: ScrollViewController, selection: ScrollSelection<Data.Element.ID>,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    let ids = data.map(\.id)
+    let identity = controller.rowIdentity(for: data)
+    let ids = identity.ids
     self.init(
-      data: data, keys: ids.map { StructuralKey($0) },
+      data: data, keys: identity,
       selection: LogicalSelection(
         selectedKey: { selection.selectedID.map { StructuralKey($0) } },
         select: { key in
-          if let id = ids.first(where: { StructuralKey($0) == key }) { selection.selectedID = id }
+          if let index = identity.indices[key] { selection.selectedID = ids[index] }
         },
         move: { direction in
-          selection.move(in: ids, by: direction).map { StructuralKey($0) }
+          guard let selectedID = selection.selectedID,
+            let index = identity.indices[StructuralKey(selectedID)], !ids.isEmpty
+          else {
+            selection.selectedID = nil
+            return nil
+          }
+          let next = max(0, min(ids.count - 1, index + direction))
+          selection.selectedID = ids[next]
+          return identity.keys[next]
         }),
       rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
       sticksToBottom: sticksToBottom, controller: controller, content: content)
@@ -124,13 +133,12 @@ public struct ScrollView: PrimitiveBlock {
   }
 
   @MainActor private init<Data: RandomAccessCollection, RowContent: Block>(
-    data: Data, keys: [StructuralKey]?, selection: LogicalSelection?, rowHeight: Float, spacing: Float,
+    data: Data, keys: UniformRowIdentity?, selection: LogicalSelection?, rowHeight: Float, spacing: Float,
     showsIndicator: Bool, sticksToBottom: Bool, controller: ScrollViewController,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) {
     precondition(rowHeight.isFinite && rowHeight > 0, "rowHeight must be finite and positive")
     precondition(spacing.isFinite && spacing >= 0, "spacing must be finite and nonnegative")
-    if let keys { precondition(Set(keys).count == keys.count, "Duplicate lazy collection element ID") }
     self.init(
       spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom,
       content: .uniform(
@@ -150,12 +158,13 @@ public struct ScrollView: PrimitiveBlock {
     controller?.restore(id: id, interaction: interaction)
     let contentSize: Size
     let horizontal: Bool
+    var resolvedContent: BlockEngine.Resolved?
     switch content {
     case .block(let block, _):
       horizontal = true
-      contentSize = BlockEngine.measure(
-        block,
-        proposal: Size(width: rect.size.width, height: .greatestFiniteMagnitude), context: context)
+      let resolved = BlockEngine.resolve(block, context: context)
+      resolvedContent = resolved
+      contentSize = resolved.sizeThatFits(Size(width: rect.size.width, height: .greatestFiniteMagnitude))
     case .rows(let rows, let controller):
       horizontal = false
       updateCache(rows: rows, controller: controller, width: rect.size.width, context: context)
@@ -197,12 +206,12 @@ public struct ScrollView: PrimitiveBlock {
       rect: rect, axis: horizontal ? nil : .vertical,
       scrollID: id, navigationID: id, navigationName: name)
     switch content {
-    case .block(let block, _):
-      BlockEngine.draw(
-        block, into: &drawList,
+    case .block:
+      resolvedContent!.draw(
+        into: &drawList,
         in: Rect(
           x: rect.minX - offsets.x, y: rect.minY - offsets.y,
-          width: contentSize.width, height: contentSize.height), context: context)
+          width: contentSize.width, height: contentSize.height))
     case .rows, .uniform:
       drawRows(into: &drawList, in: rect, context: context, id: id, offset: offsets.y)
     }
@@ -273,9 +282,9 @@ public struct ScrollView: PrimitiveBlock {
             in: Rect(
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
               width: rect.size.width, height: uniformRows.height),
-            context: uniformRows.keys.map { context.scoped([.key($0[index])]) } ?? context.childScope(index),
+            context: uniformRows.keys.map { context.scoped([.key($0.keys[index])]) } ?? context.childScope(index),
             interaction: interaction, offset: offset, scrollID: id,
-            rowKey: uniformRows.keys?[index] ?? StructuralKey(index))
+            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index))
         }
       }
     case .rows(let rows, let controller):

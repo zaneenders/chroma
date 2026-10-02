@@ -228,5 +228,4 @@ extension Host {
 }
 
 extension BlockContext {
-  public var caretVisible: Bool { interaction.caretClock.isVisible(at: animationTimestamp) }
 }
