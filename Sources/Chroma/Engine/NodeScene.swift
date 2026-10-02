@@ -19,6 +19,7 @@ final class NodeScene {
     case interactive(any NodeInteractive)
     case background
     case themeReader
+    case container(any LifecycleContainer)
     case scroll(ScrollView)
     case group(String?)
     case trailing(Float)
@@ -105,7 +106,7 @@ final class NodeScene {
       case .marquee(let marquee): .marquee(marquee.text, marquee.fontScale)
       case .stack(let axis, let spacing, let reversed, let bottom): .stack(axis, spacing, reversed, bottom)
       case .interactive: .interactive
-      case .themeReader: .themeReader
+      case .themeReader, .container: .themeReader
       case .background: .background
       case .scroll: .scroll
       case .group: .group
@@ -354,6 +355,10 @@ final class NodeScene {
           try lower(row.nodeControls, context: context.childScope(1)),
         ])
     }
+    if let container = block as? any LifecycleContainer {
+      return Description(node: Node(content: .container(container), context: context),
+        children: [try lower(container.lifecycleContent(context: context), context: context)])
+    }
     if let element = block as? any LifecycleElement {
       return Description(node: Node(content: .element(element), context: context))
     }
@@ -547,7 +552,7 @@ final class NodeScene {
       let sizes = trailingSizes(id, spacing: spacing, proposal: proposal)
       return Size(width: proposal.width, height: max(sizes.0.height, sizes.1.height))
     case .background: return measure(store.children(of: id)![1], proposal: proposal)
-    case .themeReader, .interactive, .group, .scope, .boundary:
+    case .themeReader, .container, .interactive, .group, .scope, .boundary:
       return measure(store.children(of: id)![0], proposal: proposal)
     case .scroll, .list, .variableList, .color, .spacer: return proposal
     case .empty: return .zero
@@ -643,7 +648,7 @@ final class NodeScene {
     case .overlay, .tuple: return store.children(of: id)!.contains { expands($0, axis: axis) }
     case .trailing: return axis == .horizontal
     case .element(let element): return axis == .horizontal ? element.expandsHorizontally : element.expandsVertically
-    case .themeReader: return expands(store.children(of: id)![0], axis: axis)
+    case .themeReader, .container: return expands(store.children(of: id)![0], axis: axis)
     case .background: return expands(store.children(of: id)![1], axis: axis)
     case .interactive, .group, .scope, .boundary: return expands(store.children(of: id)![0], axis: axis)
     default: return false
@@ -720,6 +725,9 @@ final class NodeScene {
         in: Rect(
           x: rect.minX - node.scrollOffset.x, y: rect.minY - node.scrollOffset.y, width: node.contentSize.width,
           height: node.contentSize.height))
+    case .container(let container):
+      container.willPlace(in: rect, context: node.context)
+      try place(store.children(of: id)![0], in: rect)
     case .element: break
     case .trailing(let spacing):
       let children = store.children(of: id)!
@@ -778,7 +786,10 @@ final class NodeScene {
       let scrollID = node.context.widgetID
       list.controller?.restore(id: scrollID, interaction: interaction)
       let previousState = interaction.scrollStates[scrollID]
-      let followsBottom = list.sticksToBottom && previousState.map { abs($0.offset.y - $0.limit.y) <= 1 } == true
+      let requestedBottom = list.controller?.request == .bottom
+      let followsBottom = requestedBottom || (previousState?.pendingReveal == nil
+        && list.controller?.request == nil && list.sticksToBottom
+        && previousState.map { abs($0.offset.y - $0.limit.y) <= 1 } == true)
       let previousHeights = node.heightIndex
       let previousOffset = Double(previousState?.offset.y ?? 0)
       let previousAnchor = previousHeights?.row(at: previousOffset) ?? node.anchorIndex
@@ -792,7 +803,7 @@ final class NodeScene {
       {
         heights = VariableHeightIndex(count: list.count, estimatedHeight: Double(list.estimatedHeight))
       }
-      if list.count > 0,
+      if list.count > 0, previousHeights != nil,
         node.heightIndex == nil || node.measuredWidth != rect.size.width
           || node.measuredMetrics != node.context.fontMetrics || node.measuredTextScale != node.context.textScale
       {
@@ -1156,7 +1167,7 @@ final class NodeScene {
     case .color: bounds = expanded(node.rect, by: 2)
     case .element(let element): bounds = element.visualBounds(in: node.rect, context: node.context)
     case .empty, .spacer: break
-    case .themeReader, .interactive, .background, .scroll, .group, .trailing, .list, .variableList, .stack, .overlay,
+    case .themeReader, .container, .interactive, .background, .scroll, .group, .trailing, .list, .variableList, .stack, .overlay,
       .tuple, .scope, .boundary:
       for child in store.children(of: id)! { bounds = union(bounds, store.value(for: child)!.visualBounds) }
       switch node.content {
@@ -1244,6 +1255,8 @@ final class NodeScene {
       _ = context.buttonState(
         id: button.id ?? context.widgetID, in: node.rect, role: button.role, action: button.action)
     case .scope(let scope): scope.prepare(in: node.rect, context: context) { prepare(store.children(of: id)![0]) }
+    case .container(let container):
+      container.prepareChildren(in: node.rect, context: context) { prepare(store.children(of: id)![0]) }
     case .themeReader, .boundary: prepare(store.children(of: id)![0])
     case .tuple: for child in store.children(of: id)! { prepare(child) }
     case .list, .variableList:
@@ -1365,10 +1378,19 @@ final class NodeScene {
     precondition(prepared, "Interaction preparation must precede input")
     guard let root, let node = store.value(for: root) else { return }
     node.context.interaction.processInput(input)
+    handleContainerInput(root)
     node.context.interaction.finishInput()
     node.context.interaction.caretClock.setActive(
       node.context.interaction.editingLeaf != nil && node.context.interaction.textSelectionRange == nil,
       timestamp: node.context.interaction.animationFrame.timestamp)
+  }
+
+  private func handleContainerInput(_ id: NodeID) {
+    let node = store.value(for: id)!
+    for child in store.children(of: id)! { handleContainerInput(child) }
+    if case .container(let container) = node.content {
+      container.handleInput(in: node.rect, context: node.context)
+    }
   }
 
   func refreshScroll() throws {
@@ -1409,6 +1431,7 @@ final class NodeScene {
 
   private func scrollChanged(_ id: NodeID) -> Bool {
     let node = store.value(for: id)!
+    if node.context.interaction.scrollStates[node.context.widgetID]?.pendingReveal != nil { return true }
     switch node.content {
     case .scroll:
       if node.context.interaction.scrollStates[node.context.widgetID]?.offset != node.scrollOffset { return true }
@@ -1535,6 +1558,10 @@ final class NodeScene {
     case .element(let element):
       let rect = node.rect
       trackElement(id) { element.paint(into: &list, in: rect, context: context) }
+    case .container(let container):
+      container.paintChildren(in: node.rect, context: context) {
+        paint(store.children(of: id)![0], into: &list, clip: clip, cullingEnabled: cullingEnabled)
+      }
     case .themeReader, .interactive, .background, .group, .trailing, .stack, .overlay, .tuple, .scope, .boundary:
       for child in store.children(of: id)! { paint(child, into: &list, clip: clip, cullingEnabled: cullingEnabled) }
     }

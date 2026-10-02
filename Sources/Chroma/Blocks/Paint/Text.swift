@@ -1,4 +1,4 @@
-public struct Text: PrimitiveBlock {
+public struct Text: LifecycleElement {
   public var content: String
   public var color: Color
   public var scale: Float
@@ -59,19 +59,22 @@ public struct Text: PrimitiveBlock {
       height: Float(layout.lines.count) * context.fontMetrics.lineAdvance * scale * context.textScale)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    let effectiveScale = scale * context.textScale
+  public func prepareInteraction(in rect: Rect, context: BlockContext) {
+    if isSelectable { selectionLayout(in: rect, context: context).prepare(text: self, context: context) }
+  }
+  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     if isSelectable {
-      let layout = PlainTextLayout(
-        text: content, rect: rect,
-        cellWidth: context.fontMetrics.cellAdvance * effectiveScale,
-        lineHeight: context.fontMetrics.lineAdvance * effectiveScale,
-        scale: effectiveScale, columns: columns(width: rect.size.width, context: context))
-      layout.prepare(text: self, context: context)
-      layout.paint(text: self, context: context, into: &drawList)
-      return
+      selectionLayout(in: rect, context: context).paint(text: self, context: context, into: &drawList)
+    } else {
+      drawText(into: &drawList, in: rect, color: color, scale: scale * context.textScale, context: context)
     }
-    drawText(into: &drawList, in: rect, color: color, scale: effectiveScale, context: context)
+  }
+  @MainActor private func selectionLayout(in rect: Rect, context: BlockContext) -> PlainTextLayout {
+    let effectiveScale = scale * context.textScale
+    return PlainTextLayout(text: content, rect: rect,
+      cellWidth: context.fontMetrics.cellAdvance * effectiveScale,
+      lineHeight: context.fontMetrics.lineAdvance * effectiveScale,
+      scale: effectiveScale, columns: columns(width: rect.size.width, context: context))
   }
   @MainActor private func drawText(
     into drawList: inout DrawList, in rect: Rect, color: Color, scale: Float, context: BlockContext

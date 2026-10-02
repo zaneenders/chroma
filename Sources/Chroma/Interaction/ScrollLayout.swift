@@ -59,6 +59,7 @@ extension Interaction {
     state.limit = limit
     state.clampOffset()
     scrollStates[id] = state
+    controller?.limit = limit
     controller?.offset = state.offset.y
     controller?.horizontalOffset = state.offset.x
     return state.offset
