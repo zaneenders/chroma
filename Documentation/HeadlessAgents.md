@@ -31,15 +31,16 @@ on stderr. The dedicated `ChromaHeadless` product depends on `Chroma` and
 The demo contains two single-line text editors with placeholders `First` and
 `Second`, followed by a `Count: 0` button. It uses desktop navigation bindings
 with explicit plain Backspace and Delete editing bindings.
-The Python driver focuses the first editor, enters text, and prints the responses:
+The Swift driver focuses the first editor, enters text, and prints the responses:
 
 ```sh
-python3 Tools/headless_client.py .build/debug/ChromaHeadlessDemo --text "Hello Chroma"
-python3 Tools/test_headless_stdio.py .build/debug/ChromaHeadlessDemo
+swift Tools/headless_client.swift .build/debug/ChromaHeadlessDemo --text "Hello Chroma"
+swift Tools/test_headless_stdio.swift .build/debug/ChromaHeadlessDemo
 ```
 
-The driver and integration tests require only Python 3.10+ and its standard
-library. Tests launch real subprocesses with stdin/stdout/stderr pipes, rather
+The driver and integration tests are standalone Swift scripts using Foundation,
+with no package dependencies.
+Tests launch real subprocesses with stdin/stdout/stderr pipes, rather
 than invoking the request decoder in-process. They cover burst input ordering,
 repeated keys, pointer editing and button clicks, resizes, malformed and oversized
 input recovery, byte limits, EOF, quit, and strict JSON-only stdout.

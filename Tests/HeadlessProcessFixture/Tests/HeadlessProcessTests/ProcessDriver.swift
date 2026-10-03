@@ -8,6 +8,29 @@ import Darwin
 import Glibc
 #endif
 
+struct WireRequest: Codable, Sendable {
+  enum Operation: String, Codable, Sendable {
+    case key, frame, quit, resize, pointer
+  }
+
+  var version = 1
+  var id: String? = nil
+  let op: Operation
+  var key: String? = nil
+  var text: String? = nil
+  var width: Double? = nil
+  var height: Double? = nil
+  var phase: String? = nil
+  var x: Double? = nil
+  var y: Double? = nil
+
+  func encoded(terminated: Bool = true) throws -> Data {
+    var data = try JSONEncoder().encode(self)
+    if terminated { data.append(10) }
+    return data
+  }
+}
+
 struct WireResponse: Decodable, Sendable {
   struct Viewport: Decodable, Sendable, Equatable {
     let width: Double
@@ -198,11 +221,22 @@ struct ProcessClient: Sendable {
   let diagnostics: Diagnostics
   let pid: pid_t
 
-  func send(_ json: String) async throws { _ = try await input.write(json + "\n") }
+  func sendRaw(_ data: Data) async throws { _ = try await input.write(data) }
+
+  func send(_ request: WireRequest, terminated: Bool = true) async throws {
+    try await sendRaw(request.encoded(terminated: terminated))
+  }
+
+  func send(_ requests: [WireRequest]) async throws {
+    var data = Data()
+    for request in requests { data.append(try request.encoded()) }
+    try await sendRaw(data)
+  }
+
   func receive() async throws -> WireResponse { try await responses.next() }
 
-  func request(_ json: String) async throws -> WireResponse {
-    try await send(json)
+  func request(_ request: WireRequest) async throws -> WireResponse {
+    try await send(request)
     return try await receive()
   }
 }
