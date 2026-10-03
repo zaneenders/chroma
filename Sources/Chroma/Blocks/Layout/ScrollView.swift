@@ -1,4 +1,4 @@
-public struct ScrollView: PrimitiveBlock {
+public struct ScrollView: LayoutPreparingBlock {
   public struct Row: Identifiable {
     public let id: AnyHashable
     public var content: any Block {
@@ -11,6 +11,15 @@ public struct ScrollView: PrimitiveBlock {
       self.id = AnyHashable(id)
       self.key = StructuralKey(id)
       self.content = content
+    }
+
+    /// Invalidates persistent measurement after an unobserved value used by this row changes.
+    /// Measurements are reused only while row identity, layout environment, and observed
+    /// dependencies remain valid. Replacing `content` invalidates automatically; mutations
+    /// captured outside Observation require this explicit invalidation. Registration still
+    /// resolves current content and callbacks on each update, independently of measurement reuse.
+    public mutating func invalidateMeasurement() {
+      measurementIdentity = LazyRowIdentity()
     }
   }
 
@@ -108,23 +117,22 @@ public struct ScrollView: PrimitiveBlock {
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
     let identity = controller.rowIdentity(for: data)
-    let ids = identity.ids
     self.init(
       data: data, keys: identity,
       selection: LogicalSelection(
         selectedKey: { selection.selectedID.map { StructuralKey($0) } },
         select: { key in
-          if let index = identity.indices[key] { selection.selectedID = ids[index] }
+          if let index = identity.indices[key] { selection.selectedID = identity.ids[index] }
         },
         move: { direction in
           guard let selectedID = selection.selectedID,
-            let index = identity.indices[StructuralKey(selectedID)], !ids.isEmpty
+            let index = identity.indices[StructuralKey(selectedID)], !identity.ids.isEmpty
           else {
             selection.selectedID = nil
             return nil
           }
-          let next = max(0, min(ids.count - 1, index + direction))
-          selection.selectedID = ids[next]
+          let next = max(0, min(identity.ids.count - 1, index + direction))
+          selection.selectedID = identity.ids[next]
           return identity.keys[next]
         }),
       rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
@@ -147,12 +155,82 @@ public struct ScrollView: PrimitiveBlock {
         }, controller))
   }
 
-  public var focusRule: FocusRule { .container }
-  public var expandsHorizontally: Bool { true }
-  public var expandsVertically: Bool { true }
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+  private struct ScrollGeometry {
+    let id: WidgetID
+    let contentSize: Size
+    let horizontal: Bool
+    let offsets: Point
+    let resolvedContent: BlockEngine.Resolved?
+  }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  /// Placement events are shared by registration and presentation. No event requires painting.
+  private enum Placement {
+    case content(BlockEngine.Resolved, Rect)
+    case rowFocus(BlockContext, Rect)
+  }
+
+  /// The resolved operation owns this snapshot. It is never stored on the controller or
+  /// reused by a later update, so painting keeps the exact visible rows and geometry that
+  /// registration prepared without measuring, rebuilding rows, or changing scroll state.
+  private struct PreparedScroll {
+    let rect: Rect
+    let geometry: ScrollGeometry
+    let placements: [Placement]
+  }
+
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    var prepared: PreparedScroll?
+    return BlockEngine.Resolved(
+      expandsHorizontally: { true }, expandsVertically: { true },
+      measure: { $0 },
+      register: { rect in prepared = registerContent(in: rect, context: context) },
+      paint: { list, rect in
+        precondition(prepared?.rect == rect, "ScrollView painting requires registration in the same operation")
+        paint(prepared!, into: &list, context: context)
+      })
+  }
+
+  @MainActor private func registerContent(in rect: Rect, context: BlockContext) -> PreparedScroll {
+    let geometry = prepareScroll(in: rect, context: context)
+    var placements: [Placement] = []
+    placeContent(in: rect, context: context, geometry: geometry) { placement in
+      placements.append(placement)
+      switch placement {
+      case .content(let resolved, let rect): resolved.register(in: rect)
+      case .rowFocus(let context, let rect): context.registerFocusable(in: rect)
+      }
+    }
+    return PreparedScroll(rect: rect, geometry: geometry, placements: placements)
+  }
+
+  @MainActor private func paint(_ prepared: PreparedScroll, into drawList: inout DrawList, context: BlockContext) {
+    drawList.pushClip(prepared.rect)
+    for placement in prepared.placements {
+      switch placement {
+      case .content(let resolved, let rect): resolved.paint(into: &drawList, in: rect)
+      case .rowFocus(let context, let rect): context.paintFocusHighlight(in: rect, into: &drawList)
+      }
+    }
+    paintIndicators(into: &drawList, in: prepared.rect, geometry: prepared.geometry, context: context)
+    drawList.popClip()
+  }
+
+  @MainActor private func paintIndicators(
+    into drawList: inout DrawList, in rect: Rect, geometry: ScrollGeometry, context: BlockContext
+  ) {
+    if showsIndicator {
+      drawIndicator(
+        into: &drawList, in: rect, extent: geometry.contentSize.height, offset: geometry.offsets.y,
+        horizontal: false, style: context.theme.scrollView)
+      if geometry.horizontal {
+        drawIndicator(
+          into: &drawList, in: rect, extent: geometry.contentSize.width, offset: geometry.offsets.x,
+          horizontal: true, style: context.theme.scrollView)
+      }
+    }
+  }
+
+  @MainActor private func prepareScroll(in rect: Rect, context: BlockContext) -> ScrollGeometry {
     let id = context.widgetID
     let interaction = context.interaction
     controller?.restore(id: id, interaction: interaction)
@@ -200,34 +278,33 @@ public struct ScrollView: PrimitiveBlock {
     let offsets = interaction.resolveScroll(
       id: id, viewport: rect, contentSize: contentSize, controller: controller,
       sticksToBottom: sticksToBottom, horizontal: horizontal)
-    drawList.pushClip(rect)
+    return ScrollGeometry(
+      id: id, contentSize: contentSize, horizontal: horizontal, offsets: offsets,
+      resolvedContent: resolvedContent)
+  }
+
+  @MainActor private func placeContent(
+    in rect: Rect, context: BlockContext, geometry: ScrollGeometry,
+    visit: (Placement) -> Void
+  ) {
+    let interaction = context.interaction
     interaction.pushClip(rect)
     interaction.beginGroup(
-      rect: rect, axis: horizontal ? nil : .vertical,
-      scrollID: id, navigationID: id, navigationName: name)
+      rect: rect, axis: geometry.horizontal ? nil : .vertical,
+      scrollID: geometry.id, navigationID: geometry.id, navigationName: name)
     switch content {
     case .block:
-      resolvedContent!.draw(
-        into: &drawList,
-        in: Rect(
-          x: rect.minX - offsets.x, y: rect.minY - offsets.y,
-          width: contentSize.width, height: contentSize.height))
+      visit(
+        .content(
+          geometry.resolvedContent!,
+          Rect(
+            x: rect.minX - geometry.offsets.x, y: rect.minY - geometry.offsets.y,
+            width: geometry.contentSize.width, height: geometry.contentSize.height)))
     case .rows, .uniform:
-      drawRows(into: &drawList, in: rect, context: context, id: id, offset: offsets.y)
+      placeRows(in: rect, context: context, id: geometry.id, offset: geometry.offsets.y, visit: visit)
     }
     interaction.endGroup()
     interaction.popClip()
-    if showsIndicator {
-      drawIndicator(
-        into: &drawList, in: rect, extent: contentSize.height, offset: offsets.y,
-        horizontal: false, style: context.theme.scrollView)
-      if horizontal {
-        drawIndicator(
-          into: &drawList, in: rect, extent: contentSize.width, offset: offsets.x,
-          horizontal: true, style: context.theme.scrollView)
-      }
-    }
-    drawList.popClip()
   }
 
   private func drawIndicator(
@@ -250,13 +327,14 @@ public struct ScrollView: PrimitiveBlock {
     drawList.fillRect(thumb, color: style.indicator)
   }
 
-  @MainActor private func drawRows(
-    into drawList: inout DrawList, in rect: Rect, context: BlockContext, id: WidgetID, offset: Float
+  @MainActor private func placeRows(
+    in rect: Rect, context: BlockContext, id: WidgetID, offset: Float,
+    visit: (Placement) -> Void
   ) {
     let interaction = context.interaction
     let visibleTop = offset
     let visibleBottom = offset + rect.size.height
-    let (before, after) = focusBuffer(for: interaction)
+    let (before, after) = focusBuffer(for: interaction, keyboardNavigationOverscan: context.keyboardNavigationOverscan)
     switch content {
     case .block: preconditionFailure("Expected virtualized rows")
     case .uniform(let uniformRows, _):
@@ -277,14 +355,14 @@ public struct ScrollView: PrimitiveBlock {
       let end = min(uniformRows.count, visibleEnd + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
-          drawRow(
-            uniformRows.content(index), into: &drawList,
+          placeRow(
+            uniformRows.content(index),
             in: Rect(
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
               width: rect.size.width, height: uniformRows.height),
             context: uniformRows.keys.map { context.scoped([.key($0.keys[index])]) } ?? context.childScope(index),
             interaction: interaction, offset: offset, scrollID: id,
-            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index))
+            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index), visit: visit)
         }
       }
     case .rows(let rows, let controller):
@@ -295,33 +373,32 @@ public struct ScrollView: PrimitiveBlock {
       let end = min(rows.count, positions.firstRow(startingAfter: visibleBottom) + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
-          drawRow(
+          placeRow(
             rows[index].content,
-            into: &drawList,
             in: Rect(
               x: rect.minX, y: rect.minY + positions.starts[index] - offset,
               width: rect.size.width, height: positions.heights[index]),
             context: context.scoped([.key(rows[index].key)]),
-            interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key)
+            interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key, visit: visit)
         }
       }
     }
   }
 
-  @MainActor private func drawRow(
-    _ content: any Block, into drawList: inout DrawList, in rect: Rect,
+  @MainActor private func placeRow(
+    _ content: any Block, in rect: Rect,
     context rowContext: BlockContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
-    rowKey: StructuralKey
+    rowKey: StructuralKey, visit: (Placement) -> Void
   ) {
     guard let group = interaction.builderStack.last else {
-      preconditionFailure("drawRow outside of a frame; call beginFrame first")
+      preconditionFailure("placeRow outside of a frame; call beginFrame first")
     }
     let children = group.children.count
     var rowContext = rowContext
     rowContext.focusLeafClaimed = true
-    BlockEngine.draw(content, into: &drawList, in: rect, context: rowContext)
+    visit(.content(BlockEngine.resolve(content, context: rowContext), rect))
     if group.children.count == children {
-      rowContext.focusable(in: rect, into: &drawList)
+      visit(.rowFocus(rowContext, rect))
     }
     recordScrollRows(
       in: group.children[children...], offset: offset, scrollID: scrollID,
@@ -347,7 +424,12 @@ public struct ScrollView: PrimitiveBlock {
     }
   }
 
-  @MainActor private func focusBuffer(for interaction: Interaction) -> (before: Int, after: Int) {
+  @MainActor private func focusBuffer(
+    for interaction: Interaction, keyboardNavigationOverscan: Bool
+  ) -> (before: Int, after: Int) {
+    // A raw key's scoped binding is known only after registration. Prepare either
+    // adjacent row in this same update rather than registering a second time.
+    if keyboardNavigationOverscan { return (1, 1) }
     var before = 0
     var after = 0
     for command in interaction.input.commands {

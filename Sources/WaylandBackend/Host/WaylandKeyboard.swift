@@ -8,6 +8,9 @@ import Chroma
 final class WaylandKeyboard {
   private var keyboard: OpaquePointer?
   var resolve: ((KeyboardInput, Bool) -> ResolvedKeyboardInput?)?
+  /// Native hosts update registration before resolving and supply the resulting
+  /// editing session. Delivery stays synchronous once the first frame exists.
+  var dispatch: ((KeyboardInput, @escaping (ResolvedKeyboardInput, Bool, Int) -> Void) -> Void)?
   private enum PendingTextEvent {
     case event(TextEditEvent, session: Int)
     case paste(Int32, session: Int)
@@ -43,6 +46,7 @@ final class WaylandKeyboard {
     pendingCommands.removeAll(keepingCapacity: false)
     pendingTextEvents.removeAll(keepingCapacity: false)
     onInputAvailable = nil
+    dispatch = nil
     onCopy = nil
     onCut = nil
     onPaste = nil
@@ -111,7 +115,16 @@ final class WaylandKeyboard {
     let input = KeyboardInput(
       chord: keyChord(symbol: chroma_xkb_keyboard_keysym(keyboard, key), keyboard: keyboard),
       text: text(for: key, keyboard: keyboard))
-    guard let resolved = resolve?(input, editing) else { return }
+    if let dispatch {
+      dispatch(input) { [weak self] resolved, editing, session in
+        self?.dispatchResolved(resolved, editing: editing, editingSession: session)
+      }
+    } else if let resolved = resolve?(input, editing) {
+      dispatchResolved(resolved, editing: editing, editingSession: editingSession)
+    }
+  }
+
+  private func dispatchResolved(_ resolved: ResolvedKeyboardInput, editing: Bool, editingSession: Int) {
     defer { onInputAvailable?() }
     switch resolved {
     case .command(let command): pendingCommands.append(command)

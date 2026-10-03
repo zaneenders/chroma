@@ -66,11 +66,11 @@ struct BlockContextTests {
 
     _ = BlockEngine.measure(block, proposal: Size(width: 20, height: 10), context: context)
     var drawList = DrawList()
-    BlockEngine.draw(
-      block,
-      into: &drawList,
-      in: Rect(x: 0, y: 0, width: 20, height: 10),
-      context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 10))
+      resolved.paint(into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
+    }
 
     #expect(recorder.measuredInteraction === interaction)
     #expect(recorder.drawnInteraction === interaction)
@@ -104,17 +104,19 @@ private final class ContextRecorder {
   var drawnInteraction: Interaction?
 }
 
-private struct ContextRecordingBlock: PrimitiveBlock {
+private struct ContextRecordingBlock: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   let recorder: ContextRecorder
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     recorder.measuredInteraction = context.interaction
     return proposal
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     recorder.drawnInteraction = context.interaction
   }
 }

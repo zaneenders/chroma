@@ -1,6 +1,6 @@
 import Foundation
 
-public struct MarqueeText: PrimitiveBlock {
+public struct MarqueeText: PaintableBlock {
   public var text: String
   public var color: Color
   public var fontScale: Float
@@ -20,7 +20,9 @@ public struct MarqueeText: PrimitiveBlock {
     Size(width: proposal.width, height: context.fontMetrics.measure(text, scale: fontScale * context.textScale).height)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  public func register(in rect: Rect, context: BlockContext) {}
+
+  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let scale = fontScale * context.textScale
     drawList.pushClip(rect)
     drawList.text(text, at: rect.origin, color: color, scale: scale)

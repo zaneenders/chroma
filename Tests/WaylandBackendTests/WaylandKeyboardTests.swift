@@ -103,4 +103,27 @@ struct WaylandKeyboardTests {
     #expect(events == Array(repeating: .insert("a"), count: 5))
   }
 
+  @Test func nativeDispatchUsesRefreshedEditingSessionForEveryRepeat() throws {
+    let keyboard = try keyboard()
+    defer { keyboard.cleanup() }
+    keyboard.updateModifiers(depressed: 0, latched: 0, locked: 0, group: 0)
+    keyboard.updateRepeatInfo(rate: 20, delay: 100)
+    var session = 1
+    var dispatches = 0
+    var events: [TextEditEvent] = []
+    keyboard.dispatch = { _, deliver in
+      dispatches += 1
+      session += 1
+      deliver(.text(.insert("a")), true, session)
+    }
+    keyboard.onInputAvailable = {
+      var commands: [Command] = []
+      keyboard.drain(editingSession: session, commands: &commands, textEvents: &events)
+    }
+    keyboard.keyPressed(30, editing: false, editingSession: 0, now: 0)
+    #expect(keyboard.dispatchRepeats(editing: false, editingSession: 0, now: 0.26))
+    #expect(dispatches == 5)
+    #expect(events == Array(repeating: .insert("a"), count: 5))
+  }
+
 }

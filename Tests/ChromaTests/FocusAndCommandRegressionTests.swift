@@ -502,18 +502,19 @@ struct FocusAndCommandRegressionTests {
   }
 }
 
-private struct GridProbe: PrimitiveBlock {
+private struct GridProbe: PaintableBlock {
+
   let rows: Int
   let columns: Int
   private let cell: Float = 20
 
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: Float(columns) * cell, height: Float(rows) * cell)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func register(in rect: Rect, context: BlockContext) {
     context.withFocusGroup(in: rect, axis: .vertical) {
       for row in 0..<rows {
         let rowRect = Rect(
@@ -528,4 +529,5 @@ private struct GridProbe: PrimitiveBlock {
       }
     }
   }
+  func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
 }

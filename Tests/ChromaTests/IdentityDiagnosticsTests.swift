@@ -10,7 +10,11 @@ struct IdentityDiagnosticsTests {
   @MainActor private static func draw(_ block: any Block, context: BlockContext = BlockContext()) {
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(block, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 100))
+      resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
+    }
     context.interaction.endFrame()
   }
 

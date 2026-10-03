@@ -1,4 +1,4 @@
-public struct Image: PrimitiveBlock {
+public struct Image: PaintableBlock {
   public var resource: ImageResource
   public var scaling: ImageScaling
   public var alignment: ImageAlignment
@@ -22,7 +22,9 @@ public struct Image: PrimitiveBlock {
   public var expandsHorizontally: Bool { false }
   public var expandsVertically: Bool { false }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  public func register(in rect: Rect, context: BlockContext) {}
+
+  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.image(resource, in: rect, scaling: scaling, alignment: alignment)
   }
 }

@@ -1,4 +1,4 @@
-public struct VStack: PrimitiveBlock {
+public struct VStack: LayoutPreparingBlock {
   public var spacing: Float
   var scopedChildren: [any Block]
 
@@ -21,24 +21,4 @@ public struct VStack: PrimitiveBlock {
     return copy
   }
 
-  public var focusRule: FocusRule { .container }
-
-  @MainActor public var expandsHorizontally: Bool {
-    scopedChildren.contains { child in
-      !BlockEngine.isSpacer(child) && BlockEngine.expandsHorizontally(child)
-    }
-  }
-
-  @MainActor public var expandsVertically: Bool {
-    scopedChildren.contains { BlockEngine.expandsVertically($0) }
-  }
-
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    StackLayout(axis: .vertical, spacing: spacing).measure(scopedChildren, proposal: proposal, context: context)
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    StackLayout(axis: .vertical, spacing: spacing).draw(
-      scopedChildren, reversed: isLayoutReversed, into: &drawList, in: rect, context: context)
-  }
 }

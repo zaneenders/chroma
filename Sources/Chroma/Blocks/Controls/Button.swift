@@ -1,4 +1,4 @@
-public struct Button: PrimitiveBlock {
+public struct Button: PaintableBlock {
   public var label: String
   var id: WidgetID?
   public let action: @MainActor () -> Void
@@ -45,9 +45,13 @@ public struct Button: PrimitiveBlock {
       height: textSize.height + padding.top + padding.bottom)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
+    _ = context.buttonState(id: id ?? context.widgetID, in: rect, role: role, action: action)
+  }
+
+  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let style = style ?? context.theme.button
-    let state = context.buttonState(id: id ?? context.widgetID, in: rect, role: role) { action() }
+    let state = context.buttonVisualState(id: id ?? context.widgetID)
 
     let background: Color
     switch state.phase {

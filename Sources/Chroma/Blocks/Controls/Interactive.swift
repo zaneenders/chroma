@@ -1,4 +1,4 @@
-public struct Interactive<Content: Block>: PrimitiveBlock {
+public struct Interactive<Content: Block>: LayoutPreparingBlock {
   var id: WidgetID?
   public var action: @MainActor () -> Void
   public var content: @MainActor (InteractionPhase) -> Content
@@ -28,26 +28,45 @@ public struct Interactive<Content: Block>: PrimitiveBlock {
     self.init(id: WidgetID(id), action: action, content: content)
   }
 
-  public var focusRule: FocusRule { .control }
+}
 
-  @MainActor public var expandsHorizontally: Bool {
-    BlockEngine.expandsHorizontally(content(.idle))
-  }
-
-  @MainActor public var expandsVertically: Bool {
-    BlockEngine.expandsVertically(content(.idle))
-  }
-
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    BlockEngine.measure(content(.idle), proposal: proposal, context: context)
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+extension Interactive {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    // Layout queries intentionally use the idle tree. The current-phase tree belongs
+    // to this operation and is shared by registration and painting, never a later event.
+    var idle: BlockEngine.Resolved?
+    func measurementTree() -> BlockEngine.Resolved {
+      if let idle { return idle }
+      let resolved = BlockEngine.resolve(content(.idle), context: context)
+      idle = resolved
+      return resolved
+    }
+    var childContext = context
+    childContext.focusTargets = []
+    childContext.focusLeafClaimed = true
+    var active: BlockEngine.Resolved?
+    var activePhase: InteractionPhase?
+    func current(_ phase: InteractionPhase) -> BlockEngine.Resolved {
+      if let active, activePhase == phase { return active }
+      let resolved = BlockEngine.resolve(content(phase), context: childContext)
+      active = resolved
+      activePhase = phase
+      return resolved
+    }
     let id = id ?? context.widgetID
-    let state = context.buttonState(id: id, in: rect, action: action)
-    var context = context
-    context.focusTargets = []
-    context.focusLeafClaimed = true
-    BlockEngine.draw(content(state.phase), into: &drawList, in: rect, context: context)
+    return BlockEngine.Resolved(
+      expandsHorizontally: { measurementTree().expandsHorizontally },
+      expandsVertically: { measurementTree().expandsVertically },
+      measure: { measurementTree().sizeThatFits($0) },
+      register: { rect in
+        let state = context.buttonState(id: id, in: rect, action: action)
+        current(state.phase).register(in: rect)
+      },
+      paint: { list, rect in
+        // Canonical update has prepared this exact phase; direct standalone paint may
+        // prepare a fresh visual tree, but never installs its handlers or focus leaves.
+        let child = active ?? current(context.buttonVisualState(id: id).phase)
+        child.paint(into: &list, in: rect)
+      })
   }
 }

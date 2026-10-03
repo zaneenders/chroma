@@ -1,5 +1,6 @@
 @MainActor
 public struct BlockContext {
+  var keyboardNavigationOverscan = false
   var structuralPath = StructuralPath()
   var widgetID: WidgetID { WidgetID(path: structuralPath) }
   var backgroundDepth = 0
@@ -45,11 +46,19 @@ public struct BlockContext {
   public var selection: TextSelectionManager { interaction.textSelection }
 
   public func setCopyTextProvider(_ provider: (@MainActor () -> String?)?) {
-    interaction.onCopy = provider
+    if interaction.builderRoot != nil {
+      interaction.building.copyProvider = provider
+    } else {
+      interaction.onCopy = provider
+    }
   }
 
   public func setSelectAllHandler(_ handler: (@MainActor () -> Bool)?) {
-    interaction.onSelectAll = handler
+    if interaction.builderRoot != nil {
+      interaction.building.selectAll = handler
+    } else {
+      interaction.onSelectAll = handler
+    }
   }
 
   public var navigationBreadcrumb: [String] {
@@ -120,6 +129,52 @@ public struct BlockContext {
     interaction.registerFocusTargets(focusTargets, id: id)
     return interaction.interactiveBehavior(
       id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
+  }
+
+  /// Reads the current visual phase without registering a control or replaying an action.
+  /// `clicked` is always false: input edges belong to dispatch, never painting.
+  public func buttonVisualState() -> ButtonState {
+    buttonVisualState(id: widgetID)
+  }
+
+  func buttonVisualState(id: WidgetID) -> ButtonState {
+    let state = interaction.untrackedLeafState
+    return ButtonState(
+      hovered: state.hovered == id, focused: state.selected == id,
+      held: state.pressed == id && interaction.input.pointerDown, clicked: false)
+  }
+
+  /// Reads focus, editing, caret and selection without installing handlers, clamping
+  /// editing state, consuming focus requests, or evaluating the application's text binding.
+  public func textInputVisualState() -> TextInputState {
+    textInputVisualState(id: widgetID)
+  }
+
+  func textInputVisualState(id: WidgetID) -> TextInputState {
+    let state = buttonVisualState(id: id)
+    let hasCaret = interaction.editingLeaf == id
+    return TextInputState(
+      hovered: state.hovered, focused: state.focused, held: state.held,
+      editing: hasCaret && interaction.isTextEditing,
+      caretOffset: hasCaret ? interaction.caretOffset : nil,
+      selectionRange: hasCaret ? interaction.textSelectionRange : nil)
+  }
+
+  /// Paints the current focus/hover indication without registering a focus leaf.
+  public func paintFocusHighlight(in rect: Rect, into drawList: inout DrawList) {
+    guard !navigationIgnored else { return }
+    BlockEngine.drawHighlight(for: widgetID, into: &drawList, in: rect, context: self)
+  }
+
+  /// Registers a focus leaf and current behavior without emitting a visual highlight.
+  @discardableResult
+  public func registerFocusable(
+    in rect: Rect, role: ActionRole = .normal, action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    guard !navigationIgnored else {
+      return ButtonState(hovered: false, held: false, clicked: false)
+    }
+    return buttonState(in: rect, role: role, action: action)
   }
 
   @discardableResult
@@ -228,4 +283,9 @@ extension Host {
 }
 
 extension BlockContext {
+  /// Registers an ordered event observer. It runs once after core input dispatch,
+  /// before release/drag cleanup; presentation never invokes it.
+  public func registerInputHandler(_ handler: @escaping @MainActor (InputState) -> Void) {
+    interaction.building.inputObservers.append(handler)
+  }
 }

@@ -9,15 +9,16 @@ struct CustomTextSelectionTests {
     var state: TextInputState?
   }
 
-  private struct ReadOnlyText: PrimitiveBlock {
+  private struct ReadOnlyText: PaintableBlock {
+
     let renderer: Renderer
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       Size(width: 200, height: 40)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: BlockContext) {
       let layout = TextLayout(renderer.text)
       renderer.state = context.textSelectionState(
         in: rect, text: { renderer.text },
@@ -27,6 +28,9 @@ struct CustomTextSelectionTests {
             column: Int((point.x - rect.minX) / 10))
         },
         verticalOffset: { layout.verticalOffset($0, direction: $1) })
+    }
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+      renderer.state = context.textInputVisualState()
     }
   }
 
