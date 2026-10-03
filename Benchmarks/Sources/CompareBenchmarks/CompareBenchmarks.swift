@@ -12,6 +12,10 @@ struct BenchmarkRuns {
     "scene", "stage", "count", "warmup", "minimumFrames", "minimumSeconds", "sequenceFrames",
     "commandCountMin", "commandCountMax",
   ]
+  static let stressConfigKeys = [
+    "benchmarkKind", "schemaVersion", "fixtureVersion", "viewport", "configuration", "samples", "warmup",
+    "phaseSamples",
+  ]
   var metadata: [Data] = []
   var configs: [String: Data] = [:]
   var results: [String: [[String: Double]]] = [:]
@@ -41,7 +45,10 @@ struct BenchmarkRuns {
           let timings = report["timings"] as? [String: [String: Double]], !timings.isEmpty
         else { throw ComparisonError("Invalid report: \(name)") }
         var config: [String: Any] = [:]
-        for key in Self.configKeys {
+        let kind = report["benchmarkKind"] as? String
+        guard kind == nil || kind == "stress" else { throw ComparisonError("Unknown benchmark kind: \(name)") }
+        let configKeys = kind == "stress" ? Self.stressConfigKeys : Self.configKeys
+        for key in configKeys {
           guard let value = report[key] else { throw ComparisonError("Missing \(key): \(name)") }
           config[key] = value
         }

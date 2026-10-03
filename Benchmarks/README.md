@@ -26,6 +26,45 @@ Timing and work counters use separate identical replays so enabled instrumentati
 
 `PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved block values and their ordinary proposal caches remain **traversal-scoped**. No cross-frame subtree geometry cache is retained. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
 
+## Stress lab benchmark and native example
+
+```sh
+swift run --package-path Benchmarks -c release StressBenchmark
+swift run --package-path ../chroma-examples -c release StressExample
+# Increase collection scans, nesting, and input burst size:
+swift run --package-path Benchmarks -c release StressBenchmark \
+  --rows 1000000 --panes 4 --depth 12 --events 24 --samples 30 --warmup 5
+swift test --package-path Benchmarks --filter StressFixturesTests
+```
+
+Both products share `StressScene`: by default three independent virtualized lists,
+100,000 identified rows per pane, eight nested interactive layers per visible row,
+text previews, and buttons in a 1440×900 viewport. In the native example, scroll
+individual panes and click **Update all panes** to invalidate their displayed revision.
+The example uses the default configuration; edit its `StressConfiguration` to scale it.
+
+The benchmark accepts the options above (`--help` prints defaults). Each cycle applies
+two header activations and an ordered burst of 12 scroll events distributed across
+panes, then presents once and checks 1,000 idle polls. Alternating scroll directions
+keep the workload near the populated viewport rather than running to an endpoint.
+Callbacks must stay fresh and presentation must not replay actions.
+
+JSON separates first-frame, input-burst, presentation, and idle timings and includes
+pipeline counters. The initial frame has **one fresh-host sample**, excluding scene
+allocation; its p50/p95 are therefore the same, not a startup distribution. Active
+phases use 5 warmups and 30 measured cycles by default. Percentiles use nearest-rank
+p95 and the lower median. Counters come from the final cycle of a separate matching
+replay with instrumentation enabled; timings disable instrumentation. Close checks
+that resolved nodes and observation subscriptions are released.
+
+This intentionally stresses whole-collection ID scans as well as visible layout:
+virtualization does not eliminate metadata scanning. Timings exclude native event
+loops, GPU work, and refresh deadlines. `run.sh` includes `stress-headless.json`
+in every collection; `CompareBenchmarks` checks its workload, viewport, schema/fixture
+versions, warmup and sample counts before comparing each phase’s p50/p95.
+The single-sample first-frame phase is also compared, but is noisier than steady state.
+Use the native example for manual profiling, not as evidence of frame-rate guarantees.
+
 ## Input frames
 
 ```sh
@@ -121,7 +160,8 @@ swift run --package-path Benchmarks -c release CompareBenchmarks \
 
 The scripts preserve reports and revision, worktree, toolchain, dependency, and hardware metadata. `run.sh` refuses nonempty output directories; `baseline.sh` requires a new directory and accepts 3–30 trials (default: 5). Keep old baselines and create new directories when updating them.
 
-The scripts currently require `Benchmarks/Package.resolved` to copy dependency metadata. If it is absent, collection stops at that step.
+The scripts copy `Benchmarks/Package.resolved` when present; otherwise they record
+`swift package show-dependencies --format json` for the local dependency graph.
 
 Comparisons require matching workloads, configuration, toolchain, dependencies, and hardware. They compare median p50/p95 timings across trials and exit nonzero for regressions above the threshold (default: 15%). Reported spread is not a confidence interval.
 

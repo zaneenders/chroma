@@ -8,11 +8,16 @@ if [ -d "$out" ] && [ -n "$(ls -A "$out")" ]; then
 fi
 mkdir -p "$out"
 swift build --package-path Benchmarks -c release --product RenderBenchmark
+swift build --package-path Benchmarks -c release --product StressBenchmark
 bin=$(swift build --package-path Benchmarks -c release --show-bin-path)/RenderBenchmark
 swift --version > "$out/toolchain.txt"
 git rev-parse HEAD > "$out/revision.txt"
 git status --short > "$out/worktree.txt"
-cp Benchmarks/Package.resolved "$out/dependencies.json"
+if [ -f Benchmarks/Package.resolved ]; then
+  cp Benchmarks/Package.resolved "$out/dependencies.json"
+else
+  swift package --package-path Benchmarks show-dependencies --format json > "$out/dependencies.json"
+fi
 if [ "$(uname -s)" = Darwin ]; then
   { uname -m; sysctl -n hw.model; sysctl -n machdep.cpu.brand_string; } > "$out/hardware.txt"
 else
@@ -24,3 +29,5 @@ for scene in ${SCENES:-shapes text clipped images transcript streaming scrolling
     "$bin" --scene "$scene" --stage metal > "$out/$scene-metal.json"
   fi
 done
+
+"$(dirname "$bin")/StressBenchmark" > "$out/stress-headless.json"

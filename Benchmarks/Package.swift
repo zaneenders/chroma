@@ -12,10 +12,22 @@ runnerDependencies.append(.product(name: "MetalBackend", package: "chroma"))
 let package = Package(
   name: "ChromaBenchmarks",
   platforms: [.macOS(.v27)],
+  products: [.library(name: "StressFixtures", targets: ["StressFixtures"])],
   dependencies: [
     .package(name: "chroma", path: "..")
   ],
   targets: [
+    .target(name: "StressFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
+    .executableTarget(
+      name: "StressBenchmark",
+      dependencies: [
+        "StressFixtures", .product(name: "ChromaTesting", package: "chroma"),
+      ]),
+    .testTarget(
+      name: "StressFixturesTests",
+      dependencies: [
+        "StressFixtures", .product(name: "ChromaTesting", package: "chroma"),
+      ]),
     .executableTarget(
       name: "LayoutBenchmark",
       dependencies: [
