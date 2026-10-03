@@ -253,7 +253,7 @@ struct ProcessOutcome: Sendable {
 func executable(_ variable: String) throws -> Executable {
   let path = try #require(
     ProcessInfo.processInfo.environment[variable],
-    "Run Tools/test_headless_fixture.sh to build and locate the test executables")
+    "Set CHROMA_HEADLESS_DEMO and CHROMA_HEADLESS_FIXTURE to the built executables; see HeadlessModeTests/README.md")
   try #require(FileManager.default.isExecutableFile(atPath: path), "Missing executable: \(path)")
   return .path(.init(path))
 }
