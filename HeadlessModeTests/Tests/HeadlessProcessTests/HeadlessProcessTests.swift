@@ -85,7 +85,7 @@ struct HeadlessProcessTests {
     #expect(outcome.diagnostics.isEmpty)
   }
 
-  @Test func emptyEOFProducesNoUnsolicitedOutput() async throws {
+  @Test func emptyEOFClosesSuccessfully() async throws {
     try await runSession { _ in }.requireSuccess()
   }
 
@@ -96,79 +96,137 @@ struct HeadlessProcessTests {
     #expect(outcome.diagnostics.contains("viewport"))
   }
 
-  @Test func applicationLogsAndAsyncWorkProgressWhileStdinIsIdle() async throws {
-    let outcome = try await runSession("CHROMA_HEADLESS_FIXTURE") { client in
-      let initial = try await client.request(.init(id: "initial", op: .frame))
-      try initial.requireFrame(id: "initial")
+  @Test func missingViewportExitsNonzeroWithUsage() async throws {
+    let outcome = try await runSession(arguments: []) { _ in }
+    #expect(outcome.status == .exited(1))
+    #expect(outcome.diagnostics.contains("Usage:"))
+    #expect(outcome.diagnostics.contains("--viewport WIDTHxHEIGHT"))
+  }
+
+  @Test func allChangesContinuouslyEmitsUnchangedFrames() async throws {
+    let outcome = try await runSession("HeadlessProcessFixture", arguments: ["--viewport", "800x600", "--all-changes"]) { client in
+      let first = try await client.frames.next()
+      let second = try await client.frames.next()
+      let third = try await client.frames.next()
+      #expect(first.id == nil)
+      #expect(second.status == .frame)
+      #expect(third.status == .frame)
+      #expect(first.commands == second.commands)
+      #expect(second.commands == third.commands)
+    }
+    try outcome.requireSuccess()
+  }
+
+  @Test func defaultDoesNotRepeatIdleFrames() async throws {
+    let outcome = try await runSession("HeadlessProcessFixture", arguments: ["--viewport", "800x600"]) { client in
+      _ = try await client.frames.next()
+      do {
+        _ = try await withDeadline("idle frame", after: .milliseconds(100)) {
+          try await client.frames.next()
+        }
+        Issue.record("Unexpected repeated idle frame")
+      } catch is DeadlineExceeded {}
+      let response = try await client.request(.init(id: "alive", op: .frame))
+      try response.requireFrame(id: "alive")
+    }
+    try outcome.requireSuccess()
+  }
+
+  @Test func emitsInitialFrameWithoutStdinRequest() async throws {
+    let outcome = try await runSession("HeadlessProcessFixture") { client in
+      let frame = try await client.waitForText("idle")
+      #expect(frame.status == .frame)
+      #expect(frame.id == nil)
+      #expect(frame.viewport == .init(width: 800, height: 600))
+    }
+    try outcome.requireSuccess()
+    #expect(outcome.diagnostics.isEmpty)
+  }
+
+  @Test func asyncWorkUpdatesFrameworkStdout() async throws {
+    let outcome = try await runSession("HeadlessProcessFixture") { client in
+      let initialID = UUID()
+      let initial = try await client.request(.init(id: .init(rawValue: initialID.uuidString), op: .frame))
+      try initial.requireFrame(id: initialID)
       #expect(initial.texts.contains("idle"))
       let position = try #require(initial.commands?.compactMap { command in
         if case .text(let position, "Start async", _, _) = command { return position }
         return nil
       }.first)
       for phase in [HeadlessPointerPhase.down, .up] {
+        let id = UUID()
         let clicked = try await client.request(
-          .init(id: .init(rawValue: phase.rawValue), op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
+          .init(id: .init(rawValue: id.uuidString), op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
         )
-        try clicked.requireFrame(id: phase.rawValue)
+        try clicked.requireFrame(id: id)
       }
-      // No timer guess and no additional stdin: the async task must run before
-      // its independently drained stderr marker allows the next request.
-      try await client.diagnostics.wait(for: "fixture: async complete")
-      let complete = try await client.request(.init(id: "complete", op: .frame))
-      try complete.requireFrame(id: "complete")
+      let complete = try await client.waitForText("complete")
       #expect(complete.texts.contains("complete"))
-      let closed = try await client.request(.init(id: "quit", op: .quit))
+      let quitID = UUID()
+      let closed = try await client.request(.init(id: .init(rawValue: quitID.uuidString), op: .quit))
       #expect(closed.status == .closed)
-      #expect(closed.id == "quit")
+      #expect(closed.id?.rawValue == quitID.uuidString)
     }
     try outcome.requireSuccess()
-    for marker in [
-      "initializer print", "frame observer print", "button callback print", "async print", "model deinit print",
-    ] {
-      #expect(outcome.diagnostics.contains("fixture: " + marker))
-    }
+    #expect(outcome.diagnostics.isEmpty)
   }
 
-  @Test func stdoutAndStderrDrainBeforeResponsesAreConsumed() async throws {
+  @Test func timerUpdatesFrameworkStdout() async throws {
+    let outcome = try await runSession("HeadlessProcessFixture") { client in
+      let initialID = UUID()
+      let initial = try await client.request(.init(id: .init(rawValue: initialID.uuidString), op: .frame))
+      try initial.requireFrame(id: initialID)
+      #expect(initial.texts.contains("Tick: 0"))
+      let position = try #require(initial.commands?.compactMap { command in
+        if case .text(let position, "Start timer", _, _) = command { return position }
+        return nil
+      }.first)
+      for phase in [HeadlessPointerPhase.down, .up] {
+        let id = UUID()
+        try await client.request(
+          .init(id: .init(rawValue: id.uuidString), op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
+        ).requireFrame(id: id)
+      }
+      let updated = try await client.waitForText("Tick: 3")
+      #expect(updated.texts.contains("Tick: 3"))
+      #expect(!updated.texts.contains("Tick: 0"))
+      let unchangedID = UUID()
+      let unchanged = try await client.request(.init(id: .init(rawValue: unchangedID.uuidString), op: .frame))
+      try unchanged.requireFrame(id: unchangedID)
+      #expect(unchanged.commands == updated.commands)
+      let quitID = UUID()
+      let closed = try await client.request(.init(id: .init(rawValue: quitID.uuidString), op: .quit))
+      #expect(closed.status == .closed)
+      #expect(closed.id?.rawValue == quitID.uuidString)
+    }
+    try outcome.requireSuccess()
+
+  }
+
+  @Test func stdoutBurstDrainsBeforeResponsesAreConsumed() async throws {
     let count = 256
-    let outcome = try await runSession(
-      "CHROMA_HEADLESS_FIXTURE",
-      environment: .inherit.updating(["CHROMA_FIXTURE_FLOOD_STDERR": "1"])
-    ) { client in
+    let outcome = try await runSession("HeadlessProcessFixture") { client in
       let requests = (0..<count).map { HeadlessRequest(id: .init(rawValue: "burst-\($0)"), op: .frame) }
       try await client.send(requests)
       try await client.input.finish()
-      // The app flushes all 256 frames (over 200 KiB) before this exit marker.
-      // Deliberately consume no replies until then: either undrained pipe would
-      // prevent exit. No sleeps or assumptions about rendering speed are needed.
-      try await client.diagnostics.wait(for: "fixture: model deinit print")
+      try await client.responses.waitForEOF()
       for index in 0..<count {
         try await client.receive().requireFrame(id: "burst-\(index)")
       }
     }
     try outcome.requireSuccess()
-    #expect(outcome.diagnostics.utf8.count > 300_000)
-  }
-
-  @Test func fixtureEOFFlushesApplicationAndDeinitializerLogs() async throws {
-    let outcome = try await runSession("CHROMA_HEADLESS_FIXTURE") { client in
-      try await client.request(.init(id: "before-eof", op: .frame)).requireFrame(id: "before-eof")
-    }
-    try outcome.requireSuccess()
-    for marker in ["initializer print", "frame observer print", "model deinit print"] {
-      #expect(outcome.diagnostics.contains("fixture: " + marker))
-    }
+    #expect(outcome.diagnostics.isEmpty)
   }
 
   @Test func brokenStdoutReportsIOFailureInsteadOfSIGPIPE() async throws {
-    let program = try executable("CHROMA_HEADLESS_FIXTURE")
+    let program = try executable("HeadlessProcessFixture")
     let pipe = Pipe()
     try pipe.fileHandleForReading.close()
     defer { try? pipe.fileHandleForWriting.close() }
     let outputFD = pipe.fileHandleForWriting.fileDescriptor
     let outcome = try await withDeadline("broken stdout") {
       let result = try await Subprocess.run(
-        program, arguments: ["--headless"], input: .inputWriter,
+        program, arguments: ["--viewport", "800x600"], input: .inputWriter,
         output: .fileDescriptor(.init(rawValue: outputFD), closeAfterSpawningProcess: false),
         error: .sequence
       ) { execution in

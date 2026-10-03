@@ -20,6 +20,8 @@ let package = Package(
     .testTarget(
       name: "HeadlessProcessTests",
       dependencies: [
+        "HeadlessProcessFixture",
+        .product(name: "ChromaHeadlessDemo", package: "Chroma"),
         .product(name: "Subprocess", package: "swift-subprocess"),
         .product(name: "ChromaHeadless", package: "Chroma"),
       ]

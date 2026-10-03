@@ -16,17 +16,19 @@ extension HeadlessSession {
     do { try await run(app()) } catch { failProcess(error) }
   }
 
-  /// Starts a JSONL process. --viewport WIDTHxHEIGHT optionally overrides the App size.
+  /// Starts a JSONL process. --viewport WIDTHxHEIGHT is required.
   @MainActor public static func run<A: App>(
     _ app: @autoclosure () -> A, arguments: [String] = Array(CommandLine.arguments.dropFirst())
   ) async throws {
     let channels = try StandardIOChannels()
     defer { withExtendedLifetime(channels) {} }
+    var onlyChanges = true
     var viewport: Size?
     var index = 0
     while index < arguments.count {
       switch arguments[index] {
       case "--headless": break
+      case "--all-changes": onlyChanges = false
       case "--viewport":
         index += 1
         guard index < arguments.count else { throw HeadlessArgumentError.usage }
@@ -39,12 +41,13 @@ extension HeadlessSession {
       }
       index += 1
     }
+    guard let viewport else { throw HeadlessArgumentError.usage }
     let session = try HeadlessSession(app(), viewport: viewport)
-    try await session.runStandardIO(output: channels.output)
+    try await session.runStandardIO(output: channels.output, onlyChanges: onlyChanges)
   }
 }
 
 private enum HeadlessArgumentError: Error, CustomStringConvertible {
   case usage
-  var description: String { "Usage: [--headless] [--viewport WIDTHxHEIGHT] (dimensions 1...16384)" }
+  var description: String { "Usage: [--headless] [--all-changes] --viewport WIDTHxHEIGHT (dimensions 1...16384)" }
 }

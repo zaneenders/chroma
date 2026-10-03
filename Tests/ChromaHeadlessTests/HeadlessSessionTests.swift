@@ -126,6 +126,43 @@ import ChromaHeadless
     }
   }
 
+  @Observable final class TimerModel { var tick = 0 }
+  struct TimerApp: App {
+    let model = TimerModel()
+    var body: some Block { Text("Tick: \(model.tick)") }
+  }
+
+  @Test func asyncTimerUpdatesAppearInFrameSnapshots() async throws {
+    let app = TimerApp()
+    let model = app.model
+    let session = try HeadlessSession(app)
+    defer { session.close() }
+    func texts(_ frame: HeadlessResponse) -> [String] {
+      (frame.commands ?? []).compactMap { command in
+        guard case .text(_, let text, _, _) = command else { return nil }
+        return text
+      }
+    }
+    let initial = try response(session, #"{"version":1,"op":"frame"}"#)
+    #expect(texts(initial) == ["Tick: 0"])
+    // A separate main-actor task suspends between ticks, just like an app timer.
+    let timer = Task { @MainActor in
+      for tick in 1...3 {
+        try await Task.sleep(for: .milliseconds(50))
+        model.tick = tick
+        let frame = try response(session, #"{"version":1,"op":"frame"}"#)
+        #expect(frame.status == .frame)
+        #expect(texts(frame) == ["Tick: \(tick)"])
+        #expect(frame.commands != initial.commands)
+      }
+    }
+    defer { timer.cancel() }
+    try await timer.value
+    let final = try response(session, #"{"version":1,"op":"frame"}"#)
+    #expect(texts(final) == ["Tick: 3"])
+    #expect(try response(session, #"{"version":1,"op":"frame"}"#).commands == final.commands)
+  }
+
   @Test func escapeReportsMovementAndDoesNotInsertText() throws {
     let app = EditorApp()
     let session = try HeadlessSession(app)

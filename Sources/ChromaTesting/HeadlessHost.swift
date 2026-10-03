@@ -85,6 +85,24 @@ public final class HeadlessHost: Host {
     return frame
   }
 
+  /// Presents changes using the same refresh-rate scheduler as native hosts.
+  public func startPresenting(onlyChanges: Bool = true, _ present: @escaping @MainActor (HeadlessFrame) -> Void) {
+    runtime.scheduler.onFrame = { [weak self] kind in
+      guard let self else { return }
+      let drawList = runtime.renderScheduled(
+        kind, viewport: viewport,
+        onChange: { [weak self] in self?.requestRedraw() })
+      _ = interaction.consumeRedrawRequest()
+      runtime.observe(drawList, viewport: viewport)
+      let frame = HeadlessFrame(viewport: viewport, commands: drawList.commands)
+      lastFrame = frame
+      present(frame)
+      if !onlyChanges { runtime.scheduler.requestContent() }
+    }
+    if !onlyChanges { runtime.scheduler.requestContent() }
+    runtime.scheduler.isReady = true
+  }
+
   private func requestRedraw() {
     runtime.scheduler.requestContent()
     onRedrawRequested?()
@@ -100,6 +118,8 @@ public final class HeadlessHost: Host {
   }
 
   public func close() {
+    runtime.scheduler.isReady = false
+    runtime.scheduler.onFrame = nil
     runtime.reset()
     onClose?()
   }

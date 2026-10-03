@@ -2,7 +2,7 @@ import Chroma
 import ChromaTesting
 import Foundation
 
-/// A request/response JSONL transport for the same App and input engine used by native hosts.
+/// A JSONL frame stream and input transport for the same App engine used by native hosts.
 /// It produces draw commands, not raster images. See Documentation/HeadlessAgents.md.
 @MainActor
 public final class HeadlessSession {
@@ -116,16 +116,25 @@ public final class HeadlessSession {
     host.close()
   }
 
-  /// Serves stdin until EOF or quit. No timers, unsolicited frames, or window connection.
+  /// Emits an initial frame and scheduled updates while serving stdin until EOF or quit.
   /// Reading off the main actor lets the application's asynchronous work continue while idle.
-  public func runStandardIO() async throws {
+  public func runStandardIO(onlyChanges: Bool = true) async throws {
     let channels = try StandardIOChannels()
     defer { withExtendedLifetime(channels) {} }
-    try await runStandardIO(output: channels.output)
+    try await runStandardIO(output: channels.output, onlyChanges: onlyChanges)
   }
 
-  func runStandardIO(output: FileHandle) async throws {
+  func runStandardIO(output: FileHandle, onlyChanges: Bool = true) async throws {
     defer { close() }
+    func present(_ frame: HeadlessFrame) throws {
+      let response = encode(HeadlessResponse(
+        status: .frame, viewport: frame.viewport, commands: frame.commands))
+      try output.write(contentsOf: Data((response + "\n").utf8))
+    }
+    if let frame = host.lastFrame { try present(frame) }
+    host.startPresenting(onlyChanges: onlyChanges) { frame in
+      do { try present(frame) } catch { failProcess(error) }
+    }
     let reader = BoundedLineReader(handle: .standardInput, limit: Self.maximumLineBytes)
     while !isClosed, let line = try await Task.detached(operation: { try reader.next() }).value {
       let response: String

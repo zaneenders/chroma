@@ -25,6 +25,10 @@ extension HeadlessResponse {
     }
   }
 
+  func requireFrame(id expectedID: UUID) throws {
+    try requireFrame(id: expectedID.uuidString)
+  }
+
   func requireFrame(id expectedID: String) throws {
     try #require(version == 1)
     try #require(id?.rawValue == expectedID)
@@ -94,6 +98,13 @@ actor Responses {
     continuation.resume(throwing: CancellationError())
   }
 
+  func waitForEOF() async throws {
+    while !ended {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    if let failure { throw failure }
+  }
+
   func requireDrained() throws {
     try #require(ended, "stdout must reach EOF")
     try #require(queued.isEmpty, "Unsolicited or unconsumed protocol responses")
@@ -103,49 +114,7 @@ actor Responses {
 actor Diagnostics {
   private var data = Data()
   var text: String { String(decoding: data, as: UTF8.self) }
-  private var waiters: [UUID: (String, CheckedContinuation<Void, any Error>)] = [:]
-  private var ended = false
-
-  func append(_ chunk: Data) {
-    data.append(chunk)
-    guard !waiters.isEmpty else { return }
-    let currentText = text
-    for (id, (marker, continuation)) in waiters where currentText.contains(marker) {
-      waiters.removeValue(forKey: id)
-      continuation.resume()
-    }
-  }
-
-  func finish() {
-    ended = true
-    let pending = waiters
-    waiters.removeAll()
-    for (_, (_, continuation)) in pending {
-      continuation.resume(throwing: DriverFailure(description: "stderr ended before expected diagnostic"))
-    }
-  }
-
-  func wait(for marker: String) async throws {
-    let id = UUID()
-    try await withTaskCancellationHandler {
-      try Task.checkCancellation()
-      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-        if text.contains(marker) {
-          continuation.resume()
-        } else if ended {
-          continuation.resume(throwing: DriverFailure(description: "Missing diagnostic: \(marker)"))
-        } else {
-          waiters[id] = (marker, continuation)
-        }
-      }
-    } onCancel: {
-      Task { await self.cancel(id) }
-    }
-  }
-
-  private func cancel(_ id: UUID) {
-    waiters.removeValue(forKey: id)?.1.resume(throwing: CancellationError())
-  }
+  func append(_ chunk: Data) { data.append(chunk) }
 }
 
 func withDeadline<T: Sendable>(
@@ -165,14 +134,20 @@ func withDeadline<T: Sendable>(
 
 /// Decode each stdout line separately. A log line on stdout is a decoding error,
 /// rather than being silently skipped or confused with stderr diagnostics.
-private func decodeJSONL(_ output: SubprocessOutputSequence, into responses: Responses) async throws {
+private func decodeJSONL(_ output: SubprocessOutputSequence, into responses: Responses, frames: Responses) async throws {
   do {
     for try await line in output.strings(separatedBy: .unicodeScalarSequence("\n".unicodeScalars)) {
       let response = try JSONDecoder().decode(HeadlessResponse.self, from: Data(line.utf8))
-      await responses.append(response)
+      if response.status == .frame && response.id == nil {
+        await frames.append(response)
+      } else {
+        await responses.append(response)
+      }
     }
+    await frames.finish()
     await responses.finish()
   } catch {
+    await frames.finish(throwing: error)
     await responses.finish(throwing: error)
     throw error
   }
@@ -182,6 +157,7 @@ struct ProcessClient: Sendable {
   // These values are used only in structured tasks inside Subprocess.run's body.
   let input: StandardInputWriter
   let responses: Responses
+  let frames: Responses
   let diagnostics: Diagnostics
   let pid: pid_t
 
@@ -199,6 +175,15 @@ struct ProcessClient: Sendable {
 
   func receive() async throws -> HeadlessResponse { try await responses.next() }
 
+  func waitForText(_ text: String) async throws -> HeadlessResponse {
+    try await withDeadline("stdout text: \(text)") {
+      while true {
+        let frame = try await frames.next()
+        if frame.texts.contains(text) { return frame }
+      }
+    }
+  }
+
   func request(_ request: HeadlessRequest) async throws -> HeadlessResponse {
     try await send(request)
     return try await receive()
@@ -214,43 +199,54 @@ struct ProcessOutcome: Sendable {
   }
 }
 
-func executable(_ variable: String) throws -> Executable {
-  let path = try #require(
-    ProcessInfo.processInfo.environment[variable],
-    "Set CHROMA_HEADLESS_DEMO and CHROMA_HEADLESS_FIXTURE to the built executables; see HeadlessModeTests/README.md")
-  try #require(FileManager.default.isExecutableFile(atPath: path), "Missing executable: \(path)")
-  return .path(.init(path))
+private final class TestBundleMarker: NSObject {}
+
+func executable(_ name: String) throws -> Executable {
+  // SwiftPM places executables beside the test binary (or its macOS .xctest bundle).
+  #if canImport(Darwin)
+  var directory = Bundle(for: TestBundleMarker.self).bundleURL.deletingLastPathComponent()
+  #else
+  var directory = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+  #endif
+  while true {
+    let path = directory.appendingPathComponent(name).path
+    if FileManager.default.isExecutableFile(atPath: path) { return .path(.init(path)) }
+    let parent = directory.deletingLastPathComponent()
+    guard parent.path != directory.path else { break }
+    directory = parent
+  }
+  throw DriverFailure(description: "Missing built executable: \(name); run swift test in HeadlessModeTests")
 }
 
 func runSession(
-  _ variable: String = "CHROMA_HEADLESS_DEMO",
-  arguments: Arguments = ["--headless"],
+  _ name: String = "ChromaHeadlessDemo",
+  arguments: Arguments = ["--viewport", "800x600"],
   environment: Environment = .inherit,
   body: @escaping @Sendable (ProcessClient) async throws -> Void
 ) async throws -> ProcessOutcome {
-  let program = try executable(variable)
+  let program = try executable(name)
   let responses = Responses()
+  let frames = Responses()
   let diagnostics = Diagnostics()
-  return try await withDeadline("\(variable) session") {
+  return try await withDeadline("\(name) session") {
     let result = try await Subprocess.run(
       program, arguments: arguments, environment: environment,
       input: .inputWriter, output: .sequence, error: .sequence
     ) { execution in
       try await withThrowingTaskGroup(of: Void.self) { group in
-        group.addTask { try await decodeJSONL(execution.standardOutput, into: responses) }
+        group.addTask { try await decodeJSONL(execution.standardOutput, into: responses, frames: frames) }
         group.addTask {
           // Diagnostics need not contain newlines. Drain byte chunks without a
           // line limit, preserving UTF-8 even when scalars cross read boundaries.
           for try await chunk in execution.standardError {
             await diagnostics.append(chunk.withUnsafeBytes { Data($0) })
           }
-          await diagnostics.finish()
         }
         group.addTask {
           try await body(
             ProcessClient(
               input: execution.standardInputWriter,
-              responses: responses, diagnostics: diagnostics,
+              responses: responses, frames: frames, diagnostics: diagnostics,
               pid: execution.processIdentifier.value))
           try await execution.standardInputWriter.finish()
         }
