@@ -5,7 +5,7 @@
 set -euo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-fixture="$root/Tests/HeadlessProcessFixture"
+fixture="$root/HeadlessModeTests"
 if [[ -z "${SWIFT:-}" ]]; then
   if [[ -n "${SWIFTC:-}" ]]; then
     SWIFT="$(dirname -- "$SWIFTC")/swift"

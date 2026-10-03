@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-  name: "HeadlessProcessFixture",
+  name: "HeadlessModeTests",
   platforms: [.macOS(.v27)],
   dependencies: [
-    .package(name: "Chroma", path: "../.."),
+    .package(name: "Chroma", path: ".."),
     // Keep the process driver out of Chroma's production dependency graph.
     .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "1.0.0"),
   ],
