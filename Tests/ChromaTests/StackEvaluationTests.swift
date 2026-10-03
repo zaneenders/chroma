@@ -195,6 +195,40 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 1)
   }
 
+  @Test(arguments: [4, 8, 16])
+  func nestedInteractivePreparationGrowsLinearly(depth: Int) {
+    PipelineMetrics.isEnabled = true
+    defer { PipelineMetrics.isEnabled = false }
+    var block: any Block = Text("leaf")
+    for _ in 0..<depth {
+      let child = block
+      block = Interactive(action: {}, content: { _ in TupleBlock(children: [child]) })
+    }
+    let context = BlockContext()
+    let rect = Rect(x: 0, y: 0, width: 200, height: 100)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      #expect(PipelineMetrics.snapshot.liveResolvedNodes == 1)
+      _ = resolved.expandsHorizontally
+      _ = resolved.expandsVertically
+      _ = resolved.sizeThatFits(rect.size)
+      #expect(PipelineMetrics.snapshot.liveResolvedNodes == 2 * depth + 1)
+      context.interaction.beginFrame(input: InputState())
+      resolved.register(in: rect)
+      let registered = PipelineMetrics.snapshot.liveResolvedNodes
+      #expect(registered == 4 * depth + 1)
+      var list = DrawList()
+      resolved.paint(into: &list, in: rect)
+      #expect(PipelineMetrics.snapshot.liveResolvedNodes == registered)
+      #expect(list.commands.contains {
+        if case .text(_, "leaf", _, _) = $0 { return true }
+        return false
+      })
+      context.interaction.endFrame()
+    }
+    #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
+  }
+
   @Test func interactiveDrawingUsesCurrentPhaseAfterIdleMeasurement() {
     var activations = 0
     let block = VStack {

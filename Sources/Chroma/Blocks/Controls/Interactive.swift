@@ -34,7 +34,13 @@ extension Interactive {
   @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     // Layout queries intentionally use the idle tree. The current-phase tree belongs
     // to this operation and is shared by registration and painting, never a later event.
-    let idle = BlockEngine.resolve(content(.idle), context: context)
+    var idle: BlockEngine.Resolved?
+    func measurementTree() -> BlockEngine.Resolved {
+      if let idle { return idle }
+      let resolved = BlockEngine.resolve(content(.idle), context: context)
+      idle = resolved
+      return resolved
+    }
     var childContext = context
     childContext.focusTargets = []
     childContext.focusLeafClaimed = true
@@ -49,9 +55,9 @@ extension Interactive {
     }
     let id = id ?? context.widgetID
     return BlockEngine.Resolved(
-      expandsHorizontally: { idle.expandsHorizontally },
-      expandsVertically: { idle.expandsVertically },
-      measure: idle.sizeThatFits,
+      expandsHorizontally: { measurementTree().expandsHorizontally },
+      expandsVertically: { measurementTree().expandsVertically },
+      measure: { measurementTree().sizeThatFits($0) },
       register: { rect in
         let state = context.buttonState(id: id, in: rect, action: action)
         current(state.phase).register(in: rect)
