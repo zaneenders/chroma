@@ -1,4 +1,5 @@
 import Chroma
+import ChromaHeadless
 
 #if os(macOS)
 import MetalBackend
@@ -10,7 +11,11 @@ public protocol NativeApp: App {}
 
 extension NativeApp {
   @MainActor
-  public static func main() throws {
+  public static func main() async throws {
+    if CommandLine.arguments.contains("--headless") {
+      await HeadlessSession.runProcess(Self())
+      return
+    }
     #if os(macOS)
     let app = Self()
     try app.run(on: MacOSHost(size: app.windowSize))

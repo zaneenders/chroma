@@ -220,10 +220,11 @@ struct StackEvaluationTests {
       var list = DrawList()
       resolved.paint(into: &list, in: rect)
       #expect(PipelineMetrics.snapshot.liveResolvedNodes == registered)
-      #expect(list.commands.contains {
-        if case .text(_, "leaf", _, _) = $0 { return true }
-        return false
-      })
+      #expect(
+        list.commands.contains {
+          if case .text(_, "leaf", _, _) = $0 { return true }
+          return false
+        })
       context.interaction.endFrame()
     }
     #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)

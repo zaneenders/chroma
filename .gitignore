@@ -1,8 +1,8 @@
-
-Benchmarks/results/
-
 .build/
 .DS_Store
 .swiftpm/
 Package.resolved
 .vscode/
+
+Benchmarks/results/
+!HeadlessModeTests/Package.resolved
