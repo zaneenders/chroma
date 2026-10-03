@@ -3,7 +3,7 @@ import ChromaTesting
 import Foundation
 
 /// A JSONL frame stream and input transport for the same App engine used by native hosts.
-/// It produces draw commands, not raster images. See Documentation/HeadlessAgents.md.
+/// It produces draw commands, not raster images.
 @MainActor
 public final class HeadlessSession {
   public let host: HeadlessHost
