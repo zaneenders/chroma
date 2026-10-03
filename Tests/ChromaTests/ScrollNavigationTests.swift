@@ -66,6 +66,31 @@ struct ScrollNavigationTests {
     #expect(controller.offset < 1200)
   }
 
+  @Test func retainedSelectionCallbacksKeepTheirIdentitySnapshot() {
+    let h = Harness()
+    let controller = ScrollViewController()
+    let selection = ScrollSelection<Int>()
+    struct Item: Identifiable { let id: Int }
+    let original = ScrollView(
+      data: [Item(id: 0), Item(id: 1), Item(id: 2)], rowHeight: 20,
+      controller: controller, selection: selection
+    ) { Text("Row \($0.id)") }
+    h.render(original)
+    h.render(original, [.down, .stepIn, .down])
+    #expect(selection.selectedID == 1)
+
+    let replacement = ScrollView(
+      data: [Item(id: 0), Item(id: 1), Item(id: 3)], rowHeight: 20,
+      controller: controller, selection: selection
+    ) { Text("Row \($0.id)") }
+    h.render(original, [.down])
+    #expect(selection.selectedID == 2)
+    h.render(replacement)
+    selection.selectedID = 1
+    h.render(replacement, [.down])
+    #expect(selection.selectedID == 3)
+  }
+
   @Test func logicalSelectionHasExplicitMissingItemPolicy() {
     let selection = ScrollSelection(2)
     #expect(selection.move(in: [1, 3], by: 1) == nil)

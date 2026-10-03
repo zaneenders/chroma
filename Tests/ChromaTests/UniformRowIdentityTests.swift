@@ -41,12 +41,101 @@ struct UniformRowIdentityTests {
     #expect(second.indices[StructuralKey(Int64(1))] == 0)
   }
 
+  @Test func emptyAndGrowingCollectionsReplaceOnlyChangedSnapshots() {
+    let controller = ScrollViewController()
+    let empty = controller.rowIdentity(for: [Item<Int>]())
+    #expect(controller.rowIdentity(for: [Item<Int>]()) === empty)
+    let first = controller.rowIdentity(for: [Item(id: 1)])
+    #expect(first !== empty)
+    let appended = controller.rowIdentity(for: [Item(id: 1), Item(id: 2)])
+    #expect(appended !== first)
+    #expect(appended.indices[StructuralKey(2)] == 1)
+    #expect(first.matches([Item(id: 1)]))
+    let cleared = controller.rowIdentity(for: [Item<Int>]())
+    #expect(cleared !== appended)
+    #expect(cleared.keys.isEmpty)
+    #expect(cleared.indices.isEmpty)
+  }
+
+  @Test func slicedCollectionsUseTheirOwnStartIndex() {
+    let controller = ScrollViewController()
+    let items = (0..<6).map { Item(id: $0) }
+    let first = controller.rowIdentity(for: items[2..<5])
+    #expect(controller.rowIdentity(for: Array(items[2..<5])) === first)
+    #expect(controller.rowIdentity(for: items[2..<5]) === first)
+    #expect(first.indices[StructuralKey(2)] == 0)
+    #expect(first.indices[StructuralKey(4)] == 2)
+    let shifted = controller.rowIdentity(for: items[3..<6])
+    #expect(shifted !== first)
+    #expect(shifted.indices[StructuralKey(3)] == 0)
+  }
+
+  private struct NoncontiguousItems: RandomAccessCollection {
+    let items: ArraySlice<Item<Int>>
+    var startIndex: Int { items.startIndex }
+    var endIndex: Int { items.endIndex }
+    subscript(index: Int) -> Item<Int> { items[index] }
+    func index(after index: Int) -> Int { index + 1 }
+    func index(before index: Int) -> Int { index - 1 }
+  }
+
+  @Test func noncontiguousCollectionsReuseIdentityAndDetectChanges() {
+    let controller = ScrollViewController()
+    let items = (0..<6).map { Item(id: $0) }
+    let data = NoncontiguousItems(items: items[2..<5])
+    #expect(data.withContiguousStorageIfAvailable { _ in true } == nil)
+    let first = controller.rowIdentity(for: data)
+    #expect(controller.rowIdentity(for: data) === first)
+    #expect(controller.rowIdentity(for: items[2..<5]) === first)
+    #expect(controller.rowIdentity(for: NoncontiguousItems(items: items[3..<6])) !== first)
+    #expect(first.matches(data))
+  }
+
+  @Test(arguments: [0, 1, 2])
+  func comparisonDetectsChangesAtEveryPosition(position: Int) {
+    let controller = ScrollViewController()
+    let items = [Item(id: 1), Item(id: 2), Item(id: 3)]
+    let first = controller.rowIdentity(for: items)
+    var changed = items
+    changed[position] = Item(id: 4)
+    #expect(!first.matches(changed))
+    #expect(!first.matches(NoncontiguousItems(items: changed[...])))
+    let replacement = controller.rowIdentity(for: changed)
+    #expect(replacement !== first)
+    #expect(replacement.indices[StructuralKey(4)] == position)
+    #expect(first.matches(items))
+  }
+
+  private final class ReferenceID: Hashable, Sendable {
+    let value: Int
+    init(_ value: Int) { self.value = value }
+    static func == (lhs: ReferenceID, rhs: ReferenceID) -> Bool { lhs.value == rhs.value }
+    func hash(into hasher: inout Hasher) { hasher.combine(value) }
+  }
+
+  @Test func referenceIDsRemainAliveUntilTheirLastSnapshotIsReleased() {
+    let controller = ScrollViewController()
+    weak var oldID: ReferenceID?
+    var retained: TypedUniformRowIdentity<ReferenceID>?
+    do {
+      let id = ReferenceID(1)
+      oldID = id
+      retained = controller.rowIdentity(for: [Item(id: id)])
+    }
+    _ = controller.rowIdentity(for: [Item(id: ReferenceID(2))])
+    #expect(oldID != nil)
+    #expect(retained?.matches([Item(id: ReferenceID(1))]) == true)
+    retained = nil
+    #expect(oldID == nil)
+  }
+
   @Test func equivalentLayoutsReuseIdentity() {
     let controller = ScrollViewController()
     let first = controller.rowIdentity(for: [Item(id: 1)])
     let second = controller.rowIdentity(for: [Item(id: 1)])
     let layout = Interaction.ScrollLayout(width: 100, spacing: 0, rows: .uniform(count: 1, height: 20, keys: first))
-    #expect(layout == Interaction.ScrollLayout(width: 100, spacing: 0, rows: .uniform(count: 1, height: 20, keys: second)))
+    #expect(
+      layout == Interaction.ScrollLayout(width: 100, spacing: 0, rows: .uniform(count: 1, height: 20, keys: second)))
     #expect(layout.index(of: StructuralKey(1)) == 0)
   }
 }

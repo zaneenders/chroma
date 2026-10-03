@@ -1,3 +1,5 @@
+import BasicContainers
+import ContainersPreview
 import Observation
 
 enum ScrollRequest: Equatable, Sendable {
@@ -32,11 +34,10 @@ public final class ScrollViewController {
 
   func rowIdentity<Data: RandomAccessCollection>(for data: Data) -> TypedUniformRowIdentity<Data.Element.ID>
   where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    let ids = data.map(\.id)
-    if let cached = uniformRowIdentity as? TypedUniformRowIdentity<Data.Element.ID>, cached.ids == ids {
+    if let cached = uniformRowIdentity as? TypedUniformRowIdentity<Data.Element.ID>, cached.matches(data) {
       return cached
     }
-    let identity = TypedUniformRowIdentity(ids: ids)
+    let identity = TypedUniformRowIdentity(data: data)
     uniformRowIdentity = identity
     return identity
   }
@@ -55,8 +56,8 @@ class UniformRowIdentity: Equatable {
   let keys: [StructuralKey]
   let indices: [StructuralKey: Int]
 
-  init<ID: Hashable & Sendable>(ids: [ID]) {
-    keys = ids.map { StructuralKey($0) }
+  init(keys: [StructuralKey]) {
+    self.keys = keys
     var indices: [StructuralKey: Int] = [:]
     indices.reserveCapacity(keys.count)
     for (index, key) in keys.enumerated() {
@@ -69,10 +70,31 @@ class UniformRowIdentity: Equatable {
 }
 
 final class TypedUniformRowIdentity<ID: Hashable & Sendable>: UniformRowIdentity {
-  let ids: [ID]
+  let ids: RigidArray<ID>
 
-  init(ids: [ID]) {
+  init<Data: RandomAccessCollection>(data: Data) where Data.Element: Identifiable, Data.Element.ID == ID {
+    let ids = RigidArray(copying: data.lazy.map { $0.id })
+    let keys = ids.indices.map { StructuralKey(ids[$0]) }
     self.ids = ids
-    super.init(ids: ids)
+    super.init(keys: keys)
+  }
+
+  func matches<Data: RandomAccessCollection>(_ data: Data) -> Bool
+  where Data.Element: Identifiable, Data.Element.ID == ID {
+    Self.matches(ids, data: data)
+  }
+
+  // Borrow the stored owner explicitly; Swift 6.4 cannot extend its property borrow through the iterator call.
+  private static func matches<Data: RandomAccessCollection>(_ ids: borrowing RigidArray<ID>, data: Data) -> Bool
+  where Data.Element: Identifiable, Data.Element.ID == ID {
+    guard ids.count == data.count else { return false }
+    if let equal = data.withContiguousStorageIfAvailable({ buffer in
+      // The collection keeps this storage alive; the borrowed span never leaves this closure.
+      ids.span.elementsEqual(unsafe buffer.span, by: { $0 == $1.id })
+    }) {
+      return equal
+    }
+    return ids.makeBorrowingIterator().elementsEqual(
+      BorrowingIteratorAdapter(iterator: data.makeIterator()), by: { $0 == $1.id })
   }
 }

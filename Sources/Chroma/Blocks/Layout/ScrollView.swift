@@ -117,23 +117,22 @@ public struct ScrollView: LayoutPreparingBlock {
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
     let identity = controller.rowIdentity(for: data)
-    let ids = identity.ids
     self.init(
       data: data, keys: identity,
       selection: LogicalSelection(
         selectedKey: { selection.selectedID.map { StructuralKey($0) } },
         select: { key in
-          if let index = identity.indices[key] { selection.selectedID = ids[index] }
+          if let index = identity.indices[key] { selection.selectedID = identity.ids[index] }
         },
         move: { direction in
           guard let selectedID = selection.selectedID,
-            let index = identity.indices[StructuralKey(selectedID)], !ids.isEmpty
+            let index = identity.indices[StructuralKey(selectedID)], !identity.ids.isEmpty
           else {
             selection.selectedID = nil
             return nil
           }
-          let next = max(0, min(ids.count - 1, index + direction))
-          selection.selectedID = ids[next]
+          let next = max(0, min(identity.ids.count - 1, index + direction))
+          selection.selectedID = identity.ids[next]
           return identity.keys[next]
         }),
       rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
