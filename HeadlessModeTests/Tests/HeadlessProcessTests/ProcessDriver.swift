@@ -31,7 +31,7 @@ extension HeadlessResponse {
 
   func requireFrame(id expectedID: String) throws {
     try #require(version == 1)
-    try #require(id?.rawValue == expectedID)
+    try #require(id == expectedID)
     try #require(status == .frame)
     try #require(error == nil)
     try #require(viewport != nil)

@@ -10,7 +10,7 @@ struct HeadlessProcessTests {
       // remains open. This cannot pass with a pre-collected one-shot input string.
       // Unicode line separators in JSON strings are data, never JSONL delimiters.
       for id in ["hello", "still-alive\u{2028}\u{2029}\u{85}", "ready"] {
-        let frame = try await client.request(.init(id: .init(rawValue: id), op: .frame))
+        let frame = try await client.request(.init(id: id, op: .frame))
         try frame.requireFrame(id: id)
         #expect(frame.viewport == .init(width: 800, height: 600))
         #expect(frame.texts.contains("First"))
@@ -147,7 +147,7 @@ struct HeadlessProcessTests {
   @Test func asyncWorkUpdatesFrameworkStdout() async throws {
     let outcome = try await runSession("HeadlessProcessFixture") { client in
       let initialID = UUID()
-      let initial = try await client.request(.init(id: .init(rawValue: initialID.uuidString), op: .frame))
+      let initial = try await client.request(.init(id: initialID.uuidString, op: .frame))
       try initial.requireFrame(id: initialID)
       #expect(initial.texts.contains("idle"))
       let position = try #require(
@@ -158,16 +158,16 @@ struct HeadlessProcessTests {
       for phase in [HeadlessPointerPhase.down, .up] {
         let id = UUID()
         let clicked = try await client.request(
-          .init(id: .init(rawValue: id.uuidString), op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
+          .init(id: id.uuidString, op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
         )
         try clicked.requireFrame(id: id)
       }
       let complete = try await client.waitForText("complete")
       #expect(complete.texts.contains("complete"))
       let quitID = UUID()
-      let closed = try await client.request(.init(id: .init(rawValue: quitID.uuidString), op: .quit))
+      let closed = try await client.request(.init(id: quitID.uuidString, op: .quit))
       #expect(closed.status == .closed)
-      #expect(closed.id?.rawValue == quitID.uuidString)
+      #expect(closed.id == quitID.uuidString)
     }
     try outcome.requireSuccess()
     #expect(outcome.diagnostics.isEmpty)
@@ -176,7 +176,7 @@ struct HeadlessProcessTests {
   @Test func timerUpdatesFrameworkStdout() async throws {
     let outcome = try await runSession("HeadlessProcessFixture") { client in
       let initialID = UUID()
-      let initial = try await client.request(.init(id: .init(rawValue: initialID.uuidString), op: .frame))
+      let initial = try await client.request(.init(id: initialID.uuidString, op: .frame))
       try initial.requireFrame(id: initialID)
       #expect(initial.texts.contains("Tick: 0"))
       let position = try #require(
@@ -187,20 +187,20 @@ struct HeadlessProcessTests {
       for phase in [HeadlessPointerPhase.down, .up] {
         let id = UUID()
         try await client.request(
-          .init(id: .init(rawValue: id.uuidString), op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
+          .init(id: id.uuidString, op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
         ).requireFrame(id: id)
       }
       let updated = try await client.waitForText("Tick: 3")
       #expect(updated.texts.contains("Tick: 3"))
       #expect(!updated.texts.contains("Tick: 0"))
       let unchangedID = UUID()
-      let unchanged = try await client.request(.init(id: .init(rawValue: unchangedID.uuidString), op: .frame))
+      let unchanged = try await client.request(.init(id: unchangedID.uuidString, op: .frame))
       try unchanged.requireFrame(id: unchangedID)
       #expect(unchanged.commands == updated.commands)
       let quitID = UUID()
-      let closed = try await client.request(.init(id: .init(rawValue: quitID.uuidString), op: .quit))
+      let closed = try await client.request(.init(id: quitID.uuidString, op: .quit))
       #expect(closed.status == .closed)
-      #expect(closed.id?.rawValue == quitID.uuidString)
+      #expect(closed.id == quitID.uuidString)
     }
     try outcome.requireSuccess()
 
@@ -209,7 +209,7 @@ struct HeadlessProcessTests {
   @Test func stdoutBurstDrainsBeforeResponsesAreConsumed() async throws {
     let count = 256
     let outcome = try await runSession("HeadlessProcessFixture") { client in
-      let requests = (0..<count).map { HeadlessRequest(id: .init(rawValue: "burst-\($0)"), op: .frame) }
+      let requests = (0..<count).map { HeadlessRequest(id: "burst-\($0)", op: .frame) }
       try await client.send(requests)
       try await client.input.finish()
       try await client.responses.waitForEOF()

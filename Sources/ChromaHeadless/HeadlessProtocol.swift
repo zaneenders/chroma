@@ -4,7 +4,7 @@ import Foundation
 /// A request in the headless JSONL protocol.
 public struct HeadlessRequest: Codable, Sendable {
   public let version: Int
-  public let id: HeadlessRequestID?
+  public let id: String?
   public let op: HeadlessOperation
   public let key: HeadlessKey?
   public let modifiers: [HeadlessModifier]?
@@ -16,7 +16,7 @@ public struct HeadlessRequest: Codable, Sendable {
   public let height: Float?
 
   public init(
-    version: Int = 1, id: HeadlessRequestID? = nil, op: HeadlessOperation,
+    version: Int = 1, id: String? = nil, op: HeadlessOperation,
     key: HeadlessKey? = nil, modifiers: [HeadlessModifier]? = nil, text: String? = nil,
     x: Float? = nil, y: Float? = nil, phase: HeadlessPointerPhase? = nil,
     width: Float? = nil, height: Float? = nil
@@ -58,7 +58,7 @@ public struct HeadlessFocus: Codable, Sendable {
 /// A frame, closed acknowledgement, or error in the headless JSONL protocol.
 public struct HeadlessResponse: Codable, Sendable {
   public let version: Int
-  public let id: HeadlessRequestID?
+  public let id: String?
   public let status: HeadlessStatus
   public let viewport: Size?
   public let commands: [DrawCommand]?
@@ -66,7 +66,7 @@ public struct HeadlessResponse: Codable, Sendable {
   public let error: HeadlessError?
 
   public init(
-    version: Int = 1, id: HeadlessRequestID? = nil, status: HeadlessStatus,
+    version: Int = 1, id: String? = nil, status: HeadlessStatus,
     viewport: Size? = nil, commands: [DrawCommand]? = nil,
     focus: HeadlessFocus? = nil, error: HeadlessError? = nil
   ) {
@@ -77,20 +77,6 @@ public struct HeadlessResponse: Codable, Sendable {
     self.commands = commands
     self.focus = focus
     self.error = error
-  }
-}
-
-/// Correlation data, encoded as a JSON string rather than an object.
-public struct HeadlessRequestID: RawRepresentable, Codable, Sendable, Hashable, ExpressibleByStringLiteral {
-  public let rawValue: String
-  public init(rawValue: String) { self.rawValue = rawValue }
-  public init(stringLiteral value: String) { self.init(rawValue: value) }
-  public init(from decoder: any Decoder) throws {
-    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
-  }
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.singleValueContainer()
-    try container.encode(rawValue)
   }
 }
 
@@ -110,7 +96,7 @@ public enum HeadlessStatus: String, Codable, Sendable {
   case frame, closed, error
 }
 
-public enum HeadlessError: String, Codable, Sendable, Error {
+public enum HeadlessError: String, Codable, Sendable, Error, CustomStringConvertible {
   case invalidViewport = "invalid_viewport"
   case lineTooLong = "line_too_long"
   case invalidRequest = "invalid_request"
@@ -120,6 +106,10 @@ public enum HeadlessError: String, Codable, Sendable, Error {
   case invalidUTF8 = "invalid_utf8"
   case unencodableFrame = "unencodable_frame"
   case closed
+
+  public var description: String {
+    self == .invalidViewport ? "viewport dimensions must be finite and within 1...16384" : rawValue
+  }
 }
 
 /// Named keys and single-character keys retain their string representation on the wire.

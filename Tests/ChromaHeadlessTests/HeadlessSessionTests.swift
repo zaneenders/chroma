@@ -38,7 +38,7 @@ import Testing
       key: .character("é"), modifiers: [.shift, .super], phase: .down)
     let data = try JSONEncoder().encode(request)
     let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-    #expect(json["id"] as? String == request.id?.rawValue)
+    #expect(json["id"] as? String == request.id)
     #expect(json["op"] as? String == "key")
     #expect(json["key"] as? String == "é")
     #expect(json["modifiers"] as? [String] == ["shift", "super"])
@@ -72,9 +72,23 @@ import Testing
   @Test func duplicateIDsCannotBypassLengthLimit() throws {
     let session = try HeadlessSession(Fixture())
     let longID = String(repeating: "a", count: 257)
+    defer { session.close() }
     let result = try response(session, "{\"version\":1,\"op\":\"frame\",\"id\":\"\(longID)\",\"id\":\"small\"}")
     #expect(result.error == .invalidRequest)
     #expect(result.id == nil)
+  }
+
+  @Test func requestIDLengthBoundaryAndUnknownOperationCorrelation() throws {
+    let session = try HeadlessSession(Fixture())
+    defer { session.close() }
+    let id = String(repeating: "a", count: 256)
+    let frame = try response(session, "{\"version\":1,\"id\":\"\(id)\",\"op\":\"frame\"}")
+    #expect(frame.id == id)
+    #expect(frame.status == .frame)
+    let unknown = try response(session, #"{"version":1,"id":"kept","op":"unknown"}"#)
+    #expect(unknown.id == "kept")
+    #expect(unknown.error == .unknownOperation)
+    #expect(HeadlessError.invalidViewport.description == "viewport dimensions must be finite and within 1...16384")
   }
 
   @Test func viewportLimits() throws {
