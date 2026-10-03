@@ -7,7 +7,6 @@ var products: [Product] = [
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
   .library(name: "ChromaTesting", targets: ["ChromaTesting"]),
   .library(name: "ChromaHeadless", targets: ["ChromaHeadless"]),
-  .executable(name: "ChromaHeadlessDemo", targets: ["ChromaHeadlessDemo"]),
 ]
 
 var appDependencies: [Target.Dependency] = ["Chroma", "ChromaHeadless"]
@@ -29,7 +28,6 @@ var targets: [Target] = [
     swiftSettings: [.strictMemorySafety()]),
   .target(name: "ChromaTesting", dependencies: ["Chroma"]),
   .target(name: "ChromaHeadless", dependencies: ["Chroma", "ChromaTesting"]),
-  .executableTarget(name: "ChromaHeadlessDemo", dependencies: ["Chroma", "ChromaHeadless"]),
   .testTarget(name: "ChromaHeadlessTests", dependencies: ["ChromaHeadless", "Chroma"]),
 ]
 #if os(macOS)
