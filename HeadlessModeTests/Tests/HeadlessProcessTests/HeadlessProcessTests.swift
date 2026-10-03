@@ -151,10 +151,7 @@ struct HeadlessProcessTests {
       try initial.requireFrame(id: initialID)
       #expect(initial.texts.contains("idle"))
       let position = try #require(
-        initial.commands?.compactMap { command in
-          if case .text(let position, "Start async", _, _) = command { return position }
-          return nil
-        }.first)
+        initial.textRuns.first { $0.text == "Start async" }?.position)
       for phase in [HeadlessPointerPhase.down, .up] {
         let id = UUID()
         let clicked = try await client.request(
@@ -180,10 +177,7 @@ struct HeadlessProcessTests {
       try initial.requireFrame(id: initialID)
       #expect(initial.texts.contains("Tick: 0"))
       let position = try #require(
-        initial.commands?.compactMap { command in
-          if case .text(let position, "Start timer", _, _) = command { return position }
-          return nil
-        }.first)
+        initial.textRuns.first { $0.text == "Start timer" }?.position)
       for phase in [HeadlessPointerPhase.down, .up] {
         let id = UUID()
         try await client.request(

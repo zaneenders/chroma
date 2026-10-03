@@ -7,7 +7,7 @@ struct LayoutTests {
   private let viewport = Rect(x: 0, y: 0, width: 400, height: 300)
 
   private func textPositions(in list: DrawList) -> [(String, Float)] {
-    list.commands.compactMap { command in
+    list.paintSnapshot.compactMap { command in
       guard case .text(let position, let text, _, _) = command else { return nil }
       return (text, position.y)
     }
@@ -212,11 +212,11 @@ struct LayoutTests {
     }
     interaction.endFrame()
 
-    let horizontalText = horizontalList.commands.compactMap { command -> (String, Point)? in
+    let horizontalText = horizontalList.paintSnapshot.compactMap { command -> (String, Point)? in
       guard case .text(let position, let text, _, _) = command else { return nil }
       return (text, position)
     }
-    let verticalText = verticalList.commands.compactMap { command -> (String, Point)? in
+    let verticalText = verticalList.paintSnapshot.compactMap { command -> (String, Point)? in
       guard case .text(let position, let text, _, _) = command else { return nil }
       return (text, position)
     }

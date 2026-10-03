@@ -65,7 +65,7 @@ struct BoundaryTests {
       resolved.paint(into: &outerBackground, in: viewport)
     }
     #expect(
-      outerBackground.commands == [
+      outerBackground.paintSnapshot == [
         .fillRect(rect: viewport, color: red),
         .text(position: Point(x: 5, y: 5), text: "content", color: .white, scale: 1),
       ])
@@ -77,7 +77,7 @@ struct BoundaryTests {
       resolved.paint(into: &innerBackground, in: viewport)
     }
     #expect(
-      innerBackground.commands == [
+      innerBackground.paintSnapshot == [
         .fillRect(rect: Rect(x: 5, y: 5, width: 30, height: 30), color: blue),
         .text(position: Point(x: 5, y: 5), text: "content", color: .white, scale: 1),
       ])
@@ -97,7 +97,7 @@ struct BoundaryTests {
     interaction.endFrame()
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .pushClip(viewport), .pushClip(viewport),
         .text(position: .zero, text: "x", color: .white, scale: 1),
         .popClip, .popClip,

@@ -145,7 +145,7 @@ struct NavigationContractTests {
     let frame = h.render(content, text: [.selectCaretRight, .selectCaretDown, .selectCaretRight])
     let copied = try #require(h.context.interaction.copyText())
     #expect(copied == "café\n👨‍👩‍👧‍👦 ")
-    let highlights = frame.commands.filter {
+    let highlights = frame.paintSnapshot.filter {
       if case .fillRect(let rect, let color) = $0 {
         return color == h.context.theme.focus.selectionBackground
           && rect.size.height == h.context.fontMetrics.lineAdvance

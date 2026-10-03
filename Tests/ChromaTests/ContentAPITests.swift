@@ -25,7 +25,7 @@ struct ContentAPITests {
     let producer = FrameProducer()
     let list = producer.render(
       content: text, viewport: size, input: InputState(), context: context, onChange: {})
-    let strings = list.commands.compactMap { command -> String? in
+    let strings = list.paintSnapshot.compactMap { command -> String? in
       if case .text(_, let text, _, _) = command { return text }
       return nil
     }
@@ -150,7 +150,7 @@ struct ContentAPITests {
     #expect(context.interaction.textSelectionRange == 6..<9)
     let held = render(InputState(pointerPosition: end, pointerDown: true))
     #expect(context.interaction.textSelectionRange == 6..<9)
-    let lines = held.commands.compactMap { command -> String? in
+    let lines = held.paintSnapshot.compactMap { command -> String? in
       if case .text(_, let text, _, _) = command { return text }
       return nil
     }
@@ -187,7 +187,7 @@ struct ContentAPITests {
     let list = FrameProducer().render(
       content: content, viewport: Size(width: 200, height: 200), input: InputState(),
       context: context, onChange: {})
-    let strings = list.commands.compactMap { command -> String? in
+    let strings = list.paintSnapshot.compactMap { command -> String? in
       if case .text(_, let text, _, _) = command { return text }
       return nil
     }
@@ -209,7 +209,7 @@ struct ContentAPITests {
     #expect(view.controller === controller)
     #expect(controller.offset == 1960)
     #expect(context.interaction.navigation?.children.first?.name == "History")
-    let strings = list.commands.compactMap { command -> String? in
+    let strings = list.paintSnapshot.compactMap { command -> String? in
       if case .text(_, let text, _, _) = command { return text }
       return nil
     }

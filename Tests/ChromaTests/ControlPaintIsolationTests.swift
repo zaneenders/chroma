@@ -19,7 +19,7 @@ struct ControlPaintIsolationTests {
       let context = BlockContext()
       var list = DrawList()
       BlockEngine.resolve(control, context: context).paint(into: &list, in: rect)
-      #expect(!list.commands.isEmpty)
+      #expect(!list.paintSnapshot.isEmpty)
       #expect(context.interaction.tree == nil)
       #expect(context.interaction.builderRoot == nil)
       #expect(context.interaction.building.inputHandlers.isEmpty)
@@ -64,7 +64,7 @@ struct ControlPaintIsolationTests {
     #expect(context.interaction.editingText == "old long value")
     #expect(changes == 0)
     #expect(
-      list.commands.contains {
+      list.paintSnapshot.contains {
         if case .text(_, "x", _, _) = $0 { return true }
         return false
       })
@@ -115,7 +115,7 @@ struct ControlPaintIsolationTests {
     #expect(context.interaction.builderRoot?.children.count == leaves)
     #expect(capture.paints == 2)
     #expect(
-      list.commands.allSatisfy {
+      list.paintSnapshot.allSatisfy {
         if case .text(_, "hovered", _, _) = $0 { return true }
         return false
       })
@@ -208,7 +208,7 @@ struct ControlPaintIsolationTests {
     resolved.paint(into: &first, in: rect)
     #expect(reads == registeredReads)
     #expect(
-      first.commands.contains {
+      first.paintSnapshot.contains {
         if case .text(_, "before", _, _) = $0 { return true }
         return false
       })
@@ -219,7 +219,7 @@ struct ControlPaintIsolationTests {
     var second = DrawList()
     updated.paint(into: &second, in: rect)
     #expect(
-      second.commands.contains {
+      second.paintSnapshot.contains {
         if case .text(_, "after", _, _) = $0 { return true }
         return false
       })
@@ -251,12 +251,12 @@ struct ControlPaintIsolationTests {
     resolved.register(in: rect)
     resolved.paint(into: &list, in: rect)
     context.interaction.endFrame()
-    let highlight = DrawCommand.fillRect(rect: rect, color: .black)
+    let highlight = PaintSnapshotEntry.fillRect(rect: rect, color: .black)
     if selectable {
       // The opaque hover background must be below selectable glyphs and selection.
-      #expect(list.commands.first == highlight)
+      #expect(list.paintSnapshot.first == highlight)
     } else {
-      #expect(list.commands.last == highlight)
+      #expect(list.paintSnapshot.last == highlight)
     }
   }
 }

@@ -29,6 +29,7 @@ let package = Package(
       dependencies: [
         "HeadlessProcessFixture",
         "ChromaHeadlessDemo",
+        .product(name: "ChromaFont", package: "Chroma"),
         .product(name: "Subprocess", package: "swift-subprocess"),
         .product(name: "ChromaHeadless", package: "Chroma"),
       ]

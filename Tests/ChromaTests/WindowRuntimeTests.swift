@@ -64,7 +64,7 @@ struct WindowRuntimeTests {
     #expect(model.actions == 2)
     #expect(model.text == "ac")
     #expect(
-      list.commands.contains {
+      list.paintSnapshot.contains {
         if case .text(_, "ac", _, _) = $0 { return true }
         return false
       })
@@ -135,7 +135,7 @@ struct WindowRuntimeTests {
     let list = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     #expect(model.text == "ab")
     #expect(
-      list.commands.contains {
+      list.paintSnapshot.contains {
         if case .text(_, "ab", _, _) = $0 { return true }
         return false
       })
@@ -191,7 +191,7 @@ struct WindowRuntimeTests {
     #expect(runtime.scheduler.nextFrame == nil)
     clock.now += 10
     let second = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
-    #expect(first.commands == second.commands)
+    #expect(first.paintSnapshot == second.paintSnapshot)
     #expect(runtime.scheduler.nextFrame == nil)
     runtime.reset()
   }
@@ -253,7 +253,7 @@ struct WindowRuntimeTests {
     #expect(runtime.scheduler.takeFrame() == .content)
     let list = runtime.renderScheduled(.content, viewport: viewport, onChange: { runtime.scheduler.requestContent() })
     #expect(
-      list.commands.contains {
+      list.paintSnapshot.contains {
         if case .text(_, "two", _, _) = $0 { return true }
         return false
       })

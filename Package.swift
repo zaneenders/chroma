@@ -19,6 +19,7 @@ var targets: [Target] = [
   .target(
     name: "Chroma",
     dependencies: [
+      "ChromaFont",
       .product(name: "BasicContainers", package: "swift-collections"),
       .product(name: "ContainersPreview", package: "swift-collections"),
     ],
@@ -28,7 +29,7 @@ var targets: [Target] = [
     swiftSettings: [.strictMemorySafety()]),
   .target(name: "ChromaTesting", dependencies: ["Chroma"]),
   .target(name: "ChromaHeadless", dependencies: ["Chroma", "ChromaTesting"]),
-  .testTarget(name: "ChromaHeadlessTests", dependencies: ["ChromaHeadless", "Chroma"]),
+  .testTarget(name: "ChromaHeadlessTests", dependencies: ["ChromaHeadless", "Chroma", "ChromaFont"]),
 ]
 #if os(macOS)
 appDependencies.append("MetalBackend")

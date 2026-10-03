@@ -1,4 +1,5 @@
 import Chroma
+import ChromaFont
 import ChromaHeadless
 import Foundation
 import Observation
@@ -63,7 +64,11 @@ import Testing
     #expect(invalid.error == .invalidViewport)
     #expect(invalid.id == "test")
     #expect(session.host.viewport == Size(width: 800, height: 600))
-    #expect(session.respond(to: #"{"version":1,"op":"frame"}"#).contains("Hello"))
+    #expect(
+      try response(session, #"{"version":1,"op":"frame"}"#).commands?.contains {
+        if case .quad(let quad) = $0 { return quad.texture == .fontAtlas }
+        return false
+      } == true)
     let mistyped = try response(session, #"{"version":"wrong","id":"kept","op":"frame"}"#)
     #expect(mistyped.id == "kept")
     #expect(mistyped.error == .invalidRequest)
@@ -152,10 +157,20 @@ import Testing
     let session = try HeadlessSession(app)
     defer { session.close() }
     func texts(_ frame: HeadlessResponse) -> [String] {
-      (frame.commands ?? []).compactMap { command in
-        guard case .text(_, let text, _, _) = command else { return nil }
-        return text
+      let atlas = ChromaFont.HighResolutionFontAtlas()
+      var text = ""
+      for entry in frame.commands ?? [] {
+        guard case .quad(let quad) = entry, quad.texture == .fontAtlas else { continue }
+        for scalar in atlas.characterIndices.keys {
+          let character = Character(String(UnicodeScalar(scalar)!))
+          let (x, y, _, _) = atlas.glyphUV(character)
+          if x == quad.sourceRect.minX && y == quad.sourceRect.minY {
+            text += String(character)
+            break
+          }
+        }
       }
+      return [text]
     }
     let initial = try response(session, #"{"version":1,"op":"frame"}"#)
     #expect(texts(initial) == ["Tick: 0"])

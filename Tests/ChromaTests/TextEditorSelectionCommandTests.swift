@@ -34,12 +34,12 @@ struct TextEditorSelectionCommandTests {
     focus.focus(editing: true)
     let frame = test.host.render(input: InputState(textEvents: [.moveCaretToEnd]))
     #expect(
-      frame.commands.contains {
+      frame.paintSnapshot.contains {
         if case .text(_, let value, _, _) = $0 { return value == text }
         return false
       })
     #expect(
-      !frame.commands.contains {
+      !frame.paintSnapshot.contains {
         if case .text(_, let value, _, _) = $0 { return value == "abcdefg" }
         return false
       })

@@ -21,7 +21,7 @@ struct HeadlessInputTests {
     await drainObservationChanges()
     let frame = host.renderIfNeeded()
     #expect(
-      frame?.commands.contains { command in
+      frame?.paintSnapshot.contains { command in
         if case .text(_, "Second", _, _) = command { return true }
         return false
       } == true)

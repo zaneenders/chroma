@@ -114,8 +114,8 @@ struct ScrollViewTests {
     )
 
     #expect(interaction.scrollState(for: scrollID).offset.y == 15)
-    #expect(list.commands.first == .pushClip(viewport))
-    #expect(list.commands.last == .popClip)
+    #expect(list.paintSnapshot.first == .pushClip(viewport))
+    #expect(list.paintSnapshot.last == .popClip)
   }
 
   @Test func horizontalWheelRetainsOffsetAndMovesWideContent() {
@@ -146,7 +146,7 @@ struct ScrollViewTests {
     #expect(interaction.scrollState(for: scrollID).offset.x == 15)
     #expect(interaction.scrollState(for: scrollID).limit.x == 100)
     #expect(
-      list.commands.contains(
+      list.paintSnapshot.contains(
         .fillRect(
           rect: Rect(x: -15, y: 0, width: 200, height: 20), color: .white)))
   }
@@ -702,7 +702,7 @@ struct ScrollViewTests {
     }
     interaction.endFrame()
 
-    let rowRects = list.commands.compactMap { command -> Rect? in
+    let rowRects = list.paintSnapshot.compactMap { command -> Rect? in
       guard case .fillRect(let rect, let color) = command, colors.contains(color) else { return nil }
       return rect
     }

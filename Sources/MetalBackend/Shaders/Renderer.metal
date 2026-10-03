@@ -1,90 +1,44 @@
 #include <metal_stdlib>
 using namespace metal;
-
-struct TextInstance {
-  float2 dst_p0;
-  float2 dst_p1;
-  float2 tex_tl;
-  float2 tex_br;
-  float4 color;
-};
-
-constant float2 quadPositions[4] = {
-  float2(0.0, 0.0),
-  float2(1.0, 0.0),
-  float2(0.0, 1.0),
-  float2(1.0, 1.0),
-};
-
-struct TextVertexOut {
-  float4 position [[position]];
-  float2 texCoord;
-  float4 color;
-};
-
-vertex TextVertexOut text_vertex(uint vid [[vertex_id]],
-                                 uint iid [[instance_id]],
-                                 constant TextInstance* instances [[buffer(0)]]) {
-    TextVertexOut out;
-    TextInstance inst = instances[iid];
-    float2 q = quadPositions[vid];
-    float2 size = inst.dst_p1 - inst.dst_p0;
-    out.position = float4(inst.dst_p0 + q * size, 0.0, 1.0);
-    float2 texSize = inst.tex_br - inst.tex_tl;
-    out.texCoord = inst.tex_tl + q * texSize;
-    out.color = inst.color;
-    return out;
-}
-
-fragment float4 text_fragment(TextVertexOut in [[stage_in]],
-                              texture2d<float> fontTex [[texture(0)]]) {
-    constexpr sampler s(min_filter::linear, mag_filter::linear,
-                        mip_filter::linear);
-    float a = fontTex.sample(s, in.texCoord).r;
-    return float4(in.color.rgb, in.color.a * a);
-}
-
-fragment float4 image_fragment(TextVertexOut in [[stage_in]],
-                               texture2d<float> image [[texture(0)]]) {
-    constexpr sampler s(min_filter::linear, mag_filter::linear,
-                        mip_filter::none, address::clamp_to_edge);
-    return image.sample(s, in.texCoord) * in.color;
-}
-
 struct ShapeInstance {
   float2 dst_p0;
   float2 dst_p1;
   float2 size;
   float4 radii;
-  float4 color;
-  float borderWidth;
-  float3 padding;
+  float4 topLeft;
+  float4 topRight;
+  float4 bottomRight;
+  float4 bottomLeft;
+  float2 uv0;
+  float2 uv1;
+  float4 parameters;
 };
-
 struct ShapeVertexOut {
   float4 position [[position]];
   float2 localPosition;
+  float2 uv;
   float2 size;
   float4 radii;
   float4 color;
-  float borderWidth;
+  float4 parameters;
 };
-
-vertex ShapeVertexOut shape_vertex(uint vid [[vertex_id]],
-                                   uint iid [[instance_id]],
-                                   constant ShapeInstance* instances [[buffer(0)]]) {
-    ShapeInstance inst = instances[iid];
-    float2 q = quadPositions[vid];
-    ShapeVertexOut out;
-    out.position = float4(inst.dst_p0 + q * (inst.dst_p1 - inst.dst_p0), 0.0, 1.0);
-    out.localPosition = q * (inst.size + 2.0 * inst.padding.x) - inst.padding.x;
-    out.size = inst.size;
-    out.radii = inst.radii;
-    out.color = inst.color;
-    out.borderWidth = inst.borderWidth;
-    return out;
+constant float2 corners[4] = {float2(0,0), float2(1,0), float2(0,1), float2(1,1)};
+vertex ShapeVertexOut shape_vertex(uint vid [[vertex_id]], uint iid [[instance_id]],
+                                  constant ShapeInstance* instances [[buffer(0)]]) {
+  ShapeInstance inst = instances[iid];
+  float2 q = corners[vid];
+  ShapeVertexOut out;
+  out.position = float4(mix(inst.dst_p0, inst.dst_p1, q), 0, 1);
+  out.localPosition = q * (inst.size + 2 * inst.parameters.z) - inst.parameters.z;
+  float2 t = out.localPosition / inst.size;
+  out.uv = mix(inst.uv0, inst.uv1, t);
+  out.color = mix(mix(inst.topLeft, inst.topRight, t.x),
+                  mix(inst.bottomLeft, inst.bottomRight, t.x), t.y);
+  out.size = inst.size;
+  out.radii = inst.radii;
+  out.parameters = inst.parameters;
+  return out;
 }
-
 float roundedRectDistance(float2 localPosition, float2 size, float4 radii) {
     float2 centered = localPosition - size * 0.5;
     float2 q = abs(centered) - size * 0.5;
@@ -121,24 +75,25 @@ float roundedRectDistance(float2 localPosition, float2 size, float4 radii) {
     return distance;
 }
 
-float shapeCoverage(float distance) {
-    float antialiasWidth = max(fwidth(distance), 0.001);
-    return 1.0 - smoothstep(-antialiasWidth, antialiasWidth, distance);
+
+float coverage(float distance, float softness) {
+  float width = max(max(fwidth(distance), softness), 0.001);
+  return 1 - smoothstep(-width, width, distance);
 }
-
-fragment float4 shape_fragment(ShapeVertexOut in [[stage_in]]) {
-    float outerDistance = roundedRectDistance(in.localPosition, in.size, in.radii);
-    float alpha = shapeCoverage(outerDistance);
-
-    if (in.borderWidth > 0.0) {
-        float2 innerSize = in.size - 2.0 * in.borderWidth;
-        if (innerSize.x > 0.0 && innerSize.y > 0.0) {
-            float2 innerPosition = in.localPosition - in.borderWidth;
-            float4 innerRadii = max(in.radii - in.borderWidth, 0.0);
-            float innerDistance = roundedRectDistance(innerPosition, innerSize, innerRadii);
-            alpha *= 1.0 - shapeCoverage(innerDistance);
-        }
-    }
-
-    return float4(in.color.rgb, in.color.a * alpha);
+fragment float4 shape_fragment(ShapeVertexOut in [[stage_in]],
+                               texture2d<float> texture [[texture(0)]]) {
+  constexpr sampler s(min_filter::linear, mag_filter::linear,
+                      mip_filter::linear, address::clamp_to_edge);
+  float4 sample = texture.sample(s, in.uv);
+  if (in.parameters.w > 0.5) sample = float4(1, 1, 1, sample.r);
+  float alpha = coverage(roundedRectDistance(in.localPosition, in.size, in.radii), in.parameters.y);
+  float border = in.parameters.x;
+  float2 innerSize = in.size - 2 * border;
+  if (border > 0 && innerSize.x > 0 && innerSize.y > 0) {
+    alpha *= 1 - coverage(roundedRectDistance(in.localPosition - border, innerSize,
+                                             max(in.radii - border, 0.0)), in.parameters.y);
+  }
+  float4 result = sample * in.color;
+  result.a *= alpha;
+  return result;
 }
