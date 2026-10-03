@@ -29,7 +29,7 @@ struct RegistrationControlTests {
     }
   }
 
-  @Test func builtInControlsRegisterWithoutPaintingOrCompatibilityFallbacks() {
+  @Test func builtInControlsRegisterWithoutPainting() {
     let blocks: [any Block] = [
       Button("Action", action: {}),
       TextEditor(text: { "first\nsecond" }, onChange: { _ in }),
@@ -138,7 +138,9 @@ struct RegistrationControlTests {
       registration.interaction.endFrame()
       presentation.interaction.beginFrame(input: input)
       var list = DrawList()
-      editor.draw(into: &list, in: rect, context: presentation)
+      let resolved = editor.prepareLayout(context: presentation)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
       presentation.interaction.endFrame()
       #expect(registration.interaction.caretOffset == presentation.interaction.caretOffset)
       #expect(registration.interaction.textSelectionRange == presentation.interaction.textSelectionRange)

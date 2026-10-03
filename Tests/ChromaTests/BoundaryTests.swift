@@ -59,9 +59,11 @@ struct BoundaryTests {
     let blue = Color(r: 0, g: 0, b: 1, a: 1)
 
     var outerBackground = DrawList()
-    BlockEngine.draw(
-      NamedBlock(name: "content").padding(5).background(red),
-      into: &outerBackground, in: viewport, context: context)
+    do {
+      let resolved = BlockEngine.prepare(NamedBlock(name: "content").padding(5).background(red), context: context)
+      resolved.register(in: viewport)
+      resolved.paint(into: &outerBackground, in: viewport)
+    }
     #expect(
       outerBackground.commands == [
         .fillRect(rect: viewport, color: red),
@@ -69,9 +71,11 @@ struct BoundaryTests {
       ])
 
     var innerBackground = DrawList()
-    BlockEngine.draw(
-      NamedBlock(name: "content").background(blue).padding(5),
-      into: &innerBackground, in: viewport, context: context)
+    do {
+      let resolved = BlockEngine.prepare(NamedBlock(name: "content").background(blue).padding(5), context: context)
+      resolved.register(in: viewport)
+      resolved.paint(into: &innerBackground, in: viewport)
+    }
     #expect(
       innerBackground.commands == [
         .fillRect(rect: Rect(x: 5, y: 5, width: 30, height: 30), color: blue),
@@ -85,7 +89,11 @@ struct BoundaryTests {
     let viewport = Rect(x: 0, y: 0, width: 20, height: 20)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(NamedBlock(name: "x").clipped().clipped(), into: &list, in: viewport, context: context)
+    do {
+      let resolved = BlockEngine.prepare(NamedBlock(name: "x").clipped().clipped(), context: context)
+      resolved.register(in: viewport)
+      resolved.paint(into: &list, in: viewport)
+    }
     interaction.endFrame()
 
     #expect(

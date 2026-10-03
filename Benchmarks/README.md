@@ -12,8 +12,7 @@ swift run --package-path Benchmarks -c release RegistrationBenchmark \
 
 `RegistrationBenchmark` measures paint-free registration with a deferred root, fixed
 increment button, 480×360 viewport, and identified uniform virtualized list
-(30-point rows, 1-point spacing). The legacy comparison mode has been removed with
-`PrimitiveBlock`; earlier comparison results are historical, not reproducible on this API.
+(30-point rows, 1-point spacing).
 
 The JSON report separates:
 
@@ -51,7 +50,7 @@ Measures 20 session-style rows in a scroll view under one, three, or five layers
 
 `--interactive` wraps each layer in a control. Its idle measurement tree is shared within a traversal, while registration builds the current interaction phase with the control's child focus context and painting consumes that prepared child. This adds work per nested control without repeating every idle layout query.
 
-Increasing container depth must not multiply row-body evaluations. The prepared layout tree gives each built-in container ownership of its resolved children, sharing them across expansion checks, measurement, and drawing. Each resolved node memoizes sizes by proposal for that traversal only. A new traversal evaluates current state and reinstalls observation tracking. Migrated custom primitives explicitly register and paint prepared children; there is no legacy drawing adapter. Phase-dependent controls prepare the current appearance during update.
+Increasing container depth must not multiply row-body evaluations. The prepared layout tree gives each built-in container ownership of its resolved children, sharing them across expansion checks, measurement, and drawing. Each resolved node memoizes sizes by proposal for that traversal only. A new traversal evaluates current state and reinstalls observation tracking. Custom primitives explicitly register and paint prepared children. Phase-dependent controls prepare the current appearance during update.
 
 `StackEvaluationTests` covers nested body counts, repeated and changed proposals, fresh state between traversals, and scroll-content reuse without relying on timing thresholds:
 
@@ -64,12 +63,12 @@ swift test --filter StackEvaluationTests
 1. The backend snapshots native input and queues it on the main actor.
 2. `WindowRuntime` applies events in order. Clicks, dragging, scrolling, commands, and text edits first rebuild registrations to obtain current callbacks and hit-test geometry. Plain hover uses the last frame's geometry.
 3. `FrameScheduler` coalesces requests and caps frame starts at `maximumRefreshRate` (60 Hz by default). Rendering time counts toward that interval. With no requests or Wayland scroll momentum, it schedules nothing.
-4. `FrameProducer` reconciles current blocks, measures/places, registers behavior, then paints those prepared snapshots while tracking observable properties. Migrated painting performs no registration or lifecycle work. A change to a tracked property requests another frame.
+4. `FrameProducer` reconciles current blocks, measures/places, registers behavior, then paints those prepared snapshots while tracking observable properties. Painting performs no registration or lifecycle work. A change to a tracked property requests another frame.
 5. The backend culls and encodes the draw commands, then submits them to the GPU.
 
-Registration refresh traverses migrated built-ins without painting. Custom primitives that have not implemented `register(in:context:)` use an explicit counted adapter that draws into a temporary command list. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
+Registration refresh traverses blocks without painting. Custom primitives implement explicit registration and painting phases. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
 
-Bodies, callbacks and geometry reconcile conservatively; stable identity alone never establishes validity. Prepared custom children are owned locally through one operation, without paired traversal bookkeeping. The experimental broad geometry cache was removed after measurements showed no end-to-end benefit. The ShapeTree companion migrates its custom primitives, while external custom blocks must migrate to the explicit protocols. Identified collections still need explicit revisions or change sets before their ID scans can safely be skipped. See [the validity contract](../Documentation/RegistrationPipeline.md).
+Bodies, callbacks and geometry reconcile conservatively; stable identity alone never establishes validity. Prepared custom children are owned locally through one operation, without paired traversal bookkeeping. The experimental broad geometry cache was removed after measurements showed no end-to-end benefit. Custom blocks implement `PaintableBlock` or `LayoutPreparingBlock`. Identified collections still need explicit revisions or change sets before their ID scans can safely be skipped.
 
 The scheduler and hover regressions are covered without wall-clock performance thresholds:
 

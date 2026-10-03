@@ -65,7 +65,7 @@ struct RegistrationLayoutTests {
     #expect(second.paints == 0)
   }
 
-  @Test func preparedBuiltinsRegisterWithoutPaintingOrCompatibilityFallback() {
+  @Test func preparedBuiltinsRegisterWithoutPainting() {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     let target = FocusTarget()

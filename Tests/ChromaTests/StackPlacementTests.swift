@@ -26,7 +26,9 @@ struct StackPlacementTests {
     #expect(row.sizeThatFits(Size(width: 150, height: 200), context: context).height == 20)
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
-    row.draw(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60), context: context)
+    let resolved = row.prepareLayout(context: context)
+    resolved.register(in: Rect(x: 10, y: 20, width: 100, height: 60))
+    resolved.paint(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
     context.interaction.endFrame()
     let rects = list.commands.compactMap { command -> Rect? in
       if case .fillRect(let rect, _) = command { return rect }
@@ -59,7 +61,11 @@ struct StackPlacementTests {
     #expect(measured == (horizontal ? Size(width: 65, height: 50) : Size(width: 40, height: 85)))
     var drawList = DrawList()
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.draw(stack, into: &drawList, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &drawList, in: rect)
+    }
     context.interaction.endFrame()
     let rectangles = drawList.commands.compactMap { command -> Rect? in
       if case .fillRect(let rect, _) = command { return rect }

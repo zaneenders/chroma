@@ -20,10 +20,6 @@ extension LayoutPreparingBlock {
   @MainActor public func register(in rect: Rect, context: BlockContext) {
     prepareLayout(context: context).register(in: rect)
   }
-  @MainActor public func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-
-    prepareLayout(context: context).draw(into: &list, in: rect)
-  }
 }
 
 extension LayoutModifier {

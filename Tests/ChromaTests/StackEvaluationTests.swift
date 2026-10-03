@@ -29,7 +29,11 @@ struct StackEvaluationTests {
     #expect(BlockEngine.measure(block, proposal: rect.size, context: context) == rect.size)
     #expect(counter.bodies == 3)
     var list = DrawList()
-    BlockEngine.draw(block, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     #expect(counter.bodies == 4)
     #expect(
       list.commands.contains {
@@ -54,7 +58,11 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 1)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
     #expect(
@@ -74,7 +82,11 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 1)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
   }
@@ -101,7 +113,11 @@ struct StackEvaluationTests {
     counter.bodies = 0
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
   }
@@ -112,7 +128,11 @@ struct StackEvaluationTests {
     let context = BlockContext()
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.draw(block, into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100), context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: Rect(x: 0, y: 0, width: 200, height: 100))
+      resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
   }
@@ -151,7 +171,8 @@ struct StackEvaluationTests {
     #expect(resolved.sizeThatFits(proposal) == Size(width: 200, height: 12))
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
-    resolved.draw(into: &list, in: Rect(origin: .zero, size: proposal))
+    resolved.register(in: Rect(origin: .zero, size: proposal))
+    resolved.paint(into: &list, in: Rect(origin: .zero, size: proposal))
     context.interaction.endFrame()
     #expect(measurements.proposals == [proposal, Size(width: 100, height: 100)])
 
@@ -214,14 +235,22 @@ struct StackEvaluationTests {
     counter.bodies = 0
     var first = DrawList()
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.draw(stack, into: &first, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &first, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
 
     counter.text = "after"
     var second = DrawList()
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.draw(stack, into: &second, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &second, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
     #expect(

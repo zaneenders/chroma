@@ -58,10 +58,6 @@ public enum BlockEngine {
       update(rect)
     }
 
-    public func draw(into drawList: inout DrawList, in rect: Rect) {
-      register(in: rect)
-      paint(into: &drawList, in: rect)
-    }
     public func paint(into drawList: inout DrawList, in rect: Rect) {
       PipelineMetrics.record(.paint)
       BlockEngine.countDrawingCommands(into: &drawList) { list in presentation(&list, rect) }
@@ -124,16 +120,6 @@ public enum BlockEngine {
   ) -> Size {
     let resolved = resolve(block, context: context)
     return resolved.sizeThatFits(proposal)
-  }
-
-  public static func draw(
-    _ block: any Block,
-    into drawList: inout DrawList,
-    in rect: Rect,
-    context: BlockContext
-  ) {
-    let resolved = resolve(block, context: context)
-    resolved.draw(into: &drawList, in: rect)
   }
 
   /// Builds one consistent interaction update from fresh block values. The resolved tree and

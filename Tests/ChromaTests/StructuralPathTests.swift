@@ -41,7 +41,11 @@ struct StructuralPathTests {
     _ = BlockEngine.measure(block, proposal: rect.size, context: context)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(block, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     #expect(recorder.measured == recorder.drawn)
     return recorder.drawn
@@ -189,7 +193,11 @@ struct StructuralPathTests {
     func draw() -> [String: StructuralPath] {
       recorder.drawn = [:]
       var list = DrawList()
-      BlockEngine.draw(layered, into: &list, in: rect, context: context)
+      do {
+        let resolved = BlockEngine.prepare(layered, context: context)
+        resolved.register(in: rect)
+        resolved.paint(into: &list, in: rect)
+      }
       return recorder.drawn
     }
     let paths = draw()
@@ -393,7 +401,11 @@ struct StructuralPathTests {
       }
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()
-      BlockEngine.draw(stack, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
+      do {
+        let resolved = BlockEngine.prepare(stack, context: context)
+        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 100))
+        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
+      }
       context.interaction.endFrame()
       if !uniform { #expect(recorder.measured == recorder.drawn) }
       return recorder.drawn

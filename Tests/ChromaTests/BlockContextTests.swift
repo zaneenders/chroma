@@ -66,11 +66,11 @@ struct BlockContextTests {
 
     _ = BlockEngine.measure(block, proposal: Size(width: 20, height: 10), context: context)
     var drawList = DrawList()
-    BlockEngine.draw(
-      block,
-      into: &drawList,
-      in: Rect(x: 0, y: 0, width: 20, height: 10),
-      context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 10))
+      resolved.paint(into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
+    }
 
     #expect(recorder.measuredInteraction === interaction)
     #expect(recorder.drawnInteraction === interaction)

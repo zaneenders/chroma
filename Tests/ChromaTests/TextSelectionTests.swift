@@ -229,7 +229,7 @@ struct TextSelectionTests {
     #expect(ctx.copyText() == "custom copy")
   }
 
-  @Test func renderContextCanInstallCustomCopyProvider() {
+  @Test func blockContextCanInstallCustomCopyProvider() {
     let ctx = BlockContext()
     ctx.setCopyTextProvider { "custom copy" }
 

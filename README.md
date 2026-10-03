@@ -16,7 +16,9 @@ The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma
 
 ## Architecture
 
-[Registration without painting](Documentation/RegistrationPipeline.md) describes the input-update path, cache validity, and custom primitive migration.
+Interaction registration and painting are separate phases. Custom leaves implement
+`PaintableBlock`; containers implement `LayoutPreparingBlock` and prepare children
+for one traversal. Resolved layout and measurement caches are not retained across updates.
 
 ## Inspired by
 

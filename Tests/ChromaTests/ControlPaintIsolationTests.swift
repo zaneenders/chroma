@@ -240,33 +240,23 @@ struct ControlPaintIsolationTests {
   }
 
   @Test(arguments: [false, true])
-  func opaqueTextHoverPreservesLegacyCommandOrder(selectable: Bool) {
+  func opaqueTextHoverPreservesCommandOrder(selectable: Bool) {
     let text = selectable ? Text("visible glyphs").selectable() : Text("visible glyphs")
-    func render(separated: Bool) -> DrawList {
-      var context = BlockContext()
-      context.hoverStyle = .tint(.black)
-      context.interaction.hoveredLeafID = context.widgetID
-      context.interaction.beginFrame(input: InputState(), processingInput: false)
-      let resolved = text.prepareLayout(context: context)
-      var list = DrawList()
-      if separated {
-        resolved.register(in: rect)
-        resolved.paint(into: &list, in: rect)
-      } else {
-        resolved.draw(into: &list, in: rect)
-      }
-      context.interaction.endFrame()
-      return list
-    }
-    let legacy = render(separated: false)
-    let separated = render(separated: true)
-    #expect(separated.commands == legacy.commands)
+    var context = BlockContext()
+    context.hoverStyle = .tint(.black)
+    context.interaction.hoveredLeafID = context.widgetID
+    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    let resolved = text.prepareLayout(context: context)
+    var list = DrawList()
+    resolved.register(in: rect)
+    resolved.paint(into: &list, in: rect)
+    context.interaction.endFrame()
     let highlight = DrawCommand.fillRect(rect: rect, color: .black)
     if selectable {
       // The opaque hover background must be below selectable glyphs and selection.
-      #expect(separated.commands.first == highlight)
+      #expect(list.commands.first == highlight)
     } else {
-      #expect(separated.commands.last == highlight)
+      #expect(list.commands.last == highlight)
     }
   }
 }

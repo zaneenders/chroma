@@ -21,8 +21,4 @@ extension PaintableBlock {
   public var body: Never { fatalError("\(Self.self) is a paintable block") }
   public var expandsHorizontally: Bool { false }
   public var expandsVertically: Bool { false }
-
-  @MainActor public func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-    BlockEngine.prepare(self, context: context).draw(into: &list, in: rect)
-  }
 }

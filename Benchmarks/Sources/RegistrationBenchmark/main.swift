@@ -196,9 +196,8 @@ private struct RegistrationBenchmark {
     let report = Report(
       configuration: configuration,
       notes: [
-        "Same binary, dataset, viewport, warmup and ordered input sequence for both modes.",
+        "Timing and counter replays use the same binary, dataset, viewport, warmup and ordered input sequence.",
         "Timing replay disables PipelineMetrics; a separate identical replay collects work counters.",
-        "Legacy mode adds one identity-preserving custom primitive to force the draw-to-register adapter. It is a same-binary mechanism baseline, not a historical executable comparison.",
         "Initial-frame samples use fresh hosts and exclude fixture allocation; they are not process-cold startup timings.",
         "Pre-input activation samples contain two distinct events with no intervening presentation; each captured callback must observe its predecessor's update.",
         "Active presentation coalesces the two activations and scroll event. Presentation is asserted not to replay actions.",

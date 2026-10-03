@@ -116,9 +116,11 @@ struct LazyLayoutCacheTests {
           .init(id: WidgetID("stable-row"), content: Color.white.sizing(y: .fixed(height)))
         ]
       ).id(id)
-      BlockEngine.draw(
-        stack, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: BlockContext(interaction: interaction))
+      do {
+        let resolved = BlockEngine.prepare(stack, context: BlockContext(interaction: interaction))
+        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+      }
       interaction.endFrame()
     }
     frame(height: 40)
@@ -136,10 +138,12 @@ struct LazyLayoutCacheTests {
     func frame() {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
-      BlockEngine.draw(
-        ScrollView(controller: controller, rows: [row]).id(id),
-        into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: BlockContext(interaction: interaction))
+      do {
+        let resolved = BlockEngine.prepare(
+          ScrollView(controller: controller, rows: [row]).id(id), context: BlockContext(interaction: interaction))
+        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+      }
       interaction.endFrame()
     }
     frame()
@@ -156,10 +160,13 @@ struct LazyLayoutCacheTests {
     func frame(scale: Float) {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
-      BlockEngine.draw(
-        ScrollView(controller: controller, rows: rows).id(id),
-        into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: BlockContext(interaction: interaction, textScale: scale))
+      do {
+        let resolved = BlockEngine.prepare(
+          ScrollView(controller: controller, rows: rows).id(id),
+          context: BlockContext(interaction: interaction, textScale: scale))
+        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+      }
       interaction.endFrame()
     }
     frame(scale: 1)

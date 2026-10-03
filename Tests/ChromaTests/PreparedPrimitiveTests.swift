@@ -59,8 +59,11 @@ struct PreparedPrimitiveTests {
   @Test func defaultCombinedDrawingUsesTheSameLocalChildren() {
     let counts = Counts()
     var list = DrawList()
-    BlockEngine.draw(
-      Pair(counts: counts), into: &list, in: Rect(x: 0, y: 0, width: 20, height: 20), context: BlockContext())
+    do {
+      let resolved = BlockEngine.prepare(Pair(counts: counts), context: BlockContext())
+      resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 20))
+      resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 20, height: 20))
+    }
     #expect(counts.built == 1)
     #expect(counts.registered == 2)
     #expect(counts.painted == ["last", "first"])

@@ -36,7 +36,11 @@ struct RenderingCommandTests {
   ) -> DrawList {
     context.interaction.beginFrame(input: input)
     var list = DrawList()
-    BlockEngine.draw(block, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     return list
   }

@@ -21,7 +21,11 @@ struct DefaultFocusTests {
     let isInitialFrame = context.interaction.tree == nil
     context.interaction.beginFrame(input: input)
     var list = DrawList()
-    BlockEngine.draw(content, into: &list, in: viewport, context: context)
+    do {
+      let resolved = BlockEngine.prepare(content, context: context)
+      resolved.register(in: viewport)
+      resolved.paint(into: &list, in: viewport)
+    }
     context.interaction.endFrame()
     if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     return list

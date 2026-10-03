@@ -11,8 +11,11 @@ struct FocusVisibilityTests {
     let isInitialFrame = context.interaction.tree == nil
     context.interaction.beginFrame(input: input)
     var drawList = DrawList()
-    BlockEngine.draw(
-      content, into: &drawList, in: Rect(origin: .zero, size: viewport), context: context)
+    do {
+      let resolved = BlockEngine.prepare(content, context: context)
+      resolved.register(in: Rect(origin: .zero, size: viewport))
+      resolved.paint(into: &drawList, in: Rect(origin: .zero, size: viewport))
+    }
     context.interaction.endFrame()
     if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
   }
