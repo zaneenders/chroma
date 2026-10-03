@@ -1,13 +1,8 @@
-
-Benchmarks/results/
-
 .build/
 .DS_Store
 .swiftpm/
 Package.resolved
 .vscode/
 
-__pycache__/
-
-# Reproduce the standalone integration-test dependency graph.
+Benchmarks/results/
 !HeadlessModeTests/Package.resolved
