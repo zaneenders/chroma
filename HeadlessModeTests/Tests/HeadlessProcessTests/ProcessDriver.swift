@@ -1,3 +1,4 @@
+import ChromaHeadless
 import Foundation
 import Subprocess
 import Testing
@@ -8,22 +9,7 @@ import Darwin
 import Glibc
 #endif
 
-struct WireRequest: Codable, Sendable {
-  enum Operation: String, Codable, Sendable {
-    case key, frame, quit, resize, pointer
-  }
-
-  var version = 1
-  var id: String? = nil
-  let op: Operation
-  var key: String? = nil
-  var text: String? = nil
-  var width: Double? = nil
-  var height: Double? = nil
-  var phase: String? = nil
-  var x: Double? = nil
-  var y: Double? = nil
-
+extension HeadlessRequest {
   func encoded(terminated: Bool = true) throws -> Data {
     var data = try JSONEncoder().encode(self)
     if terminated { data.append(10) }
@@ -31,40 +17,18 @@ struct WireRequest: Codable, Sendable {
   }
 }
 
-struct WireResponse: Decodable, Sendable {
-  struct Viewport: Decodable, Sendable, Equatable {
-    let width: Double
-    let height: Double
+extension HeadlessResponse {
+  var texts: [String] {
+    (commands ?? []).compactMap { command in
+      guard case .text(_, let text, _, _) = command else { return nil }
+      return text
+    }
   }
-  struct Point: Decodable, Sendable {
-    let x: Double
-    let y: Double
-  }
-  struct Text: Decodable, Sendable {
-    let text: String
-    let position: Point
-  }
-  struct Command: Decodable, Sendable { let text: Text? }
-  struct Focus: Decodable, Sendable {
-    let editing: Bool
-    let path: [Int]?
-    let caretOffset: Int?
-  }
-
-  let version: Int
-  let id: String?
-  let status: String
-  let error: String?
-  let viewport: Viewport?
-  let commands: [Command]?
-  let focus: Focus?
-
-  var texts: [String] { (commands ?? []).compactMap { $0.text?.text } }
 
   func requireFrame(id expectedID: String) throws {
     try #require(version == 1)
-    try #require(id == expectedID)
-    try #require(status == "frame")
+    try #require(id?.rawValue == expectedID)
+    try #require(status == .frame)
     try #require(error == nil)
     try #require(viewport != nil)
     try #require(commands != nil)
@@ -82,12 +46,12 @@ struct DeadlineExceeded: Error, CustomStringConvertible {
 /// Unlike a timeout around a blocking read, cancellation wakes this mailbox's
 /// suspended consumer, allowing the Subprocess closure to unwind and reap its child.
 actor Responses {
-  private var queued: [WireResponse] = []
-  private var waiter: (UUID, CheckedContinuation<WireResponse, any Error>)?
+  private var queued: [HeadlessResponse] = []
+  private var waiter: (UUID, CheckedContinuation<HeadlessResponse, any Error>)?
   private var ended = false
   private var failure: (any Error)?
 
-  func append(_ response: WireResponse) {
+  func append(_ response: HeadlessResponse) {
     if let (_, continuation) = waiter {
       waiter = nil
       continuation.resume(returning: response)
@@ -105,7 +69,7 @@ actor Responses {
     }
   }
 
-  func next() async throws -> WireResponse {
+  func next() async throws -> HeadlessResponse {
     let id = UUID()
     return try await withTaskCancellationHandler {
       try Task.checkCancellation()
@@ -204,7 +168,7 @@ func withDeadline<T: Sendable>(
 private func decodeJSONL(_ output: SubprocessOutputSequence, into responses: Responses) async throws {
   do {
     for try await line in output.strings(separatedBy: .unicodeScalarSequence("\n".unicodeScalars)) {
-      let response = try JSONDecoder().decode(WireResponse.self, from: Data(line.utf8))
+      let response = try JSONDecoder().decode(HeadlessResponse.self, from: Data(line.utf8))
       await responses.append(response)
     }
     await responses.finish()
@@ -223,19 +187,19 @@ struct ProcessClient: Sendable {
 
   func sendRaw(_ data: Data) async throws { _ = try await input.write(data) }
 
-  func send(_ request: WireRequest, terminated: Bool = true) async throws {
+  func send(_ request: HeadlessRequest, terminated: Bool = true) async throws {
     try await sendRaw(request.encoded(terminated: terminated))
   }
 
-  func send(_ requests: [WireRequest]) async throws {
+  func send(_ requests: [HeadlessRequest]) async throws {
     var data = Data()
     for request in requests { data.append(try request.encoded()) }
     try await sendRaw(data)
   }
 
-  func receive() async throws -> WireResponse { try await responses.next() }
+  func receive() async throws -> HeadlessResponse { try await responses.next() }
 
-  func request(_ request: WireRequest) async throws -> WireResponse {
+  func request(_ request: HeadlessRequest) async throws -> HeadlessResponse {
     try await send(request)
     return try await receive()
   }

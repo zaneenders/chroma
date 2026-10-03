@@ -1,3 +1,4 @@
+import ChromaHeadless
 import Foundation
 import Subprocess
 import Testing
@@ -9,7 +10,7 @@ struct HeadlessProcessTests {
       // remains open. This cannot pass with a pre-collected one-shot input string.
       // Unicode line separators in JSON strings are data, never JSONL delimiters.
       for id in ["hello", "still-alive\u{2028}\u{2029}\u{85}", "ready"] {
-        let frame = try await client.request(.init(id: id, op: .frame))
+        let frame = try await client.request(.init(id: .init(rawValue: id), op: .frame))
         try frame.requireFrame(id: id)
         #expect(frame.viewport == .init(width: 800, height: 600))
         #expect(frame.texts.contains("First"))
@@ -17,17 +18,17 @@ struct HeadlessProcessTests {
       }
 
       // One write deliberately sends requests faster than frames can be rendered.
-      let burst: [WireRequest] = [
-        .init(id: "focus-first", op: .key, key: "tab"),
-        .init(id: "edit-first", op: .key, key: "enter"),
+      let burst: [HeadlessRequest] = [
+        .init(id: "focus-first", op: .key, key: .tab),
+        .init(id: "edit-first", op: .key, key: .enter),
         .init(id: "text-first", op: .key, text: "Alpha"),
-        .init(id: "focus-second", op: .key, key: "tab"),
-        .init(id: "edit-second", op: .key, key: "enter"),
+        .init(id: "focus-second", op: .key, key: .tab),
+        .init(id: "edit-second", op: .key, key: .enter),
         .init(id: "text-second", op: .key, text: "Beta"),
         .init(id: "snapshot", op: .frame),
       ]
       try await client.send(burst)
-      var received: [WireResponse] = []
+      var received: [HeadlessResponse] = []
       for id in ["focus-first", "edit-first", "text-first", "focus-second", "edit-second", "text-second", "snapshot"] {
         let frame = try await client.receive()
         try frame.requireFrame(id: id)
@@ -46,7 +47,7 @@ struct HeadlessProcessTests {
       let closed = try await client.request(.init(id: "bye", op: .quit))
       #expect(closed.version == 1)
       #expect(closed.id == "bye")
-      #expect(closed.status == "closed")
+      #expect(closed.status == .closed)
     }
     try outcome.requireSuccess()
     #expect(outcome.diagnostics.isEmpty)
@@ -54,17 +55,17 @@ struct HeadlessProcessTests {
 
   @Test func malformedRequestRecoversAndKeepsCorrelation() async throws {
     let outcome = try await runSession { client in
-      try await client.sendRaw(Data("not JSON\n".utf8) + WireRequest(id: "recovered", op: .frame).encoded())
+      try await client.sendRaw(Data("not JSON\n".utf8) + HeadlessRequest(id: "recovered", op: .frame).encoded())
       let invalid = try await client.receive()
       #expect(invalid.version == 1)
-      #expect(invalid.status == "error")
+      #expect(invalid.status == .error)
       #expect(invalid.id == nil)
-      #expect(invalid.error == "invalid_request")
+      #expect(invalid.error == .invalidRequest)
       try await client.receive().requireFrame(id: "recovered")
       let invalidSize = try await client.request(
         .init(id: "invalid-size", op: .resize, width: 0, height: 600))
       #expect(invalidSize.id == "invalid-size")
-      #expect(invalidSize.error == "invalid_viewport")
+      #expect(invalidSize.error == .invalidViewport)
       let recovered = try await client.request(.init(id: "recovered-again", op: .frame))
       try recovered.requireFrame(id: "recovered-again")
       #expect(recovered.viewport == .init(width: 800, height: 600))
@@ -100,12 +101,15 @@ struct HeadlessProcessTests {
       let initial = try await client.request(.init(id: "initial", op: .frame))
       try initial.requireFrame(id: "initial")
       #expect(initial.texts.contains("idle"))
-      let position = try #require(initial.commands?.compactMap(\.text).first { $0.text == "Start async" }?.position)
-      for phase in ["down", "up"] {
+      let position = try #require(initial.commands?.compactMap { command in
+        if case .text(let position, "Start async", _, _) = command { return position }
+        return nil
+      }.first)
+      for phase in [HeadlessPointerPhase.down, .up] {
         let clicked = try await client.request(
-          .init(id: phase, op: .pointer, phase: phase, x: position.x + 2, y: position.y + 2)
+          .init(id: .init(rawValue: phase.rawValue), op: .pointer, x: position.x + 2, y: position.y + 2, phase: phase)
         )
-        try clicked.requireFrame(id: phase)
+        try clicked.requireFrame(id: phase.rawValue)
       }
       // No timer guess and no additional stdin: the async task must run before
       // its independently drained stderr marker allows the next request.
@@ -114,7 +118,7 @@ struct HeadlessProcessTests {
       try complete.requireFrame(id: "complete")
       #expect(complete.texts.contains("complete"))
       let closed = try await client.request(.init(id: "quit", op: .quit))
-      #expect(closed.status == "closed")
+      #expect(closed.status == .closed)
       #expect(closed.id == "quit")
     }
     try outcome.requireSuccess()
@@ -131,7 +135,7 @@ struct HeadlessProcessTests {
       "CHROMA_HEADLESS_FIXTURE",
       environment: .inherit.updating(["CHROMA_FIXTURE_FLOOD_STDERR": "1"])
     ) { client in
-      let requests = (0..<count).map { WireRequest(id: "burst-\($0)", op: .frame) }
+      let requests = (0..<count).map { HeadlessRequest(id: .init(rawValue: "burst-\($0)"), op: .frame) }
       try await client.send(requests)
       try await client.input.finish()
       // The app flushes all 256 frames (over 200 KiB) before this exit marker.
@@ -173,7 +177,7 @@ struct HeadlessProcessTests {
           for try await line in execution.standardError.strings() { text += line }
           return text
         }()
-        _ = try await execution.standardInputWriter.write(WireRequest(op: .frame).encoded())
+        _ = try await execution.standardInputWriter.write(HeadlessRequest(op: .frame).encoded())
         try await execution.standardInputWriter.finish()
         return try await diagnostics
       }

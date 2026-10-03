@@ -31,8 +31,13 @@ public final class HeadlessSession {
         id = nil
         throw Failure.invalidRequest
       }
-      let request = try JSONDecoder().decode(Request.self, from: Data(line.utf8))
-      id = request.id
+      if let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+        let op = object["op"] as? String, HeadlessOperation(rawValue: op) == nil,
+        let version = object["version"] as? Int, version == 1, !isClosed {
+        throw Failure.unknownOperation
+      }
+      let request = try JSONDecoder().decode(HeadlessRequest.self, from: Data(line.utf8))
+      id = request.id?.rawValue
       if let value = id, value.utf8.count > 256 {
         id = nil
         throw Failure.invalidRequest
@@ -42,10 +47,10 @@ public final class HeadlessSession {
       guard (request.text?.utf8.count ?? 0) <= 16_384 else { throw Failure.invalidRequest }
       var input = InputState(pointerPosition: pointer, pointerPressPosition: press, pointerDown: pointerDown)
       switch request.op {
-      case "frame": break
-      case "key":
-        let modifiers = try Self.modifiers(request.modifiers ?? [])
-        let key = try request.key.map(Self.key)
+      case .frame: break
+      case .key:
+        let modifiers = Self.modifiers(request.modifiers ?? [])
+        let key = request.key.map(Self.key)
         guard key != nil || request.text != nil else { throw Failure.invalidRequest }
         let resolved = host.resolve(
           KeyboardInput(chord: key.map { KeyChord($0, modifiers: modifiers) }, text: request.text))
@@ -55,55 +60,53 @@ public final class HeadlessSession {
         case nil: break
         }
         host.sendInput(input)
-      case "pointer":
+      case .pointer:
         guard let x = request.x, let y = request.y,
-          Self.validCoordinate(x), Self.validCoordinate(y), let phase = request.phase,
-          ["move", "down", "up"].contains(phase)
+          Self.validCoordinate(x), Self.validCoordinate(y), let phase = request.phase
         else { throw Failure.invalidRequest }
-        guard !(phase == "down" && pointerDown), !(phase == "up" && !pointerDown)
+        guard !(phase == .down && pointerDown), !(phase == .up && !pointerDown)
         else { throw Failure.invalidPointerTransition }
         pointer = Point(x: x, y: y)
-        if phase == "down" {
+        if phase == .down {
           press = pointer
           pointerDown = true
         }
-        if phase == "up" { pointerDown = false }
+        if phase == .up { pointerDown = false }
         input = InputState(
           pointerPosition: pointer, pointerPressPosition: press,
-          pointerDown: pointerDown, pointerPressed: phase == "down", pointerReleased: phase == "up")
+          pointerDown: pointerDown, pointerPressed: phase == .down, pointerReleased: phase == .up)
         host.sendInput(input)
-      case "scroll":
+      case .scroll:
         guard let x = request.x, let y = request.y, Self.validCoordinate(x), Self.validCoordinate(y) else {
           throw Failure.invalidRequest
         }
         input.scrollDelta = Point(x: x, y: y)
         host.sendInput(input)
-      case "resize":
+      case .resize:
         guard let width = request.width, let height = request.height,
           Self.validViewport(Size(width: width, height: height))
         else { throw Failure.invalidViewport }
         host.viewport = Size(width: width, height: height)
-      case "quit":
+      case .quit:
         close()
-        return encode(Response(id: id, status: "closed"))
-      default: throw Failure.unknownOperation
+        return encode(HeadlessResponse(id: id.map { HeadlessRequestID(rawValue: $0) }, status: .closed))
       }
       // Explicit snapshots are deterministic request boundaries, not a promise that all
       // background app work has finished. Never replay transient events while painting.
       let frame = host.render(
         input: InputState(pointerPosition: pointer, pointerPressPosition: press, pointerDown: pointerDown))
       return encode(
-        Response(
-          id: id, status: "frame", viewport: frame.viewport, commands: frame.commands,
-          focus: Focus(
+        HeadlessResponse(
+          id: id.map { HeadlessRequestID(rawValue: $0) }, status: .frame, viewport: frame.viewport, commands: frame.commands,
+          focus: HeadlessFocus(
             path: host.interaction.selection, editing: host.interaction.isTextEditing,
             caretOffset: host.interaction.editingLeaf == nil ? nil : host.interaction.caretOffset,
             selectionStart: host.interaction.textSelectionRange?.lowerBound,
             selectionEnd: host.interaction.textSelectionRange?.upperBound)))
     } catch let failure as Failure {
-      return encode(Response(id: id, status: "error", error: failure.rawValue))
+      return encode(HeadlessResponse(id: id.map { HeadlessRequestID(rawValue: $0) }, status: .error, error: HeadlessError(rawValue: failure.rawValue)))
     } catch {
-      return encode(Response(id: id, status: "error", error: "invalid_request"))
+      return encode(HeadlessResponse(id: id.map { HeadlessRequestID(rawValue: $0) }, status: .error, error: .invalidRequest))
     }
   }
 
@@ -131,10 +134,10 @@ public final class HeadlessSession {
         if let string = String(data: data, encoding: .utf8) {
           response = respond(to: string)
         } else {
-          response = encode(Response(status: "error", error: "invalid_utf8"))
+          response = encode(HeadlessResponse(status: .error, error: .invalidUTF8))
         }
       case .oversized:
-        response = encode(Response(status: "error", error: "line_too_long"))
+        response = encode(HeadlessResponse(status: .error, error: .lineTooLong))
       }
       try output.write(contentsOf: Data((response + "\n").utf8))
       if let object = try? JSONSerialization.jsonObject(with: Data(response.utf8)) as? [String: Any],
@@ -156,50 +159,47 @@ public final class HeadlessSession {
     value.isFinite && abs(value) <= 1_000_000
   }
 
-  private func encode(_ response: Response) -> String {
+  private func encode(_ response: HeadlessResponse) -> String {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     do {
       return String(decoding: try encoder.encode(response), as: UTF8.self)
     } catch {
       // App-produced invalid geometry must not corrupt the JSONL stream.
-      let fallback = Response(id: response.id, status: "error", error: "unencodable_frame")
+      let fallback = HeadlessResponse(id: response.id, status: .error, error: .unencodableFrame)
       return String(decoding: try! encoder.encode(fallback), as: UTF8.self)
     }
   }
 
-  private static func key(_ value: String) throws -> Key {
+  private static func key(_ value: HeadlessKey) -> Key {
     switch value {
-    case "up": return .upArrow
-    case "down": return .downArrow
-    case "left": return .leftArrow
-    case "right": return .rightArrow
-    case "tab": return .tab
-    case "enter": return .enter
-    case "escape": return .escape
-    case "space": return .space
-    case "home": return .home
-    case "end": return .end
-    case "pageUp": return .pageUp
-    case "pageDown": return .pageDown
-    case "delete": return .delete
-    case "backspace": return .backspace
-    default:
-      if value.count == 1, let character = value.first { return .character(character) }
-      throw Failure.invalidRequest
+    case .up: return .upArrow
+    case .down: return .downArrow
+    case .left: return .leftArrow
+    case .right: return .rightArrow
+    case .tab: return .tab
+    case .enter: return .enter
+    case .escape: return .escape
+    case .space: return .space
+    case .home: return .home
+    case .end: return .end
+    case .pageUp: return .pageUp
+    case .pageDown: return .pageDown
+    case .delete: return .delete
+    case .backspace: return .backspace
+    case .character(let character): return .character(character)
     }
   }
 
-  private static func modifiers(_ values: [String]) throws -> KeyModifiers {
+  private static func modifiers(_ values: [HeadlessModifier]) -> KeyModifiers {
     var result: KeyModifiers = []
     for value in values {
       switch value {
-      case "shift": result.insert(.shift)
-      case "control": result.insert(.control)
-      case "option": result.insert(.option)
-      case "command": result.insert(.command)
-      case "super": result.insert(.superKey)
-      default: throw Failure.invalidRequest
+      case .shift: result.insert(.shift)
+      case .control: result.insert(.control)
+      case .option: result.insert(.option)
+      case .command: result.insert(.command)
+      case .super: result.insert(.superKey)
       }
     }
     return result
@@ -219,35 +219,4 @@ public final class HeadlessSession {
     }
   }
 
-  private struct Request: Decodable {
-    let version: Int
-    let id: String?
-    let op: String
-    let key: String?
-    let modifiers: [String]?
-    let text: String?
-    let x: Float?
-    let y: Float?
-    let phase: String?
-    let width: Float?
-    let height: Float?
-  }
-
-  private struct Focus: Encodable {
-    let path: [Int]?
-    let editing: Bool
-    let caretOffset: Int?
-    let selectionStart: Int?
-    let selectionEnd: Int?
-  }
-
-  private struct Response: Encodable {
-    let version = 1
-    var id: String?
-    let status: String
-    var viewport: Size?
-    var commands: [DrawCommand]?
-    var focus: Focus?
-    var error: String?
-  }
 }

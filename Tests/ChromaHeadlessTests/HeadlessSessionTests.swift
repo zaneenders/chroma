@@ -3,33 +3,78 @@ import Foundation
 import Observation
 import Testing
 
-@testable import ChromaHeadless
+import ChromaHeadless
 
 @MainActor struct HeadlessSessionTests {
   struct Fixture: App { var body: some Block { Text("Hello") } }
 
-  private func response(_ session: HeadlessSession, _ request: String) throws -> [String: Any] {
-    try #require(JSONSerialization.jsonObject(with: Data(session.respond(to: request).utf8)) as? [String: Any])
+  private func response(_ session: HeadlessSession, _ request: String) throws -> HeadlessResponse {
+    try JSONDecoder().decode(HeadlessResponse.self, from: Data(session.respond(to: request).utf8))
+  }
+
+  @Test func sharedProtocolTypes() throws {
+    let session = try HeadlessSession(Fixture())
+    defer { session.close() }
+    let request = HeadlessRequest(id: "frame-1", op: .frame)
+    let data = try JSONEncoder().encode(request)
+    let decoded = try JSONDecoder().decode(HeadlessRequest.self, from: data)
+    #expect(decoded.version == 1)
+    #expect(decoded.id == "frame-1")
+    #expect(decoded.op == .frame)
+    let frame = try response(session, String(decoding: data, as: UTF8.self))
+    #expect(frame.version == 1)
+    #expect(frame.id == request.id)
+    #expect(frame.status == .frame)
+    #expect(frame.viewport == session.host.viewport)
+    #expect(frame.commands?.isEmpty == false)
+    #expect(frame.focus != nil)
+    let roundTrip = try JSONDecoder().decode(HeadlessResponse.self, from: JSONEncoder().encode(frame))
+    #expect(roundTrip.commands == frame.commands)
+    #expect(roundTrip.focus?.editing == frame.focus?.editing)
+  }
+
+  @Test func typedWireValuesKeepTheirJSONRepresentation() throws {
+    let request = HeadlessRequest(
+      id: "still-alive\u{2028}\u{2029}\u{85}", op: .key,
+      key: .character("é"), modifiers: [.shift, .super], phase: .down)
+    let data = try JSONEncoder().encode(request)
+    let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    #expect(json["id"] as? String == request.id?.rawValue)
+    #expect(json["op"] as? String == "key")
+    #expect(json["key"] as? String == "é")
+    #expect(json["modifiers"] as? [String] == ["shift", "super"])
+    #expect(json["phase"] as? String == "down")
+    let decoded = try JSONDecoder().decode(HeadlessRequest.self, from: data)
+    #expect(decoded.id == request.id)
+    #expect(decoded.key == request.key)
+    #expect(decoded.modifiers == request.modifiers)
+    for key in [HeadlessKey.tab, .pageUp, .character("🦊")] {
+      #expect(try JSONDecoder().decode(HeadlessKey.self, from: JSONEncoder().encode(key)) == key)
+    }
+    let session = try HeadlessSession(Fixture())
+    defer { session.close() }
+    #expect(try response(session, #"{"version":1,"id":"unknown","op":"unknown"}"#).error == .unknownOperation)
+    #expect(try response(session, #"{"version":1,"op":"pointer","phase":"invalid","x":0,"y":0}"#).error == .invalidRequest)
   }
 
   @Test func validationAndCorrelation() throws {
     let session = try HeadlessSession(Fixture())
     let invalid = try response(session, #"{"version":1,"id":"test","op":"resize","width":0,"height":100}"#)
-    #expect(invalid["error"] as? String == "invalid_viewport")
-    #expect(invalid["id"] as? String == "test")
+    #expect(invalid.error == .invalidViewport)
+    #expect(invalid.id == "test")
     #expect(session.host.viewport == Size(width: 800, height: 600))
     #expect(session.respond(to: #"{"version":1,"op":"frame"}"#).contains("Hello"))
     let mistyped = try response(session, #"{"version":"wrong","id":"kept","op":"frame"}"#)
-    #expect(mistyped["id"] as? String == "kept")
-    #expect(mistyped["error"] as? String == "invalid_request")
+    #expect(mistyped.id == "kept")
+    #expect(mistyped.error == .invalidRequest)
   }
 
   @Test func duplicateIDsCannotBypassLengthLimit() throws {
     let session = try HeadlessSession(Fixture())
     let longID = String(repeating: "a", count: 257)
     let result = try response(session, "{\"version\":1,\"op\":\"frame\",\"id\":\"\(longID)\",\"id\":\"small\"}")
-    #expect(result["error"] as? String == "invalid_request")
-    #expect(result["id"] == nil)
+    #expect(result.error == .invalidRequest)
+    #expect(result.id == nil)
   }
 
   @Test func viewportLimits() throws {
@@ -53,7 +98,7 @@ import Testing
       #"{"version":1,"op":"resize","width":1e100,"height":20}"#,
       "{", String(repeating: "x", count: 65_537),
     ] {
-      #expect(try response(session, request)["status"] as? String == "error")
+      #expect(try response(session, request).status == .error)
       #expect(session.respond(to: #"{"version":1,"op":"frame"}"#) == initial)
     }
   }
@@ -61,15 +106,15 @@ import Testing
   @Test func pointerTransitionsAndClose() throws {
     let session = try HeadlessSession(Fixture())
     let down = #"{"version":1,"op":"pointer","phase":"down","x":20,"y":20}"#
-    #expect(try response(session, down)["status"] as? String == "frame")
-    #expect(try response(session, down)["error"] as? String == "invalid_pointer_transition")
+    #expect(try response(session, down).status == .frame)
+    #expect(try response(session, down).error == .invalidPointerTransition)
     #expect(
-      try response(session, #"{"version":1,"op":"pointer","phase":"up","x":20,"y":20}"#)["status"] as? String == "frame"
+      try response(session, #"{"version":1,"op":"pointer","phase":"up","x":20,"y":20}"#).status == .frame
     )
-    #expect(try response(session, #"{"version":1,"id":"bye","op":"quit"}"#)["status"] as? String == "closed")
+    #expect(try response(session, #"{"version":1,"id":"bye","op":"quit"}"#).status == .closed)
     #expect(session.isClosed)
     session.close()
-    #expect(try response(session, #"{"version":1,"op":"frame"}"#)["error"] as? String == "closed")
+    #expect(try response(session, #"{"version":1,"op":"frame"}"#).error == .closed)
   }
 
   @Observable final class EditorModel { var text = "" }
@@ -89,8 +134,8 @@ import Testing
     _ = session.respond(to: #"{"version":1,"op":"key","text":"hello"}"#)
     #expect(app.model.text == "hello")
     let escaped = try response(session, #"{"version":1,"op":"key","key":"escape"}"#)
-    let focus = try #require(escaped["focus"] as? [String: Any])
-    #expect(focus["editing"] as? Bool == false)
+    let focus = try #require(escaped.focus)
+    #expect(focus.editing == false)
     _ = session.respond(to: #"{"version":1,"op":"key","text":"ignored"}"#)
     #expect(app.model.text == "hello")
   }
@@ -107,6 +152,6 @@ import Testing
   @Test func unencodableAppGeometryReturnsAnError() throws {
     let session = try HeadlessSession(InvalidApp())
     #expect(
-      try response(session, #"{"version":1,"id":"bad-frame","op":"frame"}"#)["error"] as? String == "unencodable_frame")
+      try response(session, #"{"version":1,"id":"bad-frame","op":"frame"}"#).error == .unencodableFrame)
   }
 }
