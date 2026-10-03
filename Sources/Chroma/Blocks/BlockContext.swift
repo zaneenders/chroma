@@ -283,9 +283,6 @@ extension Host {
 }
 
 extension BlockContext {
-}
-
-extension BlockContext {
   /// Registers an ordered event observer. It runs once after core input dispatch,
   /// before release/drag cleanup; presentation never invokes it.
   public func registerInputHandler(_ handler: @escaping @MainActor (InputState) -> Void) {

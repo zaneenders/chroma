@@ -182,7 +182,6 @@ extension Text {
   @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     if !wraps, !isSelectable {
       return BlockEngine.Resolved(
-        expandsHorizontally: { false }, expandsVertically: { false },
         measure: { _ in context.fontMetrics.measure(content, scale: scale * context.textScale) },
         register: { rect in
           if context.interaction.builderStack.last != nil, !context.focusLeafClaimed, !context.navigationIgnored {
@@ -199,7 +198,6 @@ extension Text {
     }
     let preparation = TextLayoutPreparation()
     return BlockEngine.Resolved(
-      expandsHorizontally: { false }, expandsVertically: { false },
       measure: { proposal in sizeThatFits(proposal, context: context, preparation: preparation) },
       register: { rect in
         if isSelectable {

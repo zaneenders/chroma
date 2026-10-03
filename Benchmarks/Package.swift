@@ -40,14 +40,6 @@ let package = Package(
         .product(name: "Chroma", package: "chroma"),
         .product(name: "ChromaTesting", package: "chroma"),
       ]),
-    .target(
-      name: "RegistrationFixtures",
-      dependencies: [
-        .product(name: "Chroma", package: "chroma"),
-        .product(name: "ChromaTesting", package: "chroma"),
-      ]),
-    .executableTarget(name: "RegistrationBenchmark", dependencies: ["RegistrationFixtures"]),
-    .testTarget(name: "RegistrationFixturesTests", dependencies: ["RegistrationFixtures"]),
     .executableTarget(name: "CompareBenchmarks"),
     .testTarget(name: "CompareBenchmarksTests", dependencies: ["CompareBenchmarks"]),
     .target(name: "RenderFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),

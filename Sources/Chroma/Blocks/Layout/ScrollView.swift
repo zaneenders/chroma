@@ -490,5 +490,3 @@ public struct ScrollView: LayoutPreparingBlock {
       identities: rows.map(\.measurementIdentity), measurements: sizes)
   }
 }
-
-extension ScrollView {}

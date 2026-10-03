@@ -133,7 +133,6 @@ extension ThemeReader {
   @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content(context.theme), context: context)
     return BlockEngine.Resolved(
-      expandsHorizontally: { false }, expandsVertically: { false },
       measure: child.sizeThatFits, register: child.register,
       paint: { list, rect in child.paint(into: &list, in: rect) })
   }
@@ -242,7 +241,7 @@ extension TrailingControlsRow {
       visit(controls, placed!.2)
     }
     return BlockEngine.Resolved(
-      expandsHorizontally: { true }, expandsVertically: { false },
+      expandsHorizontally: { true },
       measure: { proposal in
         let sizes = sizes(proposal)
         return Size(width: proposal.width, height: max(sizes.input.height, sizes.controls.height))

@@ -238,7 +238,7 @@ extension TextEditor {
     // different versions. A later input/update resolves a fresh operation.
     var registered: (rect: Rect, text: PreparedText)?
     return BlockEngine.Resolved(
-      expandsHorizontally: { true }, expandsVertically: { false },
+      expandsHorizontally: { true },
       measure: { proposal in sizeThatFits(proposal, context: context, preparation: preparation) },
       register: { rect in
         registered = nil

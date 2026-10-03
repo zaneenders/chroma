@@ -2,30 +2,6 @@
 
 Run commands from the repository root. Use release builds and consistent hardware, toolchain, and workloads when comparing results.
 
-## Paint-free registration
-
-```sh
-swift test --package-path Benchmarks
-swift run --package-path Benchmarks -c release RegistrationBenchmark \
-  --rows 10000 --samples 40 --warmup 5 --idle-polls 1000
-```
-
-`RegistrationBenchmark` measures paint-free registration with a deferred root, fixed
-increment button, 480×360 viewport, and identified uniform virtualized list
-(30-point rows, 1-point spacing).
-
-The JSON report separates:
-
-- `initial-frame`: a fresh host for every sample, including initial registration and painting, but excluding fixture allocation. These are not process-cold startup measurements.
-- `pre-input-two-activations`: two activation events without a presentation between them. Each action captures the current count while resolving the deferred root; a stale callback fails a precondition.
-- `pre-input-scroll`: one ordered scroll event, including registration and dispatch but no presentation.
-- `active-presentation`: one coalesced presentation after those three events. It must not replay an action.
-- `idle-scheduler-polls`: repeated no-input scheduling checks, which must produce zero frames. This verifies synchronous scheduling behavior, not native idle CPU or asynchronous observation delivery.
-
-Timing and work counters use separate identical replays so enabled instrumentation overhead is excluded from p50/p95 timings. Work counts include body evaluations, measurement requests/cache hits, resolved-node rectangle visits, registration/paint visits, emitted commands, live/peak resolved nodes and observation subscription objects. Fresh-host tests verify subscriptions and resolved nodes are released after close. Rows are built only near the viewport, while identified row metadata is still scanned across the whole collection each root evaluation.
-
-`PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved block values and their ordinary proposal caches remain **traversal-scoped**. No cross-frame subtree geometry cache is retained. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
-
 ## Stress lab benchmark and native example
 
 ```sh
@@ -64,6 +40,8 @@ in every collection; `CompareBenchmarks` checks its workload, viewport, schema/f
 versions, warmup and sample counts before comparing each phase’s p50/p95.
 The single-sample first-frame phase is also compared, but is noisier than steady state.
 Use the native example for manual profiling, not as evidence of frame-rate guarantees.
+
+`PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved block values and their ordinary proposal caches remain **traversal-scoped**. No cross-frame subtree geometry cache is retained. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
 
 ## Input frames
 
