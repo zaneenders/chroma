@@ -1,4 +1,4 @@
-struct CommandScope: PrimitiveBlock, CollectionDistributingBlock {
+struct CommandScope: LayoutPreparingBlock, CollectionDistributingBlock {
   enum Operation {
     case keyBindings(KeyBindings)
     case handler(Command, @MainActor () -> CommandResult)
@@ -8,30 +8,6 @@ struct CommandScope: PrimitiveBlock, CollectionDistributingBlock {
   var operation: Operation
 
   var preservesContentIdentity: Bool { true }
-
-  var focusRule: FocusRule { .container }
-
-  @MainActor var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  @MainActor var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    BlockEngine.measure(content, proposal: proposal, context: context)
-  }
-
-  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    draw(into: &drawList, in: rect, context: context) { list, rect, context in
-      BlockEngine.draw(content, into: &list, in: rect, context: context)
-    }
-  }
-
-  @MainActor func draw(
-    into drawList: inout DrawList, in rect: Rect, context: BlockContext,
-    drawContent: (inout DrawList, Rect, BlockContext) -> Void
-  ) {
-    withRegistration(in: rect, context: context) {
-      drawContent(&drawList, rect, context)
-    }
-  }
 
   @MainActor func withRegistration(in rect: Rect, context: BlockContext, content: () -> Void) {
     let interaction = context.interaction

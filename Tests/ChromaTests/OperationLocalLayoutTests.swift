@@ -34,9 +34,7 @@ struct OperationLocalLayoutTests {
       capture.rects.append(rect)
       if let action { _ = context.buttonState(in: rect, action: action) }
     }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      register(in: rect, context: context)
-    }
+
     func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
   }
 

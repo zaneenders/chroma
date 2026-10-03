@@ -17,10 +17,7 @@ struct PreparedPrimitiveTests {
     func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
     func register(in rect: Rect, context: BlockContext) { counts.registered += 1 }
     func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) { counts.painted.append(name) }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      register(in: rect, context: context)
-      paint(into: &list, in: rect, context: context)
-    }
+
   }
 
   struct Pair: LayoutPreparingBlock {

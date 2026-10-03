@@ -2,26 +2,31 @@ import Testing
 
 @testable import Chroma
 
-private struct FixedContent: PrimitiveBlock {
+private struct FixedContent: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   var size: Size
   var focusRule: FocusRule { .standard }
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: .white)
   }
 }
 
-private struct ClippedScrollContent: PrimitiveBlock {
+private struct ClippedScrollContent: LayoutPreparingBlock {
+
   let content: any Block
 
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    context.withInteractionClip(Rect(x: 0, y: 0, width: 20, height: 20)) {
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
-    }
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    let child = BlockEngine.prepare(content, context: context)
+    return BlockEngine.Resolved(
+      measure: { $0 },
+      register: { rect in
+        context.withInteractionClip(Rect(x: 0, y: 0, width: 20, height: 20)) { child.register(in: rect) }
+      }, paint: child.paint)
   }
 }
 
@@ -34,34 +39,38 @@ private final class PhaseLog {
   var phases: [Int: InteractionPhase] = [:]
 }
 
-private struct CountedRow: PrimitiveBlock {
+private struct CountedRow: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   let index: Int
   let height: Float
   let counter: DrawCounter
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     counter.measured.append(index)
     return Size(width: proposal.width, height: height)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     counter.drawn.append(index)
   }
 }
 
-private struct RowContent: PrimitiveBlock {
+private struct RowContent: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   let height: Float
   let color: Color
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: proposal.width, height: height)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: color)
   }
 }

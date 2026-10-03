@@ -1,6 +1,7 @@
-import Chroma
 import ChromaTesting
 import Testing
+
+@testable import Chroma
 
 @MainActor
 struct PreparedPublicContractTests {
@@ -12,19 +13,6 @@ struct PreparedPublicContractTests {
     var actions: [Int] = []
   }
 
-  struct LegacyLeaf: PrimitiveBlock {
-    let counts: Counts
-    var focusRule: FocusRule { .decorative }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      counts.measurements += 1
-      return proposal
-    }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      counts.paints += 1
-      list.fillRect(rect, color: .white)
-    }
-  }
-
   struct Wrapper<Content: Block>: LayoutPreparingBlock {
     let content: Content
     let counts: Counts
@@ -33,18 +21,6 @@ struct PreparedPublicContractTests {
       counts.builds += 1
       let child = BlockEngine.prepare(content, context: context)
       return BlockEngine.Resolved(child: child, register: child.register, paint: child.paint)
-    }
-  }
-
-  struct DirectContainer: PrimitiveBlock {
-    let content: any PrimitiveBlock
-    var focusRule: FocusRule { .container }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      content.sizeThatFits(proposal, context: context)
-    }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      // Legacy wrappers can call concrete container draw entry points during input refresh.
-      content.draw(into: &list, in: rect, context: context)
     }
   }
 
@@ -72,14 +48,12 @@ struct PreparedPublicContractTests {
 
   struct OrdinaryLeaf: PaintableBlock {
     var focusRule: FocusRule { .standard }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
     func register(in rect: Rect, context: BlockContext) {}
     func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       list.fillRect(rect, color: .white)
     }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      paint(into: &list, in: rect, context: context)
-    }
+
   }
 
   struct TwoControls: LayoutPreparingBlock {
@@ -109,25 +83,22 @@ struct PreparedPublicContractTests {
     }
   }
 
-  @Test func defaultCombinedDrawingAdaptsLegacyChildrenExactlyOnce() {
+  @Test func publicPreparationRegistersAndPaintsOneChildWithoutReplayingEffects() {
     let counts = Counts()
+    let context = BlockContext()
+    let rect = Rect(x: 0, y: 0, width: 20, height: 20)
+    let prepared = BlockEngine.prepare(
+      Wrapper(content: PreparedLeaf(counts: counts), counts: counts), context: context)
+    context.interaction.beginFrame(input: InputState())
+    prepared.register(in: rect)
     var list = DrawList()
-    BlockEngine.draw(
-      Wrapper(content: LegacyLeaf(counts: counts), counts: counts), into: &list,
-      in: Rect(x: 0, y: 0, width: 20, height: 20), context: BlockContext())
-    #expect(counts.builds == 1)
-    #expect(counts.paints == 1)
-    #expect(list.commands.count == 1)
-  }
-
-  @Test func directPrimitiveDrawingAdaptsLegacyChildrenExactlyOnce() {
-    let counts = Counts()
-    var list = DrawList()
-    Wrapper(content: LegacyLeaf(counts: counts), counts: counts).draw(
-      into: &list, in: Rect(x: 0, y: 0, width: 20, height: 20), context: BlockContext())
-    #expect(counts.builds == 1)
-    #expect(counts.paints == 1)
-    #expect(list.commands.count == 1)
+    prepared.paint(into: &list, in: rect)
+    prepared.paint(into: &list, in: rect)
+    context.interaction.endFrame()
+    #expect(counts.builds == 2)
+    #expect(counts.registrations == 1)
+    #expect(counts.paints == 2)
+    #expect(list.commands.filter { if case .fillRect = $0 { true } else { false } }.count == 2)
   }
 
   @Test func measurementDoesNotRunRegistrationOrPainting() {
@@ -166,27 +137,6 @@ struct PreparedPublicContractTests {
     target.focus()
     host.render()
     #expect(target.isFocused)
-  }
-
-  @Test(arguments: 0..<5)
-  func directContainersAdaptNestedLegacyChildrenExactlyOnce(kind: Int) {
-    let counts = Counts()
-    let wrapper = Wrapper(content: LegacyLeaf(counts: counts), counts: counts)
-    let container: any PrimitiveBlock
-    switch kind {
-    case 0: container = VStack { wrapper }
-    case 1: container = HStack { wrapper }
-    case 2: container = TupleBlock(children: [wrapper])
-    case 3: container = ZStack { wrapper }
-    default: container = ScrollView(showsIndicator: false) { wrapper }
-    }
-    let host = HeadlessHost(size: Size(width: 20, height: 20))
-    defer { host.close() }
-    host.content = DirectContainer(content: container)
-    let frame = host.render()
-    // Initial input registration and presentation each adapt the child exactly once.
-    #expect(counts.paints == 2)
-    #expect(frame.commands.filter { if case .fillRect = $0 { true } else { false } }.count == 1)
   }
 
   @Test func preparedLeafOwnsExplicitFocusRegistration() {

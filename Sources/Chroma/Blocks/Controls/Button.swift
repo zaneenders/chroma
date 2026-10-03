@@ -53,11 +53,6 @@ public struct Button: PaintableBlock {
     _ = interactionState(in: rect, context: context)
   }
 
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    register(in: rect, context: context)
-    paint(into: &drawList, in: rect, context: context)
-  }
-
   @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let style = style ?? context.theme.button
     let state = context.buttonVisualState(id: id ?? context.widgetID)

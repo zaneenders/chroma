@@ -24,10 +24,7 @@ struct InputUpdatePhaseTests {
       }
     }
     func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) { state.paints += 1 }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      register(in: rect, context: context)
-      paint(into: &list, in: rect, context: context)
-    }
+
   }
 
   @Test func rawObserversReceiveEveryEdgeOnceAndPresentationDoesNotReplayThem() {
@@ -77,9 +74,7 @@ struct InputUpdatePhaseTests {
         context.setSelectAllHandler { true }
       }
       func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
-      func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-        register(in: rect, context: context)
-      }
+
     }
     let context = BlockContext()
     let producer = FrameProducer()

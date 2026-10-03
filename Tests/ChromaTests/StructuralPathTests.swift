@@ -9,18 +9,20 @@ struct StructuralPathTests {
     var drawn: [String: StructuralPath] = [:]
   }
 
-  private struct Probe: PrimitiveBlock {
+  private struct Probe: PaintableBlock {
+    func register(in rect: Rect, context: BlockContext) {}
+
     let name: String
     let recorder: Recorder
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       recorder.measured[name] = context.structuralPath
       return Size(width: 10, height: 10)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       recorder.drawn[name] = context.structuralPath
     }
   }
@@ -124,23 +126,34 @@ struct StructuralPathTests {
     expectReadOnly(\TupleBlock.children)
   }
 
-  private struct Pair: PrimitiveBlock {
+  private struct Pair: LayoutPreparingBlock {
+
     let recorder: Recorder
 
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       _ = BlockEngine.measure(
         Probe(name: "first", recorder: recorder), proposal: proposal, context: context.childScope(0))
       return BlockEngine.measure(
         Probe(name: "second", recorder: recorder), proposal: proposal, context: context.childScope(1))
     }
-
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-      BlockEngine.draw(
-        Probe(name: "second", recorder: recorder), into: &drawList, in: rect, context: context.childScope(1))
-      BlockEngine.draw(
-        Probe(name: "first", recorder: recorder), into: &drawList, in: rect, context: context.childScope(0))
+    @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+      let first = BlockEngine.prepare(Probe(name: "first", recorder: recorder), context: context.childScope(0))
+      let second = BlockEngine.prepare(Probe(name: "second", recorder: recorder), context: context.childScope(1))
+      return BlockEngine.Resolved(
+        measure: { proposal in
+          _ = first.sizeThatFits(proposal)
+          return second.sizeThatFits(proposal)
+        },
+        register: { rect in
+          first.register(in: rect)
+          second.register(in: rect)
+        },
+        paint: { list, rect in
+          second.paint(into: &list, in: rect)
+          first.paint(into: &list, in: rect)
+        })
     }
   }
 
@@ -188,17 +201,17 @@ struct StructuralPathTests {
     #expect(recorder.measured["content"] == expected)
   }
 
-  private struct TransparentScope: PrimitiveBlock {
+  private struct TransparentScope: LayoutPreparingBlock {
+
     var preservesContentIdentity: Bool { true }
     var content: any Block
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       BlockEngine.measure(content, proposal: proposal, context: context)
     }
-
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+      return BlockEngine.prepare(content, context: context)
     }
   }
 
@@ -224,16 +237,16 @@ struct StructuralPathTests {
     #expect(render(TransparentScope(content: probe), recorder: recorder) == render(probe, recorder: recorder))
   }
 
-  private struct DistributingScope: PrimitiveBlock, CollectionDistributingBlock {
+  private struct DistributingScope: LayoutPreparingBlock, CollectionDistributingBlock {
+
     var content: any Block
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       BlockEngine.measure(content, proposal: proposal, context: context)
     }
-
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-      BlockEngine.draw(content, into: &drawList, in: rect, context: context)
+    @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+      return BlockEngine.prepare(content, context: context)
     }
   }
 

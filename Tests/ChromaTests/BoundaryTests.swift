@@ -2,16 +2,18 @@ import Testing
 
 @testable import Chroma
 
-private struct NamedBlock: PrimitiveBlock {
+private struct NamedBlock: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   let name: String
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: 10, height: 10)
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.text(name, at: rect.origin, color: .white)
   }
 }

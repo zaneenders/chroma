@@ -31,8 +31,6 @@ private struct Work: Encodable {
   let registrations: Double
   let paints: Double
   let drawingCommands: Double
-  let compatibilityFallbacks: Double
-  let compatibilityFallbackTypes: [String: Double]
   let rowConstructions: Double
   let frameCommands: Double
   let maxLiveResolvedNodesAtBoundary: Int
@@ -147,12 +145,6 @@ private func summarize(timings: [Sample], counters: [Sample]) -> [Result] {
       func peak(_ keyPath: KeyPath<PipelineMetrics.Snapshot, Int>) -> Int {
         work.map { $0.metrics[keyPath: keyPath] }.max() ?? 0
       }
-      var fallbackTypes: [String: Double] = [:]
-      for sample in work {
-        for (type, count) in sample.metrics.compatibilityFallbackTypes {
-          fallbackTypes[type, default: 0] += Double(count) / Double(work.count)
-        }
-      }
       return Result(
         mode: mode, phase: phase, samples: times.count,
         p50MS: times[(times.count - 1) / 2], p95MS: times[Int(ceil(Double(times.count) * 0.95)) - 1],
@@ -163,8 +155,7 @@ private func summarize(timings: [Sample], counters: [Sample]) -> [Result] {
           measurementComputations: mean(\.measurements) - mean(\.measurementCacheHits),
           placements: mean(\.placements),
           registrations: mean(\.registrations), paints: mean(\.paints),
-          drawingCommands: mean(\.drawingCommands), compatibilityFallbacks: mean(\.compatibilityFallbacks),
-          compatibilityFallbackTypes: fallbackTypes,
+          drawingCommands: mean(\.drawingCommands),
           rowConstructions: Double(work.reduce(0) { $0 + $1.rowConstructions }) / Double(work.count),
           frameCommands: Double(work.reduce(0) { $0 + $1.frameCommands }) / Double(work.count),
           maxLiveResolvedNodesAtBoundary: peak(\.liveResolvedNodes),

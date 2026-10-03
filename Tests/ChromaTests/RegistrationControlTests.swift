@@ -11,19 +11,19 @@ struct RegistrationControlTests {
     var paints = 0
   }
 
-  private struct PhaseProbe: PrimitiveBlock {
+  private struct PhaseProbe: PaintableBlock {
     let phase: InteractionPhase
     let capture: PhaseCapture
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
     func register(in rect: Rect, context: BlockContext) {
       capture.registered.append(phase)
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.paints += 1
       list.fillRect(rect, color: .white)
     }
@@ -46,7 +46,6 @@ struct RegistrationControlTests {
       #expect(metrics.registrations > 0)
       #expect(metrics.paints == 0)
       #expect(metrics.drawingCommands == 0)
-      #expect(metrics.compatibilityFallbacks == 0)
       #expect(context.interaction.tree?.children.count == 1)
       #expect(context.interaction.tree?.children.first?.rect == rect)
     }
@@ -112,7 +111,6 @@ struct RegistrationControlTests {
     #expect(context.interaction.caretOffset == 1)
     #expect(PipelineMetrics.snapshot.paints == 0)
     #expect(PipelineMetrics.snapshot.drawingCommands == 0)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbacks == 0)
   }
 
   @Test(arguments: [false, true])

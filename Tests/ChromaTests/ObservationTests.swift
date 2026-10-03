@@ -162,11 +162,13 @@ struct ObservationTests {
 
   @Test func explicitRedrawSurvivesMutationDuringFirstDraw() {
     let model = Model()
-    struct MutatingBlock: PrimitiveBlock {
+    struct MutatingBlock: PaintableBlock {
+      func register(in rect: Rect, context: BlockContext) {}
+
       let model: Model
       var focusRule: FocusRule { .standard }
-      func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+      @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+      func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
         drawList.fillRect(rect, color: model.first)
         model.first = .yellow
         context.requestRedraw()

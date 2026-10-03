@@ -31,7 +31,7 @@ struct ScrollPaintTests {
     var lifetime: Lifetime? = nil
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       capture.measured.append(index)
       return Size(width: proposal.width, height: height?.value ?? 10)
     }
@@ -45,9 +45,6 @@ struct ScrollPaintTests {
       list.fillRect(rect, color: .white)
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      paint(into: &list, in: rect, context: context)
-    }
   }
 
   private struct Wrapper: LayoutPreparingBlock {
@@ -85,39 +82,6 @@ struct ScrollPaintTests {
     #expect(capture.painted.map(\.index) == [0, 1, 2])
     #expect(capture.measured.isEmpty)
     #expect(capture.lastRowLifetime == nil)
-  }
-
-  @Test func legacyRowsDrawOnceDuringPresentationUpdate() {
-    struct Legacy: PrimitiveBlock {
-      let index: Int
-      let capture: Capture
-      var focusRule: FocusRule { .standard }
-      func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-        capture.painted.append((index, rect))
-        list.fillRect(rect, color: .white)
-      }
-    }
-    let context = BlockContext()
-    let producer = FrameProducer()
-    let controller = ScrollViewController()
-    let capture = Capture()
-    let view = ScrollView(data: 0..<10_000, rowHeight: 10, controller: controller) { index in
-      capture.built.append(index)
-      return Legacy(index: index, capture: capture)
-    }
-    func render() -> DrawList {
-      producer.render(content: view, viewport: viewport.size, input: InputState(), context: context, onChange: {})
-    }
-    _ = render()
-    capture.built = []
-    capture.painted = []
-    let list = render()
-    #expect(capture.built == [0, 1, 2])
-    #expect(capture.painted.map(\.index) == [0, 1, 2])
-    for y: Float in [0, 10, 20] {
-      #expect(list.commands.contains(.fillRect(rect: Rect(x: 0, y: y, width: 100, height: 10), color: .white)))
-    }
   }
 
   @Test func uniformPaintUsesPreparedRowsWithoutChangingInteractionOrController() throws {

@@ -16,18 +16,20 @@ struct LazyLayoutCacheTests {
     var drawnHeight: Float = 0
   }
 
-  struct Row: PrimitiveBlock {
+  struct Row: PaintableBlock {
+    func register(in rect: Rect, context: BlockContext) {}
+
     let model: Model
     let capture: Capture
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       capture.measurements += 1
       return Size(width: proposal.width, height: model.height)
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.drawnHeight = rect.size.height
       list.fillRect(rect, color: .white)
     }

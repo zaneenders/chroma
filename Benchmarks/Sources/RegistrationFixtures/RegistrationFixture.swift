@@ -1,32 +1,8 @@
 import Chroma
 import ChromaTesting
 
-/// Forces the old draw-to-register behavior through the documented compatibility
-/// boundary. The additional wrapper is disclosed in the benchmark report; it is
-/// not an independently built historical executable.
-public struct LegacyRegistrationRoot: PrimitiveBlock {
-  public let content: any Block
-
-  public init(_ content: any Block) { self.content = content }
-
-  public var preservesContentIdentity: Bool { true }
-  public var focusRule: FocusRule { .container }
-  public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
-
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    BlockEngine.measure(content, proposal: proposal, context: context)
-  }
-
-  // Intentionally inherits PrimitiveBlock.register's counted compatibility path.
-  public func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-    BlockEngine.draw(content, into: &list, in: rect, context: context)
-  }
-}
-
 public enum RegistrationMode: String, Codable, CaseIterable, Sendable {
   case paintFree = "paint-free"
-  case legacyPaintTraversal = "legacy-paint-traversal"
 }
 
 @MainActor
@@ -55,10 +31,7 @@ public final class RegistrationFixture {
         }
       }
     }
-    switch mode {
-    case .paintFree: host.content = content
-    case .legacyPaintTraversal: host.content = LegacyRegistrationRoot(content)
-    }
+    host.content = content
   }
 
   /// Focuses the fixed header; the virtualized rows remain below it.

@@ -5,13 +5,15 @@ import Testing
 @MainActor
 struct TrailingControlsRowTests {
   private final class Recorder { var rects: [Rect] = [] }
-  private struct Wrapping: PrimitiveBlock {
+  private struct Wrapping: PaintableBlock {
+    func register(in rect: Rect, context: BlockContext) {}
+
     let recorder: Recorder
     var focusRule: FocusRule { .standard }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       Size(width: proposal.width, height: proposal.width < 80 ? 40 : 20)
     }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       recorder.rects.append(rect)
     }
   }

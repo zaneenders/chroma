@@ -1,4 +1,4 @@
-public struct ScrollView: PrimitiveBlock {
+public struct ScrollView: LayoutPreparingBlock {
   public struct Row: Identifiable {
     public let id: AnyHashable
     public var content: any Block {
@@ -156,11 +156,6 @@ public struct ScrollView: PrimitiveBlock {
         }, controller))
   }
 
-  public var focusRule: FocusRule { .container }
-  public var expandsHorizontally: Bool { true }
-  public var expandsVertically: Bool { true }
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-
   private struct ScrollGeometry {
     let id: WidgetID
     let contentSize: Size
@@ -193,12 +188,7 @@ public struct ScrollView: PrimitiveBlock {
       paint: { list, rect in
         precondition(prepared?.rect == rect, "ScrollView painting requires registration in the same operation")
         paint(prepared!, into: &list, context: context)
-      },
-      draw: { list, rect in draw(into: &list, in: rect, context: context) })
-  }
-
-  @MainActor public func register(in rect: Rect, context: BlockContext) {
-    _ = registerContent(in: rect, context: context)
+      })
   }
 
   @MainActor private func registerContent(in rect: Rect, context: BlockContext) -> PreparedScroll {
@@ -223,21 +213,6 @@ public struct ScrollView: PrimitiveBlock {
       }
     }
     paintIndicators(into: &drawList, in: prepared.rect, geometry: prepared.geometry, context: context)
-    drawList.popClip()
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    var context = context
-    context.isPresentationUpdate = true
-    let geometry = prepareScroll(in: rect, context: context)
-    drawList.pushClip(rect)
-    placeContent(in: rect, context: context, geometry: geometry) { placement in
-      switch placement {
-      case .content(let resolved, let rect): resolved.draw(into: &drawList, in: rect)
-      case .rowFocus(let context, let rect): context.focusable(in: rect, into: &drawList)
-      }
-    }
-    paintIndicators(into: &drawList, in: rect, geometry: geometry, context: context)
     drawList.popClip()
   }
 
@@ -517,4 +492,4 @@ public struct ScrollView: PrimitiveBlock {
   }
 }
 
-extension ScrollView: LayoutPreparingBlock {}
+extension ScrollView {}

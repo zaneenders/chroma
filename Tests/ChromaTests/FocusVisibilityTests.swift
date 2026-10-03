@@ -90,23 +90,28 @@ struct FocusVisibilityTests {
   }
 }
 
-private struct ClippedColumn: PrimitiveBlock {
+private struct ClippedColumn: LayoutPreparingBlock {
+
   var focusRule: FocusRule { .container }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    context.withInteractionClip(Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 60)) {
-      BlockEngine.draw(
-        VStack(spacing: 0) {
-          Button("Row 1") {}
-          Button("Row 2") {}
-          Button("Row 3") {}
-          Button("Row 4") {}
-        },
-        into: &drawList,
-        in: Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 120),
-        context: context)
-    }
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    let child = BlockEngine.prepare(
+      VStack(spacing: 0) {
+        Button("Row 1") {}
+        Button("Row 2") {}
+        Button("Row 3") {}
+        Button("Row 4") {}
+      }, context: context)
+    return BlockEngine.Resolved(
+      measure: { $0 },
+      register: { rect in
+        context.withInteractionClip(Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 60)) {
+          child.register(in: Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 120))
+        }
+      },
+      paint: { list, rect in
+        child.paint(into: &list, in: Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 120))
+      })
   }
 }

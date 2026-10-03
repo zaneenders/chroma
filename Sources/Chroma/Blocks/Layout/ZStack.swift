@@ -1,4 +1,4 @@
-public struct ZStack: PrimitiveBlock {
+public struct ZStack: LayoutPreparingBlock {
   var scopedChildren: [any Block]
 
   public var children: [any Block] {
@@ -9,23 +9,4 @@ public struct ZStack: PrimitiveBlock {
     self.scopedChildren = BlockBuilder.flattenedChildren(content().scopedChildren)
   }
 
-  public var focusRule: FocusRule { .container }
-
-  @MainActor public var expandsHorizontally: Bool {
-    scopedChildren.contains { BlockEngine.expandsHorizontally($0) }
-  }
-
-  @MainActor public var expandsVertically: Bool {
-    scopedChildren.contains { BlockEngine.expandsVertically($0) }
-  }
-
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    prepareLayout(context: context).sizeThatFits(proposal)
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    var context = context
-    context.isPresentationUpdate = true
-    prepareLayout(context: context).draw(into: &drawList, in: rect)
-  }
 }

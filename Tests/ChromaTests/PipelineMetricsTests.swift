@@ -13,17 +13,6 @@ struct PipelineMetricsTests {
     #expect(PipelineMetrics.snapshot == PipelineMetrics.Snapshot())
   }
 
-  @Test func compatibilityCaptureNamesThePrimitiveType() {
-    PipelineMetrics.isEnabled = true
-    defer { PipelineMetrics.isEnabled = false }
-    PipelineMetrics.recordCompatibilityFallback(Self.self)
-    PipelineMetrics.recordCompatibilityFallback(Self.self)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbacks == 2)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbackTypes == [String(reflecting: Self.self): 2])
-    PipelineMetrics.reset()
-    #expect(PipelineMetrics.snapshot.compatibilityFallbackTypes.isEmpty)
-  }
-
   @Test func countersAndLifetimesResetIndependently() {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }

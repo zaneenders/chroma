@@ -172,22 +172,29 @@ struct DefaultFocusTests {
     #expect(context.interaction.tree?.firstLeafPath() != nil)
   }
 
-  private struct CellGrid: PrimitiveBlock {
+  private struct CellGrid: PaintableBlock {
+
     let action: (@MainActor () -> Void)?
 
     var focusRule: FocusRule { .container }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       Size(width: proposal.width, height: 40)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: BlockContext) {
       context.withFocusGroup(in: rect, axis: .horizontal) {
         for column in 0..<2 {
           let box = Rect(
             x: rect.minX + Float(column) * 50, y: rect.minY, width: 50, height: 40)
-          context.childScope(column).focusable(in: box, into: &drawList, action: action)
+          context.childScope(column).registerFocusable(in: box, action: action)
         }
+      }
+    }
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+      for column in 0..<2 {
+        context.childScope(column).paintFocusHighlight(
+          in: Rect(x: rect.minX + Float(column) * 50, y: rect.minY, width: 50, height: 40), into: &list)
       }
     }
   }

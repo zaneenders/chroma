@@ -86,10 +86,7 @@ struct ControlPaintIsolationTests {
       capture.paints += 1
       list.text("\(phase)", at: rect.origin, color: .white)
     }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      register(in: rect, context: context)
-      paint(into: &list, in: rect, context: context)
-    }
+
   }
 
   @Test func interactivePaintUsesTheRegisteredPhaseWithoutResolvingOrRegisteringAgain() {

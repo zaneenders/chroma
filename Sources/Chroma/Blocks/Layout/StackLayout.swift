@@ -46,15 +46,6 @@ struct StackLayout {
     prepare(children, reversed: false, context: context).sizeThatFits(proposal)
   }
 
-  func draw(
-    _ originals: [any Block], reversed: Bool, into drawList: inout DrawList,
-    in rect: Rect, context: BlockContext
-  ) {
-    var context = context
-    context.isPresentationUpdate = true
-    prepare(originals, reversed: reversed, context: context).draw(into: &drawList, in: rect)
-  }
-
   func prepare(_ originals: [any Block], reversed: Bool, context: BlockContext) -> BlockEngine.Resolved {
     let children = originals.enumerated().map { index, child in
       BlockEngine.resolve(child, context: context.childContext(for: child, at: index))
@@ -100,11 +91,6 @@ struct StackLayout {
       },
       paint: { list, rect in
         visit(rect) { child, rect in child.paint(into: &list, in: rect) }
-      },
-      draw: { list, rect in
-        context.withFocusGroup(in: rect, axis: axis == .horizontal ? .horizontal : .vertical) {
-          visit(rect) { child, rect in child.draw(into: &list, in: rect) }
-        }
       })
   }
 

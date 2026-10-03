@@ -11,15 +11,15 @@ struct RegistrationLayoutTests {
     var paints = 0
   }
 
-  struct Leaf: PrimitiveBlock {
+  struct Leaf: PaintableBlock {
     let state: State
     var focusRule: FocusRule { .standard }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       state.measures += 1
       return Size(width: 30, height: state.height)
     }
     func register(in rect: Rect, context: BlockContext) { state.rects.append(rect) }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       state.paints += 1
       list.fillRect(rect, color: .white)
     }
@@ -94,28 +94,7 @@ struct RegistrationLayoutTests {
     #expect(counts.registrations > 0)
     #expect(counts.paints == 0)
     #expect(counts.drawingCommands == 0)
-    #expect(counts.compatibilityFallbacks == 0)
     #expect(counts.liveResolvedNodes == 0)
   }
 
-  @Test func legacyPrimitiveFallbackRemainsVisibleAndPreservesBehavior() {
-    struct Legacy: PrimitiveBlock {
-      let state: State
-      var focusRule: FocusRule { .standard }
-      func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-        state.paints += 1
-        list.fillRect(rect, color: .white)
-      }
-    }
-    PipelineMetrics.isEnabled = true
-    defer { PipelineMetrics.isEnabled = false }
-    let state = State()
-    let context = BlockContext()
-    FrameProducer().refreshRegistrations(Legacy(state: state), viewport: Size(width: 100, height: 60), context: context)
-    #expect(state.paints == 1)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbacks == 1)
-    #expect(PipelineMetrics.snapshot.drawingCommands == 1)
-    #expect(context.interaction.tree?.hitTest(Point(x: 1, y: 1)) != nil)
-  }
 }

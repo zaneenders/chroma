@@ -1,4 +1,4 @@
-public struct TextEditor: PaintableBlock {
+public struct TextEditor: LayoutPreparingBlock {
   public var placeholder: String
   public var fontScale: Float
   public var lineLimits: ClosedRange<Int>
@@ -44,7 +44,7 @@ public struct TextEditor: PaintableBlock {
     return columns
   }
 
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     sizeThatFits(proposal, context: context, preparation: TextLayoutPreparation())
   }
 
@@ -144,7 +144,7 @@ public struct TextEditor: PaintableBlock {
       submitInsertsNewline: !singleLine && onSubmit == nil)
   }
 
-  public func register(in rect: Rect, context: BlockContext) {
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
     guard
       let prepared = prepareText(
         in: rect, context: context, preparation: TextLayoutPreparation())
@@ -152,16 +152,7 @@ public struct TextEditor: PaintableBlock {
     register(prepared, in: rect, context: context)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    guard
-      let prepared = prepareText(
-        in: rect, context: context, preparation: TextLayoutPreparation())
-    else { return }
-    register(prepared, in: rect, context: context)
-    paint(prepared, into: &drawList, in: rect, context: context)
-  }
-
-  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     guard
       let prepared = prepareText(
         in: rect, context: context, preparation: TextLayoutPreparation())
@@ -239,8 +230,8 @@ public struct TextEditor: PaintableBlock {
   }
 }
 
-extension TextEditor: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension TextEditor {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let preparation = TextLayoutPreparation()
     // Registration commits this operation's text and geometry. Its matching paint
     // does not read the application binding again, so editing and pixels cannot use
@@ -261,11 +252,6 @@ extension TextEditor: LayoutPreparingBlock {
           return
         }
         guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
-        paint(prepared, into: &list, in: rect, context: context)
-      },
-      draw: { list, rect in
-        guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
-        register(prepared, in: rect, context: context)
         paint(prepared, into: &list, in: rect, context: context)
       })
   }

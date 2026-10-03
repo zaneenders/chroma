@@ -60,7 +60,6 @@ struct RawKeyboardFreshnessTests {
     #expect(events == ["old", "new"])
     #expect(builds == 2)
     #expect(PipelineMetrics.snapshot.paints == 0)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbacks == 0)
   }
 
   @Test func pendingEditingFocusIsResolvedBeforeTheFirstCharacter() {

@@ -18,7 +18,7 @@ struct RegistrationFixturesTests {
   }
 
   @Test(arguments: RegistrationMode.allCases)
-  func registrationWorkIsVirtualizedAndBaselineIsExplicit(mode: RegistrationMode) {
+  func registrationWorkIsVirtualizedAndPaintFree(mode: RegistrationMode) {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     let fixture = RegistrationFixture(mode: mode, rows: 10_000)
@@ -33,17 +33,8 @@ struct RegistrationFixturesTests {
     #expect(work.registrations > 0)
     #expect(work.liveResolvedNodes == 0)
     #expect(work.peakResolvedNodes > 0)
-    switch mode {
-    case .paintFree:
-      #expect(work.paints == 0)
-      #expect(work.drawingCommands == 0)
-      #expect(work.compatibilityFallbacks == 0)
-    case .legacyPaintTraversal:
-      #expect(work.paints > 0)
-      #expect(work.drawingCommands > 0)
-      #expect(work.compatibilityFallbacks == 2)
-      #expect(work.compatibilityFallbackTypes == [String(reflecting: LegacyRegistrationRoot.self): 2])
-    }
+    #expect(work.paints == 0)
+    #expect(work.drawingCommands == 0)
     fixture.close()
     #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
     #expect(PipelineMetrics.snapshot.liveObservationSubscriptions == 0)
@@ -86,26 +77,4 @@ struct RegistrationFixturesTests {
     #expect(fixture.host.renderIfNeeded() == nil)
   }
 
-  @Test func modesPaintTheSameFramesForTheSameInputSequence() {
-    let current = RegistrationFixture(mode: .paintFree, rows: 100)
-    let baseline = RegistrationFixture(mode: .legacyPaintTraversal, rows: 100)
-    defer {
-      current.close()
-      baseline.close()
-    }
-    let frame = current.host.renderIfNeeded()
-    #expect(frame == baseline.host.renderIfNeeded())
-    #expect(current.rowConstructions == baseline.rowConstructions)
-    for fixture in [current, baseline] {
-      fixture.selectIncrement()
-      fixture.activateTwice()
-      fixture.scroll()
-    }
-    #expect(current.actions == baseline.actions)
-    #expect(current.actions == 2)
-    #expect(current.host.renderIfNeeded() == baseline.host.renderIfNeeded())
-    #expect(current.actions == 2)
-    #expect(baseline.actions == 2)
-    #expect(current.rowConstructions == baseline.rowConstructions)
-  }
 }

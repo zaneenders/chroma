@@ -104,17 +104,19 @@ private final class ContextRecorder {
   var drawnInteraction: Interaction?
 }
 
-private struct ContextRecordingBlock: PrimitiveBlock {
+private struct ContextRecordingBlock: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   let recorder: ContextRecorder
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     recorder.measuredInteraction = context.interaction
     return proposal
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     recorder.drawnInteraction = context.interaction
   }
 }

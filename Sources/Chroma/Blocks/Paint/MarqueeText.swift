@@ -23,10 +23,6 @@ public struct MarqueeText: PaintableBlock {
   public func register(in rect: Rect, context: BlockContext) {}
 
   public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    draw(into: &drawList, in: rect, context: context)
-  }
-
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let scale = fontScale * context.textScale
     drawList.pushClip(rect)
     drawList.text(text, at: rect.origin, color: color, scale: scale)

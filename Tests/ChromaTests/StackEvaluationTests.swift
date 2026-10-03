@@ -122,17 +122,19 @@ struct StackEvaluationTests {
     var height: Float = 12
   }
 
-  private struct MeasuredLeaf: PrimitiveBlock {
+  private struct MeasuredLeaf: PaintableBlock {
+    func register(in rect: Rect, context: BlockContext) {}
+
     let measurements: Measurements
     var focusRule: FocusRule { .decorative }
     var expandsHorizontally: Bool { true }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       measurements.proposals.append(proposal)
       return Size(width: proposal.width, height: measurements.height)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       drawList.fillRect(rect, color: .black)
     }
   }

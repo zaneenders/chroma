@@ -25,27 +25,12 @@ public final class FocusTarget {
   }
 }
 
-public struct FocusTargetBlock: PrimitiveBlock, CollectionDistributingBlock {
+public struct FocusTargetBlock: LayoutPreparingBlock, CollectionDistributingBlock {
   var content: any Block
   let target: FocusTarget
 
   public var preservesContentIdentity: Bool { true }
 
-  public var focusRule: FocusRule { .container }
-
-  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
-
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    BlockEngine.measure(content, proposal: proposal, context: context)
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    _ = target.pendingEditing
-    var context = context
-    context.focusTargets.append(target)
-    BlockEngine.draw(content, into: &drawList, in: rect, context: context)
-  }
 }
 
 extension Block {

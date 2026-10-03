@@ -15,19 +15,23 @@ struct CapturedTextInputTests {
     var range: Range<Int>?
   }
 
-  struct Editor: PrimitiveBlock {
+  struct Editor: PaintableBlock {
+
     let text: String
     let model: Model
     let capture: Capture
 
     var focusRule: FocusRule { .control }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: BlockContext) {
       let state = context.textInputState(
         id: WidgetID("editor"), in: rect, text: { text }, onChange: { model.text = $0 })
       capture.range = state.selectionRange
+    }
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+      capture.range = context.textInputVisualState(id: WidgetID("editor")).selectionRange
     }
   }
 
