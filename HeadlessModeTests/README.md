@@ -27,5 +27,5 @@ closes the session. Async and timer tests wait for streamed stdout frames.
 Headless CLI startup requires `--viewport WIDTHxHEIGHT`, for example:
 
 ```sh
-swift run FallingBlocksDemo --headless --viewport 800x600
+swift run --package-path HeadlessModeTests ChromaHeadlessDemo --viewport 800x600
 ```

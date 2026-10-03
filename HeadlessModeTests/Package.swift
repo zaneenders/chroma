@@ -11,6 +11,13 @@ let package = Package(
   ],
   targets: [
     .executableTarget(
+      name: "ChromaHeadlessDemo",
+      dependencies: [
+        .product(name: "Chroma", package: "Chroma"),
+        .product(name: "ChromaHeadless", package: "Chroma"),
+      ]
+    ),
+    .executableTarget(
       name: "HeadlessProcessFixture",
       dependencies: [
         .product(name: "Chroma", package: "Chroma"),
@@ -21,7 +28,7 @@ let package = Package(
       name: "HeadlessProcessTests",
       dependencies: [
         "HeadlessProcessFixture",
-        .product(name: "ChromaHeadlessDemo", package: "Chroma"),
+        "ChromaHeadlessDemo",
         .product(name: "Subprocess", package: "swift-subprocess"),
         .product(name: "ChromaHeadless", package: "Chroma"),
       ]
