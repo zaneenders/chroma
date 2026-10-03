@@ -158,7 +158,11 @@ struct ImageRenderingTests {
       let image = Image(resource, scaling: scaling).sizing(
         x: .fixed(frame.size.width), y: .fixed(frame.size.height))
       var list = DrawList()
-      BlockEngine.draw(image, into: &list, in: frame, context: context)
+      do {
+        let resolved = BlockEngine.prepare(image, context: context)
+        resolved.register(in: frame)
+        resolved.paint(into: &list, in: frame)
+      }
 
       #expect(
         list.commands == [
@@ -175,14 +179,14 @@ struct ImageRenderingTests {
     interaction.beginFrame(input: InputState())
     var list = DrawList()
 
-    BlockEngine.draw(
-      ScrollView(showsIndicator: false) {
-        Image(resource)
-      }.id(WidgetID("image-scroll")),
-      into: &list,
-      in: viewport,
-      context: context
-    )
+    do {
+      let resolved = BlockEngine.prepare(
+        ScrollView(showsIndicator: false) {
+          Image(resource)
+        }.id(WidgetID("image-scroll")), context: context)
+      resolved.register(in: viewport)
+      resolved.paint(into: &list, in: viewport)
+    }
     interaction.endFrame()
 
     #expect(interaction.scrollState(for: WidgetID("image-scroll")).limit.y == 20)

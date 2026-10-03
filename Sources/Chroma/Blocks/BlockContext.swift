@@ -1,6 +1,5 @@
 @MainActor
 public struct BlockContext {
-  var isPresentationUpdate = false
   var keyboardNavigationOverscan = false
   var structuralPath = StructuralPath()
   var widgetID: WidgetID { WidgetID(path: structuralPath) }
@@ -281,9 +280,6 @@ public struct BlockContext {
 
 extension Host {
   package var context: BlockContext { runtime.context }
-}
-
-extension BlockContext {
 }
 
 extension BlockContext {

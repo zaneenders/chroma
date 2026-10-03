@@ -17,7 +17,13 @@ var targets: [Target] = [
     name: "ChromaTests",
     dependencies: ["Chroma", "ChromaFont", "ChromaTesting"]
   ),
-  .target(name: "Chroma", swiftSettings: [.strictMemorySafety()]),
+  .target(
+    name: "Chroma",
+    dependencies: [
+      .product(name: "BasicContainers", package: "swift-collections"),
+      .product(name: "ContainersPreview", package: "swift-collections"),
+    ],
+    swiftSettings: [.strictMemorySafety()]),
   .target(
     name: "ChromaFont", exclude: ["README.md"], resources: [.copy("Resources")],
     swiftSettings: [.strictMemorySafety()]),
@@ -134,5 +140,10 @@ let package = Package(
   name: "chroma",
   platforms: [.macOS(.v27)],
   products: products,
+  dependencies: [
+    .package(
+      url: "https://github.com/apple/swift-collections.git", exact: "1.7.1",
+      traits: ["UnstableContainersPreview"])
+  ],
   targets: targets
 )

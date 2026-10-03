@@ -45,17 +45,8 @@ public struct Button: PaintableBlock {
       height: textSize.height + padding.top + padding.bottom)
   }
 
-  @MainActor private func interactionState(in rect: Rect, context: BlockContext) -> ButtonState {
-    context.buttonState(id: id ?? context.widgetID, in: rect, role: role, action: action)
-  }
-
   @MainActor public func register(in rect: Rect, context: BlockContext) {
-    _ = interactionState(in: rect, context: context)
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    register(in: rect, context: context)
-    paint(into: &drawList, in: rect, context: context)
+    _ = context.buttonState(id: id ?? context.widgetID, in: rect, role: role, action: action)
   }
 
   @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {

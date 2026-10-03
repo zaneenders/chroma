@@ -1,4 +1,4 @@
-struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
+struct LayoutModifier: LayoutPreparingBlock, CollectionDistributingBlock {
   enum Operation {
     case padding(EdgeInsets)
     case sizing(x: Sizing, y: Sizing)
@@ -8,28 +8,6 @@ struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
   var operation: Operation
 
   var preservesContentIdentity: Bool { true }
-
-  var focusRule: FocusRule { .container }
-
-  @MainActor var expandsHorizontally: Bool {
-    switch operation {
-    case .padding: BlockEngine.expandsHorizontally(content)
-    case .sizing(let x, _): x == .grow
-    }
-  }
-
-  @MainActor var expandsVertically: Bool {
-    switch operation {
-    case .padding: BlockEngine.expandsVertically(content)
-    case .sizing(_, let y): y == .grow
-    }
-  }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    sizeThatFits(proposal, context: context) { proposal in
-      BlockEngine.measure(content, proposal: proposal, context: context)
-    }
-  }
 
   @MainActor func sizeThatFits(
     _ proposal: Size, context: BlockContext, measure: (Size) -> Size
@@ -56,19 +34,6 @@ struct LayoutModifier: PrimitiveBlock, CollectionDistributingBlock {
         height: resolvedSize(for: y, available: proposal.height, fitted: childSize.height)
       )
     }
-  }
-
-  @MainActor func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    draw(into: &drawList, in: rect, context: context) { list, rect, context in
-      BlockEngine.draw(content, into: &list, in: rect, context: context)
-    }
-  }
-
-  @MainActor func draw(
-    into drawList: inout DrawList, in rect: Rect, context: BlockContext,
-    drawContent: (inout DrawList, Rect, BlockContext) -> Void
-  ) {
-    drawContent(&drawList, placedContent(in: rect), context)
   }
 
   func placedContent(in rect: Rect) -> Rect {

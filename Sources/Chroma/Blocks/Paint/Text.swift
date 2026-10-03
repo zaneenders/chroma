@@ -1,4 +1,4 @@
-public struct Text: PaintableBlock {
+public struct Text: LayoutPreparingBlock {
   public var content: String
   public var color: Color
   public var scale: Float
@@ -49,7 +49,7 @@ public struct Text: PaintableBlock {
     return Int(min(Float(Int32.max), max(1, width / cell)))
   }
 
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     sizeThatFits(proposal, context: context, preparation: TextLayoutPreparation())
   }
 
@@ -65,7 +65,7 @@ public struct Text: PaintableBlock {
       height: Float(layout.lines.count) * context.fontMetrics.lineAdvance * scale * context.textScale)
   }
 
-  public func register(in rect: Rect, context: BlockContext) {
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
     if isSelectable {
       registerSelection(prepareText(in: rect, context: context, preparation: TextLayoutPreparation()), context: context)
     }
@@ -111,23 +111,7 @@ public struct Text: PaintableBlock {
     return (range, caret)
   }
 
-  public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    if !wraps, !isSelectable {
-      paint(into: &drawList, in: rect, context: context)
-      return
-    }
-    let prepared = prepareText(in: rect, context: context, preparation: TextLayoutPreparation())
-    if isSelectable {
-      registerSelection(prepared, context: context)
-      if !context.focusLeafClaimed, !context.navigationIgnored {
-        BlockEngine.drawHighlight(
-          for: selectionID ?? context.widgetID, into: &drawList, in: rect, context: context)
-      }
-    }
-    paint(prepared, into: &drawList, in: rect, context: context)
-  }
-
-  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     if !wraps, !isSelectable {
       PipelineMetrics.record(.textLayout)
       drawText(
@@ -194,11 +178,10 @@ public struct Text: PaintableBlock {
 
 }
 
-extension Text: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension Text {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     if !wraps, !isSelectable {
       return BlockEngine.Resolved(
-        expandsHorizontally: { false }, expandsVertically: { false },
         measure: { _ in context.fontMetrics.measure(content, scale: scale * context.textScale) },
         register: { rect in
           if context.interaction.builderStack.last != nil, !context.focusLeafClaimed, !context.navigationIgnored {
@@ -211,12 +194,10 @@ extension Text: LayoutPreparingBlock {
             BlockEngine.drawHighlight(
               for: selectionID ?? context.widgetID, into: &list, in: rect, context: context)
           }
-        },
-        draw: { BlockEngine.drawResolved(self, into: &$0, in: $1, context: context) })
+        })
     }
     let preparation = TextLayoutPreparation()
     return BlockEngine.Resolved(
-      expandsHorizontally: { false }, expandsVertically: { false },
       measure: { proposal in sizeThatFits(proposal, context: context, preparation: preparation) },
       register: { rect in
         if isSelectable {
@@ -235,22 +216,6 @@ extension Text: LayoutPreparingBlock {
         if !isSelectable, !context.focusLeafClaimed, !context.navigationIgnored {
           BlockEngine.drawHighlight(
             for: selectionID ?? context.widgetID, into: &list, in: rect, context: context)
-        }
-      },
-      draw: { list, rect in
-        let prepared = prepareText(in: rect, context: context, preparation: preparation)
-        if isSelectable {
-          registerSelection(prepared, context: context)
-          if !context.focusLeafClaimed, !context.navigationIgnored {
-            BlockEngine.drawHighlight(
-              for: selectionID ?? context.widgetID, into: &list, in: rect, context: context)
-          }
-        }
-        paint(prepared, into: &list, in: rect, context: context)
-        if !isSelectable, context.interaction.builderStack.last != nil,
-          !context.focusLeafClaimed, !context.navigationIgnored
-        {
-          context.focusable(in: rect, into: &list)
         }
       })
   }

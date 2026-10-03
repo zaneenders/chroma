@@ -1,4 +1,4 @@
-public struct ScrollView: PrimitiveBlock {
+public struct ScrollView: LayoutPreparingBlock {
   public struct Row: Identifiable {
     public let id: AnyHashable
     public var content: any Block {
@@ -117,23 +117,22 @@ public struct ScrollView: PrimitiveBlock {
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
     let identity = controller.rowIdentity(for: data)
-    let ids = identity.ids
     self.init(
       data: data, keys: identity,
       selection: LogicalSelection(
         selectedKey: { selection.selectedID.map { StructuralKey($0) } },
         select: { key in
-          if let index = identity.indices[key] { selection.selectedID = ids[index] }
+          if let index = identity.indices[key] { selection.selectedID = identity.ids[index] }
         },
         move: { direction in
           guard let selectedID = selection.selectedID,
-            let index = identity.indices[StructuralKey(selectedID)], !ids.isEmpty
+            let index = identity.indices[StructuralKey(selectedID)], !identity.ids.isEmpty
           else {
             selection.selectedID = nil
             return nil
           }
-          let next = max(0, min(ids.count - 1, index + direction))
-          selection.selectedID = ids[next]
+          let next = max(0, min(identity.ids.count - 1, index + direction))
+          selection.selectedID = identity.ids[next]
           return identity.keys[next]
         }),
       rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
@@ -155,11 +154,6 @@ public struct ScrollView: PrimitiveBlock {
           content(data[data.index(data.startIndex, offsetBy: offset)])
         }, controller))
   }
-
-  public var focusRule: FocusRule { .container }
-  public var expandsHorizontally: Bool { true }
-  public var expandsVertically: Bool { true }
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
   private struct ScrollGeometry {
     let id: WidgetID
@@ -193,12 +187,7 @@ public struct ScrollView: PrimitiveBlock {
       paint: { list, rect in
         precondition(prepared?.rect == rect, "ScrollView painting requires registration in the same operation")
         paint(prepared!, into: &list, context: context)
-      },
-      draw: { list, rect in draw(into: &list, in: rect, context: context) })
-  }
-
-  @MainActor public func register(in rect: Rect, context: BlockContext) {
-    _ = registerContent(in: rect, context: context)
+      })
   }
 
   @MainActor private func registerContent(in rect: Rect, context: BlockContext) -> PreparedScroll {
@@ -223,21 +212,6 @@ public struct ScrollView: PrimitiveBlock {
       }
     }
     paintIndicators(into: &drawList, in: prepared.rect, geometry: prepared.geometry, context: context)
-    drawList.popClip()
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    var context = context
-    context.isPresentationUpdate = true
-    let geometry = prepareScroll(in: rect, context: context)
-    drawList.pushClip(rect)
-    placeContent(in: rect, context: context, geometry: geometry) { placement in
-      switch placement {
-      case .content(let resolved, let rect): resolved.draw(into: &drawList, in: rect)
-      case .rowFocus(let context, let rect): context.focusable(in: rect, into: &drawList)
-      }
-    }
-    paintIndicators(into: &drawList, in: rect, geometry: geometry, context: context)
     drawList.popClip()
   }
 
@@ -516,5 +490,3 @@ public struct ScrollView: PrimitiveBlock {
       identities: rows.map(\.measurementIdentity), measurements: sizes)
   }
 }
-
-extension ScrollView: LayoutPreparingBlock {}

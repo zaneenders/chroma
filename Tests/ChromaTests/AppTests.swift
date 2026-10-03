@@ -40,16 +40,18 @@ private struct StatefulApp: App {
   }
 }
 
-private struct AppContent: PrimitiveBlock {
+private struct AppContent: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   let identifier: UUID
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     proposal
   }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
 }
 
 @MainActor

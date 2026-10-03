@@ -2,16 +2,18 @@ import Testing
 
 @testable import Chroma
 
-private struct CommandProbe: PrimitiveBlock {
+private struct CommandProbe: PaintableBlock {
+  func register(in rect: Rect, context: BlockContext) {}
+
   var name: String
   var size = Size(width: 10, height: 10)
   var color = Color.white
 
   var focusRule: FocusRule { .standard }
 
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
 
-  func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.text(name, at: rect.origin, color: color)
   }
 }
@@ -34,7 +36,11 @@ struct RenderingCommandTests {
   ) -> DrawList {
     context.interaction.beginFrame(input: input)
     var list = DrawList()
-    BlockEngine.draw(block, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     return list
   }

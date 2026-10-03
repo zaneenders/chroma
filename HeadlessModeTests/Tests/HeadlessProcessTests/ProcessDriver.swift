@@ -134,7 +134,8 @@ func withDeadline<T: Sendable>(
 
 /// Decode each stdout line separately. A log line on stdout is a decoding error,
 /// rather than being silently skipped or confused with stderr diagnostics.
-private func decodeJSONL(_ output: SubprocessOutputSequence, into responses: Responses, frames: Responses) async throws {
+private func decodeJSONL(_ output: SubprocessOutputSequence, into responses: Responses, frames: Responses) async throws
+{
   do {
     for try await line in output.strings(separatedBy: .unicodeScalarSequence("\n".unicodeScalars)) {
       let response = try JSONDecoder().decode(HeadlessResponse.self, from: Data(line.utf8))

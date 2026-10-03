@@ -186,43 +186,19 @@ public struct ChromaTheme: Equatable, Sendable {
   )
 }
 
-public struct ThemeReader<Content: Block>: PrimitiveBlock {
+public struct ThemeReader<Content: Block>: LayoutPreparingBlock {
   public var content: (ChromaTheme) -> Content
 
   public init(@BlockBuilder content: @escaping (ChromaTheme) -> Content) {
     self.content = content
   }
 
-  public var focusRule: FocusRule { .container }
-
-  @MainActor public var expandsHorizontally: Bool { false }
-  @MainActor public var expandsVertically: Bool { false }
-
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    BlockEngine.measure(content(context.theme), proposal: proposal, context: context)
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    BlockEngine.draw(content(context.theme), into: &drawList, in: rect, context: context)
-  }
 }
 
-public struct ThemeBlock: PrimitiveBlock {
+public struct ThemeBlock: LayoutPreparingBlock {
   public var content: any Block
   public var theme: ChromaTheme
 
-  public var focusRule: FocusRule { .container }
-
-  @MainActor public var expandsHorizontally: Bool { BlockEngine.expandsHorizontally(content) }
-  @MainActor public var expandsVertically: Bool { BlockEngine.expandsVertically(content) }
-
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    BlockEngine.measure(content, proposal: proposal, context: context.withTheme(theme))
-  }
-
-  @MainActor public func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    BlockEngine.draw(content, into: &drawList, in: rect, context: context.withTheme(theme))
-  }
 }
 
 extension Block {

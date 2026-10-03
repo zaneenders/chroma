@@ -30,8 +30,7 @@ struct HeadlessProcessFixture: HeadlessApp {
       Button("Start timer") {
         Task { @MainActor in
           for tick in 1...3 {
-            do { try await Task.sleep(for: .milliseconds(50)) }
-            catch { return }
+            do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
             model.tick = tick
           }
         }

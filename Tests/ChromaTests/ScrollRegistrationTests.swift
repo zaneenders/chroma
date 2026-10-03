@@ -15,7 +15,7 @@ struct ScrollRegistrationTests {
     var paints = 0
   }
 
-  struct Probe: PrimitiveBlock {
+  struct Probe: PaintableBlock {
     let index: Int
     let height: Float
     let capture: Capture
@@ -23,7 +23,7 @@ struct ScrollRegistrationTests {
 
     var focusRule: FocusRule { action == nil ? .standard : .control }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       capture.measurements.append(index)
       capture.proposals.append(proposal)
       return Size(width: proposal.width, height: height)
@@ -34,10 +34,10 @@ struct ScrollRegistrationTests {
       if let action { context.registerFocusable(in: rect, action: action) }
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.paints += 1
       list.fillRect(rect, color: .white)
-      if let action { context.focusable(in: rect, into: &list, action: action) }
+      if action != nil { context.paintFocusHighlight(in: rect, into: &list) }
     }
   }
 
@@ -53,12 +53,12 @@ struct ScrollRegistrationTests {
     var height: Float = 10
   }
 
-  struct ObservableRow: PrimitiveBlock {
+  struct ObservableRow: PaintableBlock {
     let model: HeightModel
     let capture: Capture
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       capture.measurements.append(0)
       return Size(width: proposal.width, height: model.height)
     }
@@ -67,7 +67,7 @@ struct ScrollRegistrationTests {
       capture.registered.append((0, rect))
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.paints += 1
     }
   }
@@ -131,7 +131,6 @@ struct ScrollRegistrationTests {
     #expect(capture.paints == 0)
     #expect(PipelineMetrics.snapshot.paints == 0)
     #expect(PipelineMetrics.snapshot.drawingCommands == 0)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbacks == 0)
   }
 
   @Test func uniformRegistrationBuildsOnlyVisibleRowsAndClipsFallbackFocus() {
@@ -166,7 +165,6 @@ struct ScrollRegistrationTests {
     #expect(capture.paints == 0)
     #expect(PipelineMetrics.snapshot.paints == 0)
     #expect(PipelineMetrics.snapshot.drawingCommands == 0)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbacks == 0)
   }
 
   @Test func registrationPreservesPendingControllerRequestForPresentationOrdering() {

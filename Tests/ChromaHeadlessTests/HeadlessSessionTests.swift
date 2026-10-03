@@ -1,9 +1,8 @@
 import Chroma
+import ChromaHeadless
 import Foundation
 import Observation
 import Testing
-
-import ChromaHeadless
 
 @MainActor struct HeadlessSessionTests {
   struct Fixture: App { var body: some Block { Text("Hello") } }
@@ -54,7 +53,8 @@ import ChromaHeadless
     let session = try HeadlessSession(Fixture())
     defer { session.close() }
     #expect(try response(session, #"{"version":1,"id":"unknown","op":"unknown"}"#).error == .unknownOperation)
-    #expect(try response(session, #"{"version":1,"op":"pointer","phase":"invalid","x":0,"y":0}"#).error == .invalidRequest)
+    #expect(
+      try response(session, #"{"version":1,"op":"pointer","phase":"invalid","x":0,"y":0}"#).error == .invalidRequest)
   }
 
   @Test func validationAndCorrelation() throws {
@@ -177,10 +177,11 @@ import ChromaHeadless
     #expect(app.model.text == "hello")
   }
 
-  struct InvalidGeometry: PrimitiveBlock {
+  struct InvalidGeometry: PaintableBlock {
     var focusRule: FocusRule { .standard }
     func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: BlockContext) {}
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       list.fillRect(Rect(x: .nan, y: 0, width: 10, height: 10), color: Color(r: 1, g: 0, b: 0, a: 1))
     }
   }

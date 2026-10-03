@@ -17,9 +17,11 @@ struct CommandConsumptionTests {
         handled += 1
         return .handled
       }
-      BlockEngine.draw(
-        view, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: BlockContext(interaction: interaction))
+      do {
+        let resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
+        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+      }
       interaction.endFrame()
     }
     frame()
@@ -40,9 +42,11 @@ struct CommandConsumptionTests {
       }.id(id).onCommand(.application("resize")) {
         consumes ? .handled : .ignored
       }
-      BlockEngine.draw(
-        view, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20),
-        context: BlockContext(interaction: interaction))
+      do {
+        let resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
+        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+      }
       interaction.endFrame()
     }
     frame()

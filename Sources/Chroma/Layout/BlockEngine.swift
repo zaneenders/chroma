@@ -8,32 +8,26 @@ public enum BlockEngine {
       expandsVertically: @escaping () -> Bool = { false },
       measure: @escaping (Size) -> Size,
       register: @escaping (Rect) -> Void,
-      paint: @escaping (inout DrawList, Rect) -> Void,
-      draw: ((inout DrawList, Rect) -> Void)? = nil
+      paint: @escaping (inout DrawList, Rect) -> Void
     ) {
       horizontalExpansion = expandsHorizontally
       verticalExpansion = expandsVertically
       self.measure = measure
       self.update = register
       self.presentation = paint
-      self.combined =
-        draw ?? { list, rect in
-          register(rect)
-          paint(&list, rect)
-        }
+
     }
 
     public convenience init(
       child: Resolved,
       register: @escaping (Rect) -> Void,
-      paint: @escaping (inout DrawList, Rect) -> Void,
-      draw: ((inout DrawList, Rect) -> Void)? = nil
+      paint: @escaping (inout DrawList, Rect) -> Void
     ) {
       self.init(
         expandsHorizontally: { child.expandsHorizontally },
         expandsVertically: { child.expandsVertically },
         measure: child.sizeThatFits,
-        register: register, paint: paint, draw: draw)
+        register: register, paint: paint)
     }
 
     private let metricsLifetime = PipelineMetrics.trackLifetime(.resolvedNode)
@@ -42,7 +36,6 @@ public enum BlockEngine {
     private let measure: (Size) -> Size
     private let update: (Rect) -> Void
     private let presentation: (inout DrawList, Rect) -> Void
-    private let combined: (inout DrawList, Rect) -> Void
     private var measurements: [(proposal: Size, size: Size)] = []
 
     public private(set) lazy var expandsHorizontally = horizontalExpansion()
@@ -65,11 +58,6 @@ public enum BlockEngine {
       update(rect)
     }
 
-    public func draw(into drawList: inout DrawList, in rect: Rect) {
-      PipelineMetrics.record(.placement)
-      PipelineMetrics.record(.paint)
-      BlockEngine.countDrawingCommands(into: &drawList) { list in combined(&list, rect) }
-    }
     public func paint(into drawList: inout DrawList, in rect: Rect) {
       PipelineMetrics.record(.paint)
       BlockEngine.countDrawingCommands(into: &drawList) { list in presentation(&list, rect) }
@@ -81,40 +69,22 @@ public enum BlockEngine {
     if let scoped = block as? ScopedBlock {
       return resolve(scoped.content, context: context.scoped(scoped.path))
     }
-    if let primitive = block as? any PrimitiveBlock {
+    if let container = block as? any LayoutPreparingBlock {
+      let context =
+        container.preservesContentIdentity
+        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
+      return container.prepareLayout(context: context)
+    }
+    if let primitive = block as? any PaintableBlock {
       let context =
         primitive.preservesContentIdentity
         ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
-      if let container = primitive as? any LayoutPreparingBlock {
-        return container.prepareLayout(context: context)
-      }
-      var legacyCommands: DrawList?
       return Resolved(
         expandsHorizontally: { primitive.expandsHorizontally },
         expandsVertically: { primitive.expandsVertically },
         measure: { primitive.sizeThatFits($0, context: context) },
-        register: { rect in
-          if context.isPresentationUpdate && !(primitive is any PaintableBlock) {
-            PipelineMetrics.recordCompatibilityFallback(type(of: primitive))
-            PipelineMetrics.record(.paint)
-            var commands = DrawList()
-            // Legacy drawing is an explicit update adapter, never a presentation effect.
-            paintingDepth += 1
-            drawResolved(primitive, into: &commands, in: rect, context: context)
-            paintingDepth -= 1
-            legacyCommands = commands
-          } else {
-            registerResolved(primitive, in: rect, context: context)
-          }
-        },
-        paint: { list, rect in
-          if let legacyCommands {
-            list.append(legacyCommands)
-          } else {
-            paintResolved(primitive, into: &list, in: rect, context: context)
-          }
-        },
-        draw: { list, rect in drawResolved(primitive, into: &list, in: rect, context: context) })
+        register: { registerResolved(primitive, in: $0, context: context) },
+        paint: { paintResolved(primitive, into: &$0, in: $1, context: context) })
     }
     PipelineMetrics.record(.bodyEvaluation)
     return resolve(block.body, context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))
@@ -122,7 +92,7 @@ public enum BlockEngine {
 
   private static var paintingDepth = 0
 
-  /// Count once at the outermost drawing boundary, including nested legacy adapters.
+  /// Count once at the outermost drawing boundary, including nested prepared children.
   static func countDrawingCommands(
     into drawList: inout DrawList, _ body: (inout DrawList) -> Void
   ) {
@@ -152,18 +122,6 @@ public enum BlockEngine {
     return resolved.sizeThatFits(proposal)
   }
 
-  public static func draw(
-    _ block: any Block,
-    into drawList: inout DrawList,
-    in rect: Rect,
-    context: BlockContext
-  ) {
-    var context = context
-    context.isPresentationUpdate = true
-    let resolved = resolve(block, context: context)
-    resolved.draw(into: &drawList, in: rect)
-  }
-
   /// Builds one consistent interaction update from fresh block values. The resolved tree and
   /// proposal caches live only for this call; identity alone never retains callbacks or layout.
   public static func register(_ block: any Block, in rect: Rect, context: BlockContext) {
@@ -178,19 +136,16 @@ public enum BlockEngine {
   }
 
   static func paintResolved(
-    _ primitive: any PrimitiveBlock, into drawList: inout DrawList, in rect: Rect,
+    _ primitive: any PaintableBlock, into drawList: inout DrawList, in rect: Rect,
     context: BlockContext
   ) {
-    guard let primitive = primitive as? any PaintableBlock else {
-      preconditionFailure("Unmigrated primitives require the explicit legacy presentation path")
-    }
     primitive.paint(into: &drawList, in: rect, context: context)
     if primitive.focusRule == .standard, !context.focusLeafClaimed, !context.navigationIgnored {
       drawHighlight(for: context.widgetID, into: &drawList, in: rect, context: context)
     }
   }
 
-  static func registerResolved(_ primitive: any PrimitiveBlock, in rect: Rect, context: BlockContext) {
+  static func registerResolved(_ primitive: any PaintableBlock, in rect: Rect, context: BlockContext) {
     let parent = context.interaction.builderStack.last
     let registered = parent?.children.count
     primitive.register(in: rect, context: context)
@@ -203,29 +158,6 @@ public enum BlockEngine {
     case .standard:
       guard !context.focusLeafClaimed, !context.navigationIgnored else { return }
       context.registerFocusable(in: rect)
-    case .container, .decorative:
-      break
-    }
-  }
-
-  static func drawResolved(
-    _ primitive: any PrimitiveBlock,
-    into drawList: inout DrawList,
-    in rect: Rect,
-    context: BlockContext
-  ) {
-    let parent = context.interaction.builderStack.last
-    let registered = parent?.children.count
-    primitive.draw(into: &drawList, in: rect, context: context)
-    guard let parent, parent.children.count == registered else { return }
-    switch primitive.focusRule {
-    case .control:
-      preconditionFailure(
-        "\(String(describing: type(of: primitive))) declares focusRule .control but registered no focus leaf; "
-          + "call buttonState while drawing")
-    case .standard:
-      guard !context.focusLeafClaimed, !context.navigationIgnored else { return }
-      context.focusable(in: rect, into: &drawList)
     case .container, .decorative:
       break
     }

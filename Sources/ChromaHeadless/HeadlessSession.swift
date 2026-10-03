@@ -33,7 +33,8 @@ public final class HeadlessSession {
       }
       if let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
         let op = object["op"] as? String, HeadlessOperation(rawValue: op) == nil,
-        let version = object["version"] as? Int, version == 1, !isClosed {
+        let version = object["version"] as? Int, version == 1, !isClosed
+      {
         throw Failure.unknownOperation
       }
       let request = try JSONDecoder().decode(HeadlessRequest.self, from: Data(line.utf8))
@@ -97,16 +98,21 @@ public final class HeadlessSession {
         input: InputState(pointerPosition: pointer, pointerPressPosition: press, pointerDown: pointerDown))
       return encode(
         HeadlessResponse(
-          id: id.map { HeadlessRequestID(rawValue: $0) }, status: .frame, viewport: frame.viewport, commands: frame.commands,
+          id: id.map { HeadlessRequestID(rawValue: $0) }, status: .frame, viewport: frame.viewport,
+          commands: frame.commands,
           focus: HeadlessFocus(
             path: host.interaction.selection, editing: host.interaction.isTextEditing,
             caretOffset: host.interaction.editingLeaf == nil ? nil : host.interaction.caretOffset,
             selectionStart: host.interaction.textSelectionRange?.lowerBound,
             selectionEnd: host.interaction.textSelectionRange?.upperBound)))
     } catch let failure as Failure {
-      return encode(HeadlessResponse(id: id.map { HeadlessRequestID(rawValue: $0) }, status: .error, error: HeadlessError(rawValue: failure.rawValue)))
+      return encode(
+        HeadlessResponse(
+          id: id.map { HeadlessRequestID(rawValue: $0) }, status: .error,
+          error: HeadlessError(rawValue: failure.rawValue)))
     } catch {
-      return encode(HeadlessResponse(id: id.map { HeadlessRequestID(rawValue: $0) }, status: .error, error: .invalidRequest))
+      return encode(
+        HeadlessResponse(id: id.map { HeadlessRequestID(rawValue: $0) }, status: .error, error: .invalidRequest))
     }
   }
 
@@ -127,8 +133,9 @@ public final class HeadlessSession {
   func runStandardIO(output: FileHandle, onlyChanges: Bool = true) async throws {
     defer { close() }
     func present(_ frame: HeadlessFrame) throws {
-      let response = encode(HeadlessResponse(
-        status: .frame, viewport: frame.viewport, commands: frame.commands))
+      let response = encode(
+        HeadlessResponse(
+          status: .frame, viewport: frame.viewport, commands: frame.commands))
       try output.write(contentsOf: Data((response + "\n").utf8))
     }
     if let frame = host.lastFrame { try present(frame) }

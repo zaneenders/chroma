@@ -108,7 +108,11 @@ struct LayoutTests {
     let context = BlockContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(Host(showQueue: true), into: &list, in: viewport, context: context)
+    do {
+      let resolved = BlockEngine.prepare(Host(showQueue: true), context: context)
+      resolved.register(in: viewport)
+      resolved.paint(into: &list, in: viewport)
+    }
     interaction.endFrame()
 
     let positions = textPositions(in: list)
@@ -133,7 +137,11 @@ struct LayoutTests {
     let context = BlockContext(interaction: interaction)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(LegacyHost(showQueue: true), into: &list, in: viewport, context: context)
+    do {
+      let resolved = BlockEngine.prepare(ComputedPropertyHost(showQueue: true), context: context)
+      resolved.register(in: viewport)
+      resolved.paint(into: &list, in: viewport)
+    }
     interaction.endFrame()
 
     let positions = textPositions(in: list)
@@ -180,28 +188,28 @@ struct LayoutTests {
     interaction.beginFrame(input: InputState())
 
     var horizontalList = DrawList()
-    BlockEngine.draw(
-      HStack {
-        Text("first")
-        Text("second")
-      }.reverseLayout(),
-      into: &horizontalList,
-      in: rect,
-      context: context
-    )
+    do {
+      let resolved = BlockEngine.prepare(
+        HStack {
+          Text("first")
+          Text("second")
+        }.reverseLayout(), context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &horizontalList, in: rect)
+    }
     interaction.endFrame()
     interaction.beginFrame(input: InputState())
 
     var verticalList = DrawList()
-    BlockEngine.draw(
-      VStack {
-        Text("first")
-        Text("second")
-      }.reverseLayout(),
-      into: &verticalList,
-      in: rect,
-      context: context
-    )
+    do {
+      let resolved = BlockEngine.prepare(
+        VStack {
+          Text("first")
+          Text("second")
+        }.reverseLayout(), context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &verticalList, in: rect)
+    }
     interaction.endFrame()
 
     let horizontalText = horizontalList.commands.compactMap { command -> (String, Point)? in
@@ -243,7 +251,7 @@ struct LayoutTests {
   }
 }
 
-private struct LegacyHost: Block {
+private struct ComputedPropertyHost: Block {
   var showQueue: Bool
 
   @MainActor var body: some Block {

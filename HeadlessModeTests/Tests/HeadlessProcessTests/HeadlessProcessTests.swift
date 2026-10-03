@@ -104,7 +104,8 @@ struct HeadlessProcessTests {
   }
 
   @Test func allChangesContinuouslyEmitsUnchangedFrames() async throws {
-    let outcome = try await runSession("HeadlessProcessFixture", arguments: ["--viewport", "800x600", "--all-changes"]) { client in
+    let outcome = try await runSession("HeadlessProcessFixture", arguments: ["--viewport", "800x600", "--all-changes"])
+    { client in
       let first = try await client.frames.next()
       let second = try await client.frames.next()
       let third = try await client.frames.next()
@@ -149,10 +150,11 @@ struct HeadlessProcessTests {
       let initial = try await client.request(.init(id: .init(rawValue: initialID.uuidString), op: .frame))
       try initial.requireFrame(id: initialID)
       #expect(initial.texts.contains("idle"))
-      let position = try #require(initial.commands?.compactMap { command in
-        if case .text(let position, "Start async", _, _) = command { return position }
-        return nil
-      }.first)
+      let position = try #require(
+        initial.commands?.compactMap { command in
+          if case .text(let position, "Start async", _, _) = command { return position }
+          return nil
+        }.first)
       for phase in [HeadlessPointerPhase.down, .up] {
         let id = UUID()
         let clicked = try await client.request(
@@ -177,10 +179,11 @@ struct HeadlessProcessTests {
       let initial = try await client.request(.init(id: .init(rawValue: initialID.uuidString), op: .frame))
       try initial.requireFrame(id: initialID)
       #expect(initial.texts.contains("Tick: 0"))
-      let position = try #require(initial.commands?.compactMap { command in
-        if case .text(let position, "Start timer", _, _) = command { return position }
-        return nil
-      }.first)
+      let position = try #require(
+        initial.commands?.compactMap { command in
+          if case .text(let position, "Start timer", _, _) = command { return position }
+          return nil
+        }.first)
       for phase in [HeadlessPointerPhase.down, .up] {
         let id = UUID()
         try await client.request(

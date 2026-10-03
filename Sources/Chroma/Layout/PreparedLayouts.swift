@@ -1,32 +1,29 @@
 /// A traversal owns its resolved children and measurements. Nothing is reused across input events or frames.
 ///
 /// This low-level extension point owns all registration and painting, including focus behavior:
-/// the engine does not apply the generic `PrimitiveBlock.focusRule` fallback to its prepared result.
+/// the engine does not add automatic leaf focus to its prepared result.
 /// Forward to prepared children, or explicitly register and paint any focus owned by this block.
 /// Prefer `PaintableBlock` for ordinary leaves that need automatic primitive focus handling.
-public protocol LayoutPreparingBlock: PrimitiveBlock {
+public protocol LayoutPreparingBlock: Block where Body == Never {
+  var preservesContentIdentity: Bool { get }
   @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved
 }
 
 /// Default entry points preserve direct primitive use; the engine prepares once and
 /// owns this object through measurement, registration, and painting of one update.
-@MainActor
 extension LayoutPreparingBlock {
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  public var preservesContentIdentity: Bool { false }
+  public var body: Never { fatalError("\(Self.self) is a prepared block") }
+  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     prepareLayout(context: context).sizeThatFits(proposal)
   }
-  public func register(in rect: Rect, context: BlockContext) {
+  @MainActor public func register(in rect: Rect, context: BlockContext) {
     prepareLayout(context: context).register(in: rect)
-  }
-  public func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-    var context = context
-    context.isPresentationUpdate = true
-    prepareLayout(context: context).draw(into: &list, in: rect)
   }
 }
 
-extension LayoutModifier: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension LayoutModifier {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content, context: context)
     return BlockEngine.Resolved(
       expandsHorizontally: {
@@ -39,17 +36,12 @@ extension LayoutModifier: LayoutPreparingBlock {
       },
       measure: { proposal in sizeThatFits(proposal, context: context, measure: child.sizeThatFits) },
       register: { rect in child.register(in: placedContent(in: rect)) },
-      paint: { list, rect in child.paint(into: &list, in: placedContent(in: rect)) },
-      draw: { list, rect in
-        draw(into: &list, in: rect, context: context) { list, rect, _ in
-          child.draw(into: &list, in: rect)
-        }
-      })
+      paint: { list, rect in child.paint(into: &list, in: placedContent(in: rect)) })
   }
 }
 
-extension PaintModifier: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension PaintModifier {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let childContext: BlockContext
     if case .background = operation { childContext = context.backgroundContentContext } else { childContext = context }
     let child = BlockEngine.resolve(content, context: childContext)
@@ -90,17 +82,12 @@ extension PaintModifier: LayoutPreparingBlock {
           child.paint(into: &list, in: rect)
           list.popClip()
         }
-      },
-      draw: { list, rect in
-        draw(into: &list, in: rect, context: context) { list, rect, _ in
-          child.draw(into: &list, in: rect)
-        }
       })
   }
 }
 
-extension ContextModifier: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension ContextModifier {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     var context = context
     switch operation {
     case .hover(let style): context.hoverStyle = style
@@ -110,25 +97,20 @@ extension ContextModifier: LayoutPreparingBlock {
   }
 }
 
-extension CommandScope: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension CommandScope {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content, context: context)
     return BlockEngine.Resolved(
       child: child,
       register: { rect in
         withRegistration(in: rect, context: context) { child.register(in: rect) }
       },
-      paint: { list, rect in child.paint(into: &list, in: rect) },
-      draw: { list, rect in
-        draw(into: &list, in: rect, context: context) { list, rect, _ in
-          child.draw(into: &list, in: rect)
-        }
-      })
+      paint: { list, rect in child.paint(into: &list, in: rect) })
   }
 }
 
-extension Group: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension Group {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content, context: context)
     return BlockEngine.Resolved(
       child: child,
@@ -137,34 +119,27 @@ extension Group: LayoutPreparingBlock {
         child.register(in: rect)
         context.interaction.endGroup()
       },
-      paint: { list, rect in child.paint(into: &list, in: rect) },
-      draw: { list, rect in
-        context.interaction.beginGroup(rect: rect, navigationID: context.widgetID, navigationName: name)
-        child.draw(into: &list, in: rect)
-        context.interaction.endGroup()
-      })
+      paint: { list, rect in child.paint(into: &list, in: rect) })
   }
 }
 
-extension ThemeBlock: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension ThemeBlock {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     BlockEngine.resolve(content, context: context.withTheme(theme))
   }
 }
 
-extension ThemeReader: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension ThemeReader {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let child = BlockEngine.resolve(content(context.theme), context: context)
     return BlockEngine.Resolved(
-      expandsHorizontally: { false }, expandsVertically: { false },
       measure: child.sizeThatFits, register: child.register,
-      paint: { list, rect in child.paint(into: &list, in: rect) },
-      draw: { list, rect in child.draw(into: &list, in: rect) })
+      paint: { list, rect in child.paint(into: &list, in: rect) })
   }
 }
 
-extension FocusTargetBlock: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension FocusTargetBlock {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     var context = context
     context.focusTargets.append(target)
     let child = BlockEngine.resolve(content, context: context)
@@ -174,36 +149,32 @@ extension FocusTargetBlock: LayoutPreparingBlock {
         _ = target.pendingEditing
         child.register(in: rect)
       },
-      paint: { list, rect in child.paint(into: &list, in: rect) },
-      draw: { list, rect in
-        _ = target.pendingEditing
-        child.draw(into: &list, in: rect)
-      })
+      paint: { list, rect in child.paint(into: &list, in: rect) })
   }
 }
 
-extension HStack: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension HStack {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     StackLayout(axis: .horizontal, spacing: spacing, bottomAligned: alignment == .bottom)
       .prepare(scopedChildren, reversed: isLayoutReversed, context: context)
   }
 }
 
-extension VStack: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension VStack {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     StackLayout(axis: .vertical, spacing: spacing)
       .prepare(scopedChildren, reversed: isLayoutReversed, context: context)
   }
 }
 
-extension TupleBlock: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension TupleBlock {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     BlockEngine.prepareOverlay(scopedChildren, group: false, context: context)
   }
 }
 
-extension ZStack: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension ZStack {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     BlockEngine.prepareOverlay(scopedChildren, group: true, context: context)
   }
 }
@@ -238,17 +209,12 @@ extension BlockEngine {
       },
       paint: { list, rect in
         for (child, rect) in zip(children, placements(in: rect)) { child.paint(into: &list, in: rect) }
-      },
-      draw: { list, rect in
-        if group { context.interaction.beginGroup(rect: rect) }
-        for (child, rect) in zip(children, placements(in: rect)) { child.draw(into: &list, in: rect) }
-        if group { context.interaction.endGroup() }
       })
   }
 }
 
-extension TrailingControlsRow: LayoutPreparingBlock {
-  public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+extension TrailingControlsRow {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let input = BlockEngine.resolve(input, context: context.childScope(0))
     let controls = BlockEngine.resolve(controls, context: context.childScope(1))
     func sizes(_ proposal: Size) -> (input: Size, controls: Size) {
@@ -275,7 +241,7 @@ extension TrailingControlsRow: LayoutPreparingBlock {
       visit(controls, placed!.2)
     }
     return BlockEngine.Resolved(
-      expandsHorizontally: { true }, expandsVertically: { false },
+      expandsHorizontally: { true },
       measure: { proposal in
         let sizes = sizes(proposal)
         return Size(width: proposal.width, height: max(sizes.input.height, sizes.controls.height))
@@ -283,9 +249,6 @@ extension TrailingControlsRow: LayoutPreparingBlock {
       register: { rect in
         context.withFocusGroup(in: rect) { place(rect) { child, rect in child.register(in: rect) } }
       },
-      paint: { list, rect in place(rect) { child, rect in child.paint(into: &list, in: rect) } },
-      draw: { list, rect in
-        context.withFocusGroup(in: rect) { place(rect) { child, rect in child.draw(into: &list, in: rect) } }
-      })
+      paint: { list, rect in place(rect) { child, rect in child.paint(into: &list, in: rect) } })
   }
 }

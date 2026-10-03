@@ -145,11 +145,13 @@ struct WindowRuntimeTests {
 
   @Test func hoverEventsShareTheLastFrameUntilPresentation() {
     final class Counter { var draws = 0 }
-    struct Probe: PrimitiveBlock {
+    struct Probe: PaintableBlock {
+      func register(in rect: Rect, context: BlockContext) {}
+
       let counter: Counter
       var focusRule: FocusRule { .standard }
-      func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+      @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+      func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
         counter.draws += 1
         list.fillRect(rect, color: .white)
       }

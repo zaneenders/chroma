@@ -52,9 +52,6 @@ public enum PipelineMetrics {
     /// Commands emitted through the instrumented engine/frame entry points.
     /// Direct writes to an unrelated DrawList are outside the capture boundary.
     public internal(set) var drawingCommands = 0
-    public internal(set) var compatibilityFallbacks = 0
-    /// Fully qualified primitive types that used the draw-to-register adapter.
-    public internal(set) var compatibilityFallbackTypes: [String: Int] = [:]
     /// Traversal-scoped resolved nodes, not a persistent retained-tree size.
     public internal(set) var liveResolvedNodes = 0
     /// Frame and row observation subscriptions that are still alive.
@@ -88,12 +85,6 @@ public enum PipelineMetrics {
     case .paint: counters.paints += count
     case .drawingCommands: counters.drawingCommands += count
     }
-  }
-
-  static func recordCompatibilityFallback(_ type: Any.Type) {
-    guard isEnabled else { return }
-    counters.compatibilityFallbacks += 1
-    counters.compatibilityFallbackTypes[String(reflecting: type), default: 0] += 1
   }
 
   static func trackLifetime(_ kind: PipelineMetricLifetime.Kind) -> PipelineMetricLifetime? {

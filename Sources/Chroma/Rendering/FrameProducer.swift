@@ -93,8 +93,7 @@ package final class FrameProducer {
     let drawList = withObservationTracking(options: .didSet) {
       subscription.trackCancellation()
       var drawList = DrawList()
-      var context = context
-      context.isPresentationUpdate = true
+
       if let content {
         let resolved = BlockEngine.resolve(content, context: context)
         let rect = Rect(origin: .zero, size: viewport)
@@ -124,7 +123,7 @@ package final class FrameProducer {
   ) {
     var context = context
     context.keyboardNavigationOverscan = keyboardNavigationOverscan
-    context.isPresentationUpdate = false
+
     let interaction = context.interaction
     interaction.refreshingRegistrations = interaction.tree != nil
     interaction.beginFrame(input: InputState(commands: commands))

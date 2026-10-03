@@ -11,25 +11,25 @@ struct RegistrationControlTests {
     var paints = 0
   }
 
-  private struct PhaseProbe: PrimitiveBlock {
+  private struct PhaseProbe: PaintableBlock {
     let phase: InteractionPhase
     let capture: PhaseCapture
 
     var focusRule: FocusRule { .standard }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
     func register(in rect: Rect, context: BlockContext) {
       capture.registered.append(phase)
     }
 
-    func draw(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.paints += 1
       list.fillRect(rect, color: .white)
     }
   }
 
-  @Test func builtInControlsRegisterWithoutPaintingOrCompatibilityFallbacks() {
+  @Test func builtInControlsRegisterWithoutPainting() {
     let blocks: [any Block] = [
       Button("Action", action: {}),
       TextEditor(text: { "first\nsecond" }, onChange: { _ in }),
@@ -46,7 +46,6 @@ struct RegistrationControlTests {
       #expect(metrics.registrations > 0)
       #expect(metrics.paints == 0)
       #expect(metrics.drawingCommands == 0)
-      #expect(metrics.compatibilityFallbacks == 0)
       #expect(context.interaction.tree?.children.count == 1)
       #expect(context.interaction.tree?.children.first?.rect == rect)
     }
@@ -112,7 +111,6 @@ struct RegistrationControlTests {
     #expect(context.interaction.caretOffset == 1)
     #expect(PipelineMetrics.snapshot.paints == 0)
     #expect(PipelineMetrics.snapshot.drawingCommands == 0)
-    #expect(PipelineMetrics.snapshot.compatibilityFallbacks == 0)
   }
 
   @Test(arguments: [false, true])
@@ -140,7 +138,9 @@ struct RegistrationControlTests {
       registration.interaction.endFrame()
       presentation.interaction.beginFrame(input: input)
       var list = DrawList()
-      editor.draw(into: &list, in: rect, context: presentation)
+      let resolved = editor.prepareLayout(context: presentation)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
       presentation.interaction.endFrame()
       #expect(registration.interaction.caretOffset == presentation.interaction.caretOffset)
       #expect(registration.interaction.textSelectionRange == presentation.interaction.textSelectionRange)

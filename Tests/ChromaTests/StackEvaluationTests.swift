@@ -29,7 +29,11 @@ struct StackEvaluationTests {
     #expect(BlockEngine.measure(block, proposal: rect.size, context: context) == rect.size)
     #expect(counter.bodies == 3)
     var list = DrawList()
-    BlockEngine.draw(block, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     #expect(counter.bodies == 4)
     #expect(
       list.commands.contains {
@@ -54,7 +58,11 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 1)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
     #expect(
@@ -74,7 +82,11 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 1)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
   }
@@ -101,7 +113,11 @@ struct StackEvaluationTests {
     counter.bodies = 0
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
-    BlockEngine.draw(stack, into: &list, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &list, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
   }
@@ -112,7 +128,11 @@ struct StackEvaluationTests {
     let context = BlockContext()
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.draw(block, into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100), context: context)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      resolved.register(in: Rect(x: 0, y: 0, width: 200, height: 100))
+      resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
   }
@@ -122,17 +142,19 @@ struct StackEvaluationTests {
     var height: Float = 12
   }
 
-  private struct MeasuredLeaf: PrimitiveBlock {
+  private struct MeasuredLeaf: PaintableBlock {
+    func register(in rect: Rect, context: BlockContext) {}
+
     let measurements: Measurements
     var focusRule: FocusRule { .decorative }
     var expandsHorizontally: Bool { true }
 
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       measurements.proposals.append(proposal)
       return Size(width: proposal.width, height: measurements.height)
     }
 
-    func draw(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       drawList.fillRect(rect, color: .black)
     }
   }
@@ -149,7 +171,8 @@ struct StackEvaluationTests {
     #expect(resolved.sizeThatFits(proposal) == Size(width: 200, height: 12))
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
-    resolved.draw(into: &list, in: Rect(origin: .zero, size: proposal))
+    resolved.register(in: Rect(origin: .zero, size: proposal))
+    resolved.paint(into: &list, in: Rect(origin: .zero, size: proposal))
     context.interaction.endFrame()
     #expect(measurements.proposals == [proposal, Size(width: 100, height: 100)])
 
@@ -170,6 +193,41 @@ struct StackEvaluationTests {
     }
     _ = BlockEngine.measure(block, proposal: Size(width: 200, height: 100), context: BlockContext())
     #expect(counter.bodies == 1)
+  }
+
+  @Test(arguments: [4, 8, 16])
+  func nestedInteractivePreparationGrowsLinearly(depth: Int) {
+    PipelineMetrics.isEnabled = true
+    defer { PipelineMetrics.isEnabled = false }
+    var block: any Block = Text("leaf")
+    for _ in 0..<depth {
+      let child = block
+      block = Interactive(action: {}, content: { _ in TupleBlock(children: [child]) })
+    }
+    let context = BlockContext()
+    let rect = Rect(x: 0, y: 0, width: 200, height: 100)
+    do {
+      let resolved = BlockEngine.prepare(block, context: context)
+      #expect(PipelineMetrics.snapshot.liveResolvedNodes == 1)
+      _ = resolved.expandsHorizontally
+      _ = resolved.expandsVertically
+      _ = resolved.sizeThatFits(rect.size)
+      #expect(PipelineMetrics.snapshot.liveResolvedNodes == 2 * depth + 1)
+      context.interaction.beginFrame(input: InputState())
+      resolved.register(in: rect)
+      let registered = PipelineMetrics.snapshot.liveResolvedNodes
+      #expect(registered == 4 * depth + 1)
+      var list = DrawList()
+      resolved.paint(into: &list, in: rect)
+      #expect(PipelineMetrics.snapshot.liveResolvedNodes == registered)
+      #expect(
+        list.commands.contains {
+          if case .text(_, "leaf", _, _) = $0 { return true }
+          return false
+        })
+      context.interaction.endFrame()
+    }
+    #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
   }
 
   @Test func interactiveDrawingUsesCurrentPhaseAfterIdleMeasurement() {
@@ -212,14 +270,22 @@ struct StackEvaluationTests {
     counter.bodies = 0
     var first = DrawList()
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.draw(stack, into: &first, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &first, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
 
     counter.text = "after"
     var second = DrawList()
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.draw(stack, into: &second, in: rect, context: context)
+    do {
+      let resolved = BlockEngine.prepare(stack, context: context)
+      resolved.register(in: rect)
+      resolved.paint(into: &second, in: rect)
+    }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
     #expect(

@@ -1,5 +1,5 @@
-import Foundation
 import Chroma
+import Foundation
 
 /// A request in the headless JSONL protocol.
 public struct HeadlessRequest: Codable, Sendable {

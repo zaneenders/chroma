@@ -12,10 +12,22 @@ runnerDependencies.append(.product(name: "MetalBackend", package: "chroma"))
 let package = Package(
   name: "ChromaBenchmarks",
   platforms: [.macOS(.v27)],
+  products: [.library(name: "StressFixtures", targets: ["StressFixtures"])],
   dependencies: [
     .package(name: "chroma", path: "..")
   ],
   targets: [
+    .target(name: "StressFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
+    .executableTarget(
+      name: "StressBenchmark",
+      dependencies: [
+        "StressFixtures", .product(name: "ChromaTesting", package: "chroma"),
+      ]),
+    .testTarget(
+      name: "StressFixturesTests",
+      dependencies: [
+        "StressFixtures", .product(name: "ChromaTesting", package: "chroma"),
+      ]),
     .executableTarget(
       name: "LayoutBenchmark",
       dependencies: [
@@ -28,14 +40,6 @@ let package = Package(
         .product(name: "Chroma", package: "chroma"),
         .product(name: "ChromaTesting", package: "chroma"),
       ]),
-    .target(
-      name: "RegistrationFixtures",
-      dependencies: [
-        .product(name: "Chroma", package: "chroma"),
-        .product(name: "ChromaTesting", package: "chroma"),
-      ]),
-    .executableTarget(name: "RegistrationBenchmark", dependencies: ["RegistrationFixtures"]),
-    .testTarget(name: "RegistrationFixturesTests", dependencies: ["RegistrationFixtures"]),
     .executableTarget(name: "CompareBenchmarks"),
     .testTarget(name: "CompareBenchmarksTests", dependencies: ["CompareBenchmarks"]),
     .target(name: "RenderFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
