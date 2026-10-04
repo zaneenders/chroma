@@ -153,7 +153,7 @@ public final class WaylandHost: Chroma.Host {
 
   private func displayBecameReadable() {
     guard running, let display else { return }
-    guard unsafe wl_display_dispatch(display) != -1 else {
+    guard unsafe WaylandDisplayEvents.dispatchAvailable(display) != -1 else {
       failEventLoop(WaylandError("Wayland display dispatch failed"))
       return
     }
