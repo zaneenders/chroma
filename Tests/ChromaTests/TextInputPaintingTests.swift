@@ -12,16 +12,16 @@ struct TextInputPaintingTests {
     var list = DrawList()
     list.textInputBackground(in: rect, style: style, editing: editing, hover: .white)
     #expect(
-      list.commands.first
+      list.paintSnapshot.first
         == .fillRoundedRect(
           rect: rect, radii: CornerRadii(style.cornerRadius),
           color: editing ? style.editingBackground : style.idleBackground))
     #expect(
-      list.commands.last
+      list.paintSnapshot.last
         == .strokeRoundedRect(
           rect: rect, radii: CornerRadii(style.cornerRadius), width: style.borderWidth,
           color: editing ? style.editingBorder : style.border))
-    #expect(list.commands.count == (editing ? 2 : 3))
+    #expect(list.paintSnapshot.count == (editing ? 2 : 3))
   }
 
   @Test(arguments: [false, true])
@@ -42,14 +42,14 @@ struct TextInputPaintingTests {
     context.interaction.focus(id)
     let focused = render()
     #expect(
-      focused.commands.contains {
+      focused.paintSnapshot.contains {
         if case .strokeRoundedRect(_, _, let width, let color) = $0 {
           return width == 2 && color == context.theme.focus.ring
         }
         return false
       })
     #expect(
-      !focused.commands.contains {
+      !focused.paintSnapshot.contains {
         if case .fillRoundedRect(_, _, let color) = $0 {
           return color == HoverStyle.standardTint(in: context.theme)
         }
@@ -66,11 +66,11 @@ struct TextInputPaintingTests {
     list.textInputLine(
       text, at: origin, scale: 1, foreground: .white, selection: selection, theme: theme.focus)
     #expect(
-      list.commands == [
-        .text(position: origin, text: text, color: .white, scale: 1),
+      list.paintSnapshot == [
+        .text(position: origin, text: "a�bc", color: .white, scale: 1),
         .fillRect(rect: selection, color: theme.focus.selectionBackground),
         .pushClip(selection),
-        .text(position: origin, text: text, color: theme.focus.selectionForeground, scale: 1),
+        .text(position: origin, text: "a�bc", color: theme.focus.selectionForeground, scale: 1),
         .popClip,
       ])
   }
@@ -112,24 +112,24 @@ struct TextInputPaintingTests {
     context.interaction.caretOffset = 1
     let caret = render()
     #expect(
-      caret.commands.contains {
+      caret.paintSnapshot.contains {
         if case .fillRect(_, let color) = $0 { return color == context.theme.textEditor.caret }
         return false
       })
     context.interaction.textSelectionRange = 1..<4
     let selected = render()
     #expect(
-      !selected.commands.contains {
+      !selected.paintSnapshot.contains {
         if case .fillRect(_, let color) = $0 { return color == context.theme.textEditor.caret }
         return false
       })
-    let highlights = selected.commands.filter {
+    let highlights = selected.paintSnapshot.filter {
       if case .fillRect(_, let color) = $0 { return color == context.theme.focus.selectionBackground }
       return false
     }
     #expect(highlights.count == (multiline ? 2 : 1))
     var depth = 0
-    for command in selected.commands {
+    for command in selected.paintSnapshot {
       if case .pushClip = command { depth += 1 }
       if case .popClip = command { depth -= 1 }
       #expect(depth >= 0)

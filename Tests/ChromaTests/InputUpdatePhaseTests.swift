@@ -113,7 +113,7 @@ struct InputUpdatePhaseTests {
     let frame = host.render()
     #expect(state.updates == 3)
     #expect(
-      frame.commands.contains {
+      frame.paintSnapshot.contains {
         if case .text(_, "3", _, _) = $0 { return true }
         return false
       })

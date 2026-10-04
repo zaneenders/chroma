@@ -98,7 +98,7 @@ struct PreparedPublicContractTests {
     #expect(counts.builds == 2)
     #expect(counts.registrations == 1)
     #expect(counts.paints == 2)
-    #expect(list.commands.filter { if case .fillRect = $0 { true } else { false } }.count == 2)
+    #expect(list.paintSnapshot.filter { if case .fillRect = $0 { true } else { false } }.count == 2)
   }
 
   @Test func measurementDoesNotRunRegistrationOrPainting() {

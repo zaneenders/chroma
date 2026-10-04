@@ -15,7 +15,7 @@ struct HeadlessHostTests {
     #expect(first == second)
     #expect(first.viewport == Size(width: 120, height: 80))
     #expect(
-      first.commands == [
+      first.paintSnapshot == [
         .fillRect(rect: Rect(x: 0, y: 0, width: 120, height: 80), color: .yellow),
         .fillRect(rect: Rect(x: 0, y: 0, width: 120, height: 80), color: HoverStyle.standardTint(in: .dark)),
         .strokeRoundedRect(
@@ -32,7 +32,7 @@ struct HeadlessHostTests {
     renderer.run(title: "Snapshot")
 
     #expect(renderer.title == "Snapshot")
-    #expect(renderer.lastFrame?.commands.count == 3)
+    #expect(renderer.lastFrame?.paintSnapshot.count == 3)
   }
 
   @Test func repeatedFramesPreserveButtonInteractionState() {
@@ -84,7 +84,7 @@ private final class Counter {
   renderer.frameObserver = { observations.append($0) }
   let frame = renderer.render()
   #expect(observations.count == 1)
-  #expect(observations[0].drawList.commands == frame.commands)
+  #expect(observations[0].drawList.paintSnapshot == frame.paintSnapshot)
   #expect(observations[0].viewport == frame.viewport)
   #expect(observations[0].rasterScale == nil)
   renderer.frameObserver = nil

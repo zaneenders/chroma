@@ -39,30 +39,20 @@ float roundedRectDistance(vec2 localPosition, vec2 size, vec4 radii) {
 }
 
 float shapeCoverage(float distance) {
-  float antialiasWidth = max(fwidth(distance), 0.001);
+  float antialiasWidth = max(max(fwidth(distance), vShape.z), 0.001);
   return 1.0 - smoothstep(-antialiasWidth, antialiasWidth, distance);
 }
 
 void main() {
-  float coverage;
-  if (vShape.w > 0.5) {
-    outColor = texture(uTexture, vUV) * vColor;
-    return;
-  } else if (vShape.z > 0.5) {
-    float outerDistance = roundedRectDistance(vLocalPosition, vSize, vRadii);
-    coverage = shapeCoverage(outerDistance);
-    float borderWidth = vShape.x;
-    if (borderWidth > 0.0) {
-      vec2 innerSize = vSize - 2.0 * borderWidth;
-      if (innerSize.x > 0.0 && innerSize.y > 0.0) {
-        vec2 innerPosition = vLocalPosition - borderWidth;
-        vec4 innerRadii = max(vRadii - borderWidth, 0.0);
-        float innerDistance = roundedRectDistance(innerPosition, innerSize, innerRadii);
-        coverage *= 1.0 - shapeCoverage(innerDistance);
-      }
-    }
-  } else {
-    coverage = texture(uTexture, vUV).r;
+  vec4 sampleColor = texture(uTexture, vUV);
+  if (vShape.w > 0.5) sampleColor = vec4(1.0, 1.0, 1.0, sampleColor.r);
+  float coverage = shapeCoverage(roundedRectDistance(vLocalPosition, vSize, vRadii));
+  float border = vShape.x;
+  vec2 innerSize = vSize - 2.0 * border;
+  if (border > 0.0 && innerSize.x > 0.0 && innerSize.y > 0.0) {
+    coverage *= 1.0 - shapeCoverage(roundedRectDistance(
+      vLocalPosition - border, innerSize, max(vRadii - border, 0.0)));
   }
-  outColor = vec4(vColor.rgb, vColor.a * coverage);
+  outColor = sampleColor * vColor;
+  outColor.a *= coverage;
 }

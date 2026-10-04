@@ -9,4 +9,7 @@ struct GLQuad {
   var size: (Float, Float) = (0, 0)
   var radii: (Float, Float, Float, Float) = (0, 0, 0, 0)
   var shape: (Float, Float, Float, Float) = (0, 0, 0, 0)
+  var topRight: (Float, Float, Float, Float)
+  var bottomRight: (Float, Float, Float, Float)
+  var bottomLeft: (Float, Float, Float, Float)
 }

@@ -2,9 +2,9 @@ import Chroma
 
 public struct HeadlessFrame: Equatable, Sendable {
   public let viewport: Size
-  public let commands: [DrawCommand]
+  public let commands: [DrawEntry]
 
-  public init(viewport: Size, commands: [DrawCommand]) {
+  public init(viewport: Size, commands: [DrawEntry]) {
     self.viewport = viewport
     self.commands = commands
   }

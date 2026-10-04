@@ -36,7 +36,7 @@ struct StackEvaluationTests {
     }
     #expect(counter.bodies == 4)
     #expect(
-      list.commands.contains {
+      list.paintSnapshot.contains {
         if case .text(_, "before", _, _) = $0 { return true }
         return false
       })
@@ -66,7 +66,7 @@ struct StackEvaluationTests {
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
     #expect(
-      list.commands.contains {
+      list.paintSnapshot.contains {
         if case .text(_, "before", _, _) = $0 { return true }
         return false
       })
@@ -221,7 +221,7 @@ struct StackEvaluationTests {
       resolved.paint(into: &list, in: rect)
       #expect(PipelineMetrics.snapshot.liveResolvedNodes == registered)
       #expect(
-        list.commands.contains {
+        list.paintSnapshot.contains {
           if case .text(_, "leaf", _, _) = $0 { return true }
           return false
         })
@@ -245,7 +245,7 @@ struct StackEvaluationTests {
       producer.render(
         content: block, viewport: Size(width: 200, height: 100), input: input,
         context: context, onChange: {}
-      ).commands.compactMap {
+      ).paintSnapshot.compactMap {
         if case .text(_, let text, _, _) = $0 { return text }
         return nil
       }
@@ -289,10 +289,10 @@ struct StackEvaluationTests {
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
     #expect(
-      second.commands.contains {
+      second.paintSnapshot.contains {
         if case .text(_, let text, _, _) = $0 { return text == "after" }
         return false
       })
-    #expect(first.commands != second.commands)
+    #expect(first.paintSnapshot != second.paintSnapshot)
   }
 }

@@ -28,7 +28,7 @@ struct FrameUpdateTests {
       input: InputState(commands: [.navigation(.down), .navigation(.down), .action(.activate)]))
     #expect(model.actions == 1)
     #expect(
-      frame.commands.contains { command in
+      frame.paintSnapshot.contains { command in
         if case .text(_, let text, _, _) = command { return text == "after" }
         return false
       })
@@ -51,7 +51,7 @@ struct FrameUpdateTests {
     let frame = renderer.render(input: InputState(textEvents: [.insert("!")]))
     #expect(model.text == "before!")
     #expect(
-      frame.commands.contains { command in
+      frame.paintSnapshot.contains { command in
         if case .text(_, let text, _, _) = command { return text == "before!" }
         return false
       })

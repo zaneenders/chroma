@@ -61,13 +61,13 @@ public struct HeadlessResponse: Codable, Sendable {
   public let id: String?
   public let status: HeadlessStatus
   public let viewport: Size?
-  public let commands: [DrawCommand]?
+  public let commands: [DrawEntry]?
   public let focus: HeadlessFocus?
   public let error: HeadlessError?
 
   public init(
     version: Int = 1, id: String? = nil, status: HeadlessStatus,
-    viewport: Size? = nil, commands: [DrawCommand]? = nil,
+    viewport: Size? = nil, commands: [DrawEntry]? = nil,
     focus: HeadlessFocus? = nil, error: HeadlessError? = nil
   ) {
     self.version = version

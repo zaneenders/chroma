@@ -45,11 +45,9 @@ struct MetalUploadTests {
   }
 
   @Test func instanceLayoutsMatchMetalShaders() {
-    #expect(MemoryLayout<TextInstance>.size == 48)
-    #expect(MemoryLayout<TextInstance>.stride == 48)
-    #expect(MemoryLayout<ShapeInstance>.stride == 96)
+    #expect(MemoryLayout<ShapeInstance>.stride == 144)
     #expect(MemoryLayout<ShapeInstance>.offset(of: \.radii) == 32)
-    #expect(MemoryLayout<ShapeInstance>.offset(of: \.color) == 48)
-    #expect(MemoryLayout<ShapeInstance>.offset(of: \.borderWidth) == 64)
+    #expect(MemoryLayout<ShapeInstance>.offset(of: \.topLeft) == 48)
+    #expect(MemoryLayout<ShapeInstance>.offset(of: \.parameters) == 128)
   }
 }

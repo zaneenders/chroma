@@ -119,8 +119,11 @@ final class OpenGLRenderer {
       MemoryLayout<GLQuad>.offset(of: \.uv0)!, MemoryLayout<GLQuad>.offset(of: \.uv1)!,
       MemoryLayout<GLQuad>.offset(of: \.color)!, MemoryLayout<GLQuad>.offset(of: \.size)!,
       MemoryLayout<GLQuad>.offset(of: \.radii)!, MemoryLayout<GLQuad>.offset(of: \.shape)!,
+      MemoryLayout<GLQuad>.offset(of: \.topRight)!,
+      MemoryLayout<GLQuad>.offset(of: \.bottomRight)!,
+      MemoryLayout<GLQuad>.offset(of: \.bottomLeft)!,
     ]
-    let sizes: [GLint] = [2, 2, 2, 2, 4, 2, 4, 4]
+    let sizes: [GLint] = [2, 2, 2, 2, 4, 2, 4, 4, 4, 4, 4]
     for index in offsets.indices {
       let attribute = GLuint(index + 1)
       glEnableVertexAttribArray(attribute)
@@ -241,35 +244,11 @@ final class OpenGLRenderer {
   func render(_ drawList: DrawList, viewport: Size, bufferScale: Int32) {
     imageFrame &+= 1
     var clips: [Rect] = []
-    for command in drawList.commands {
-      switch command {
-      case .fillRect(let rect, let color):
-        draw(rect, color: color, texture: whiteTexture)
-      case .strokeRect(let rect, let width, let color):
-        drawStroke(rect, width: width, color: color)
-      case .fillRoundedRect(let rect, let radii, let color):
-        drawShape(rect, radii: radii, color: color)
-      case .strokeRoundedRect(let rect, let radii, let width, let color):
-        drawShape(rect, radii: radii, borderWidth: width, color: color)
-      case .text(let position, let text, let color, let scale):
-        drawText(text, at: position, color: color, scale: scale)
-      case .image(let destination, let image, let scaling, let alignment):
-        guard
-          let rect = scaling.drawRect(
-            sourceSize: image.size, in: destination, alignment: alignment),
-          let texture = imageTexture(for: image)
-        else { continue }
-        let activeClip = clips.last ?? Rect(origin: .zero, size: viewport)
-        guard let clip = activeClip.intersection(destination) else { continue }
-        applyClip(clip, viewport: viewport, bufferScale: bufferScale)
-        drawImage(rect, texture: texture)
-        if let current = clips.last {
-          applyClip(current, viewport: viewport, bufferScale: bufferScale)
-        } else {
-          glDisable(GLenum(GL_SCISSOR_TEST))
-        }
+    for entry in drawList.culled(to: viewport).commands {
+      switch entry {
+      case .quad(let quad): drawQuad(quad)
       case .pushClip(let rect):
-        let clipped = clips.last.flatMap { rect.intersection($0) } ?? (clips.isEmpty ? rect : .zero)
+        let clipped = (clips.last ?? Rect(origin: .zero, size: viewport)).intersection(rect) ?? .zero
         clips.append(clipped)
         applyClip(clipped, viewport: viewport, bufferScale: bufferScale)
       case .popClip:
@@ -282,18 +261,6 @@ final class OpenGLRenderer {
       }
     }
     evictImageTexturesIfNeeded()
-  }
-
-  private func drawImage(_ rect: Rect, texture: GLuint) {
-    guard rect.size.width > 0, rect.size.height > 0 else { return }
-    var quad = GLQuad(
-      dst0: (rect.minX, rect.minY), dst1: (rect.maxX, rect.maxY),
-      uv0: (0, 0), uv1: (1, 1), color: (1, 1, 1, 1),
-      shape: (0, 0, 0, 1))
-    glBindTexture(GLenum(GL_TEXTURE_2D), texture)
-    glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    uploadQuad(&quad)
-    glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
   }
 
   private func imageTexture(for image: ImageResource) -> GLuint? {
@@ -343,92 +310,38 @@ final class OpenGLRenderer {
     }
   }
 
-  private func draw(
-    _ rect: Rect, color: Color, texture: GLuint, uv0: (Float, Float) = (0, 0), uv1: (Float, Float) = (1, 1)
-  ) {
+  private func drawQuad(_ input: DrawQuad) {
+    let rect = input.rect
     guard rect.size.width > 0, rect.size.height > 0 else { return }
+    let texture: GLuint
+    switch input.texture {
+    case .white: texture = whiteTexture
+    case .fontAtlas: texture = fontTexture
+    case .image(let image):
+      guard let imageTexture = imageTexture(for: image) else { return }
+      texture = imageTexture
+    }
+    func color(_ c: Color) -> (Float, Float, Float, Float) { (c.r, c.g, c.b, c.a) }
+    let padding = max(1, input.edgeSoftness)
+    let radii = input.radii.normalized(for: rect.size)
+    let uv = input.sourceRect
     var quad = GLQuad(
-      dst0: (rect.minX, rect.minY), dst1: (rect.maxX, rect.maxY), uv0: uv0, uv1: uv1,
-      color: (color.r, color.g, color.b, color.a))
+      dst0: (rect.minX - padding, rect.minY - padding),
+      dst1: (rect.maxX + padding, rect.maxY + padding),
+      uv0: (uv.minX, uv.minY), uv1: (uv.maxX, uv.maxY),
+      color: color(input.colors.topLeft),
+      size: (rect.size.width, rect.size.height),
+      radii: (radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft),
+      shape: (
+        max(0, input.borderThickness), padding, max(0, input.edgeSoftness),
+        input.texture == .fontAtlas ? 1 : 0
+      ),
+      topRight: color(input.colors.topRight), bottomRight: color(input.colors.bottomRight),
+      bottomLeft: color(input.colors.bottomLeft))
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
     uploadQuad(&quad)
     glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
-  }
-
-  private func drawShape(
-    _ rect: Rect,
-    radii requestedRadii: CornerRadii,
-    borderWidth: Float = 0,
-    color: Color
-  ) {
-    guard rect.size.width > 0, rect.size.height > 0 else { return }
-    let radii = requestedRadii.normalized(for: rect.size)
-    let edgePadding: Float = 1
-    let padded = Rect(
-      x: rect.minX - edgePadding,
-      y: rect.minY - edgePadding,
-      width: rect.size.width + edgePadding * 2,
-      height: rect.size.height + edgePadding * 2)
-    var quad = GLQuad(
-      dst0: (padded.minX, padded.minY),
-      dst1: (padded.maxX, padded.maxY),
-      uv0: (0, 0),
-      uv1: (1, 1),
-      color: (color.r, color.g, color.b, color.a),
-      size: (rect.size.width, rect.size.height),
-      radii: (radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft),
-      shape: (max(0, borderWidth), edgePadding, 1, 0))
-    glBindTexture(GLenum(GL_TEXTURE_2D), whiteTexture)
-    glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    uploadQuad(&quad)
-    glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
-  }
-
-  private func drawStroke(_ rect: Rect, width: Float, color: Color) {
-    let border = max(0, width)
-    guard border > 0 else { return }
-    if rect.size.width <= border * 2 || rect.size.height <= border * 2 {
-      draw(rect, color: color, texture: whiteTexture)
-      return
-    }
-    draw(Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: border), color: color, texture: whiteTexture)
-    draw(
-      Rect(x: rect.minX, y: rect.maxY - border, width: rect.size.width, height: border), color: color,
-      texture: whiteTexture)
-    draw(
-      Rect(x: rect.minX, y: rect.minY + border, width: border, height: rect.size.height - border * 2), color: color,
-      texture: whiteTexture)
-    draw(
-      Rect(x: rect.maxX - border, y: rect.minY + border, width: border, height: rect.size.height - border * 2),
-      color: color, texture: whiteTexture)
-  }
-
-  private func drawText(
-    _ text: String,
-    at position: Point,
-    color: Color,
-    scale: Float
-  ) {
-    let metrics = FontMetrics()
-    guard let fontAtlas else { return }
-    var x = position.x
-    for character in text {
-      let uv = fontAtlas.glyphUV(character)
-      draw(
-        Rect(
-          x: x,
-          y: position.y,
-          width: metrics.glyphWidth * scale,
-          height: metrics.glyphHeight * scale
-        ),
-        color: color,
-        texture: fontTexture,
-        uv0: (uv.0, uv.1),
-        uv1: (uv.2, uv.3)
-      )
-      x += metrics.cellAdvance * scale
-    }
   }
 
   private func applyClip(_ rect: Rect, viewport: Size, bufferScale: Int32) {

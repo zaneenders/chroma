@@ -56,7 +56,7 @@ struct RenderingCommandTests {
       context: BlockContext())
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .fillRect(rect: rect, color: background),
         .text(position: rect.origin, text: "content", color: .white, scale: 1),
         .strokeRect(rect: rect, width: 2, color: border),
@@ -74,8 +74,8 @@ struct RenderingCommandTests {
     let innerBackground = render(
       CommandProbe(name: "content").background(color).padding(5), in: rect, context: context)
 
-    #expect(outerBackground.commands.first == .fillRect(rect: rect, color: color))
-    #expect(innerBackground.commands.first == .fillRect(rect: inset, color: color))
+    #expect(outerBackground.paintSnapshot.first == .fillRect(rect: rect, color: color))
+    #expect(innerBackground.paintSnapshot.first == .fillRect(rect: inset, color: color))
   }
 
   @Test func nestedClipsAreBalancedAndPreserveTheirOwnGeometry() {
@@ -88,7 +88,7 @@ struct RenderingCommandTests {
       context: BlockContext())
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .pushClip(rect),
         .pushClip(inner),
         .text(position: inner.origin, text: "clipped", color: .white, scale: 1),
@@ -126,7 +126,7 @@ struct RenderingCommandTests {
       input: InputState(pointerPosition: drag, pointerDown: true))
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
         .text(position: Point(x: 10, y: 5), text: "ABCD", color: textColor, scale: 1),
         .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
@@ -167,7 +167,7 @@ struct RenderingCommandTests {
       input: InputState(pointerPosition: drag, pointerDown: true))
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
         .text(position: Point(x: 4, y: 5), text: "ABC", color: .white, scale: 1),
         .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
@@ -193,7 +193,7 @@ struct RenderingCommandTests {
       context: BlockContext())
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .fillRect(rect: rect, color: first),
         .fillRect(rect: rect, color: second),
         .fillRect(rect: rect, color: third),
@@ -205,14 +205,14 @@ struct RenderingCommandTests {
     let negative = Rect(x: 5, y: 7, width: -20, height: -10)
     let fill = Color(r: 0.2, g: 0.3, b: 0.4, a: 1)
 
-    #expect(render(EmptyBlock(), in: .zero, context: context).commands.isEmpty)
+    #expect(render(EmptyBlock(), in: .zero, context: context).paintSnapshot.isEmpty)
 
     let list = render(
       EmptyBlock().background(fill).border(.yellow, width: 3),
       in: negative,
       context: context)
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .fillRect(rect: negative, color: fill),
         .strokeRect(rect: negative, width: 3, color: .yellow),
       ])
@@ -230,7 +230,7 @@ struct RenderingCommandTests {
     let list = render(block, in: rect, context: BlockContext())
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .pushClip(rect),
         .fillRect(rect: rect, color: background),
         .text(position: Point(x: 32, y: 32), text: "deep", color: .white, scale: 1),
@@ -251,7 +251,7 @@ struct RenderingCommandTests {
       context: BlockContext())
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .fillRoundedRect(rect: rect, radii: radii, color: .black),
         .text(position: rect.origin, text: "rounded", color: .white, scale: 1),
         .strokeRoundedRect(rect: rect, radii: radii, width: 2, color: .yellow),
@@ -265,7 +265,7 @@ struct RenderingCommandTests {
       content.border(.yellow, width: 2), in: rect, context: BlockContext())
     let rounded = render(
       content.roundedBorder(.yellow, radius: 0, width: 2), in: rect, context: BlockContext())
-    #expect(rounded.commands == square.commands)
+    #expect(rounded.paintSnapshot == square.paintSnapshot)
   }
 
   @Test(arguments: [CornerRadii.zero, CornerRadii(4)])
@@ -305,7 +305,7 @@ struct RenderingCommandTests {
       context: BlockContext())
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .fillRoundedRect(
           rect: rect, radii: CornerRadii(theme.button.cornerRadius),
           color: theme.button.idleBackground),

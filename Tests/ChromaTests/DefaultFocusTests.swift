@@ -8,7 +8,7 @@ struct DefaultFocusTests {
   private let parked = InputState(pointerPosition: Point(x: 500, y: 500))
   private let context = BlockContext()
 
-  private func focusBorder(_ rect: Rect) -> DrawCommand {
+  private func focusBorder(_ rect: Rect) -> PaintSnapshotEntry {
     .strokeRect(rect: rect, width: 2, color: context.theme.focus.ring)
   }
 
@@ -41,8 +41,8 @@ struct DefaultFocusTests {
     return rects
   }
 
-  private func highlightCommands(in list: DrawList, for highlighted: Rect) -> [DrawCommand] {
-    list.commands.filter { command in
+  private func highlightCommands(in list: DrawList, for highlighted: Rect) -> [PaintSnapshotEntry] {
+    list.paintSnapshot.filter { command in
       if case .fillRect(let rect, let color) = command, rect == highlighted, color.a < 1 { return true }
       return false
     }
@@ -78,7 +78,7 @@ struct DefaultFocusTests {
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     let keyboard = render(content, input: parked)
     let focused = highlightCommands(in: keyboard, for: target)
-    #expect(keyboard.commands.contains(focusBorder(target)))
+    #expect(keyboard.paintSnapshot.contains(focusBorder(target)))
     #expect(focused.isEmpty)
 
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.up)]))
@@ -86,8 +86,8 @@ struct DefaultFocusTests {
       content,
       input: InputState(pointerPosition: Point(x: target.minX + 1, y: target.minY + 1)))
     #expect(context.interaction.hoveredLeafID != nil)
-    #expect(hovered.commands.contains(.fillRect(rect: target, color: standardHighlight)))
-    #expect(!hovered.commands.contains(focusBorder(target)))
+    #expect(hovered.paintSnapshot.contains(.fillRect(rect: target, color: standardHighlight)))
+    #expect(!hovered.paintSnapshot.contains(focusBorder(target)))
   }
 
   @Test func pressingUsesThePressedTint() {
@@ -105,7 +105,7 @@ struct DefaultFocusTests {
         pointerPosition: Point(x: target.minX + 1, y: target.minY + 1),
         pointerDown: true, pointerPressed: true))
     let pressed = HoverStyle.standardTint(in: context.theme, pressed: true)
-    #expect(list.commands.contains(.fillRect(rect: target, color: pressed)))
+    #expect(list.paintSnapshot.contains(.fillRect(rect: target, color: pressed)))
   }
 
   @Test func hoverStyleOverridesTheHighlight() {
@@ -119,8 +119,8 @@ struct DefaultFocusTests {
     let target = leafRects().last!
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     let list = render(content, input: parked)
-    #expect(list.commands.contains(.fillRect(rect: target, color: tint)))
-    #expect(!list.commands.contains(.fillRect(rect: target, color: standardHighlight)))
+    #expect(list.paintSnapshot.contains(.fillRect(rect: target, color: tint)))
+    #expect(!list.paintSnapshot.contains(.fillRect(rect: target, color: standardHighlight)))
   }
 
   @Test func navigationIgnoredRemovesDefaultFocusability() {
@@ -165,7 +165,7 @@ struct DefaultFocusTests {
 
     render(content, input: InputState(pointerPosition: Point(x: 500, y: 500), commands: [.navigation(.down)]))
     let list = render(content, input: parked)
-    #expect(list.commands.contains(focusBorder(leafRects()[1])))
+    #expect(list.paintSnapshot.contains(focusBorder(leafRects()[1])))
   }
 
   @Test func backgroundsStayDecorative() {
@@ -211,17 +211,17 @@ struct DefaultFocusTests {
     #expect(rects == [Rect(x: 0, y: 0, width: 50, height: 40), Rect(x: 50, y: 0, width: 50, height: 40)])
 
     let focused = render(content, input: parked)
-    #expect(focused.commands.contains(focusBorder(rects[0])))
-    #expect(!focused.commands.contains(.fillRect(rect: rects[0], color: standardHighlight)))
+    #expect(focused.paintSnapshot.contains(focusBorder(rects[0])))
+    #expect(!focused.paintSnapshot.contains(.fillRect(rect: rects[0], color: standardHighlight)))
 
     let hovered = render(content, input: InputState(pointerPosition: Point(x: 60, y: 10)))
-    #expect(hovered.commands.contains(.fillRect(rect: rects[1], color: standardHighlight)))
+    #expect(hovered.paintSnapshot.contains(.fillRect(rect: rects[1], color: standardHighlight)))
 
     let list = render(
       content,
       input: InputState(pointerPosition: Point(x: 60, y: 10), pointerDown: true, pointerPressed: true))
     let pressed = HoverStyle.standardTint(in: context.theme, pressed: true)
-    #expect(list.commands.contains(.fillRect(rect: rects[1], color: pressed)))
+    #expect(list.paintSnapshot.contains(.fillRect(rect: rects[1], color: pressed)))
   }
 
   @Test func focusableCellsHonorHoverOverrides() {
@@ -236,8 +236,8 @@ struct DefaultFocusTests {
     context.interaction.focusFirstControlForTest()
     let list = render(tinted, input: parked)
     let first = leafRects()[0]
-    #expect(list.commands.contains(.fillRect(rect: first, color: tint)))
-    #expect(!list.commands.contains(.fillRect(rect: first, color: standardHighlight)))
+    #expect(list.paintSnapshot.contains(.fillRect(rect: first, color: tint)))
+    #expect(!list.paintSnapshot.contains(.fillRect(rect: first, color: standardHighlight)))
   }
 
   @Test func focusableCellsActivateTheirAction() {

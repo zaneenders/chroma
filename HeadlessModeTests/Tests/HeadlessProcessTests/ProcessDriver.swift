@@ -1,3 +1,5 @@
+import Chroma
+import ChromaFont
 import ChromaHeadless
 import Foundation
 import Subprocess
@@ -18,12 +20,38 @@ extension HeadlessRequest {
 }
 
 extension HeadlessResponse {
-  var texts: [String] {
-    (commands ?? []).compactMap { command in
-      guard case .text(_, let text, _, _) = command else { return nil }
-      return text
+  var textRuns: [(position: Chroma.Point, text: String)] {
+    let atlas = HighResolutionFontAtlas()
+    var result: [(position: Chroma.Point, text: String)] = []
+    var lastQuad: Chroma.DrawQuad?
+    for entry in commands ?? [] {
+      guard case .quad(let quad) = entry, quad.texture == .fontAtlas else {
+        lastQuad = nil
+        continue
+      }
+      var character = "�"
+      for scalar in atlas.characterIndices.keys {
+        let candidate = Character(String(UnicodeScalar(scalar)!))
+        let (x, y, _, _) = atlas.glyphUV(candidate)
+        if x == quad.sourceRect.minX && y == quad.sourceRect.minY {
+          character = String(candidate)
+          break
+        }
+      }
+      if let previous = lastQuad, previous.colors == quad.colors,
+        previous.rect.minY == quad.rect.minY,
+        abs(previous.rect.minX + previous.rect.size.width * 0.6 - quad.rect.minX) < 0.001
+      {
+        result[result.count - 1].text += character
+      } else {
+        result.append((quad.rect.origin, character))
+      }
+      lastQuad = quad
     }
+    return result
   }
+
+  var texts: [String] { textRuns.map(\.text) }
 
   func requireFrame(id expectedID: UUID) throws {
     try requireFrame(id: expectedID.uuidString)

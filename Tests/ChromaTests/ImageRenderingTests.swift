@@ -165,7 +165,7 @@ struct ImageRenderingTests {
       }
 
       #expect(
-        list.commands == [
+        list.paintSnapshot == [
           .image(rect: frame, image: resource, scaling: scaling, alignment: .center)
         ])
     }
@@ -192,7 +192,7 @@ struct ImageRenderingTests {
     #expect(interaction.scrollState(for: WidgetID("image-scroll")).limit.y == 20)
     #expect(interaction.scrollState(for: WidgetID("image-scroll")).limit.x == 0)
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .pushClip(viewport),
         .image(
           rect: Rect(x: 0, y: 0, width: 80, height: 40), image: resource,
@@ -212,7 +212,7 @@ struct ImageRenderingTests {
 
     #expect(first == second)
     #expect(
-      first.commands == [
+      first.paintSnapshot == [
         .image(
           rect: Rect(x: 0, y: 0, width: 120, height: 80),
           image: image,
@@ -233,7 +233,7 @@ struct ImageRenderingTests {
     list.image(image, in: Rect(x: 1, y: 2, width: 3, height: 4))
 
     #expect(
-      list.commands == [
+      list.paintSnapshot == [
         .image(
           rect: Rect(x: 1, y: 2, width: 3, height: 4),
           image: image,

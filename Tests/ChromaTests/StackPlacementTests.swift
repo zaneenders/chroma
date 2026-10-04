@@ -30,7 +30,7 @@ struct StackPlacementTests {
     resolved.register(in: Rect(x: 10, y: 20, width: 100, height: 60))
     resolved.paint(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
     context.interaction.endFrame()
-    let rects = list.commands.compactMap { command -> Rect? in
+    let rects = list.paintSnapshot.compactMap { command -> Rect? in
       if case .fillRect(let rect, _) = command { return rect }
       return nil
     }
@@ -67,7 +67,7 @@ struct StackPlacementTests {
       resolved.paint(into: &drawList, in: rect)
     }
     context.interaction.endFrame()
-    let rectangles = drawList.commands.compactMap { command -> Rect? in
+    let rectangles = drawList.paintSnapshot.compactMap { command -> Rect? in
       if case .fillRect(let rect, _) = command { return rect }
       return nil
     }
