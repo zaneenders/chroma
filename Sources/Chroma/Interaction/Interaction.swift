@@ -11,6 +11,10 @@ package final class Interaction {
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
 
+  var documentMovementHandled = false
+  var documentAnchor: TextEndpoint?
+  var documentEnd: TextEndpoint?
+
   package let textSelection = TextSelectionManager()
 
   package var fontMetrics = FontMetrics()
@@ -99,6 +103,7 @@ package final class Interaction {
   }
 
   package func copyText() -> String? {
+    if let text = documentCopyText() { return text }
     if let text = editableSelectionText() { return text }
     if let text = (registrations.copyProvider ?? onCopy)?(), !text.isEmpty { return text }
     return textSelection.selectedText()
@@ -106,10 +111,13 @@ package final class Interaction {
 
   package func selectAll(at point: Point) {
     if editingLeaf != nil, let editingText {
+      documentAnchor = nil
+      documentEnd = nil
       caretOffset = editingText.count
       textSelectionRange = editingText.isEmpty ? nil : 0..<editingText.count
       return
     }
+    if selectTextScope() { return }
     if (registrations.selectAll ?? onSelectAll)?() == true { return }
     textSelection.selectAll(at: point)
   }
@@ -268,6 +276,7 @@ package final class Interaction {
     var keyBindingScopes: [ScopedKeyBindings] = []
     var actionRoles: [ScopedActionRole] = []
     var inputObservers: [@MainActor (InputState) -> Void] = []
+    var readOnlyTexts: [WidgetID: @MainActor () -> String] = [:]
     var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
     var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
     var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
@@ -290,6 +299,8 @@ package final class Interaction {
     onCopy = nil
     onSelectAll = nil
     textSelection.clear()
+    documentAnchor = nil
+    documentEnd = nil
     textSelection.layoutRegistry.clear()
     pendingFocus = nil
     scrollStates = [:]
@@ -326,6 +337,8 @@ package final class Interaction {
   }
 
   func endEditing() {
+    documentAnchor = nil
+    documentEnd = nil
     if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
     editingReadOnly = false
@@ -389,6 +402,8 @@ package final class Interaction {
       textDragAnchor = nil
       textDragViewportRow = nil
       textSelection.clear()
+      documentAnchor = nil
+      documentEnd = nil
     } else if input.pointerReleased {
       dragCurrent = input.pointerPosition
     } else if isDragging {
@@ -402,6 +417,7 @@ package final class Interaction {
         endEditing()
       }
       lastPointerPosition = input.pointerPosition
+      documentMovementHandled = false
       for handler in registrations.inputHandlers.values { handler() }
       if activatePending, let id = selectedLeafID {
         activatePending = false
@@ -451,6 +467,12 @@ package final class Interaction {
     scrollStates = scrollStates.filter { building.inputHandlers[$0.key] != nil }
     textSelection.reconcile()
     tree = newTree
+    if let anchor = documentAnchor, let end = documentEnd,
+      building.readOnlyTexts[anchor.id] == nil || building.readOnlyTexts[end.id] == nil
+    {
+      documentAnchor = nil
+      documentEnd = nil
+    }
     reconcileNavigation(in: newTree)
     reconcileLogicalSelection(in: newTree)
     resolveFocusTargets()

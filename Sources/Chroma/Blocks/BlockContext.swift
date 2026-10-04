@@ -157,7 +157,7 @@ public struct BlockContext {
       hovered: state.hovered, focused: state.focused, held: state.held,
       editing: hasCaret && interaction.isTextEditing,
       caretOffset: hasCaret ? interaction.caretOffset : nil,
-      selectionRange: hasCaret ? interaction.textSelectionRange : nil)
+      selectionRange: interaction.documentRange(for: id) ?? (hasCaret ? interaction.textSelectionRange : nil))
   }
 
   /// Paints the current focus/hover indication without registering a focus leaf.

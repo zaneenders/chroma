@@ -190,3 +190,25 @@ struct MarkdownSelectionTests {
     #expect(layout.position(at: 8).row == 3)
   }
 }
+
+@MainActor
+struct MarkdownDocumentSelectionTests {
+  @Test func parentScopeCopiesMarkdownAndPlainTextInTreeOrder() {
+    let context = BlockContext()
+    let producer = FrameProducer()
+    let content = Group("Session") {
+      Text("Header").selectable()
+      MarkdownText("**café**\n\n`code`")
+      Text("Footer").selectable()
+    }
+    _ = producer.render(
+      content: content, viewport: Size(width: 500, height: 500),
+      input: InputState(), context: context, onChange: {})
+    context.interaction.navigationPath = []
+    context.interaction.selectAll(at: .zero)
+    #expect(context.interaction.copyText() == "Header\ncafé\ncode\nFooter")
+    let entries = context.interaction.textLeafIDs(in: context.interaction.tree)
+    #expect(entries.count == 4)
+    #expect(entries.allSatisfy { context.interaction.documentRange(for: $0)?.isEmpty == false })
+  }
+}

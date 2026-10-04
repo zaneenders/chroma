@@ -105,6 +105,7 @@ public struct Text: LayoutPreparingBlock {
       range = state.selectionRange
       caret = state.caretOffset
     }
+    if let document = context.interaction.documentRange(for: id) { range = document }
     if range == nil, let selection = context.interaction.textSelection.selection(for: id) {
       range = selection.from..<selection.to
     }
