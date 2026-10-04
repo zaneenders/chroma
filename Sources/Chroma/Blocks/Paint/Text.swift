@@ -87,7 +87,7 @@ public struct Text: LayoutPreparingBlock {
     let id = selectionID ?? context.widgetID
     let interaction = context.interaction
     interaction.textSelection.layoutRegistry.register(id, layout: layout)
-    if !context.focusLeafClaimed, !context.navigationIgnored {
+    if !context.navigationIgnored {
       interaction.registerFocusTargets(context.focusTargets, id: id)
       _ = interaction.registerTextInput(
         id: id, rect: layout.rect, text: { content }, onChange: { _ in },
@@ -100,11 +100,12 @@ public struct Text: LayoutPreparingBlock {
     let id = selectionID ?? context.widgetID
     var range: Range<Int>?
     var caret: Int?
-    if !context.focusLeafClaimed, !context.navigationIgnored {
+    if !context.navigationIgnored {
       let state = context.textInputVisualState(id: id)
       range = state.selectionRange
       caret = state.caretOffset
     }
+    if let document = context.interaction.documentRange(for: id) { range = document }
     if range == nil, let selection = context.interaction.textSelection.selection(for: id) {
       range = selection.from..<selection.to
     }

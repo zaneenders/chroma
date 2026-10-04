@@ -105,6 +105,8 @@ extension Interaction {
           continue
         }
         if let (unit, direction, extend) = event.movement {
+          if readOnly, documentMovementHandled { continue }
+          let previousCaret = caretOffset
           let anchor =
             textSelectionRange.map {
               caretOffset == $0.lowerBound ? $0.upperBound : $0.lowerBound
@@ -117,6 +119,18 @@ extension Interaction {
             caretOffset = TextEditingOperation.boundary(
               in: characters, from: caretOffset, unit: unit, direction: direction,
               verticalOffset: verticalOffset)
+          }
+          if readOnly, extend {
+            let next = caretOffset
+            // Boundary crossing compares against the position before this movement.
+            caretOffset = previousCaret
+            _ = extendDocumentSelection(
+              from: id, anchor: anchor, next: next,
+              direction: direction == .backward ? -1 : 1)
+            if editingLeaf == id { caretOffset = next }
+          } else {
+            documentAnchor = nil
+            documentEnd = nil
           }
           textSelectionRange =
             extend && anchor != caretOffset
@@ -147,6 +161,8 @@ extension Interaction {
           textSelectionRange = nil
           if !range.isEmpty || !graft.isEmpty { changed = true }
         case .selectAll:
+          documentAnchor = nil
+          documentEnd = nil
           textSelectionRange = characters.isEmpty ? nil : 0..<characters.count
           caretOffset = characters.count
         case .submit:
@@ -169,6 +185,7 @@ extension Interaction {
           break
         }
       }
+      if readOnly, !(movementTextEvents + input.textEvents).isEmpty { documentMovementHandled = true }
       if changed {
         let updated = String(characters)
         editingText = updated
@@ -202,6 +219,7 @@ extension Interaction {
       FocusNode(
         kind: .leaf(id), rect: rect, hitRect: clippedRect(rect),
         canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
+    if readOnly { building.readOnlyTexts[id] = text }
     building.inputHandlers[id] = { [weak self] in
       guard let self else { return }
       _ = self.updateTextInput(
