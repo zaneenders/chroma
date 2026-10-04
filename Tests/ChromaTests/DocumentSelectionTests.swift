@@ -61,3 +61,34 @@ struct DocumentSelectionTests {
     #expect(context.interaction.copyText() == "one\ntwo\noutside")
   }
 }
+
+@MainActor
+struct VirtualizedTextSelectionTests {
+  @Test func selectableTextInsideRowsRegistersForDocumentSelectionAndFocus() {
+    let context = BlockContext()
+    let producer = FrameProducer()
+    let target = FocusTarget()
+    let content = ScrollView(
+      controller: ScrollViewController(),
+      rows: [
+        .init(
+          id: "tool",
+          content: VStack {
+            Text("read_file").selectable().focusTarget(target)
+            Text("arguments\noutput").selectable()
+          }),
+        .init(id: "answer", content: Text("Answer").selectable()),
+      ])
+    _ = producer.render(
+      content: content, viewport: Size(width: 500, height: 500),
+      input: InputState(), context: context, onChange: {})
+    target.focus()
+    _ = producer.render(
+      content: content, viewport: Size(width: 500, height: 500),
+      input: InputState(), context: context, onChange: {})
+    #expect(target.isFocused)
+    context.interaction.navigationPath = []
+    context.interaction.selectAll(at: .zero)
+    #expect(context.interaction.copyText() == "read_file\narguments\noutput\nAnswer")
+  }
+}
