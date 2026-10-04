@@ -1,7 +1,7 @@
 import Chroma
 
-/// A read-only renderer for headings, lists, quotes, rules, fenced code,
-/// inline code and bold text. Unsupported Markdown remains literal text.
+/// A read-only Markdown renderer with selectable text.
+/// Links and images render their labels; emphasis renders without italic styling.
 public struct MarkdownText: Block {
   public var markdown: String
   public let scale: Float

@@ -18,7 +18,7 @@ struct MarkdownTests {
 
   @Test func incompleteStreamingInputRemainsVisible() {
     #expect(segmentMarkdown("```swift\nunfinished") == [.code(language: "swift", code: "unfinished")])
-    #expect(inlineRuns("**unfinished `code") == [MarkdownRun(text: "**unfinished "), MarkdownRun(text: "`code")])
+    #expect(inlineRuns("**unfinished `code") == [MarkdownRun(text: "**unfinished `code")])
     #expect(
       inlineRuns("**bold** and `**literal**`") == [
         MarkdownRun(text: "bold", bold: true), MarkdownRun(text: " and "),
@@ -46,6 +46,45 @@ struct MarkdownTests {
     #expect(lines.allSatisfy { $0.kind == .code })
     #expect(lines[1].runs.map(\.text).joined().isEmpty)
     #expect(lines[2].runs.map(\.text).joined() == "**b**")
+  }
+
+  @Test func parsesCommonMarkBlocks() {
+    #expect(
+      segmentMarkdown("~~~~swift\n```literal\n~~~~") == [
+        .code(language: "swift", code: "```literal")
+      ])
+    #expect(
+      segmentMarkdown("````\na\n```\nb\n````") == [
+        .code(language: nil, code: "a\n```\nb")
+      ])
+    #expect(segmentMarkdown("    **literal**") == [.code(language: nil, code: "**literal**")])
+    #expect(
+      segmentMarkdown("Title\n=====\n\n3. first\n   continuation\n   - nested\n4. second") == [
+        .heading(level: 1, text: "Title"),
+        .listItem(marker: "3.", text: "first\ncontinuation", depth: 0),
+        .listItem(marker: "•", text: "nested", depth: 1),
+        .listItem(marker: "4.", text: "second", depth: 0),
+      ])
+    let lines = layoutMarkdown(
+      segmentMarkdown("> first\n> second\n>\n> third"),
+      columns: 80, theme: .dark, baseColor: .white)
+    #expect(lines.map { $0.runs.map(\.text).joined() }.joined(separator: "\n") == "| first\nsecond\n\nthird")
+  }
+
+  @Test func parsesEscapesEntitiesAndNestedFormatting() {
+    #expect(
+      inlineRuns(#"\*\*literal\*\* &amp; **bold *nested* `code`**"#) == [
+        MarkdownRun(text: "**literal** & "),
+        MarkdownRun(text: "bold nested ", bold: true),
+        MarkdownRun(text: "code", code: true, bold: true),
+      ])
+    #expect(inlineRuns("``a ` b``") == [MarkdownRun(text: "a ` b", code: true)])
+    #expect(inlineRuns("[label](https://example.com) ![alt](image.png)") == [MarkdownRun(text: "label alt")])
+    #expect(inlineRuns("# literal") == [MarkdownRun(text: "# literal")])
+    let lines = layoutMarkdown(
+      segmentMarkdown(#"# **Title** &amp; \*literal\*"#),
+      columns: 80, theme: .dark, baseColor: .white)
+    #expect(lines.flatMap(\.runs).map(\.text).joined() == "# Title & *literal*")
   }
 
   @Test @MainActor func measurementUsesWidthAndContextScale() {

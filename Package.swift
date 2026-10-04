@@ -13,7 +13,10 @@ var products: [Product] = [
 var appDependencies: [Target.Dependency] = ["Chroma", "ChromaHeadless"]
 
 var targets: [Target] = [
-  .target(name: "ChromaMarkdown", dependencies: ["Chroma"], swiftSettings: [.strictMemorySafety()]),
+  .target(
+    name: "ChromaMarkdown",
+    dependencies: ["Chroma", .product(name: "Markdown", package: "swift-markdown")],
+    swiftSettings: [.strictMemorySafety()]),
   .testTarget(name: "ChromaMarkdownTests", dependencies: ["ChromaMarkdown", "ChromaTesting"]),
   .testTarget(
     name: "ChromaTests",
@@ -143,9 +146,10 @@ let package = Package(
   platforms: [.macOS(.v27)],
   products: products,
   dependencies: [
+    .package(url: "https://github.com/swiftlang/swift-markdown.git", exact: "0.9.0"),
     .package(
       url: "https://github.com/apple/swift-collections.git", exact: "1.7.1",
-      traits: ["UnstableContainersPreview"])
+      traits: ["UnstableContainersPreview"]),
   ],
   targets: targets
 )
