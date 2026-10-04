@@ -3,6 +3,7 @@ import PackageDescription
 
 var products: [Product] = [
   .library(name: "Chroma", targets: ["Chroma"]),
+  .library(name: "ChromaMarkdown", targets: ["ChromaMarkdown"]),
   .library(name: "ChromaApp", targets: ["ChromaApp"]),
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
   .library(name: "ChromaTesting", targets: ["ChromaTesting"]),
@@ -12,6 +13,8 @@ var products: [Product] = [
 var appDependencies: [Target.Dependency] = ["Chroma", "ChromaHeadless"]
 
 var targets: [Target] = [
+  .target(name: "ChromaMarkdown", dependencies: ["Chroma"], swiftSettings: [.strictMemorySafety()]),
+  .testTarget(name: "ChromaMarkdownTests", dependencies: ["ChromaMarkdown", "ChromaTesting"]),
   .testTarget(
     name: "ChromaTests",
     dependencies: ["Chroma", "ChromaFont", "ChromaTesting"]
