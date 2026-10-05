@@ -120,7 +120,7 @@ range. Reversing or shrinking moves active; it never replaces anchor.
 ## First change and regression coverage
 
 Start with read-only text/Markdown, reuse layout/controller, then delete redundant
-selection paths. Keep the scroll fix in [#85](https://github.com/zaneenders/chroma/pull/85) separate.
+selection paths. Keep the scroll fix in [#85](https://github.com/zaneenders/chroma/issues/85) separate.
 
 Minimum implementation regressions:
 - Backward select -> anchor offscreen -> reverse/shrink.
