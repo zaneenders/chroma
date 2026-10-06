@@ -1,8 +1,18 @@
-# Prepared tree walkers and document selection
+# Document selection implementation
 
-Implemented baseline. The sketches below describe ownership; concrete APIs and
-regression coverage are listed at the end. Parallel passes and tree rewriting
-remain optional extensions, not runtime requirements.
+Implemented from `walker-selection-proposal.md` at `e0da048`. While this work was
+in progress, `dcdd832` replaced that proposal with [runtime architecture](runtime-architecture.md).
+That broader redesign is **not complete**. This document records the implemented
+baseline; it does not supersede the new proposal.
+
+Still required by the new proposal: window-owned `UIState`, phase-specific
+capabilities, one primitive contract, a frozen node graph with separate serial
+input/text/paint passes, one document/editor/custom selection owner, and
+revision-keyed collection identity indexes. Variable-height rows here measure all
+rows fresh; required-row-only expansion also remains part of that redesign.
+
+The sketches below describe the original ownership model; concrete APIs and
+regression coverage are listed at the end.
 
 ## Update data
 
