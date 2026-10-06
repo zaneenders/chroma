@@ -1,85 +1,96 @@
 # Prepared tree walkers and document selection
 
-Design sketch for discussion. Types below are pseudocode; omitted IDs, content
+Design sketch for discussion. Types are pseudocode; omitted IDs, content
 variants, geometry, and method bodies are deliberately unspecified.
 
 ## Update data
 
 ```swift
-struct PreparedTree {
-  let generation: Generation
-  let root: Node
-}
-
+struct PreparedTree { let generation: Generation; let root: Node }
 struct Node {
   let id: BlockID                 // stable semantic identity
   let content: Content
   let children: [Node]
 }
-
 @MainActor struct Actions {
   let generation: Generation
   let handlers: [ActionID: @MainActor () -> Void]
 }
 ```
 
-Prepare an ephemeral tree and fresh actions for each update. Content refers to
-actions by ID; callbacks stay on the main actor.
+Fresh resolve/parse creates a tree and actions for each relevant operation.
+Content refers to actions by ID; callbacks stay on the main actor. Share the
+tree only within that update, then discard it. No prepared graph caching across
+updates, dirty-node tracking, or cache-validity engine.
 
 ```text
-app state --prepare--> PreparedTree + Actions
-                            |
-                   measure / place
-                            |
-                         Geometry
-                         /      \
-                    InputMap   PaintList
+model --resolve/parse--> PreparedTree + Actions
+                              |
+                     measure / place
+                              |
+                           Geometry
+                           /      \
+                      InputMap   PaintList
 ```
 
 Layout remains dependency-aware measure/place: parent proposals and child sizes
-determine placement. A generic preorder walk does not replace that algorithm.
-Reuse the existing layout and controller.
+determine placement. A generic preorder walk does not replace it. Reuse the
+existing layout and controller; run only the passes needed by the operation.
 
 ## Small read-only walkers
 
 ```swift
 func walk<Output>(
-  _ node: Node,
-  into output: inout Output,
+  _ node: Node, into output: inout Output,
   visit: (Node, inout Output) -> Void
 ) {
   visit(node, &output)
-  for child in node.children {
-    walk(child, into: &output, visit: visit)
-  }
+  for child in node.children { walk(child, into: &output, visit: visit) }
 }
 
-// Optional rewriting is a separate operation, returning a copied tree.
+// Optional rewrite returns a copied tree.
 func transform(_ tree: PreparedTree, using rewrite: (Node) -> Node) -> PreparedTree
 ```
 
-Each pass owns its output; the input tree stays unchanged. Use concrete passes
-for input, paint, and diagnostics. No generic scheduler.
+Most walkers read unchanged input and accumulate their own output. Start with
+serial concrete passes, no generic scheduler. Independent pure passes may later
+parallelize with immutable Sendable inputs and isolated Sendable outputs.
+Prepared data is not automatically Sendable; generic Content is not assumed
+serializable. UI callbacks stay on the main actor. If asynchronous outputs are
+used, apply in order for the matching generation and reject stale results.
+Generation identifies an operation; it is not a cache-validity mechanism.
 
-Independent read-only passes may run in parallel only when their complete inputs
-and outputs are immutable, Sendable values. Prepared data is not automatically
-Sendable; generic Content is not assumed serializable. Keep actor-bound resources
-and callbacks on the main actor. Apply results in order, for the matching
-generation; discard stale results.
-
-## Lifetime and input order
+## One UI owner, separate update and draw
 
 ```text
-event N -> state change -> fresh tree / actions / input geometry -> event N+1
-                                |
-                       presentation may coalesce
+asynchronous input -> ordered main-actor queue
+  event N -> fresh resolve -> layout/input -> dispatch once -> mutate model
+  event N+1 -> fresh resolve -> layout/input -> dispatch once -> mutate model
+                                                    |
+                                           request presentation
+                                                    |
+  capped 30/60 Hz, when requested: fresh resolve -> layout/paint -> draw
 ```
 
-An update is not a displayed frame. Refresh input before the next event even
-when presentation is deferred. Do not replay input against a later tree.
+- One serial UI owner orders dispatch and mutations exactly once. Input-only
+  updates do no paint. Each actionable event gets fresh actions and geometry.
+- Draw resolves post-action state. Never paint a pre-action snapshot after
+  dispatch and call it current. Coalesce presentation requests, never actions.
+- Observation notifications, async results applied to the model, animation
+  ticks, first frame, and resize all request this same update/presentation path.
+- The runtime observes dependencies and rearms Observation during evaluation.
+  Notifications schedule work on the main actor after mutation completes;
+  `@Observable` alone is not a scheduler.
+- Cap presentation at the chosen 30/60 Hz rate. Idle means no work; active
+  animation ticks request frames through the same path.
+- Between operations, retain semantic state, selection, focus, scroll, and
+  installed interaction output/geometry as needed. Never retain a prepared UI
+  tree for the next operation.
 
-Discard superseded trees and action tables. Keep semantic state, focus, scroll,
-and the geometry needed while the current update remains active.
+Baseline: fresh resolve unconditionally for each input update and requested
+presentation. Frame-only parsing is a possible later alternative only with
+semantic commands that read current state; geometry-dependent consecutive
+events can still require fresh layout between dispatches.
 
 ## Selection belongs to the document
 
@@ -127,6 +138,8 @@ Minimum implementation regressions:
 - Copy with offscreen endpoints and intermediate runs.
 - Endpoint deletion and document/editor session replacement.
 - Unicode Character boundaries, resize, and rewrap.
-- Fresh ordered input when presentation coalesces; reject stale generations.
+- Fresh ordered, exactly-once input when presentation coalesces; post-action paint.
+- Observation rearming, async model changes, animation, first frame/resize, and idle.
+- No prepared-tree reuse between operations; reject stale asynchronous outputs.
 
 This PR proposes the design only. It adds no implementation or executable tests.
