@@ -35,7 +35,7 @@ struct CapturedTextInputTests {
     }
   }
 
-  @Test func capturedTextSelectionIsClampedToCurrentText() {
+  @Test func capturedTextSelectionClearsWhenTextChangesWithoutAnEditMapping() {
     let model = Model()
     let capture = Capture()
     let renderer = HeadlessHost()
@@ -45,7 +45,7 @@ struct CapturedTextInputTests {
     renderer.render(input: InputState(textEvents: [.selectAll]))
     model.text = "a"
     renderer.render()
-    #expect(capture.range == 0..<1)
+    #expect(capture.range == nil)
     renderer.close()
   }
 

@@ -1,5 +1,16 @@
 @MainActor
 public struct BlockContext {
+  var textDocumentID: TextID?
+  var textRunID: TextID?
+  var textRunOffset = 0
+  public var documentTextReference: (run: TextID, offset: Int)? {
+    textReference.map { ($0.run, $0.offset) }
+  }
+  var textReference: TextRunReference? {
+    guard let document = textDocumentID, let run = textRunID else { return nil }
+    return TextRunReference(document: document, run: run, offset: textRunOffset)
+  }
+
   var keyboardNavigationOverscan = false
   var structuralPath = StructuralPath()
   var widgetID: WidgetID { WidgetID(path: structuralPath) }
@@ -73,7 +84,9 @@ public struct BlockContext {
     interaction.navigation?.node(at: interaction.navigationPath)?.isGroup ?? true
   }
 
-  public var isSelectingText: Bool { interaction.editingLeaf != nil && !interaction.isTextEditing }
+  public var isSelectingText: Bool {
+    interaction.textSelection.selection != nil || (interaction.editingLeaf != nil && !interaction.isTextEditing)
+  }
 
   public var interactionMode: InteractionMode { interaction.mode }
 
@@ -157,7 +170,8 @@ public struct BlockContext {
       hovered: state.hovered, focused: state.focused, held: state.held,
       editing: hasCaret && interaction.isTextEditing,
       caretOffset: hasCaret ? interaction.caretOffset : nil,
-      selectionRange: interaction.documentRange(for: id) ?? (hasCaret ? interaction.textSelectionRange : nil))
+      selectionRange: interaction.documentRange(for: id)
+        ?? (hasCaret && !interaction.editingReadOnly ? interaction.textSelectionRange : nil))
   }
 
   /// Paints the current focus/hover indication without registering a focus leaf.
@@ -243,7 +257,7 @@ public struct BlockContext {
     return interaction.registerTextInput(
       id: id, rect: rect, text: text, onChange: { _ in },
       pointerOffset: pointerOffset, verticalOffset: verticalOffset,
-      navigationIgnored: navigationIgnored, readOnly: true)
+      navigationIgnored: navigationIgnored, readOnly: true, reference: textReference)
   }
 
   public func withFocusGroup<Result>(

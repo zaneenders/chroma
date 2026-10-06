@@ -166,28 +166,25 @@ struct ScrollPaintTests {
     }
 
     let resolved = register()
-    let measurements = controller.lazyStackCache.measurements
-    let layout = controller.lazyStackCache.layout
+    let sizes = controller.rowGeometry.rowSizes
+    let layout = controller.rowGeometry.layout
     #expect(capture.measured == [0, 1])
     height.value = 40
-    #expect(!measurements[0].valid)
     var list = DrawList()
     resolved.paint(into: &list, in: viewport)
     #expect(capture.measured == [0, 1])
     #expect(capture.registered == [0, 1])
     #expect(capture.painted.map(\.rect.size.height) == [10, 10])
-    #expect(controller.lazyStackCache.layout == layout)
-    #expect(controller.lazyStackCache.measurements[0] === measurements[0])
-    #expect(!controller.lazyStackCache.measurements[0].valid)
+    #expect(controller.rowGeometry.layout == layout)
+    #expect(controller.rowGeometry.rowSizes == sizes)
 
     capture.painted = []
     let next = register()
     next.paint(into: &list, in: viewport)
-    #expect(capture.measured == [0, 1, 0])
+    #expect(capture.measured == [0, 1, 0, 1])
     #expect(capture.painted.map(\.index) == [0])
     #expect(capture.painted.map(\.rect.size.height) == [40])
-    #expect(controller.lazyStackCache.measurements[0] !== measurements[0])
-    #expect(controller.lazyStackCache.measurements[1] === measurements[1])
+    #expect(controller.rowGeometry.rowSizes.map(\.height) == [40, 10])
   }
 
   @Test func ordinaryPaintReusesMeasuredBodyAndReleasesPreparedContentAfterOperation() {

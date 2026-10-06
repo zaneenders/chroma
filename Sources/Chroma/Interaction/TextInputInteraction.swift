@@ -16,9 +16,23 @@ extension Interaction {
     let hovered = hoveredLeafID == id
     let held = pressedLeaf == id && input.pointerDown
 
+    if readOnly {
+      if selected && activatePending {
+        activatePending = false
+        enterTextPending = false
+        if textSelection.selection == nil {
+          let offset = input.pointerReleased ? pointerOffset?(input.pointerPosition, nil) ?? 0 : 0
+          beginDocumentSelection(id: id, offset: max(0, min(text.count, offset)))
+        }
+      }
+      return TextInputState(
+        hovered: hovered, focused: selected, held: held, editing: false,
+        caretOffset: editingLeaf == id ? caretOffset : nil, selectionRange: documentRange(for: id))
+    }
+
     if selected && activatePending {
       activatePending = false
-      let enterInMovement = enterTextPending || readOnly
+      let enterInMovement = enterTextPending
       enterTextPending = false
       if editingLeaf != id {
         let clickedOffset: Int?
@@ -27,7 +41,7 @@ extension Interaction {
         } else {
           clickedOffset = nil
         }
-        beginEditing(id, caretOffset: max(0, min(text.count, clickedOffset ?? (readOnly ? 0 : text.count))))
+        beginEditing(id, caretOffset: max(0, min(text.count, clickedOffset ?? text.count)))
       }
       if enterInMovement {
         stopInput()
@@ -42,8 +56,7 @@ extension Interaction {
     }
 
     if editingLeaf == id {
-      editingReadOnly = readOnly
-      if readOnly { stopInput() }
+      editingReadOnly = false
     }
     let editing = editingLeaf == id
     if editing {
@@ -91,7 +104,7 @@ extension Interaction {
       var changed = false
       eventLoop: for incomingEvent in movementTextEvents + input.textEvents {
         let event: TextEditEvent = incomingEvent == .submit && submitInsertsNewline ? .insert("\n") : incomingEvent
-        if readOnly || mode == .movement {
+        if mode == .movement {
           switch event {
           case .insert, .delete, .backspace, .deleteForward, .cut, .paste, .submit: continue
           default: break
@@ -105,8 +118,6 @@ extension Interaction {
           continue
         }
         if let (unit, direction, extend) = event.movement {
-          if readOnly, documentMovementHandled { continue }
-          let previousCaret = caretOffset
           let anchor =
             textSelectionRange.map {
               caretOffset == $0.lowerBound ? $0.upperBound : $0.lowerBound
@@ -120,18 +131,7 @@ extension Interaction {
               in: characters, from: caretOffset, unit: unit, direction: direction,
               verticalOffset: verticalOffset)
           }
-          if readOnly, extend {
-            let next = caretOffset
-            // Boundary crossing compares against the position before this movement.
-            caretOffset = previousCaret
-            _ = extendDocumentSelection(
-              from: id, anchor: anchor, next: next,
-              direction: direction == .backward ? -1 : 1)
-            if editingLeaf == id { caretOffset = next }
-          } else {
-            documentAnchor = nil
-            documentEnd = nil
-          }
+          textSelection.clear()
           textSelectionRange =
             extend && anchor != caretOffset
             ? min(anchor, caretOffset)..<max(anchor, caretOffset) : nil
@@ -161,8 +161,7 @@ extension Interaction {
           textSelectionRange = nil
           if !range.isEmpty || !graft.isEmpty { changed = true }
         case .selectAll:
-          documentAnchor = nil
-          documentEnd = nil
+          textSelection.clear()
           textSelectionRange = characters.isEmpty ? nil : 0..<characters.count
           caretOffset = characters.count
         case .submit:
@@ -185,7 +184,6 @@ extension Interaction {
           break
         }
       }
-      if readOnly, !(movementTextEvents + input.textEvents).isEmpty { documentMovementHandled = true }
       if changed {
         let updated = String(characters)
         editingText = updated
@@ -210,7 +208,8 @@ extension Interaction {
     onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
     pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
     verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
-    navigationIgnored: Bool = false, readOnly: Bool = false, submitInsertsNewline: Bool = false
+    navigationIgnored: Bool = false, readOnly: Bool = false, submitInsertsNewline: Bool = false,
+    reference: TextRunReference? = nil
   ) -> TextInputState {
     guard let parent = builderStack.last else {
       preconditionFailure("registerTextInput outside of a frame")
@@ -219,7 +218,11 @@ extension Interaction {
       FocusNode(
         kind: .leaf(id), rect: rect, hitRect: clippedRect(rect),
         canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
-    if readOnly { building.readOnlyTexts[id] = text }
+    if readOnly {
+      building.readOnlyTexts[id] = ReadOnlyText(
+        text: text(), reference: reference ?? TextRunReference(document: Self.implicitDocument, run: TextID(id)),
+        rect: rect, hitRect: clippedRect(rect), pointerOffset: pointerOffset, verticalOffset: verticalOffset)
+    }
     building.inputHandlers[id] = { [weak self] in
       guard let self else { return }
       _ = self.updateTextInput(
@@ -231,6 +234,7 @@ extension Interaction {
     let editing = editingLeaf == id
     if editing {
       let currentText = text()
+      if !readOnly, let editingText, editingText != currentText { textSelectionRange = nil }
       if inputLengthText != currentText {
         inputLengthText = currentText
         inputLength = currentText.count
@@ -251,7 +255,7 @@ extension Interaction {
   }
 }
 
-private enum TextEditingOperation {
+enum TextEditingOperation {
   private enum Kind: Equatable { case space, word, punctuation }
 
   private static func kind(_ character: Character) -> Kind {

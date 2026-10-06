@@ -288,7 +288,7 @@ struct ScrollViewTests {
     #expect(log.phases[2] == log.phases[1], "pointer hover and keyboard focus share one UI state")
   }
 
-  @Test func variableRowsUseCachedPositionsAtDistantOffsets() {
+  @Test func variableRowsUseFreshPositionsAtDistantOffsets() {
     let context = BlockContext()
     let controller = ScrollViewController()
     let counter = DrawCounter()
@@ -318,9 +318,9 @@ struct ScrollViewTests {
     counter.drawn = []
     controller.scroll(to: positions.starts[target])
     frame()
-    #expect(counter.measured.isEmpty)
+    #expect(counter.measured.count == rows.count)
     #expect(counter.drawn == [target, target + 1])
-    #expect(controller.lazyStackCache.layout?.position(of: target) == positions.starts[target])
+    #expect(controller.rowGeometry.layout?.position(of: target) == positions.starts[target])
   }
 
   @Test func keyboardNavigationReachesVariableHeightRowsInBothDirections() {
@@ -710,7 +710,7 @@ struct ScrollViewTests {
     #expect(interaction.scrollState(for: scrollID).limit.y == 10)
   }
 
-  @Test func lazyStackMeasuresRowsOnceAndOnlyDrawsVisibleRows() {
+  @Test func lazyStackMeasuresRowsPerOperationAndOnlyDrawsVisibleRows() {
     let interaction = Interaction()
     let controller = ScrollViewController()
     let counter = DrawCounter()
@@ -741,19 +741,21 @@ struct ScrollViewTests {
     counter.drawn = []
     controller.scroll(to: 50)
     frame()
-    #expect(counter.measured.isEmpty)
+    #expect(counter.measured == Array(0..<10_000))
     #expect(counter.drawn == [4, 5, 6, 7])
 
     counter.drawn = []
+    counter.measured = []
     controller.scrollToBottom()
     frame()
-    #expect(counter.measured.isEmpty)
+    #expect(counter.measured == Array(0..<10_000))
     #expect(counter.drawn == [9_997, 9_998, 9_999])
 
     counter.drawn = []
+    counter.measured = []
     controller.scrollToTop()
     frame()
-    #expect(counter.measured.isEmpty)
+    #expect(counter.measured == Array(0..<10_000))
     #expect(counter.drawn == [0, 1, 2])
   }
 
@@ -810,7 +812,7 @@ struct ScrollViewTests {
     #expect(built.isEmpty)
   }
 
-  @Test func lazyStackCacheTracksReorderingReplacementAndWidth() {
+  @Test func rowGeometryTracksReorderingReplacementAndWidth() {
     let interaction = Interaction()
     let controller = ScrollViewController()
     let counter = DrawCounter()
@@ -838,11 +840,12 @@ struct ScrollViewTests {
     counter.measured = []
     counter.drawn = []
     frame([2, 1, 0])
-    #expect(counter.measured.isEmpty)
+    #expect(counter.measured == [2, 1, 0])
     #expect(counter.drawn == [2, 1, 0])
 
+    counter.measured = []
     frame([2, 3, 0])
-    #expect(counter.measured == [3])
+    #expect(counter.measured == [2, 3, 0])
     counter.measured = []
     frame([2, 3, 0], width: 200)
     #expect(counter.measured == [2, 3, 0])
@@ -853,7 +856,7 @@ struct ScrollViewTests {
     #expect(counter.measured == [4])
   }
 
-  @Test func lazyStackCachePreservesDistinctKeyTypesAcrossReordering() {
+  @Test func rowGeometryPreservesDistinctKeyTypesAcrossReordering() {
     let context = BlockContext()
     let controller = ScrollViewController()
     let counter = DrawCounter()
@@ -877,20 +880,16 @@ struct ScrollViewTests {
 
     frame([first, second])
     #expect(counter.measured == [0, 1])
-    let measurements = controller.lazyStackCache.measurements
     frame([second, first])
-    #expect(counter.measured.isEmpty)
+    #expect(counter.measured == [1, 0])
     #expect(counter.drawn == [1, 0])
-    #expect(controller.lazyStackCache.measurements[0] === measurements[1])
-    #expect(controller.lazyStackCache.measurements[1] === measurements[0])
-    #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 10])
+    #expect(controller.rowGeometry.rowSizes.map(\.height) == [20, 10])
 
     var replacement = first
     replacement.content = CountedRow(index: 2, height: 30, counter: counter)
     frame([second, replacement])
-    #expect(counter.measured == [2])
-    #expect(controller.lazyStackCache.measurements[0] === measurements[1])
-    #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 30])
+    #expect(counter.measured == [1, 2])
+    #expect(controller.rowGeometry.rowSizes.map(\.height) == [20, 30])
   }
 
   @Test func scrollInputRespectsClipOnBothAxes() {

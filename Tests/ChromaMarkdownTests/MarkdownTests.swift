@@ -212,3 +212,76 @@ struct MarkdownDocumentSelectionTests {
     #expect(entries.allSatisfy { context.interaction.documentRange(for: $0)?.isEmpty == false })
   }
 }
+
+@MainActor
+struct MarkdownDocumentRegressionTests {
+  @Test func renderedDocumentTextDoesNotDependOnWidth() {
+    let source =
+      "# Title\n\n  words  with **style** and `code`\n\n- a\n  - b\n\n> quote\n> next\n\n---\n\n```\n a \n\nxyz\n```"
+    let blocks =
+      segmentMarkdown(source) + [
+        .paragraph("`a `"), .paragraph("`a  `"), .paragraph("a  \nb"), .paragraph("  a"), .paragraph("a\n"),
+      ]
+    for block in blocks {
+      var texts: [String] = []
+      for width in [1, 2, 3, 8, 40, 200] {
+        texts.append(
+          MarkdownLayout(
+            lines: layoutMarkdown([block], columns: width, theme: .dark, baseColor: .white),
+            lineHeight: 20, cellWidth: 10, scale: 1, rect: .zero
+          ).text)
+      }
+      #expect(Set(texts).count == 1, "block: \(block), texts: \(texts)")
+    }
+  }
+
+  @Test func virtualizedMarkdownCopiesCompleteDocumentAndKeepsSelectionAcrossRewrap() {
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let controller = ScrollViewController()
+    let sources = (0..<20).map { "# Entry \($0)\n\n**café** `👨‍👩‍👧‍👦` words\n\n---" }
+    let document = TextDocument(
+      id: TextID("transcript"),
+      runs: sources.enumerated().map {
+        .init(id: TextID($0.offset), text: MarkdownText.plainText($0.element), separator: "\n\n")
+      })
+    runtime.content = ScrollView(data: 0..<sources.count, rowHeight: 200, controller: controller) { index in
+      MarkdownText(sources[index]).textRun(TextID(index))
+    }.textDocument(document)
+    _ = runtime.renderScheduled(.content, viewport: Size(width: 200, height: 150), onChange: {})
+    runtime.interaction.selectAll(at: .zero)
+    let selection = runtime.context.selection.selection
+    let expected = document.runs.map(\.text).joined(separator: "\n\n")
+    #expect(runtime.interaction.copyText() == expected)
+    controller.scroll(to: 1_000)
+    _ = runtime.renderScheduled(.content, viewport: Size(width: 60, height: 150), onChange: {})
+    #expect(runtime.context.selection.selection == selection)
+    #expect(runtime.interaction.copyText() == expected)
+    #expect(
+      runtime.interaction.registrations.readOnlyTexts.values.allSatisfy { text in
+        guard let selection else { return false }
+        return document.range(in: text.reference.run, selection: selection) != nil
+      })
+  }
+
+  @Test func implicitMarkdownSelectionSurvivesResizeAndClearsOnSourceChange() {
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    final class Model { var source = "words  with **style**\n\n---\n\n```\n a \n```" }
+    let model = Model()
+    runtime.content = DeferredBlock { MarkdownText(model.source) }
+    _ = runtime.renderScheduled(.content, viewport: Size(width: 300, height: 400), onChange: {})
+    runtime.interaction.selectAll(at: .zero)
+    let selection = runtime.context.selection.selection
+    let expected = MarkdownText.plainText(model.source)
+    for width: Float in [12, 36, 200] {
+      _ = runtime.renderScheduled(.content, viewport: Size(width: width, height: 400), onChange: {})
+      #expect(runtime.context.selection.selection == selection)
+      #expect(runtime.interaction.copyText() == expected)
+    }
+    model.source = "replacement"
+    _ = runtime.renderScheduled(.content, viewport: Size(width: 200, height: 400), onChange: {})
+    #expect(runtime.context.selection.selection == nil)
+    #expect(runtime.interaction.copyText() == nil)
+  }
+}

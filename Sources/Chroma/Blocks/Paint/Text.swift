@@ -86,14 +86,18 @@ public struct Text: LayoutPreparingBlock {
   @MainActor private func registerSelection(_ layout: PlainTextLayout, context: BlockContext) {
     let id = selectionID ?? context.widgetID
     let interaction = context.interaction
-    interaction.textSelection.layoutRegistry.register(id, layout: layout)
-    if !context.navigationIgnored {
-      interaction.registerFocusTargets(context.focusTargets, id: id)
-      _ = interaction.registerTextInput(
-        id: id, rect: layout.rect, text: { content }, onChange: { _ in },
-        pointerOffset: { point, _ in layout.hitTest(point: point) ?? 0 },
-        verticalOffset: { layout.verticalOffset($0, direction: $1) }, readOnly: true)
-    }
+    interaction.registerFocusTargets(context.focusTargets, id: id)
+    _ = interaction.registerTextInput(
+      id: id, rect: layout.rect, text: { content }, onChange: { _ in },
+      pointerOffset: { point, _ in
+        if point.y < layout.rect.minY { return 0 }
+        if point.y >= layout.rect.maxY { return content.count }
+        return layout.layout.offset(
+          row: Int((point.y - layout.rect.minY) / max(1, layout.lineHeight)),
+          column: Int(max(0, (point.x - layout.rect.minX) / max(1, layout.cellWidth)).rounded()))
+      },
+      verticalOffset: { layout.verticalOffset($0, direction: $1) },
+      navigationIgnored: context.navigationIgnored, readOnly: true, reference: context.textReference)
   }
 
   @MainActor private func selectionVisualState(context: BlockContext) -> (range: Range<Int>?, caret: Int?) {
@@ -106,9 +110,6 @@ public struct Text: LayoutPreparingBlock {
       caret = state.caretOffset
     }
     if let document = context.interaction.documentRange(for: id) { range = document }
-    if range == nil, let selection = context.interaction.textSelection.selection(for: id) {
-      range = selection.from..<selection.to
-    }
     return (range, caret)
   }
 

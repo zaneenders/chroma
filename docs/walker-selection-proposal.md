@@ -1,7 +1,8 @@
 # Prepared tree walkers and document selection
 
-Design sketch for discussion. Types are pseudocode; omitted IDs, content
-variants, geometry, and method bodies are deliberately unspecified.
+Implemented baseline. The sketches below describe ownership; concrete APIs and
+regression coverage are listed at the end. Parallel passes and tree rewriting
+remain optional extensions, not runtime requirements.
 
 ## Update data
 
@@ -128,12 +129,13 @@ range. Reversing or shrinking moves active; it never replaces anchor.
 - On text changes, use a known edit mapping or conservatively clear affected
   selection. Stable IDs alone cannot remap offsets across revisions.
 
-## First change and regression coverage
+## Implementation and regression coverage
 
-Start with read-only text/Markdown, reuse layout/controller, then delete redundant
-selection paths. Keep the scroll fix in [#85](https://github.com/zaneenders/chroma/issues/85) separate.
+Read-only text/Markdown share document selection, while editor selection remains
+local to its editing session. Layout and the controller are reused. The scroll
+ownership fix in [#85](https://github.com/zaneenders/chroma/issues/85) remains separate.
 
-Minimum implementation regressions:
+Covered regressions:
 - Backward select -> anchor offscreen -> reverse/shrink.
 - Copy with offscreen endpoints and intermediate runs.
 - Endpoint deletion and document/editor session replacement.
@@ -142,4 +144,56 @@ Minimum implementation regressions:
 - Observation rearming, async model changes, animation, first frame/resize, and idle.
 - No prepared-tree reuse between operations; reject stale asynchronous outputs.
 
-This PR proposes the design only. It adds no implementation or executable tests.
+### Concrete API
+
+Supply a complete `TextDocument` outside the virtualized tree. Its ID identifies
+one document session; each ordered run has a stable `TextID`, text, and the exact
+separator copied before the next run. Offsets count Swift `Character` values.
+
+```swift
+let document = TextDocument(
+  id: TextID(sessionID), revision: revision,
+  runs: messages.map {
+    .init(id: TextID($0.id), text: MarkdownText.plainText($0.markdown), separator: "\n\n")
+  })
+
+ScrollView(data: messages, rowHeight: 100, controller: controller) { message in
+  MarkdownText(message.markdown).textRun(TextID(message.id))
+}.textDocument(document)
+```
+
+Every visible fragment must match its run's text. `.textRun(id, offset:)` maps a
+fragment into a larger run. `MarkdownText` maps its semantic blocks automatically;
+`plainText` supplies the matching, width-independent copy representation. Use
+`.id(sessionID)` to distinguish replacement editor sessions at the same position.
+
+`BlockContext.selection` exposes the single read-only selection manager. Plain
+selectable text and custom `textSelectionState` renderers without an explicit
+document retain implicit tree-order selection for nonvirtualized content. They
+cannot infer offscreen text; virtualized content must provide a complete document.
+
+Changed document text, order, separators, revision, deleted endpoints, or a new
+session clear selection conservatively. Resize and rewrap do not. External editor
+text replacement clears its selection instead of guessing an offset mapping.
+
+### Runtime
+
+- `BlockEngine.Resolved` remains main-actor, operation-local prepared data.
+  Dependency-aware layout is unchanged; read-only focus-tree walkers collect
+  semantic text independently of paint. Interaction callbacks stay in the
+  main-actor registration output, indexed by semantic widget IDs.
+- Variable-height rows resolve and measure fresh each operation, sharing those
+  results through registration and paint. Persistent row validity tracking and
+  explicit `invalidateMeasurement()` were removed. Only installed row geometry
+  survives; uniform-height rows still construct only the visible window.
+- `WindowRuntime` serializes native, queued, batched, and reentrant inputs.
+  Registration-only input updates never paint. Presentation resolves post-action
+  state, reconciles selection, then paints once through the existing scheduler.
+- Observation rearms on evaluation. Its asynchronous notifications carry an
+  operation generation and are rejected after a newer evaluation or reset. No
+  asynchronous layout/paint jobs or generic pass scheduler are introduced.
+
+Regression suites: `TextDocumentTests`, `DocumentSelectionTests`,
+`MarkdownDocumentRegressionTests`, `PreparedUpdateRegressionTests`,
+`FreshRowLayoutTests`, plus the existing observation, input, layout, and scheduler
+suites. Run `swift test` on each supported platform; Metal tests require macOS.

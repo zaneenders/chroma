@@ -64,6 +64,11 @@ final class FocusNode {
 }
 
 extension FocusNode {
+  func walk<Output>(into output: inout Output, visit: (FocusNode, inout Output) -> Void) {
+    visit(self, &output)
+    for child in children { child.walk(into: &output, visit: visit) }
+  }
+
   func node(at path: [Int]) -> FocusNode? {
     var node = self
     for index in path {

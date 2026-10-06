@@ -19,7 +19,14 @@ struct TextSelectionTests {
 
   private func frame(_ ctx: Interaction, id: WidgetID, input: InputState) {
     ctx.beginFrame(input: input)
-    ctx.textSelection.layoutRegistry.register(id, layout: layout)
+    let layout = layout
+    _ = ctx.registerTextInput(
+      id: id, rect: layout.rect, text: { layout.text }, onChange: { _ in },
+      pointerOffset: { point, _ in
+        if point.y < layout.rect.minY { return 0 }
+        if point.y >= layout.rect.maxY { return layout.text.count }
+        return layout.hitTest(point: point) ?? (point.x < layout.rect.minX ? 0 : layout.text.count)
+      }, readOnly: true)
     ctx.endFrame()
   }
 

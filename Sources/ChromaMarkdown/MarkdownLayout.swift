@@ -19,6 +19,7 @@ enum VisualLineKind: Equatable {
   case plain
   case heading
   case code
+  case rule
 }
 
 struct VisualRun: Equatable {
@@ -43,6 +44,7 @@ func layoutMarkdown(
   var lines: [VisualLine] = []
 
   func wrapRuns(_ runs: [MarkdownRun], colorFor: (MarkdownRun) -> Color, kind: VisualLineKind) {
+    guard !runs.isEmpty else { return }
     var line = VisualLine(kind: kind)
     func emit(trailingText: String = "") {
       line.trailingText = trailingText
@@ -81,8 +83,9 @@ func layoutMarkdown(
           emit(trailingText: "\n")
         } else if ch == " " {
           flushWord()
-          if line.columnCount >= columns { emit(trailingText: " ") }
-          if line.columnCount > 0 {
+          if line.columnCount >= columns {
+            emit(trailingText: " ")
+          } else {
             line.runs.append(VisualRun(text: " ", color: color))
             line.columnCount += 1
           }
@@ -167,12 +170,11 @@ func layoutMarkdown(
     case .rule:
       lines.append(
         VisualLine(
-          kind: .plain,
-          runs: [VisualRun(text: String(repeating: "─", count: min(columns, 40)), color: theme.positive)],
-          columnCount: min(columns, 40)))
+          kind: .rule,
+          runs: [VisualRun(text: "─", color: theme.positive)],
+          columnCount: 1, trailingText: ""))
     }
     previousWasListItem = isListItem
   }
-  while let last = lines.last, last.columnCount == 0, last.kind != .code { lines.removeLast() }
   return lines
 }

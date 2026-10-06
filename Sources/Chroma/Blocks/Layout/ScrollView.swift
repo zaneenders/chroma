@@ -1,25 +1,13 @@
 public struct ScrollView: LayoutPreparingBlock {
   public struct Row: Identifiable {
     public let id: AnyHashable
-    public var content: any Block {
-      didSet { measurementIdentity = LazyRowIdentity() }
-    }
-    var measurementIdentity = LazyRowIdentity()
+    public var content: any Block
     let key: StructuralKey
 
     public init(id: some Hashable & Sendable, content: any Block) {
       self.id = AnyHashable(id)
       self.key = StructuralKey(id)
       self.content = content
-    }
-
-    /// Invalidates persistent measurement after an unobserved value used by this row changes.
-    /// Measurements are reused only while row identity, layout environment, and observed
-    /// dependencies remain valid. Replacing `content` invalidates automatically; mutations
-    /// captured outside Observation require this explicit invalidation. Registration still
-    /// resolves current content and callbacks on each update, independently of measurement reuse.
-    public mutating func invalidateMeasurement() {
-      measurementIdentity = LazyRowIdentity()
     }
   }
 
@@ -161,6 +149,7 @@ public struct ScrollView: LayoutPreparingBlock {
     let horizontal: Bool
     let offsets: Point
     let resolvedContent: BlockEngine.Resolved?
+    let resolvedRows: [BlockEngine.Resolved]
   }
 
   /// Placement events are shared by registration and presentation. No event requires painting.
@@ -237,6 +226,7 @@ public struct ScrollView: LayoutPreparingBlock {
     let contentSize: Size
     let horizontal: Bool
     var resolvedContent: BlockEngine.Resolved?
+    var resolvedRows: [BlockEngine.Resolved] = []
     switch content {
     case .block(let block, _):
       horizontal = true
@@ -245,16 +235,18 @@ public struct ScrollView: LayoutPreparingBlock {
       contentSize = resolved.sizeThatFits(Size(width: rect.size.width, height: .greatestFiniteMagnitude))
     case .rows(let rows, let controller):
       horizontal = false
-      updateCache(rows: rows, controller: controller, width: rect.size.width, context: context)
-      var cache = controller.lazyStackCache
-      if cache.layout?.spacing != spacing || cache.layout?.width != rect.size.width {
-        let heights = cache.measurements.map { $0.size.height }
-        cache.layout = Interaction.ScrollLayout(
-          width: rect.size.width, spacing: spacing,
-          rows: .variable(Interaction.VariableScrollRows(keys: cache.rowKeys, heights: heights, spacing: spacing)))
+      precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
+      resolvedRows = rows.map { row in
+        var context = context.scoped([.key(row.key)])
+        context.focusLeafClaimed = true
+        return BlockEngine.resolve(row.content, context: context)
       }
-      controller.lazyStackCache = cache
-      let layout = cache.layout!
+      let sizes = resolvedRows.map { $0.sizeThatFits(Size(width: rect.size.width, height: .greatestFiniteMagnitude)) }
+      let layout = Interaction.ScrollLayout(
+        width: rect.size.width, spacing: spacing,
+        rows: .variable(
+          Interaction.VariableScrollRows(keys: rows.map(\.key), heights: sizes.map(\.height), spacing: spacing)))
+      controller.rowGeometry = ScrollRowGeometry(rowSizes: sizes, layout: layout)
       interaction.updateScrollLayout(id: id, layout: layout)
       guard case .variable(let positions) = layout.rows else { preconditionFailure("Expected variable rows") }
       contentSize = Size(width: rect.size.width, height: positions.height)
@@ -280,7 +272,7 @@ public struct ScrollView: LayoutPreparingBlock {
       sticksToBottom: sticksToBottom, horizontal: horizontal)
     return ScrollGeometry(
       id: id, contentSize: contentSize, horizontal: horizontal, offsets: offsets,
-      resolvedContent: resolvedContent)
+      resolvedContent: resolvedContent, resolvedRows: resolvedRows)
   }
 
   @MainActor private func placeContent(
@@ -301,7 +293,9 @@ public struct ScrollView: LayoutPreparingBlock {
             x: rect.minX - geometry.offsets.x, y: rect.minY - geometry.offsets.y,
             width: geometry.contentSize.width, height: geometry.contentSize.height)))
     case .rows, .uniform:
-      placeRows(in: rect, context: context, id: geometry.id, offset: geometry.offsets.y, visit: visit)
+      placeRows(
+        in: rect, context: context, id: geometry.id, offset: geometry.offsets.y, resolvedRows: geometry.resolvedRows,
+        visit: visit)
     }
     interaction.endGroup()
     interaction.popClip()
@@ -329,7 +323,7 @@ public struct ScrollView: LayoutPreparingBlock {
 
   @MainActor private func placeRows(
     in rect: Rect, context: BlockContext, id: WidgetID, offset: Float,
-    visit: (Placement) -> Void
+    resolvedRows: [BlockEngine.Resolved], visit: (Placement) -> Void
   ) {
     let interaction = context.interaction
     let visibleTop = offset
@@ -366,7 +360,7 @@ public struct ScrollView: LayoutPreparingBlock {
         }
       }
     case .rows(let rows, let controller):
-      guard case .variable(let positions) = controller.lazyStackCache.layout?.rows else {
+      guard case .variable(let positions) = controller.rowGeometry.layout?.rows else {
         preconditionFailure("Expected variable rows")
       }
       let first = max(0, positions.firstRow(endingAtOrAfter: visibleTop) - before)
@@ -374,7 +368,7 @@ public struct ScrollView: LayoutPreparingBlock {
       if rect.size.height > 0 && first < end {
         for index in first..<end {
           placeRow(
-            rows[index].content,
+            rows[index].content, prepared: resolvedRows[index],
             in: Rect(
               x: rect.minX, y: rect.minY + positions.starts[index] - offset,
               width: rect.size.width, height: positions.heights[index]),
@@ -386,7 +380,7 @@ public struct ScrollView: LayoutPreparingBlock {
   }
 
   @MainActor private func placeRow(
-    _ content: any Block, in rect: Rect,
+    _ content: any Block, prepared: BlockEngine.Resolved? = nil, in rect: Rect,
     context rowContext: BlockContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
     rowKey: StructuralKey, visit: (Placement) -> Void
   ) {
@@ -396,7 +390,7 @@ public struct ScrollView: LayoutPreparingBlock {
     let children = group.children.count
     var rowContext = rowContext
     rowContext.focusLeafClaimed = true
-    visit(.content(BlockEngine.resolve(content, context: rowContext), rect))
+    visit(.content(prepared ?? BlockEngine.resolve(content, context: rowContext), rect))
     if group.children.count == children {
       visit(.rowFocus(rowContext, rect))
     }
@@ -445,48 +439,4 @@ public struct ScrollView: LayoutPreparingBlock {
     return (before, after)
   }
 
-  @MainActor private func updateCache(
-    rows: [Row], controller: ScrollViewController, width: Float, context: BlockContext
-  ) {
-    precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
-    let cache = controller.lazyStackCache
-    let environment = LazyMeasurementEnvironment(
-      textScale: context.textScale, fontMetrics: context.fontMetrics, theme: context.theme)
-    let sameEnvironment =
-      cache.width == width && cache.environment == environment
-      && cache.structuralPath == context.structuralPath
-    if sameEnvironment && cache.rowKeys.count == rows.count
-      && zip(cache.rowKeys, rows).allSatisfy({ $0.0 == $0.1.key })
-      && zip(cache.identities, rows).allSatisfy({ $0.0 === $0.1.measurementIdentity })
-      && cache.measurements.allSatisfy(\.valid)
-    {
-      return
-    }
-    var oldSizes: [StructuralKey: (LazyRowIdentity, LazyRowMeasurement)] = [:]
-    if sameEnvironment {
-      for index in cache.rowKeys.indices {
-        let size = cache.measurements[index]
-        if size.valid { oldSizes[cache.rowKeys[index]] = (cache.identities[index], size) }
-      }
-    }
-
-    var sizes: [LazyRowMeasurement] = []
-    sizes.reserveCapacity(rows.count)
-    for row in rows {
-      if let (identity, size) = oldSizes[row.key], identity === row.measurementIdentity {
-        sizes.append(size)
-      } else {
-        sizes.append(
-          LazyRowMeasurement {
-            BlockEngine.measure(
-              row.content,
-              proposal: Size(width: width, height: Float.greatestFiniteMagnitude),
-              context: context.scoped([.key(row.key)]))
-          })
-      }
-    }
-    controller.lazyStackCache = LazyStackCache(
-      structuralPath: context.structuralPath, width: width, environment: environment, rowKeys: rows.map(\.key),
-      identities: rows.map(\.measurementIdentity), measurements: sizes)
-  }
 }

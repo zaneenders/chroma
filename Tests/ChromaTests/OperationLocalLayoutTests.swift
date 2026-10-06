@@ -219,6 +219,6 @@ struct OperationLocalLayoutTests {
     producer.refreshRegistrations(rowBlock, viewport: viewport, context: context)
     model.height = 160
     producer.refreshRegistrations(rowBlock, viewport: viewport, context: context)
-    #expect(rowController.lazyStackCache.rowSizes.map(\.height) == [160])
+    #expect(rowController.rowGeometry.rowSizes.map(\.height) == [160])
   }
 }

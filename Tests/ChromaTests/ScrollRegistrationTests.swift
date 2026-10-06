@@ -199,7 +199,7 @@ struct ScrollRegistrationTests {
     #expect(capture.paints == 0)
   }
 
-  @Test func variableRegistrationReusesMeasurementsAndTracksRowContentReplacement() {
+  @Test func variableRegistrationMeasuresFreshRowsAndTracksContentReplacement() {
     let h = Harness()
     let capture = Capture()
     let controller = ScrollViewController()
@@ -209,22 +209,21 @@ struct ScrollRegistrationTests {
     }
     h.register(content(rows))
     #expect(capture.measurements == Array(0..<5))
-    let measurements = controller.lazyStackCache.measurements
     capture.measurements = []
     h.register(content(rows))
-    #expect(capture.measurements.isEmpty)
+    #expect(capture.measurements == Array(0..<5))
+    capture.measurements = []
 
     h.register(content([rows[2], rows[1], rows[0]]))
-    #expect(capture.measurements.isEmpty)
-    #expect(controller.lazyStackCache.measurements[0] === measurements[2])
-    #expect(controller.lazyStackCache.measurements[2] === measurements[0])
+    #expect(capture.measurements == [2, 1, 0])
+    capture.measurements = []
 
     var replacement = rows[1]
     replacement.content = Probe(index: 1, height: 30, capture: capture)
     capture.registered = []
     h.register(content([rows[2], replacement, rows[0]]))
-    #expect(capture.measurements == [1])
-    #expect(controller.lazyStackCache.rowSizes.map(\.height) == [10, 30, 10])
+    #expect(capture.measurements == [2, 1, 0])
+    #expect(controller.rowGeometry.rowSizes.map(\.height) == [10, 30, 10])
     #expect(
       capture.registered.map(\.rect) == [
         Rect(x: 0, y: 0, width: 100, height: 10),
@@ -274,20 +273,20 @@ struct ScrollRegistrationTests {
     capture.registered = []
     model.height = 40
     h.register(content)
-    #expect(capture.measurements == [0])
+    #expect(capture.measurements == [0, 1])
     #expect(capture.registered.map(\.rect.minY) == [0, 40])
     #expect(capture.registered.map(\.rect.size.height) == [40, 10])
     #expect(capture.paints == 0)
   }
 
-  @Test func explicitInvalidationUpdatesUnobservedRowHeightAndFollowingPlacement() {
+  @Test func freshMeasurementUpdatesUnobservedRowHeightAndFollowingPlacement() {
     final class Model { var height: Float = 10 }
     let model = Model()
     let h = Harness()
     h.viewport.height = 100
     let capture = Capture()
     let controller = ScrollViewController()
-    var first = ScrollView.Row(
+    let first = ScrollView.Row(
       id: 0,
       content: DeferredBlock {
         Probe(index: 0, height: model.height, capture: capture)
@@ -298,15 +297,14 @@ struct ScrollRegistrationTests {
     capture.measurements = []
     capture.registered = []
     model.height = 40
-    first.invalidateMeasurement()
     h.register(content())
-    #expect(capture.measurements == [0])
+    #expect(capture.measurements == [0, 1])
     #expect(capture.registered.map(\.rect.minY) == [0, 40])
     #expect(capture.registered.map(\.rect.size.height) == [40, 10])
     #expect(capture.paints == 0)
   }
 
-  @Test func cachedVariableMeasurementStillRefreshesCapturedActionsBetweenInputs() {
+  @Test func variableMeasurementRefreshesCapturedActionsBetweenInputs() {
     let h = Harness()
     let capture = Capture()
     let controller = ScrollViewController()
@@ -323,7 +321,7 @@ struct ScrollRegistrationTests {
     h.send(InputState(commands: [.action(.activate)]), to: content)
     h.send(InputState(commands: [.action(.activate)]), to: content)
     #expect(actions == 2)
-    #expect(capture.measurements == [0])
+    #expect(capture.measurements == [0, 0, 0])
     #expect(capture.paints == 0)
   }
 

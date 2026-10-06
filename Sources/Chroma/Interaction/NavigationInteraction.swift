@@ -47,7 +47,7 @@ extension Interaction {
     guard let selected = navigation?.node(at: navigationPath), case .leaf(let selectedID) = selected.kind else {
       selection = nil
       selectedLeafID = nil
-      if editingLeaf != nil { endEditing() }
+      if editingLeaf != nil { endEditing(preservingDocumentSelection: true) }
       return
     }
 
@@ -99,7 +99,7 @@ extension Interaction {
       selection = nil
       selectedLeafID = nil
       pendingFocus = nil
-      endEditing()
+      endEditing(preservingDocumentSelection: true)
       if revealing, let tree { reveal(node.renderPath, in: tree) }
     }
   }

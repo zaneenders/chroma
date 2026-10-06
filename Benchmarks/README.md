@@ -78,12 +78,12 @@ swift test --filter StackEvaluationTests
 ## How an input reaches the screen
 
 1. The backend snapshots native input and queues it on the main actor.
-2. `WindowRuntime` applies events in order. Clicks, dragging, scrolling, commands, and text edits first rebuild registrations to obtain current callbacks and hit-test geometry. Plain hover uses the last frame's geometry.
+2. `WindowRuntime` applies events in order. Every input update first rebuilds registrations to obtain current callbacks and hit-test geometry, including hover.
 3. `FrameScheduler` coalesces requests and caps frame starts at `maximumRefreshRate` (60 Hz by default). Rendering time counts toward that interval. With no requests or Wayland scroll momentum, it schedules nothing.
 4. `FrameProducer` reconciles current blocks, measures/places, registers behavior, then paints those prepared snapshots while tracking observable properties. Painting performs no registration or lifecycle work. A change to a tracked property requests another frame.
 5. The backend culls and encodes the draw commands, then submits them to the GPU.
 
-Registration refresh traverses blocks without painting. Custom primitives implement explicit registration and painting phases. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
+Registration refresh traverses blocks without painting. Custom primitives implement explicit registration and painting phases. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Uniform-height virtualized lists build visible rows. Variable-height rows resolve and measure fresh each operation, then register and paint only the visible window. Identified list construction still scans every element's ID; a small command count does not imply cheap construction.
 
 Bodies, callbacks and geometry reconcile conservatively; stable identity alone never establishes validity. Prepared custom children are owned locally through one operation, without paired traversal bookkeeping. The experimental broad geometry cache was removed after measurements showed no end-to-end benefit. Custom blocks implement `PaintableBlock` or `LayoutPreparingBlock`. Identified collections still need explicit revisions or change sets before their ID scans can safely be skipped.
 

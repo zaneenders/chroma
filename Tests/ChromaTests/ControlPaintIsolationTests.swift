@@ -25,7 +25,7 @@ struct ControlPaintIsolationTests {
       #expect(context.interaction.building.inputHandlers.isEmpty)
       #expect(context.interaction.building.buttonActions.isEmpty)
       #expect(context.interaction.building.focusTargets.isEmpty)
-      #expect(context.interaction.textSelection.layoutRegistry.entry(at: Point(x: 10, y: 10)) == nil)
+      #expect(context.interaction.building.readOnlyTexts.isEmpty)
       #expect(context.interaction.editingLeaf == nil)
     }
     #expect(actions == 0)

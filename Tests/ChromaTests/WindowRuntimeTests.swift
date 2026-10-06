@@ -143,7 +143,7 @@ struct WindowRuntimeTests {
     runtime.reset()
   }
 
-  @Test func hoverEventsShareTheLastFrameUntilPresentation() {
+  @Test func hoverEventsDoNotPaintUntilPresentation() {
     final class Counter { var draws = 0 }
     struct Probe: PaintableBlock {
       func register(in rect: Rect, context: BlockContext) {}

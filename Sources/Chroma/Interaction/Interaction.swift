@@ -11,10 +11,6 @@ package final class Interaction {
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
 
-  var documentMovementHandled = false
-  var documentAnchor: TextEndpoint?
-  var documentEnd: TextEndpoint?
-
   package let textSelection = TextSelectionManager()
 
   package var fontMetrics = FontMetrics()
@@ -96,7 +92,7 @@ package final class Interaction {
   @ObservationIgnored package var onSelectAll: (() -> Bool)?
 
   package func editableSelectionText() -> String? {
-    guard editingLeaf != nil, let range = textSelectionRange, let editingText else { return nil }
+    guard !editingReadOnly, editingLeaf != nil, let range = textSelectionRange, let editingText else { return nil }
     let characters = Array(editingText)
     guard range.lowerBound >= 0, range.upperBound <= characters.count else { return nil }
     return String(characters[range])
@@ -106,20 +102,24 @@ package final class Interaction {
     if let text = documentCopyText() { return text }
     if let text = editableSelectionText() { return text }
     if let text = (registrations.copyProvider ?? onCopy)?(), !text.isEmpty { return text }
-    return textSelection.selectedText()
+    return nil
   }
 
   package func selectAll(at point: Point) {
-    if editingLeaf != nil, let editingText {
-      documentAnchor = nil
-      documentEnd = nil
+    if !editingReadOnly, editingLeaf != nil, let editingText {
+      textSelection.clear()
       caretOffset = editingText.count
       textSelectionRange = editingText.isEmpty ? nil : 0..<editingText.count
       return
     }
     if selectTextScope() { return }
     if (registrations.selectAll ?? onSelectAll)?() == true { return }
-    textSelection.selectAll(at: point)
+    if let path = tree?.hitTest(point), let id = tree?.node(at: path)?.leafID,
+      let text = registrations.readOnlyTexts[id]
+    {
+      beginDocumentSelection(id: id, offset: text.pointerOffset?(point, nil) ?? 0)
+      textSelection.selectAll()
+    }
   }
 
   struct PendingFocus: Equatable {
@@ -153,7 +153,8 @@ package final class Interaction {
       static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.uniform(let a, let h, let k), .uniform(let b, let j, let l)): a == b && h == j && k == l
-        case (.variable(let a), .variable(let b)): a === b
+        case (.variable(let a), .variable(let b)):
+          a === b || (a.keys == b.keys && a.starts == b.starts && a.heights == b.heights)
         default: false
         }
       }
@@ -276,7 +277,8 @@ package final class Interaction {
     var keyBindingScopes: [ScopedKeyBindings] = []
     var actionRoles: [ScopedActionRole] = []
     var inputObservers: [@MainActor (InputState) -> Void] = []
-    var readOnlyTexts: [WidgetID: @MainActor () -> String] = [:]
+    var readOnlyTexts: [WidgetID: ReadOnlyText] = [:]
+    var documents: [TextID: TextDocument] = [:]
     var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
     var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
     var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
@@ -298,10 +300,8 @@ package final class Interaction {
     building = FrameRegistrations()
     onCopy = nil
     onSelectAll = nil
-    textSelection.clear()
-    documentAnchor = nil
-    documentEnd = nil
-    textSelection.layoutRegistry.clear()
+    endEditing()
+    textSelection.install([:])
     pendingFocus = nil
     scrollStates = [:]
     tree = nil
@@ -336,9 +336,8 @@ package final class Interaction {
     mode = .movement
   }
 
-  func endEditing() {
-    documentAnchor = nil
-    documentEnd = nil
+  func endEditing(preservingDocumentSelection: Bool = false) {
+    if !preservingDocumentSelection { textSelection.clear() }
     if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
     editingReadOnly = false
@@ -377,7 +376,6 @@ package final class Interaction {
     builderStack = [root]
     builderPath = []
     clipStack = []
-    textSelection.layoutRegistry.clear()
   }
 
   package func processInput(_ input: InputState, notifyingObservers: Bool = true) {
@@ -402,23 +400,20 @@ package final class Interaction {
       textDragAnchor = nil
       textDragViewportRow = nil
       textSelection.clear()
-      documentAnchor = nil
-      documentEnd = nil
     } else if input.pointerReleased {
       dragCurrent = input.pointerPosition
     } else if isDragging {
       dragCurrent = input.pointerPosition
     }
-    textSelection.updateFromDrag(interaction: self)
 
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
       if let editingLeaf, editingLeaf != selectedLeafID {
-        endEditing()
+        endEditing(preservingDocumentSelection: editingReadOnly)
       }
       lastPointerPosition = input.pointerPosition
-      documentMovementHandled = false
       for handler in registrations.inputHandlers.values { handler() }
+      processDocumentInput()
       if activatePending, let id = selectedLeafID {
         activatePending = false
         activatedLeaf = id
@@ -462,17 +457,13 @@ package final class Interaction {
     if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
 
-    if let editingLeaf, newTree.findLeaf(editingLeaf) == nil { endEditing() }
+    if let editingLeaf, newTree.findLeaf(editingLeaf) == nil {
+      endEditing(preservingDocumentSelection: editingReadOnly)
+    }
     if let pressedLeaf, newTree.findLeaf(pressedLeaf) == nil { self.pressedLeaf = nil }
     scrollStates = scrollStates.filter { building.inputHandlers[$0.key] != nil }
-    textSelection.reconcile()
     tree = newTree
-    if let anchor = documentAnchor, let end = documentEnd,
-      building.readOnlyTexts[anchor.id] == nil || building.readOnlyTexts[end.id] == nil
-    {
-      documentAnchor = nil
-      documentEnd = nil
-    }
+    installDocuments(in: newTree)
     reconcileNavigation(in: newTree)
     reconcileLogicalSelection(in: newTree)
     resolveFocusTargets()
@@ -495,8 +486,9 @@ package final class Interaction {
     }
 
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
-    if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
+    if let editingLeaf, editingLeaf != selectedLeafID { endEditing(preservingDocumentSelection: editingReadOnly) }
     registrations = building
+    synchronizeDocumentCaret()
     logicalSelections = buildingLogicalSelections
     builderRoot = nil
     builderStack = []
@@ -613,7 +605,9 @@ extension Interaction {
         handledCommandIndices.insert(index)
         continue
       }
-      if editingLeaf != nil, command == .action(.cancel) || command == .action(.dismiss) {
+      if editingLeaf != nil || textSelection.selection != nil,
+        command == .action(.cancel) || command == .action(.dismiss)
+      {
         endEditing()
         handledCommandIndices.insert(index)
         continue
@@ -668,7 +662,7 @@ extension Interaction {
         return
       }
       guard mode == .movement else { return }
-      if editingLeaf != nil {
+      if editingLeaf != nil || textSelection.selection != nil {
         if [.sectionLeft, .sectionRight, .sectionUp, .sectionDown].contains(command) {
           endEditing()
           moveNavigation(command)

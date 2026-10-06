@@ -59,130 +59,50 @@ struct PlainTextLayout: Equatable {
   }
 }
 
-@MainActor
-struct PlainTextLayoutRegistry {
-  private var layouts: [WidgetID: PlainTextLayout] = [:]
-
-  mutating func register(_ id: WidgetID, layout: PlainTextLayout) {
-    layouts[id] = layout
-  }
-
-  func layout(for id: WidgetID) -> PlainTextLayout? {
-    layouts[id]
-  }
-
-  func entry(at point: Point) -> (WidgetID, PlainTextLayout)? {
-    for (id, layout) in layouts where layout.rect.contains(point) {
-      return (id, layout)
-    }
-    return nil
-  }
-
-  mutating func clear() {
-    layouts.removeAll()
-  }
-}
-
 @Observable
 @MainActor
 public final class TextSelectionManager {
-  private var originLayoutRect: Rect? = nil
-  private var originLayoutID: WidgetID? = nil
-  private(set) var selectionStart: Int?
-  private(set) var selectionEnd: Int?
-  public private(set) var isSelecting: Bool = false
-
-  @ObservationIgnored var layoutRegistry = PlainTextLayoutRegistry()
+  public private(set) var selection: TextDocument.Selection?
+  public private(set) var isSelecting = false
+  @ObservationIgnored var documents: [TextID: TextDocument] = [:]
 
   public init() {}
 
-  func updateFromDrag(interaction: Interaction) {
-    guard interaction.isProcessingDrag else {
-      if isSelecting { isSelecting = false }
-      return
-    }
-    if !isSelecting {
-      isSelecting = true
-      originLayoutRect = nil
-      originLayoutID = nil
-      selectionStart = nil
-      selectionEnd = nil
-    }
-    guard let origin = interaction.dragOrigin else { return }
-    let current = interaction.dragCurrent
-
-    if originLayoutRect == nil {
-      if let (id, layout) = layoutRegistry.entry(at: origin) {
-        originLayoutRect = layout.rect
-        originLayoutID = id
-        selectionStart = layout.hitTest(point: origin)
-      }
-    }
-    guard originLayoutRect != nil,
-      let layoutID = originLayoutID,
-      let layout = layoutRegistry.layout(for: layoutID),
-      selectionStart != nil
-    else { return }
-
-    if let endHit = layout.hitTest(point: current) {
-      selectionEnd = endHit
-    } else if current.y > layout.rect.maxY {
-      selectionEnd = layout.text.count
-    } else if current.y < layout.rect.minY {
-      selectionEnd = 0
-    } else if current.x >= layout.rect.maxX {
-      selectionEnd = layout.text.count
-    } else if current.x < layout.rect.minX {
-      selectionEnd = 0
-    }
-  }
-
-  func selection(for id: WidgetID) -> (from: Int, to: Int)? {
-    guard originLayoutID == id else { return nil }
-    guard let start = selectionStart, let end = selectionEnd else { return nil }
-    if start <= end { return (start, end) }
-    return (end, start)
-  }
-
-  public func selectAll() {
-    guard let layoutID = originLayoutID,
-      let layout = layoutRegistry.layout(for: layoutID)
-    else { return }
-    originLayoutRect = layout.rect
-    selectionStart = 0
-    selectionEnd = layout.text.count
-    isSelecting = false
-  }
-
-  package func selectAll(at point: Point) {
-    if originLayoutID == nil, let (id, layout) = layoutRegistry.entry(at: point) {
-      originLayoutID = id
-      originLayoutRect = layout.rect
-    }
-    selectAll()
+  public func select(_ selection: TextDocument.Selection) {
+    guard documents[selection.document]?.bounds(of: selection) != nil else { return }
+    self.selection = selection
   }
 
   public func selectedText() -> String? {
-    guard originLayoutRect != nil,
-      let layoutID = originLayoutID,
-      let layout = layoutRegistry.layout(for: layoutID),
-      let start = selectionStart,
-      let end = selectionEnd
-    else { return nil }
-    let s = min(start, end)
-    let e = max(start, end)
-    return layout.textInRange(from: s, to: e)
+    guard let selection else { return nil }
+    let text = documents[selection.document]?.text(in: selection)
+    return text?.isEmpty == false ? text : nil
   }
 
-  func reconcile() {
-    if let id = originLayoutID, layoutRegistry.layout(for: id) == nil { clear() }
+  public func selectAll() {
+    guard let selection, let document = documents[selection.document],
+      let first = document.runs.first, let last = document.runs.last
+    else { return }
+    self.selection = TextDocument.Selection(
+      document: document.id, anchor: .init(run: first.id, offset: 0),
+      active: .init(run: last.id, offset: last.text.count))
+    isSelecting = false
   }
 
-  func clear() {
-    originLayoutRect = nil
-    originLayoutID = nil
-    selectionStart = nil
-    selectionEnd = nil
+  func install(_ documents: [TextID: TextDocument]) {
+    if let selection {
+      let old = self.documents[selection.document]
+      let new = documents[selection.document]
+      // Without an edit mapping, even an equal-length replacement can invalidate offsets.
+      if old != new || new?.bounds(of: selection) == nil { clear() }
+    }
+    self.documents = documents
+  }
+
+  func setSelecting(_ value: Bool) { isSelecting = value }
+
+  public func clear() {
+    selection = nil
     isSelecting = false
   }
 }

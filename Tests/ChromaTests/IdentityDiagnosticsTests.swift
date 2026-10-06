@@ -24,8 +24,9 @@ struct IdentityDiagnosticsTests {
         _ = ForEach([Item(id: 1), Item(id: 1)]) { _ in Text("Row") }
       }
     }
+    // Optimized preconditions still trap, but omit their diagnostic strings.
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("Duplicate collection element ID: 1"))
+    #expect(!_isDebugAssertConfiguration() || diagnostic.contains("Duplicate collection element ID: 1"))
   }
 
   @Test func duplicateKeyPathCollectionKeysFail() async {
@@ -35,7 +36,7 @@ struct IdentityDiagnosticsTests {
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("Duplicate collection element ID: 1"))
+    #expect(!_isDebugAssertConfiguration() || diagnostic.contains("Duplicate collection element ID: 1"))
   }
 
   @Test func duplicateLazyDataKeysFail() async {
@@ -48,7 +49,7 @@ struct IdentityDiagnosticsTests {
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("Duplicate lazy collection element ID"))
+    #expect(!_isDebugAssertConfiguration() || diagnostic.contains("Duplicate lazy collection element ID"))
   }
 
   @Test func distinctLazyRowKeyTypesSucceed() async {
@@ -78,7 +79,7 @@ struct IdentityDiagnosticsTests {
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("Duplicate lazy row ID"))
+    #expect(!_isDebugAssertConfiguration() || diagnostic.contains("Duplicate lazy row ID"))
   }
 
   @Test func sharedFocusTargetAcrossControlsFails() async {
@@ -93,7 +94,7 @@ struct IdentityDiagnosticsTests {
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("FocusTarget must bind to exactly one control"))
+    #expect(!_isDebugAssertConfiguration() || diagnostic.contains("FocusTarget must bind to exactly one control"))
   }
 
   @Test func sharedFocusTargetAcrossInteractionInstancesFails() async {
@@ -108,6 +109,8 @@ struct IdentityDiagnosticsTests {
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("FocusTarget cannot be bound to multiple interaction instances"))
+    #expect(
+      !_isDebugAssertConfiguration()
+        || diagnostic.contains("FocusTarget cannot be bound to multiple interaction instances"))
   }
 }

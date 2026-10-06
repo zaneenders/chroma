@@ -16,6 +16,8 @@ package final class WindowRuntime {
   }
   private var pendingInputs: [PendingInput] = []
   private var preparedKeyboardInput = false
+  private var processingInput = false
+  private var drainingInputs = false
   private let producer: FrameProducer
   package let scheduler: FrameScheduler
 
@@ -50,7 +52,7 @@ package final class WindowRuntime {
   package func handleKeyboardInput(
     _ input: KeyboardInput, deliver: @escaping @MainActor (ResolvedKeyboardInput) -> Void
   ) {
-    guard interaction.tree != nil else {
+    guard interaction.tree != nil, !processingInput else {
       pendingInputs.append(.keyboard(input, deliver))
       scheduler.requestContent()
       return
@@ -98,23 +100,28 @@ package final class WindowRuntime {
   }
 
   package func handleInput(_ input: InputState) {
+    if input.commands.count + input.textEvents.count > 1 {
+      preparedKeyboardInput = false
+      pendingInputs.append(contentsOf: input.separateEvents.map { .state($0) })
+      drainPendingInputs()
+      scheduler.requestContent()
+      return
+    }
     let refresh = !preparedKeyboardInput
     preparedKeyboardInput = false
-    if interaction.tree == nil {
+    if interaction.tree == nil || processingInput {
       pendingInputs.append(.state(input))
     } else {
       processInput(input, refreshing: refresh)
+      drainPendingInputs()
     }
     scheduler.requestContent()
   }
 
   private func processInput(_ input: InputState, refreshing: Bool = true) {
-    // Hover can use the last frame's geometry. Actionable events need current callbacks
-    // and layout, including between events whose presentation is coalesced.
-    if refreshing
-      && (input.pointerDown || input.pointerPressed || input.pointerReleased || input.scrollDelta != .zero
-        || !input.commands.isEmpty || !input.textEvents.isEmpty)
-    {
+    processingInput = true
+    defer { processingInput = false }
+    if refreshing {
       producer.refreshRegistrations(
         content, viewport: interaction.viewport.size, context: context, commands: input.commands)
     }
@@ -122,25 +129,31 @@ package final class WindowRuntime {
     interaction.finishInput()
   }
 
+  private func drainPendingInputs() {
+    guard !drainingInputs, !processingInput else { return }
+    drainingInputs = true
+    defer { drainingInputs = false }
+    while !pendingInputs.isEmpty, interaction.tree != nil {
+      switch pendingInputs.removeFirst() {
+      case .state(let input): handleInput(input)
+      case .keyboard(let input, let deliver): handleKeyboardInput(input, deliver: deliver)
+      }
+    }
+  }
+
   package func renderScheduled(
     _ kind: FrameScheduler.FrameKind,
     viewport: Size,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
+    interaction.viewport = Rect(origin: .zero, size: viewport)
     flushInput()
     _ = interaction.consumeRedrawRequest()
     while !pendingInputs.isEmpty {
-      let pending = pendingInputs
-      pendingInputs.removeAll(keepingCapacity: true)
-      for input in pending {
-        if interaction.tree == nil {
-          _ = render(viewport: viewport, input: InputState(), onChange: onChange)
-        }
-        switch input {
-        case .state(let input): handleInput(input)
-        case .keyboard(let input, let deliver): handleKeyboardInput(input, deliver: deliver)
-        }
+      if interaction.tree == nil {
+        producer.refreshRegistrations(content, viewport: viewport, context: context)
       }
+      drainPendingInputs()
     }
     scheduler.consumeContentRequest()
     var input = interaction.input
@@ -158,10 +171,14 @@ package final class WindowRuntime {
     processingInput: Bool = true,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
-    let list = producer.render(
+    if processingInput, input != InputState() {
+      interaction.viewport = Rect(origin: .zero, size: viewport)
+      handleInput(input)
+      return renderScheduled(.content, viewport: viewport, onChange: onChange)
+    }
+    return producer.render(
       content: content, viewport: viewport, input: input, context: context,
-      processingInput: processingInput, onChange: onChange)
-    return list
+      processingInput: false, onChange: onChange)
   }
 
   package func observe(_ list: DrawList, viewport: Size, rasterScale: Point? = nil) {

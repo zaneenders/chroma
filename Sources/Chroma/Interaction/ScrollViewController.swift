@@ -29,7 +29,7 @@ public final class ScrollViewController {
   }
 
   var request: ScrollRequest?
-  @ObservationIgnored var lazyStackCache = LazyStackCache()
+  @ObservationIgnored var rowGeometry = ScrollRowGeometry()
   @ObservationIgnored var uniformRowIdentity: UniformRowIdentity?
 
   func rowIdentity<Data: RandomAccessCollection>(for data: Data) -> TypedUniformRowIdentity<Data.Element.ID>

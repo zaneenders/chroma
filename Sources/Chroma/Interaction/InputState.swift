@@ -28,3 +28,29 @@ public struct InputState: Equatable, Sendable {
     self.textEvents = textEvents
   }
 }
+
+extension InputState {
+  var separateEvents: [InputState] {
+    guard commands.count + textEvents.count > 1 else { return [self] }
+    var state = self
+    state.commands = []
+    state.textEvents = []
+    var events: [InputState] = []
+    for command in commands {
+      state.commands = [command]
+      events.append(state)
+      state.pointerPressed = false
+      state.pointerReleased = false
+      state.scrollDelta = .zero
+    }
+    state.commands = []
+    for event in textEvents {
+      state.textEvents = [event]
+      events.append(state)
+      state.pointerPressed = false
+      state.pointerReleased = false
+      state.scrollDelta = .zero
+    }
+    return events
+  }
+}

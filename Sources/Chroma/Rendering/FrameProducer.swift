@@ -37,11 +37,13 @@ final class FrameTrackingSubscription: Observable, Sendable {
 package final class FrameProducer {
   private var generation: UInt64 = 0
   private var subscription: FrameTrackingSubscription?
+  private var onChange: (@MainActor @Sendable () -> Void)?
   private weak var interaction: Interaction?
 
   package func reset() {
     interaction?.resetRegistrations()
     interaction = nil
+    onChange = nil
     resetTracking()
   }
 
@@ -63,9 +65,8 @@ package final class FrameProducer {
     processingInput: Bool = true,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
-    resetTracking()
+    self.onChange = onChange
     self.interaction = context.interaction
-    let generation = generation
     let interaction = context.interaction
     interaction.viewport = Rect(origin: .zero, size: viewport)
     if interaction.tree == nil {
@@ -80,36 +81,31 @@ package final class FrameProducer {
         if !wasEditing { interaction.stopInput() }
       }
     }
-    if !input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed || input.pointerReleased
-      || input.scrollDelta != .zero
-    {
+    if processingInput, input.commands.count + input.textEvents.count > 1 {
+      for event in input.separateEvents {
+        refreshRegistrations(content, viewport: viewport, context: context, commands: event.commands)
+        interaction.processInput(event)
+        interaction.finishInput()
+      }
+    } else if processingInput, input != InputState() {
       refreshRegistrations(content, viewport: viewport, context: context, commands: input.commands)
     }
-    interaction.beginFrame(input: input, processingInput: processingInput)
-    let subscription = FrameTrackingSubscription(
-      onChange, metricsLifetime: PipelineMetrics.trackLifetime(.observationSubscription))
-    self.subscription = subscription
-    let enqueue = ObservationDelivery.enqueue
-    let drawList = withObservationTracking(options: .didSet) {
-      subscription.trackCancellation()
+    interaction.beginFrame(
+      input: input, processingInput: processingInput && input.commands.count + input.textEvents.count <= 1)
+    let drawList = track {
       var drawList = DrawList()
 
       if let content {
         let resolved = BlockEngine.resolve(content, context: context)
         let rect = Rect(origin: .zero, size: viewport)
         resolved.register(in: rect)
+        interaction.endFrame()
         resolved.paint(into: &drawList, in: rect)
+      } else {
+        interaction.endFrame()
       }
       return drawList
-    } onChange: { [weak self, weak subscription] event in
-      event.cancel()
-      guard let onChange = subscription?.takeCallback() else { return }
-      enqueue { [weak self] in
-        guard let self, self.generation == generation else { return }
-        onChange()
-      }
     }
-    interaction.endFrame()
     var result = drawList
     BlockEngine.countDrawingCommands(into: &result) { list in
       interaction.paintNavigation(into: &list, theme: context.theme)
@@ -121,18 +117,42 @@ package final class FrameProducer {
     _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = [],
     keyboardNavigationOverscan: Bool = false
   ) {
+    self.interaction = context.interaction
     var context = context
     context.keyboardNavigationOverscan = keyboardNavigationOverscan
 
     let interaction = context.interaction
-    interaction.refreshingRegistrations = interaction.tree != nil
-    interaction.beginFrame(input: InputState(commands: commands))
-    interaction.refreshingRegistrations = true
-    defer { interaction.refreshingRegistrations = false }
-    if let content {
-      BlockEngine.register(content, in: Rect(origin: .zero, size: viewport), context: context)
+    track {
+      interaction.refreshingRegistrations = true
+      interaction.beginFrame(input: InputState(commands: commands), processingInput: false)
+      defer { interaction.refreshingRegistrations = false }
+      if let content {
+        BlockEngine.register(content, in: Rect(origin: .zero, size: viewport), context: context)
+      }
+      interaction.endFrame()
     }
-    interaction.endFrame()
+  }
+
+  private func track<Output>(_ body: () -> Output) -> Output {
+    resetTracking()
+    guard let onChange else { return body() }
+    let generation = generation
+    let subscription = FrameTrackingSubscription(
+      onChange, metricsLifetime: PipelineMetrics.trackLifetime(.observationSubscription))
+    self.subscription = subscription
+    let enqueue = ObservationDelivery.enqueue
+    return withObservationTracking(options: .didSet) {
+      subscription.trackCancellation()
+      return body()
+    } onChange: { [weak self, weak subscription] event in
+      event.cancel()
+      guard let onChange = subscription?.takeCallback() else { return }
+      enqueue { [weak self] in
+        guard let self, self.generation == generation else { return }
+        self.onChange = nil
+        onChange()
+      }
+    }
   }
 
 }

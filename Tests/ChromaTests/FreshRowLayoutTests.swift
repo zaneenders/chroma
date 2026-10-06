@@ -6,7 +6,7 @@ import Testing
 
 @Suite(ControlledObservationDelivery())
 @MainActor
-struct LazyLayoutCacheTests {
+struct FreshRowLayoutTests {
   @Observable final class Model {
     var height: Float = 20
   }
@@ -35,7 +35,7 @@ struct LazyLayoutCacheTests {
     }
   }
 
-  @Test func lazyMeasurementsInvalidateAndResubscribe() async {
+  @Test func measurementsRefreshAndObservationRearms() async {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
@@ -47,7 +47,7 @@ struct LazyLayoutCacheTests {
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
-    #expect(capture.measurements == 1)
+    #expect(capture.measurements == 2)
     for height: Float in [50, 80] {
       redraws = 0
       model.height = height
@@ -56,13 +56,13 @@ struct LazyLayoutCacheTests {
       renderer.render()
       #expect(capture.drawnHeight == height)
     }
-    #expect(capture.measurements == 3)
+    #expect(capture.measurements == 4)
     renderer.render()
-    #expect(capture.measurements == 3)
+    #expect(capture.measurements == 5)
     renderer.close()
   }
 
-  @Test func lazyMeasurementsInvalidateBeforeImmediateRender() async {
+  @Test func measurementsRefreshBeforeObservationDelivery() async {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
@@ -78,13 +78,13 @@ struct LazyLayoutCacheTests {
       renderer.render()
       #expect(capture.drawnHeight == height)
     }
-    #expect(capture.measurements == 4)
+    #expect(capture.measurements == 5)
     await drainObservationChanges()
     renderer.render()
-    #expect(capture.measurements == 4)
+    #expect(capture.measurements == 6)
   }
 
-  @Test func lazyMeasurementsReflectChangesFromInputHandlersInSameFrame() {
+  @Test func measurementsReflectInputChangesInTheSameFrame() {
     let model = Model()
     let capture = Capture()
     let controller = ScrollViewController()
@@ -100,10 +100,10 @@ struct LazyLayoutCacheTests {
     renderer.render()
     renderer.render(input: InputState(commands: [.application("resize")]))
     #expect(capture.drawnHeight == 80)
-    #expect(capture.measurements == 2)
+    #expect(capture.measurements == 4)
   }
 
-  @Test func changedRowHeightInvalidatesCache() {
+  @Test func changedRowHeightUpdatesGeometry() {
     let interaction = Interaction()
     let controller = ScrollViewController()
     let id = WidgetID("scroll")
@@ -129,7 +129,7 @@ struct LazyLayoutCacheTests {
     #expect(interaction.scrollState(for: id).limit.y == 80)
   }
 
-  @Test func retainedRowContentMutationInvalidatesCache() {
+  @Test func retainedRowContentMutationUpdatesGeometry() {
     let interaction = Interaction()
     let controller = ScrollViewController()
     let id = WidgetID("scroll")

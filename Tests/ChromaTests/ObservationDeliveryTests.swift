@@ -7,8 +7,8 @@ import Testing
 struct ObservationDeliveryTests {
   @Test(.timeLimit(.minutes(1)))
   func lazyMeasurementsRequestRedrawUsingMainActorTasks() async throws {
-    let model = LazyLayoutCacheTests.Model()
-    let capture = LazyLayoutCacheTests.Capture()
+    let model = FreshRowLayoutTests.Model()
+    let capture = FreshRowLayoutTests.Capture()
     let renderer = HeadlessHost()
     defer { renderer.close() }
     renderer.content = ScrollView(
@@ -16,7 +16,7 @@ struct ObservationDeliveryTests {
       rows: [
         .init(
           id: WidgetID("row"),
-          content: LazyLayoutCacheTests.Row(model: model, capture: capture))
+          content: FreshRowLayoutTests.Row(model: model, capture: capture))
       ]
     ).id(WidgetID("stack"))
     let (redraws, continuation) = AsyncStream<Void>.makeStream()
@@ -31,6 +31,6 @@ struct ObservationDeliveryTests {
       renderer.render()
       #expect(capture.drawnHeight == height)
     }
-    #expect(capture.measurements == 3)
+    #expect(capture.measurements == 4)
   }
 }

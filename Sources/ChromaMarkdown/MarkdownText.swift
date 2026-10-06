@@ -2,7 +2,7 @@ import Chroma
 
 /// A read-only Markdown renderer with selectable text.
 /// Links and images render their labels; emphasis renders without italic styling.
-public struct MarkdownText: Block {
+public struct MarkdownText: LayoutPreparingBlock {
   public var markdown: String
   public let scale: Float
   public let lineSpacing: Float
@@ -15,15 +15,33 @@ public struct MarkdownText: Block {
     self.lineSpacing = lineSpacing
   }
 
-  @MainActor public var body: some Block {
+  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
     let blocks = segmentMarkdown(markdown)
-    return VStack(spacing: 0) {
-      ForEach(Array(blocks.indices), id: \.self) { index in
-        MarkdownLeaf(
+    if let reference = context.documentTextReference {
+      var offset = reference.offset
+      let fragments = blocks.indices.map { index in
+        defer { offset += markdownPlainText(blocks[index]).count + (index < blocks.count - 1 ? 1 : 0) }
+        return MarkdownLeaf(
           block: blocks[index], scale: scale, lineSpacing: lineSpacing,
-          hasLeadingGap: hasGap(before: index, in: blocks))
+          hasLeadingGap: hasGap(before: index, in: blocks)
+        )
+        .textRun(reference.run, offset: offset)
       }
+      return BlockEngine.prepare(
+        VStack(spacing: 0) { ForEach(Array(fragments.indices), id: \.self) { fragments[$0] } }, context: context)
     }
+    return BlockEngine.prepare(
+      VStack(spacing: 0) {
+        ForEach(Array(blocks.indices), id: \.self) { index in
+          MarkdownLeaf(
+            block: blocks[index], scale: scale, lineSpacing: lineSpacing,
+            hasLeadingGap: hasGap(before: index, in: blocks))
+        }
+      }, context: context)
+  }
+
+  public static func plainText(_ markdown: String) -> String {
+    segmentMarkdown(markdown).map(markdownPlainText).joined(separator: "\n")
   }
 
   private func hasGap(before index: Int, in blocks: [MarkdownBlock]) -> Bool {
@@ -33,12 +51,29 @@ public struct MarkdownText: Block {
   }
 }
 
-struct MarkdownLeaf: PaintableBlock {
+struct MarkdownLeaf: LayoutPreparingBlock {
   var focusRule: FocusRule { .standard }
   let block: MarkdownBlock
   let scale: Float
   let lineSpacing: Float
   var hasLeadingGap = false
+
+  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    var prepared: MarkdownLayout?
+    func resolve(_ rect: Rect) -> MarkdownLayout {
+      if prepared?.rect != rect { prepared = layout(in: rect, context: context) }
+      return prepared!
+    }
+    return BlockEngine.Resolved(
+      measure: { proposal in
+        let layout = resolve(Rect(origin: .zero, size: proposal))
+        return Size(width: proposal.width, height: Float(layout.lines.count) * layout.lineHeight)
+      },
+      register: { rect in register(resolve(rect), in: rect, context: context) },
+      paint: { list, rect in
+        resolve(rect).draw(into: &list, theme: context.theme, selection: context.textInputVisualState())
+      })
+  }
 
   @MainActor private func layout(in rect: Rect, context: BlockContext) -> MarkdownLayout {
     let effectiveScale = scale * context.textScale
@@ -62,7 +97,10 @@ struct MarkdownLeaf: PaintableBlock {
   }
 
   @MainActor public func register(in rect: Rect, context: BlockContext) {
-    let layout = layout(in: rect, context: context)
+    register(layout(in: rect, context: context), in: rect, context: context)
+  }
+
+  @MainActor private func register(_ layout: MarkdownLayout, in rect: Rect, context: BlockContext) {
     _ = context.textSelectionState(
       in: rect, text: { layout.text },
       pointerOffset: { point, _ in layout.hitTest(point) },
@@ -73,4 +111,11 @@ struct MarkdownLeaf: PaintableBlock {
     layout(in: rect, context: context).draw(
       into: &drawList, theme: context.theme, selection: context.textInputVisualState())
   }
+}
+
+private func markdownPlainText(_ block: MarkdownBlock) -> String {
+  MarkdownLayout(
+    lines: layoutMarkdown([block], columns: Int(Int32.max), theme: .dark, baseColor: .white),
+    lineHeight: 1, cellWidth: 1, scale: 1, rect: .zero
+  ).text
 }

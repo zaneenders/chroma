@@ -64,7 +64,7 @@ struct CustomTextSelectionTests {
     #expect(context.interaction.copyText() == renderer.text)
     renderer.text = "a"
     render()
-    #expect(renderer.state?.selectionRange == 0..<1)
+    #expect(renderer.state?.selectionRange == nil)
     #expect(renderer.state?.caretOffset == 1)
     render([.action(.cancel)])
     #expect(!context.isSelectingText)

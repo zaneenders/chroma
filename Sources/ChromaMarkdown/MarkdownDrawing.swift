@@ -17,8 +17,8 @@ struct MarkdownLayout {
   }
 
   private func separator(after row: Int) -> String {
-    guard row < lines.count - 1 else { return "" }
     if row == 0, hasLeadingGap { return "" }
+    if row == lines.count - 1, lines[row].kind == .code { return "" }
     return lines[row].trailingText
   }
 
@@ -79,7 +79,10 @@ struct MarkdownLayout {
       }
       var x = rect.minX
       for run in line.runs {
-        drawList.text(run.text, at: Point(x: x, y: y), color: run.color, scale: scale)
+        let paintedText =
+          line.kind == .rule
+          ? String(repeating: "─", count: Int(max(1, min(40, rect.size.width / max(1, cellWidth))))) : run.text
+        drawList.text(paintedText, at: Point(x: x, y: y), color: run.color, scale: scale)
         if let highlight {
           drawList.pushClip(highlight)
           drawList.text(

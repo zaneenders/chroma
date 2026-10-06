@@ -85,7 +85,7 @@ struct StructuralInteractionTests {
       }.id(key)
     }
     harness.render(content(1))
-    harness.context.selection.selectAll(at: Point(x: 1, y: 1))
+    harness.context.interaction.selectAll(at: Point(x: 1, y: 1))
     controller.scroll(to: 30)
     harness.render(content(1))
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
@@ -359,14 +359,13 @@ struct StructuralInteractionTests {
       }
     }
     harness.render(content(true))
-    let selection = harness.context.selection
-    let original = selection.layoutRegistry.entry(at: Point(x: 1, y: 1))!.0
-    selection.selectAll(at: Point(x: 1, y: 1))
-    #expect(selection.selection(for: original) != nil)
+    let original = harness.context.interaction.registrations.readOnlyTexts.keys.first!
+    harness.context.interaction.selectAll(at: Point(x: 1, y: 1))
+    #expect(harness.context.interaction.documentRange(for: original) != nil)
     harness.render(content(false))
-    let replacement = selection.layoutRegistry.entry(at: Point(x: 1, y: 1))!.0
+    let replacement = harness.context.interaction.registrations.readOnlyTexts.keys.first!
     #expect(original != replacement)
-    #expect(selection.selection(for: replacement) == nil)
+    #expect(harness.context.interaction.documentRange(for: replacement) == nil)
   }
 
   @Test func focusRequestBeforeTraversalBindsWithoutChangingIdentity() {
@@ -442,7 +441,7 @@ struct StructuralInteractionTests {
       ScrollView(controller: controller) { Text("hello").selectable().sizing(y: .fixed(500)) }
     }
     harness.render(content())
-    harness.context.selection.selectAll(at: Point(x: 1, y: 1))
+    harness.context.interaction.selectAll(at: Point(x: 1, y: 1))
     controller.scroll(to: 30)
     harness.render(content())
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
