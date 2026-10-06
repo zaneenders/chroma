@@ -26,6 +26,49 @@ struct MarkdownTests {
       ])
   }
 
+  @Test(arguments: [
+    "| Name | Value |\n| --- | --- |",
+    "| Name | Value |\n| --- | --- |\n| Apple | 1 |",
+    "| Name | Value |\n| --- | --- |\n| | |",
+  ])
+  func tablesRemainSingleBlocks(source: String) throws {
+    let blocks = segmentMarkdown(source)
+    #expect(blocks.count == 1)
+    let block = try #require(blocks.first)
+    guard case .paragraph(let text) = block else {
+      Issue.record("Expected a table to use the paragraph fallback")
+      return
+    }
+    #expect(text.contains("Name"))
+    #expect(text.contains("Value"))
+    #expect(text.contains("|"))
+    if source.contains("Apple") {
+      #expect(text.contains("Apple"))
+      #expect(text.contains("1"))
+    }
+  }
+
+  @Test func streamingTablePrefixesCanBeLaidOut() {
+    let source = "| Name | Value |\n| --- | --- |\n| Apple | 1 |"
+    for length in 1...source.count {
+      let blocks = segmentMarkdown(String(source.prefix(length)))
+      let lines = layoutMarkdown(blocks, columns: 80, theme: .dark, baseColor: .white)
+      #expect(!lines.isEmpty)
+    }
+  }
+
+  @Test func tablesInsideListsRemainSingleBlocks() {
+    let blocks = segmentMarkdown("- Item\n\n  | Name | Value |\n  | --- | --- |")
+    #expect(blocks.count == 2)
+    #expect(blocks.first == .listItem(marker: "•", text: "Item", depth: 0))
+    guard case .paragraph(let text) = blocks.last else {
+      Issue.record("Expected a nested table to use the paragraph fallback")
+      return
+    }
+    #expect(text.contains("Name"))
+    #expect(text.contains("Value"))
+  }
+
   @Test func handlesCRLFAndPreservesTrailingCodeBlankLines() {
     #expect(segmentMarkdown("# Title\r\n\r\nBody") == [.heading(level: 1, text: "Title"), .paragraph("Body")])
     let lines = layoutMarkdown(segmentMarkdown("```\na\n\n```"), columns: 80, theme: .dark, baseColor: .white)

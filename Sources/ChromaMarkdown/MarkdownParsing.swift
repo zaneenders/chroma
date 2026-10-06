@@ -37,6 +37,9 @@ func segmentMarkdown(_ source: String) -> [MarkdownBlock] {
           }
         }
       }
+    case let table as Table:
+      // Swift Markdown traps when formatting table heads, bodies, rows, or cells independently.
+      blocks.append(.paragraph(table.detachedFromParent.format()))
     case let html as HTMLBlock:
       blocks.append(.paragraph(html.rawHTML))
     default:
