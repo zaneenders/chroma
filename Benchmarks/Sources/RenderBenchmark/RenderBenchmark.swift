@@ -34,6 +34,8 @@ struct Report: Codable {
   let warmup: Int
   let coldMS: [String: Double]
   let timings: [String: Distribution]
+  let rendererInfo: [String: String]?
+  let renderWork: [String: Int]?
 }
 
 @main
@@ -46,7 +48,7 @@ struct RenderBenchmark {
     var arguments = Array(CommandLine.arguments.dropFirst())
     if arguments == ["--help"] {
       print(
-        "RenderBenchmark [--scene \(RenderFixture.names.joined(separator: "|"))] [--stage cull|metal] [--count 2000] [--frames 300] [--warmup 30] [--seconds 0]"
+        "RenderBenchmark [--scene \(RenderFixture.names.joined(separator: "|"))] [--stage cull|metal|opengl] [--count 2000] [--frames 300] [--warmup 30] [--seconds 0]"
       )
       return
     }
@@ -60,7 +62,7 @@ struct RenderBenchmark {
     }
     let scene = options["--scene"] ?? "shapes"
     let stage = options["--stage"] ?? "cull"
-    guard RenderFixture.names.contains(scene), ["cull", "metal"].contains(stage),
+    guard RenderFixture.names.contains(scene), ["cull", "metal", "opengl"].contains(stage),
       let count = Int(options["--count"] ?? "2000"), (1...100_000).contains(count),
       let frames = Int(options["--frames"] ?? "300"), (1...1_000_000).contains(frames),
       let warmup = Int(options["--warmup"] ?? "30"), (0...100_000).contains(warmup),
@@ -71,9 +73,13 @@ struct RenderBenchmark {
     let viewport = fixture.viewport
     let rasterScale = Point(x: 1, y: 1)
     #if os(macOS)
-    let metal = stage == "cull" ? nil : try MetalReplay(viewport: viewport, rasterScale: rasterScale)
+    guard stage != "opengl" else { throw BenchmarkError.failed("OpenGL stages require Linux") }
+    let metal = stage == "metal" ? try MetalReplay(viewport: viewport, rasterScale: rasterScale) : nil
+    #elseif os(Linux)
+    guard stage != "metal" else { throw BenchmarkError.failed("Metal stages require macOS") }
+    let openGL = stage == "opengl" ? try OpenGLReplay(viewport: viewport) : nil
     #else
-    guard stage == "cull" else { throw BenchmarkError.failed("Metal stages require macOS") }
+    guard stage == "cull" else { throw BenchmarkError.failed("Native stages require macOS or Linux") }
     #endif
     var samples: [String: [Double]] = [:]
     var cold: [String: Double] = [:]
@@ -96,6 +102,12 @@ struct RenderBenchmark {
         durations["metalEncode"] = timing.cpu
         durations["gpu"] = timing.gpu
       }
+      #elseif os(Linux)
+      if let openGL {
+        let timing = try openGL.render(replay, viewport: viewport)
+        durations["openGLEncode"] = timing.cpu
+        durations["openGLCompletion"] = timing.completion
+      }
       #endif
       if iteration == 0 {
         cold = durations.mapValues { $0 * 1000 }
@@ -105,10 +117,22 @@ struct RenderBenchmark {
       }
       iteration += 1
       if iteration == warmup + 1 { measurementStart = now() }
+      #if os(Linux)
+      // EGL contexts are thread-local, even when Swift actor isolation is unchanged.
+      if openGL == nil { await Task.yield() }
+      #else
       await Task.yield()
+      #endif
     } while measured < frames || now() - measurementStart < seconds
+    #if os(Linux)
+    let rendererInfo = openGL?.info
+    let renderWork = openGL?.work
+    #else
+    let rendererInfo: [String: String]? = nil
+    let renderWork: [String: Int]? = nil
+    #endif
     let report = Report(
-      schemaVersion: 5, fixtureVersion: RenderFixture.version,
+      schemaVersion: 6, fixtureVersion: RenderFixture.version,
       sequenceFrames: sequence.count,
       commandCountMin: sequence.map { $0.commands.count }.min()!,
       commandCountMax: sequence.map { $0.commands.count }.max()!,
@@ -116,7 +140,7 @@ struct RenderBenchmark {
       processors: ProcessInfo.processInfo.activeProcessorCount, scene: scene, stage: stage,
       count: count, frames: measured, minimumFrames: frames, minimumSeconds: seconds, warmup: warmup,
       coldMS: cold,
-      timings: samples.mapValues(Distribution.init))
+      timings: samples.mapValues(Distribution.init), rendererInfo: rendererInfo, renderWork: renderWork)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     print(String(decoding: try encoder.encode(report), as: UTF8.self))

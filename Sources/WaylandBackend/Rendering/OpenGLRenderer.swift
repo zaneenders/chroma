@@ -5,8 +5,17 @@ import Chroma
   StrictMemorySafety, as: ignored,
   reason:
     "OpenGL copies scoped upload buffers synchronously; buffer sizes and vertex offsets are checked before C calls.")
+/// Draw-list encoder for a current OpenGL ES 3 context.
+/// Call setup, frame encoding, and cleanup on the context's owning thread.
 @MainActor
-final class OpenGLRenderer {
+public final class OpenGLRenderer {
+  public init() {}
+
+  public private(set) var lastInstanceCount = 0
+  public private(set) var lastDrawCallCount = 0
+  /// Instance-buffer payload uploads, excluding texture uploads and buffer orphaning.
+  public private(set) var lastUploadCallCount = 0
+  public private(set) var lastUploadByteCount = 0
   private var program: GLuint = 0
   private var vao: GLuint = 0
   private var quadVBO: GLuint = 0
@@ -15,6 +24,13 @@ final class OpenGLRenderer {
   private var fontTexture: GLuint = 0
   private var fontAtlas: FontAtlas?
   private var resolutionUniform: GLint = -1
+
+  // Bound staging and each GPU backing store to about 544 KiB, even for huge draw lists.
+  static let maximumBatchInstanceCount = 4096
+  private var instances: [GLQuad] = []
+  private var batchKey: GLTextureKey?
+  private var batchTexture: GLuint = 0
+  private var batchClip = Rect.zero
 
   private struct CachedImageTexture {
     var generation: UInt64
@@ -61,7 +77,7 @@ final class OpenGLRenderer {
     return shader
   }
 
-  func setUp() throws {
+  public func setUp() throws {
     let vertex = try compileShader(
       GLenum(GL_VERTEX_SHADER), source: vertexShader, stage: "vertex shader")
     let fragment: GLuint
@@ -112,7 +128,7 @@ final class OpenGLRenderer {
 
     unsafe glGenBuffers(1, &instanceVBO)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    glBufferData(GLenum(GL_ARRAY_BUFFER), MemoryLayout<GLQuad>.stride, nil, GLenum(GL_DYNAMIC_DRAW))
+    instances.reserveCapacity(Self.maximumBatchInstanceCount)
     let stride = GLsizei(MemoryLayout<GLQuad>.stride)
     let offsets = [
       MemoryLayout<GLQuad>.offset(of: \.dst0)!, MemoryLayout<GLQuad>.offset(of: \.dst1)!,
@@ -183,13 +199,6 @@ final class OpenGLRenderer {
     }
   }
 
-  private func uploadQuad(_ quad: inout GLQuad) {
-    withUnsafeBytes(of: &quad) { bytes in
-      precondition(bytes.count <= MemoryLayout<GLQuad>.stride)
-      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, bytes.count, bytes.baseAddress)
-    }
-  }
-
   private func makeTexture(
     width: Int,
     height: Int,
@@ -232,8 +241,9 @@ final class OpenGLRenderer {
     fontTexture = texture
   }
 
-  func beginFrame(width: Int32, height: Int32, bufferScale: Int32) {
+  public func beginFrame(width: Int32, height: Int32, bufferScale: Int32) {
     glViewport(0, 0, width * bufferScale, height * bufferScale)
+    glDisable(GLenum(GL_SCISSOR_TEST))
     glClearColor(0.1, 0.1, 0.2, 1)
     glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
     glUseProgram(program)
@@ -241,26 +251,66 @@ final class OpenGLRenderer {
     glBindVertexArray(vao)
   }
 
-  func render(_ drawList: DrawList, viewport: Size, bufferScale: Int32) {
+  public func render(_ drawList: DrawList, viewport: Size, bufferScale: Int32) {
+    lastInstanceCount = 0
+    lastDrawCallCount = 0
+    lastUploadCallCount = 0
+    lastUploadByteCount = 0
     imageFrame &+= 1
+    let root = Rect(origin: .zero, size: viewport)
     var clips: [Rect] = []
     for entry in drawList.culled(to: viewport).commands {
       switch entry {
-      case .quad(let quad): drawQuad(quad)
-      case .pushClip(let rect):
-        let clipped = (clips.last ?? Rect(origin: .zero, size: viewport)).intersection(rect) ?? .zero
-        clips.append(clipped)
-        applyClip(clipped, viewport: viewport, bufferScale: bufferScale)
-      case .popClip:
-        _ = clips.popLast()
-        if let clip = clips.last {
-          applyClip(clip, viewport: viewport, bufferScale: bufferScale)
-        } else {
-          glDisable(GLenum(GL_SCISSOR_TEST))
+      case .quad(let quad):
+        guard quad.rect.size.width > 0, quad.rect.size.height > 0 else { continue }
+        let key = GLTextureKey(quad.texture)
+        let clip = clips.last ?? root
+        if key != batchKey || clip != batchClip || instances.count == Self.maximumBatchInstanceCount {
+          flushBatch(viewport: viewport, bufferScale: bufferScale)
         }
+        if instances.isEmpty {
+          // Flush before resolving a new image generation: resolution can delete its old texture.
+          switch quad.texture {
+          case .white: batchTexture = whiteTexture
+          case .fontAtlas: batchTexture = fontTexture
+          case .image(let image):
+            guard let texture = imageTexture(for: image) else { continue }
+            batchTexture = texture
+          }
+          batchKey = key
+          batchClip = clip
+        }
+        instances.append(GLQuad(quad))
+      case .pushClip(let rect): clips.append((clips.last ?? root).intersection(rect) ?? .zero)
+      case .popClip: _ = clips.popLast()
       }
     }
+    flushBatch(viewport: viewport, bufferScale: bufferScale)
+    glDisable(GLenum(GL_SCISSOR_TEST))
     evictImageTexturesIfNeeded()
+  }
+
+  private func flushBatch(viewport: Size, bufferScale: Int32) {
+    guard !instances.isEmpty else { return }
+    precondition(instances.count <= Self.maximumBatchInstanceCount)
+    let byteCount = instances.count * MemoryLayout<GLQuad>.stride
+    glBindTexture(GLenum(GL_TEXTURE_2D), batchTexture)
+    applyClip(batchClip, viewport: viewport, bufferScale: bufferScale)
+    glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
+    // Orphan before each upload. GLES keeps prior draws' storage alive; no unsynchronized overwrite
+    // or fences are needed. Allocate only this payload, always below the staging limit.
+    glBufferData(GLenum(GL_ARRAY_BUFFER), byteCount, nil, GLenum(GL_STREAM_DRAW))
+    instances.span.bytes.withUnsafeBytes { bytes in
+      precondition(bytes.count == byteCount)
+      unsafe glBufferSubData(GLenum(GL_ARRAY_BUFFER), 0, bytes.count, bytes.baseAddress)
+    }
+    glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, GLsizei(instances.count))
+    lastInstanceCount += instances.count
+    lastDrawCallCount += 1
+    lastUploadCallCount += 1
+    lastUploadByteCount += byteCount
+    instances.removeAll(keepingCapacity: true)
+    batchKey = nil
   }
 
   private func imageTexture(for image: ImageResource) -> GLuint? {
@@ -310,40 +360,6 @@ final class OpenGLRenderer {
     }
   }
 
-  private func drawQuad(_ input: DrawQuad) {
-    let rect = input.rect
-    guard rect.size.width > 0, rect.size.height > 0 else { return }
-    let texture: GLuint
-    switch input.texture {
-    case .white: texture = whiteTexture
-    case .fontAtlas: texture = fontTexture
-    case .image(let image):
-      guard let imageTexture = imageTexture(for: image) else { return }
-      texture = imageTexture
-    }
-    func color(_ c: Color) -> (Float, Float, Float, Float) { (c.r, c.g, c.b, c.a) }
-    let padding = max(1, input.edgeSoftness)
-    let radii = input.radii.normalized(for: rect.size)
-    let uv = input.sourceRect
-    var quad = GLQuad(
-      dst0: (rect.minX - padding, rect.minY - padding),
-      dst1: (rect.maxX + padding, rect.maxY + padding),
-      uv0: (uv.minX, uv.minY), uv1: (uv.maxX, uv.maxY),
-      color: color(input.colors.topLeft),
-      size: (rect.size.width, rect.size.height),
-      radii: (radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft),
-      shape: (
-        max(0, input.borderThickness), padding, max(0, input.edgeSoftness),
-        input.texture == .fontAtlas ? 1 : 0
-      ),
-      topRight: color(input.colors.topRight), bottomRight: color(input.colors.bottomRight),
-      bottomLeft: color(input.colors.bottomLeft))
-    glBindTexture(GLenum(GL_TEXTURE_2D), texture)
-    glBindBuffer(GLenum(GL_ARRAY_BUFFER), instanceVBO)
-    uploadQuad(&quad)
-    glDrawArraysInstanced(GLenum(GL_TRIANGLE_STRIP), 0, 4, 1)
-  }
-
   private func applyClip(_ rect: Rect, viewport: Size, bufferScale: Int32) {
     let width = Int32(viewport.width)
     let height = Int32(viewport.height)
@@ -359,13 +375,16 @@ final class OpenGLRenderer {
       clipWidth * bufferScale, clipHeight * bufferScale)
   }
 
-  func cleanup() {
+  public func cleanup() {
     for cached in imageTextures.values {
       var texture = cached.texture
       unsafe glDeleteTextures(1, &texture)
     }
     imageTextures.removeAll()
     imageTextureBytes = 0
+    instances.removeAll()
+    batchKey = nil
+    batchTexture = 0
     if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
     if whiteTexture != 0 { unsafe glDeleteTextures(1, &whiteTexture) }
     if instanceVBO != 0 { unsafe glDeleteBuffers(1, &instanceVBO) }
