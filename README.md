@@ -14,6 +14,11 @@ UI Library in swift
 
 The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma-examples) repository.
 
+## Installing apps
+
+Run `swift package chroma-install` from the app package. Builds release with symbols;
+add `--without-profiling` to omit debug info. See [Install](INSTALLING.md).
+
 ## Inspired by
 
 - Immediate mode UI
