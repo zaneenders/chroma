@@ -123,7 +123,17 @@ targets.append(
 )
 
 #if os(macOS) || os(Linux)
+products.append(.plugin(name: "ChromaInstall", targets: ["ChromaInstall"]))
 targets.append(contentsOf: [
+  .executableTarget(name: "ChromaInstaller"),
+  .testTarget(name: "ChromaInstallerTests", dependencies: ["ChromaInstaller"]),
+  .plugin(
+    name: "ChromaInstall",
+    capability: .command(
+      intent: .custom(verb: "chroma-install", description: "Build and install a Chroma desktop app"),
+      permissions: []),
+    dependencies: ["ChromaInstaller"]
+  ),
   .executableTarget(name: "ShaderSourceGenerator"),
   .plugin(
     name: "ShaderSourcePlugin",
