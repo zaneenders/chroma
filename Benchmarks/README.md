@@ -103,6 +103,28 @@ swift run --package-path Benchmarks -c release RenderBenchmark --scene scrolling
 
 Measures draw-command culling using render fixtures, not end-to-end view rendering. On macOS, `--stage metal` also measures CPU Metal encoding and GPU execution. Reports JSON with cold timings and warm timing distributions.
 
+On Linux, replay the same fixtures through the real GLES driver with a surfaceless EGL pbuffer:
+
+```sh
+swift run --package-path Benchmarks -c release RenderBenchmark --scene scrolling --stage opengl
+swift test --filter OpenGLRenderingTests
+```
+
+The replay/tests require Mesa surfaceless EGL with an ES3 pbuffer configuration; no Wayland window is opened.
+For CI without a GPU, a Mesa software driver can run the pixel tests; never compare its performance to hardware rendering.
+Reports include the GL vendor/renderer/version, and the final frame's instance count, draw calls,
+instance-buffer payload upload calls and bytes. Upload counters exclude texture uploads and buffer orphaning.
+`openGLEncode` measures frame clear, renderer culling/preparation, uploads and draw submission.
+`openGLCompletion` measures the following `glFinish` CPU wait, **not GPU execution time**; work may overlap
+encoding or block inside driver calls. Neither phase includes Wayland input, layout, swap/compositor scheduling,
+or display latency. Use the native `StressExample` for separate interactive scrolling profiling.
+
+Adjacent quads batch only when resource identity and effective clip agree. Instances remain ordered,
+including translucent overlaps; image generation/dimension changes flush before texture replacement.
+CPU staging is capped at 4,096 instances (~544 KiB), and each bounded GPU store is orphaned before reuse
+so outstanding draws keep their original data. `OpenGLRenderer` requires a current ES3 context on the
+calling thread for setup, encoding and cleanup; do not suspend or move threads while relying on that context.
+
 Use `--help` for scenes and measurement options.
 
 ## Profiling ShapeTree on macOS
@@ -123,11 +145,13 @@ Interact with the launched window during the capture. The recorder terminates it
 
 ## Baselines and comparisons
 
-Collect all scenes, or select scenes with `SCENES`. Set `METAL=1` on macOS to include Metal measurements.
+Collect all scenes, or select scenes with `SCENES`. Set `METAL=1` on macOS to include Metal measurements,
+or `OPENGL=1` on Linux to include surfaceless EGL/GLES replays (driver metadata must match for comparisons).
 
 ```sh
 Benchmarks/Scripts/run.sh Benchmarks/results
 SCENES="scrolling selection" METAL=1 Benchmarks/Scripts/run.sh Benchmarks/metal-results
+SCENES="scrolling text" OPENGL=1 sh Benchmarks/Scripts/run.sh Benchmarks/opengl-results
 
 Benchmarks/Scripts/baseline.sh Benchmarks/baseline 5
 # After making changes, collect the same workloads into a new directory.

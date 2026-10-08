@@ -28,6 +28,9 @@ for scene in ${SCENES:-shapes text clipped images transcript streaming scrolling
   if [ "$(uname -s)" = Darwin ] && [ "${METAL:-0}" = 1 ]; then
     "$bin" --scene "$scene" --stage metal > "$out/$scene-metal.json"
   fi
+  if [ "$(uname -s)" = Linux ] && [ "${OPENGL:-0}" = 1 ]; then
+    "$bin" --scene "$scene" --stage opengl > "$out/$scene-opengl.json"
+  fi
 done
 
 "$(dirname "$bin")/StressBenchmark" > "$out/stress-headless.json"

@@ -52,6 +52,12 @@ struct BenchmarkRuns {
           guard let value = report[key] else { throw ComparisonError("Missing \(key): \(name)") }
           config[key] = value
         }
+        if report["stage"] as? String == "opengl" {
+          guard let renderer = report["rendererInfo"] as? [String: String],
+            ["vendor", "renderer", "version"].allSatisfy({ renderer[$0]?.isEmpty == false })
+          else { throw ComparisonError("Missing OpenGL driver metadata: \(name)") }
+          config["rendererInfo"] = renderer
+        }
         let encoded = try JSONSerialization.data(withJSONObject: config, options: [.sortedKeys])
         guard configs[name] == nil || configs[name] == encoded else {
           throw ComparisonError("Incompatible trial configuration: \(name)")

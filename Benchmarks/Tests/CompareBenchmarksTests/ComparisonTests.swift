@@ -4,6 +4,39 @@ import Testing
 @testable import CompareBenchmarks
 
 struct ComparisonTests {
+  @Test func openGLReportsRequireMatchingDriverMetadata() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    func write(_ name: String, driver: [String: String]?) throws -> BenchmarkRuns {
+      let directory = root.appendingPathComponent(name)
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      for metadata in BenchmarkRuns.metadataNames {
+        try Data("same".utf8).write(to: directory.appendingPathComponent(metadata))
+      }
+      var report: [String: Any] = Dictionary(uniqueKeysWithValues: BenchmarkRuns.configKeys.map { ($0, 1) })
+      report["stage"] = "opengl"
+      if let driver { report["rendererInfo"] = driver }
+      report["timings"] = ["openGLEncode": ["p50MS": 1.0, "p95MS": 2.0]]
+      try JSONSerialization.data(withJSONObject: report)
+        .write(to: directory.appendingPathComponent("scrolling-opengl.json"))
+      return try BenchmarkRuns(directory: directory)
+    }
+    let driver = ["vendor": "Mesa", "renderer": "GPU", "version": "ES3"]
+    let baseline = try write("baseline", driver: driver)
+    let identical = try write("identical", driver: driver)
+    #expect(try !baseline.compare(to: identical, threshold: 15, emit: { _ in }))
+    for key in driver.keys {
+      var changed = driver
+      changed[key] = "different"
+      let candidate = try write(key, driver: changed)
+      #expect(throws: ComparisonError.self) {
+        try baseline.compare(to: candidate, threshold: 15, emit: { _ in })
+      }
+    }
+    #expect(throws: ComparisonError.self) { try write("missing", driver: nil) }
+    #expect(throws: ComparisonError.self) { try write("incomplete", driver: ["renderer": "GPU"]) }
+  }
+
   @Test func stressReportsCompareAndRejectWorkloadChanges() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

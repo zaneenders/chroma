@@ -7,6 +7,8 @@ var runnerDependencies: [Target.Dependency] = [
 ]
 #if os(macOS)
 runnerDependencies.append(.product(name: "MetalBackend", package: "chroma"))
+#elseif os(Linux)
+runnerDependencies.append(.product(name: "WaylandBackend", package: "chroma"))
 #endif
 
 let package = Package(
