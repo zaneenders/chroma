@@ -21,19 +21,30 @@ struct AppInstaller {
     self.profiling = profiling
     #if os(Linux)
     prefix = home.appendingPathComponent(".local")
-    destination = prefix.appendingPathComponent("lib/\(metadata.identifier)")
+    destination = prefix.appendingPathComponent(
+      "lib/\(metadata.isShapeTreeDesktop ? "shape-tree" : metadata.identifier)")
     #else
     prefix = home.appendingPathComponent("Applications")
     destination = prefix.appendingPathComponent("\(metadata.name).app")
     #endif
   }
 
-  private var launcher: URL { prefix.appendingPathComponent("bin/\(product)") }
-  private var desktop: URL { prefix.appendingPathComponent("share/applications/\(metadata.identifier).desktop") }
+  private var launcher: URL {
+    prefix.appendingPathComponent("bin/\(metadata.isShapeTreeDesktop ? "shape-tree" : product)")
+  }
+  private var desktop: URL {
+    prefix.appendingPathComponent(
+      "share/applications/\(metadata.isShapeTreeDesktop ? "shape-tree.ShapeTreeDesktop" : metadata.identifier).desktop")
+  }
 
   func preflight() throws {
     try rejectSymlinks(destination)
-    if exists(destination) {
+    #if os(Linux)
+    let legacy = try isLegacyLinuxInstallation()
+    #else
+    let legacy = false
+    #endif
+    if exists(destination), !legacy {
       let ownership = destination.appendingPathComponent(markerPath)
       try rejectSymlinks(ownership)
       guard isDirectory(destination), (try? Data(contentsOf: ownership)) == marker else {
@@ -44,7 +55,6 @@ struct AppInstaller {
     #if os(Linux)
     try rejectSymlinks(launcher.deletingLastPathComponent())
     try rejectSymlinks(desktop)
-    let legacy = try isLegacyLinuxInstallation()
     if exists(launcher), !legacy {
       guard
         (try? fm.destinationOfSymbolicLink(atPath: launcher.path)) == destination.appendingPathComponent(product).path
@@ -137,12 +147,37 @@ struct AppInstaller {
     }
     if migrating {
       preserveStaging = true
-      print("Previous launcher and desktop entry backed up to \(staging.path)")
+      print("Previous installation files backed up to \(staging.path)")
     }
   }
 
   #if os(Linux)
   private func isLegacyLinuxInstallation() throws -> Bool {
+    try rejectSymlinks(launcher.deletingLastPathComponent())
+    try rejectSymlinks(desktop)
+    if metadata.isShapeTreeDesktop {
+      let ownership = destination.appendingPathComponent(".shape-tree-install")
+      let executable = destination.appendingPathComponent(product)
+      try rejectSymlinks(ownership)
+      try rejectSymlinks(executable)
+      guard isDirectory(destination), !exists(destination.appendingPathComponent(markerPath)),
+        (try? ownership.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+        (try? Data(contentsOf: ownership)) == Data(), fm.isExecutableFile(atPath: executable.path),
+        (try? fm.destinationOfSymbolicLink(atPath: launcher.path)) == executable.path
+      else { return false }
+      let expected = """
+        [Desktop Entry]
+        Type=Application
+        Name=ShapeTree
+        Comment=Journal and personal assistant
+        Exec="\(launcher.path)"
+        Icon=shape-tree.ShapeTreeDesktop
+        Terminal=false
+        Categories=Office;
+
+        """
+      return (try? String(contentsOf: desktop, encoding: .utf8)) == expected
+    }
     // The old Scribe packager installed a regular ELF plus this exact desktop template.
     // Do not infer ownership from a filename or an arbitrary Exec line alone.
     guard !exists(destination), let template = metadata.linuxDesktopTemplate,

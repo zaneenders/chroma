@@ -15,6 +15,8 @@ struct AppMetadata {
   let infoPlist: Data
   let linuxDesktopTemplate: String?
 
+  var isShapeTreeDesktop: Bool { identifier == "shape-tree.ShapeTreeApp" && product == "ShapeTreeDesktop" }
+
   init(package: URL, product: String) throws {
     guard safeFileName(product) else { throw InstallError("Invalid executable product name: \(product)") }
     self.product = product
@@ -53,11 +55,11 @@ struct AppMetadata {
     linuxDesktopTemplate = nil
     let iconURL = packaging.appendingPathComponent("AppIcon.icns")
     #endif
-    icon = fm.fileExists(atPath: iconURL.path) ? iconURL : nil
+    icon = fm.fileExists(atPath: iconURL.path) ? iconURL.resolvingSymlinksInPath() : nil
     if icon != nil { plist["CFBundleIconFile"] = "AppIcon" }
     infoPlist = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     let licenseURL = package.appendingPathComponent("LICENSE")
-    license = fm.fileExists(atPath: licenseURL.path) ? licenseURL : nil
+    license = fm.fileExists(atPath: licenseURL.path) ? licenseURL.resolvingSymlinksInPath() : nil
   }
 }
 

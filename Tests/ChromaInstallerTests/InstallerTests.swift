@@ -78,6 +78,37 @@ private struct Fixture {
   }
   #endif
 
+  #if os(Linux)
+  func legacyShapeTreeInstaller() throws -> AppInstaller {
+    let fm = FileManager.default
+    let plist = ["CFBundleName": "ShapeTree", "CFBundleIdentifier": "shape-tree.ShapeTreeApp"]
+    try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+      .write(to: directory.appendingPathComponent("Packaging/Info.plist"))
+    let app = prefix.appendingPathComponent("lib/shape-tree")
+    let launcher = prefix.appendingPathComponent("bin/shape-tree")
+    let desktop = prefix.appendingPathComponent("share/applications/shape-tree.ShapeTreeDesktop.desktop")
+    for folder in [app, launcher.deletingLastPathComponent(), desktop.deletingLastPathComponent()] {
+      try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+    }
+    try Data().write(to: app.appendingPathComponent(".shape-tree-install"))
+    try fm.copyItem(at: binary, to: app.appendingPathComponent("ShapeTreeDesktop"))
+    try fm.copyItem(at: binary, to: bin.appendingPathComponent("ShapeTreeDesktop"))
+    try fm.createSymbolicLink(at: launcher, withDestinationURL: app.appendingPathComponent("ShapeTreeDesktop"))
+    try """
+    [Desktop Entry]
+    Type=Application
+    Name=ShapeTree
+    Comment=Journal and personal assistant
+    Exec="\(launcher.path)"
+    Icon=shape-tree.ShapeTreeDesktop
+    Terminal=false
+    Categories=Office;
+
+    """.write(to: desktop, atomically: false, encoding: .utf8)
+    return AppInstaller(metadata: try AppMetadata(package: directory, product: "ShapeTreeDesktop"), home: home)
+  }
+  #endif
+
   func cleanup() { try? FileManager.default.removeItem(at: directory) }
 }
 
@@ -105,6 +136,18 @@ struct InstallerTests {
     #expect(defaults.icon == nil)
   }
 
+  @Test func packagingAssetLinksAreCopiedAsFiles() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+    let fm = FileManager.default
+    let license = fixture.directory.appendingPathComponent("LICENSE")
+    let original = fixture.directory.appendingPathComponent("root-license")
+    try fm.moveItem(at: license, to: original)
+    try fm.createSymbolicLink(at: license, withDestinationURL: original)
+    let metadata = try AppMetadata(package: fixture.directory, product: "Demo")
+    #expect(metadata.license == original)
+  }
+
   @Test func selectsAStableDevelopmentIdentity() throws {
     let output = """
         1) 012345 "Apple Distribution: Other (TEAM)"
@@ -122,6 +165,52 @@ struct InstallerTests {
   }
 
   #if os(Linux)
+  @Test func migratesLegacyShapeTreeWithoutChangingItsLauncher() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+    let installer = try fixture.legacyShapeTreeInstaller()
+    let fm = FileManager.default
+    let old = installer.destination.appendingPathComponent("old")
+    try "preserved".write(to: old, atomically: false, encoding: .utf8)
+    try installer.install(binary: fixture.bin.appendingPathComponent("ShapeTreeDesktop"))
+    #expect(installer.destination == fixture.prefix.appendingPathComponent("lib/shape-tree"))
+    #expect(
+      try fm.destinationOfSymbolicLink(atPath: fixture.prefix.appendingPathComponent("bin/shape-tree").path)
+        == installer.destination.appendingPathComponent("ShapeTreeDesktop").path)
+    let backups = try fm.contentsOfDirectory(
+      at: fixture.prefix.appendingPathComponent("lib"), includingPropertiesForKeys: nil
+    )
+    .filter { $0.lastPathComponent.hasPrefix(".chroma-install-") }
+    let backup = try #require(backups.first)
+    #expect(try String(contentsOf: backup.appendingPathComponent("backup-0/old"), encoding: .utf8) == "preserved")
+    #expect(!exists(old))
+    try installer.install(binary: fixture.bin.appendingPathComponent("ShapeTreeDesktop"))
+    #expect(try String(contentsOf: backup.appendingPathComponent("backup-0/old"), encoding: .utf8) == "preserved")
+  }
+
+  @Test(arguments: ["marker", "launcher", "desktop"])
+  func rejectsUnrecognizedShapeTreeInstall(change: String) throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+    let installer = try fixture.legacyShapeTreeInstaller()
+    let fm = FileManager.default
+    switch change {
+    case "marker": try fm.removeItem(at: installer.destination.appendingPathComponent(".shape-tree-install"))
+    case "launcher":
+      let launcher = fixture.prefix.appendingPathComponent("bin/shape-tree")
+      try fm.removeItem(at: launcher)
+      try fm.createSymbolicLink(at: launcher, withDestinationURL: fixture.binary)
+    default:
+      try "unrelated".write(
+        to: fixture.prefix.appendingPathComponent("share/applications/shape-tree.ShapeTreeDesktop.desktop"),
+        atomically: false, encoding: .utf8)
+    }
+    #expect(throws: InstallError.self) {
+      try installer.install(binary: fixture.bin.appendingPathComponent("ShapeTreeDesktop"))
+    }
+    #expect(exists(installer.destination.appendingPathComponent("ShapeTreeDesktop")))
+  }
+
   @Test func migratesRecognizedLegacyInstallAndPreservesBackups() throws {
     let fixture = try Fixture()
     defer { fixture.cleanup() }
