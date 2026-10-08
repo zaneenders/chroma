@@ -136,8 +136,6 @@ struct AppInstaller {
     try preflight()
     #if os(Linux)
     let migrating = try isLegacyLinuxInstallation()
-    #else
-    let migrating = false
     #endif
     do {
       try replaceInstalledFiles(replacements, staging: staging)
@@ -145,10 +143,12 @@ struct AppInstaller {
       preserveStaging = true
       throw error
     }
+    #if os(Linux)
     if migrating {
       preserveStaging = true
       print("Previous installation files backed up to \(staging.path)")
     }
+    #endif
   }
 
   #if os(Linux)

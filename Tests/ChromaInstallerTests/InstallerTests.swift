@@ -156,7 +156,15 @@ struct InstallerTests {
            3 valid identities found
       """
     #expect(try developmentIdentity(in: output) == "Apple Development: Example (TEAM)")
-    #expect(throws: InstallError.self) { try developmentIdentity(in: "0 valid identities found") }
+  }
+
+  @Test(arguments: ["", "0 valid identities found", "1) 012345 \"Apple Distribution: Other (TEAM)\""])
+  func missingDevelopmentIdentityExplainsKeychainAccess(output: String) throws {
+    let error = try #require(throws: InstallError.self) {
+      try developmentIdentity(in: output)
+    }
+    #expect(error.description.contains("--disable-sandbox"))
+    #expect(error.description.contains("Xcode"))
   }
 
   @Test func commandOutputAndFailuresPropagate() throws {

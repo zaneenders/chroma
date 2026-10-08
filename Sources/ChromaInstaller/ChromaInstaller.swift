@@ -54,5 +54,10 @@ func developmentIdentity(in output: String) throws -> String {
     let fields = line.split(separator: "\"")
     if fields.count >= 2, fields[1].hasPrefix("Apple Development:") { return String(fields[1]) }
   }
-  throw InstallError("No Apple Development signing identity found. Create one in Xcode before installing.")
+  throw InstallError(
+    """
+    No accessible Apple Development signing identity found.
+    On macOS, rerun swift package with --disable-sandbox so the installer can access the Keychain.
+    If no identity is found outside the sandbox, create one in Xcode (Settings > Accounts > Manage Certificates).
+    """)
 }
