@@ -87,6 +87,13 @@ not evidence of a rendering defect. Keep the headless suite's stderr assertions:
 inspect the full stderr and the installed toolchain's permissions/path on a failing
 runner. Do not broadly ignore stderr or globally disable backtracing to get green.
 
+Session watchdogs still default to 10 seconds. The 256-response stdout-draining
+functional test has a 30-second bound because full-frame debug JSON work can exceed
+10 seconds on shared hosts. Its burst size, response ordering and EOF assertions
+are unchanged. A separate one-second override test verifies timeout cancellation
+and child reaping. This test-only guard is also included in #124; it does not
+incorporate that PR's production reader changes.
+
 `Benchmarks/Scripts/run.sh` captures informational cull/stress and backend replay
 reports after successful checks. These timings do **not** gate shared-runner CI.
 The existing deterministic work-count/resource assertions remain ordinary tests.
