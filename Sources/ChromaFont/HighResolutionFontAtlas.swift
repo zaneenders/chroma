@@ -35,6 +35,7 @@ public struct HighResolutionFontAtlas: Sendable {
   private let indices: [Character: Int]
   private let levels: [FontAtlasMipLevel]
   private let fallback: Int
+  private var missingGlyphWarnings: MissingGlyphWarnings = .shared
 
   public var width: Int { levels[0].width }
   public var height: Int { levels[0].height }
@@ -44,7 +45,10 @@ public struct HighResolutionFontAtlas: Sendable {
   public var cellWidth: Int { glyphWidth + 2 * Self.padding }
   public var cellHeight: Int { glyphHeight + 2 * Self.padding }
 
-  public init() { self = Self.bundled }
+  public init(missingGlyphWarnings: MissingGlyphWarnings = .shared) {
+    self = Self.bundled
+    self.missingGlyphWarnings = missingGlyphWarnings
+  }
 
   enum AssetError: Error { case invalidAtlas }
 
@@ -120,7 +124,7 @@ public struct HighResolutionFontAtlas: Sendable {
     if let supported = indices[character] {
       index = supported
     } else {
-      MissingGlyphWarnings.shared.report(character)
+      missingGlyphWarnings.report(character)
       index = fallback
     }
     let x = (index % Self.columns) * cellWidth + Self.padding
