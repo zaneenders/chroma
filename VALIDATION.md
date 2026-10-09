@@ -30,7 +30,9 @@ A failed test or unavailable GPU fails its check; it is not silently reported as
   Metal device. The package deployment target requires macOS 27 to execute tests.
 
 CI uses the official [Swift 6.4.0 Ubuntu 24.04 container](https://www.swift.org/install/linux/ubuntu/24_04/)
-on `ubuntu-24.04`. `Scripts/build-ci-wayland.sh` downloads the official Wayland 1.26.0
+on `ubuntu-24.04`. It checks out into a new `source/` child owned by the
+container user, so Git ownership checks remain enabled without a trust override.
+`Scripts/build-ci-wayland.sh` downloads the official Wayland 1.26.0
 release, checks its SHA256, and builds it into `/opt/chroma-wayland`. It does not
 replace the runner's system Wayland installation. The workflow installs distro
 EGL/GLES/Mesa and keyboard dependencies separately. Mesa software rendering and a
