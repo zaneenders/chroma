@@ -10,6 +10,8 @@ package final class FrameScheduler {
     package let priority: TaskPriority
   }
 
+  package var timingCapture: FrameTimingCapture?
+
   private let clock: @MainActor () -> Double
   private var wakeTask: Task<Void, Never>?
   private var scheduled: ScheduledFrame?
@@ -20,7 +22,12 @@ package final class FrameScheduler {
   package private(set) var maximumRefreshRate = 60.0
   package var scrollMomentumActive = false { didSet { schedule() } }
   package var inputPending = false { didSet { schedule() } }
-  package var isReady = false { didSet { schedule() } }
+  package var isReady = false {
+    didSet {
+      if isReady != oldValue { timingCapture?.record(.readiness, value: isReady ? 1 : 0) }
+      schedule()
+    }
+  }
   package var onFrame: (@MainActor (FrameKind) -> Void)? { didSet { schedule() } }
 
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
@@ -35,7 +42,10 @@ package final class FrameScheduler {
   }
 
   package func requestContent() {
-    if pendingSince == nil { pendingSince = clock() }
+    if pendingSince == nil {
+      pendingSince = clock()
+      timingCapture?.record(.frameRequested)
+    }
     schedule()
   }
 
@@ -56,6 +66,8 @@ package final class FrameScheduler {
   package func takeFrame() -> FrameKind? {
     let now = clock()
     guard let nextFrame, now >= nextFrame.deadline else { return nil }
+    timingCapture?.record(.schedulerTake, value: now - nextFrame.deadline)
+    if let pendingSince { timingCapture?.record(.schedulerDemandAge, value: now - pendingSince) }
     pendingSince = nil
     lastFrameTime = now
     return nextFrame.kind
@@ -92,11 +104,13 @@ package final class FrameScheduler {
     scheduled = next
     guard let next else { return }
     let delay = max(0, next.deadline - clock())
+    timingCapture?.record(.scheduled, value: delay)
     wakeTask = Task(priority: next.priority) { @MainActor [weak self] in
       do { try await Task.sleep(for: .seconds(delay)) } catch { return }
       guard let self, !Task.isCancelled else { return }
       self.wakeTask = nil
       self.scheduled = nil
+      self.timingCapture?.record(.schedulerWake)
       if let kind = self.takeFrame() {
         self.isProducing = true
         self.onFrame?(kind)

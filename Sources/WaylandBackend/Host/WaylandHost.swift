@@ -72,13 +72,21 @@ public final class WaylandHost: Chroma.Host {
   private var eglContext: EGLContext?
   private var eglSurface: EGLSurface?
   private var eglWindow: OpaquePointer?
+  private var swapIntervalAccepted = false
 
   private let openGL = OpenGLRenderer()
+  private var timingSession: WaylandTimingSession?
+  private var timingTimer: DispatchSourceTimer?
+  private var presentation: OpaquePointer?
+  private var presentationClockID: UInt32?
+  private var presentationFeedback: [OpaquePointer: Int] = [:]
+  private var callbackFrame = 0
 
   private static var compositorInterface: wl_interface = unsafe wl_compositor_interface
   private static var wmBaseInterface: wl_interface = unsafe xdg_wm_base_interface
   private static var seatInterface: wl_interface = unsafe wl_seat_interface
   private static var shmInterface: wl_interface = unsafe wl_shm_interface
+  private static var presentationInterface: wl_interface = unsafe wp_presentation_interface
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
@@ -105,6 +113,7 @@ public final class WaylandHost: Chroma.Host {
     guard running else { return }
     try setUpEGL()
     try openGL.setUp()
+    startTimingCapture()
 
     interaction.onRedrawRequested = { [weak self] in
       self?.requestFrame()
@@ -144,15 +153,19 @@ public final class WaylandHost: Chroma.Host {
   private func queueDisplayRead() {
     guard running, !displayReadQueued else { return }
     displayReadQueued = true
+    let queueSpan = runtime.timingCapture?.begin(.displayQueue)
     runtime.dispatchInput(requestsFrame: false) { [weak self] in
       guard let self else { return }
       defer { self.displayReadQueued = false }
+      self.runtime.timingCapture?.end(queueSpan)
       self.displayBecameReadable()
     }
   }
 
   private func displayBecameReadable() {
     guard running, let display else { return }
+    let span = runtime.timingCapture?.begin(.displayDispatch)
+    defer { runtime.timingCapture?.end(span) }
     guard unsafe WaylandDisplayEvents.dispatchAvailable(display) != -1 else {
       failEventLoop(WaylandError("Wayland display dispatch failed"))
       return
@@ -214,15 +227,18 @@ public final class WaylandHost: Chroma.Host {
     runtime.scheduler.requestContent()
   }
 
-  private func receiveInput() {
+  private func receiveInput(momentum: Bool = false) {
     guard running else { return }
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
-    runtime.handleInput(input.frameInput())
+    runtime.handleInput(input.frameInput(), timingPhase: momentum ? .momentumInput : .input)
     runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
 
   private func renderFrame(_ kind: FrameScheduler.FrameKind) {
     guard !framePending, running, configured, eglSurface != nil, let surface else { return }
+    let span = runtime.timingCapture?.startFrame()
+    defer { runtime.timingCapture?.endFrame(span) }
+    callbackFrame = runtime.timingCapture?.lastFrame ?? 0
     guard let callback = unsafe wl_surface_frame(surface) else {
       failEventLoop(WaylandError("could not create Wayland frame callback"))
       return
@@ -237,12 +253,14 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private static var frameListener = unsafe wl_callback_listener(
-    done: { data, callback, _ in
+    done: { data, callback, time in
       nonisolated(unsafe) let callback = callback
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        renderer.runtime.timingCapture?.record(
+          .frameCallback, frame: renderer.callbackFrame, protocolMilliseconds: time)
         if let callback { unsafe wl_callback_destroy(callback) }
         if renderer.frameCallback == callback { renderer.frameCallback = nil }
         renderer.framePending = false
@@ -328,6 +346,14 @@ public final class WaylandHost: Chroma.Host {
         case "wl_data_device_manager":
           renderer.clipboard.bind(registry: registry, name: name, version: version)
           renderer.clipboard.setUp(seat: renderer.seat)
+        case "wp_presentation":
+          guard WaylandTimingSession.isRequested else { break }
+          renderer.presentation = unsafe OpaquePointer(
+            wl_registry_bind(registry, name, &presentationInterface, min(version, 1)))
+          if let presentation = renderer.presentation {
+            unsafe wp_presentation_add_listener(
+              presentation, &presentationListener, Unmanaged.passUnretained(renderer).toOpaque())
+          }
         case "wl_shm":
           renderer.shm = unsafe OpaquePointer(
             wl_registry_bind(registry, name, &shmInterface, min(version, 1)))
@@ -516,8 +542,10 @@ public final class WaylandHost: Chroma.Host {
         let delta = -fixedToFloat(value)
         switch axis {
         case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
+          renderer.runtime.timingCapture?.record(.scrollHorizontal, protocolMilliseconds: time)
           renderer.input.scrollBy(x: delta, y: 0, time: time)
         case WL_POINTER_AXIS_VERTICAL_SCROLL.rawValue:
+          renderer.runtime.timingCapture?.record(.scrollVertical, protocolMilliseconds: time)
           renderer.input.scrollBy(x: 0, y: delta, time: time)
         default: break
         }
@@ -537,6 +565,8 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        renderer.runtime.timingCapture?.record(
+          source == WL_POINTER_AXIS_SOURCE_FINGER.rawValue ? .fingerSource : .otherSource)
         renderer.input.scrollSource(isFinger: source == WL_POINTER_AXIS_SOURCE_FINGER.rawValue)
       }
     },
@@ -545,6 +575,9 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        renderer.runtime.timingCapture?.record(
+          axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue ? .scrollStopHorizontal : .scrollStopVertical,
+          protocolMilliseconds: time)
         renderer.input.stopScroll(
           horizontal: axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue, time: time)
         renderer.receiveInput()
@@ -566,6 +599,7 @@ public final class WaylandHost: Chroma.Host {
         guard let data, let surface, factor > 0 else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard factor != renderer.bufferScale else { return }
+        renderer.runtime.timingCapture?.record(.bufferScale, value: Double(factor))
         renderer.bufferScale = factor
         unsafe wl_surface_set_buffer_scale(surface, factor)
         renderer.resizeEGLWindow()
@@ -664,26 +698,128 @@ public final class WaylandHost: Chroma.Host {
     guard unsafe eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext) == EGL_TRUE else {
       throw WaylandError("eglMakeCurrent failed")
     }
-    _ = unsafe eglSwapInterval(eglDisplay, 1)
+    swapIntervalAccepted = unsafe eglSwapInterval(eglDisplay, 1) == EGL_TRUE
   }
 
   private func drawFrame(_ kind: FrameScheduler.FrameKind) {
     guard eglDisplay != nil, eglSurface != nil else { return }
+    let clearSpan = runtime.timingCapture?.begin(.openGLClear)
     openGL.beginFrame(width: width, height: height, bufferScale: bufferScale)
+    runtime.timingCapture?.end(clearSpan)
 
     updateFrameRate()
-    if input.hasScrollMomentum { receiveInput() }
+    if input.hasScrollMomentum { receiveInput(momentum: true) }
     let viewport = Size(width: Float(width), height: Float(height))
     let drawList = runtime.renderScheduled(
       kind, viewport: viewport,
       onChange: { [weak self] in self?.requestFrame() })
+    runtime.timingCapture?.sealFrameInput()
+    let frame = runtime.timingCapture?.lastFrame
+    let observerSpan = runtime.timingCapture?.begin(.frameObservation, frame: frame)
     runtime.observe(
       drawList, viewport: viewport, rasterScale: Point(x: Float(bufferScale), y: Float(bufferScale)))
+    runtime.timingCapture?.end(observerSpan)
     if interaction.consumeRedrawRequest() { requestFrame() }
+    let glSpan = runtime.timingCapture?.begin(.openGLSubmission, frame: frame)
     openGL.render(drawList, viewport: viewport, bufferScale: bufferScale)
-    _ = unsafe eglSwapBuffers(eglDisplay, eglSurface)
+    runtime.timingCapture?.end(glSpan)
+    runtime.timingCapture?.record(.glInstances, frame: frame, value: Double(openGL.lastInstanceCount))
+    runtime.timingCapture?.record(.glDrawCalls, frame: frame, value: Double(openGL.lastDrawCallCount))
+    runtime.timingCapture?.record(.glUploadCalls, frame: frame, value: Double(openGL.lastUploadCallCount))
+    runtime.timingCapture?.record(.glUploadBytes, frame: frame, value: Double(openGL.lastUploadByteCount))
+    requestPresentationFeedback()
+    let swapSpan = runtime.timingCapture?.begin(.eglSwap, frame: frame)
+    let swapped = unsafe eglSwapBuffers(eglDisplay, eglSurface) == EGL_TRUE
+    runtime.timingCapture?.end(swapSpan, value: swapped ? 1 : 0)
     runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
+
+  private func startTimingCapture() {
+    guard WaylandTimingSession.isRequested else { return }
+    timingSession = WaylandTimingSession(
+      metadata: WaylandTimingSession.metadata(
+        minimum: runtime.scheduler.minimumRefreshRate, maximum: runtime.scheduler.maximumRefreshRate,
+        width: width, height: height, scale: bufferScale, display: eglDisplay,
+        swapIntervalAccepted: swapIntervalAccepted,
+        presentationSupported: presentation != nil, presentationClockID: presentationClockID))
+    guard let timingSession else { return }
+    runtime.timingCapture = timingSession.capture
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.schedule(deadline: .now() + timingSession.duration)
+    timer.setEventHandler { [weak self] in
+      MainActor.assumeIsolated { self?.finishTimingCapture() }
+    }
+    timingTimer = timer
+    timer.resume()
+  }
+
+  private func finishTimingCapture() {
+    timingTimer?.cancel()
+    timingTimer = nil
+    runtime.timingCapture?.record(.feedbackPending, value: Double(presentationFeedback.count))
+    runtime.timingCapture = nil
+    for feedback in presentationFeedback.keys { unsafe wp_presentation_feedback_destroy(feedback) }
+    presentationFeedback.removeAll()
+    timingSession?.finish()
+    timingSession = nil
+  }
+
+  private func requestPresentationFeedback() {
+    guard let capture = runtime.timingCapture, !capture.isFull, let presentation, let surface else { return }
+    guard presentationFeedback.count < 8 else {
+      capture.record(.feedbackSkipped)
+      return
+    }
+    guard let feedback = unsafe wp_presentation_feedback(presentation, surface) else { return }
+    presentationFeedback[feedback] = capture.lastFrame
+    unsafe wp_presentation_feedback_add_listener(
+      feedback, &Self.presentationFeedbackListener, Unmanaged.passUnretained(self).toOpaque())
+  }
+
+  private static var presentationListener = unsafe wp_presentation_listener(
+    clock_id: { data, _, clockID in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let host = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        host.presentationClockID = clockID
+        host.timingSession?.metadata.presentationClockID = clockID
+      }
+    }
+  )
+
+  private static var presentationFeedbackListener = unsafe wp_presentation_feedback_listener(
+    sync_output: { _, _, _ in },
+    presented: { data, feedback, secondsHigh, secondsLow, nanoseconds, refresh, sequenceHigh, sequenceLow, flags in
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let feedback = feedback
+      MainActor.assumeIsolated {
+        guard let data, let feedback else { return }
+        let host = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        if let frame = host.presentationFeedback.removeValue(forKey: feedback) {
+          host.runtime.timingCapture?.record(
+            .presented, frame: frame,
+            presentation: WaylandTimingSession.presentationTiming(
+              clockID: host.presentationClockID, secondsHigh: secondsHigh, secondsLow: secondsLow,
+              nanoseconds: nanoseconds, refresh: refresh,
+              sequenceHigh: sequenceHigh, sequenceLow: sequenceLow, flags: flags))
+        }
+        unsafe wp_presentation_feedback_destroy(feedback)
+      }
+    },
+    discarded: { data, feedback in
+      nonisolated(unsafe) let data = data
+      nonisolated(unsafe) let feedback = feedback
+      MainActor.assumeIsolated {
+        guard let data, let feedback else { return }
+        let host = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        if let frame = host.presentationFeedback.removeValue(forKey: feedback) {
+          host.runtime.timingCapture?.record(.discarded, frame: frame)
+        }
+        unsafe wp_presentation_feedback_destroy(feedback)
+      }
+    }
+  )
 
   private func updateFrameRate() {
     let now = ProcessInfo.processInfo.systemUptime
@@ -702,6 +838,10 @@ public final class WaylandHost: Chroma.Host {
   }
 
   private func cleanup() {
+    finishTimingCapture()
+    if let presentation { unsafe wp_presentation_destroy(presentation) }
+    presentation = nil
+    presentationClockID = nil
     runtime.scheduler.isReady = false
     runtime.reset()
     interaction.onRedrawRequested = nil
