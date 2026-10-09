@@ -1,0 +1,1032 @@
+{
+  "measured_utc": "2026-10-09T18:25:00Z",
+  "baseline_commit": "4429069d6097b476078a208968d8ae0beac8be7c",
+  "baseline_source_fingerprint": "2888e5e885748c98c5d0f265aabe047609afa04d2bd97dedaaa231fd640ca929",
+  "built_candidate_commit": "cf54d745cbe14f62e982e3cce6dc982f53acf5c2",
+  "tested_head": "050f75abcdc03f855bd96763e8b66f449cab309b",
+  "tested_tree": "78b9410711d8cb83ca08432ccec4206e31abe1ef",
+  "candidate_source_fingerprint": "47ccbafe058857c7df6117b9018390ca90744cbec93728d025b91047c522bd05",
+  "source_fingerprint_scope": "sha256sum of sorted sha256sum inventory for every file under Sources and Benchmarks/Sources",
+  "hardware": "Shared x86_64 Linux container, Intel Xeon Platinum 8573C",
+  "compiler": "Swift 6.4 (swift-6.4-RELEASE), x86_64-unknown-linux-gnu",
+  "build_flags": [
+    "CHROMA_HEADLESS_ONLY=1",
+    "--build-system native",
+    "-c release",
+    "--jobs 2",
+    "--skip-update",
+    "-Xswiftc -parse-as-library"
+  ],
+  "layout_sampling": {
+    "rows": 20,
+    "warmup_frames": 3,
+    "measured_frames": 20,
+    "process_runs_per_mode_per_variant": 3
+  },
+  "layout": [
+    {
+      "mode": "plain",
+      "depth": 1,
+      "input": "none",
+      "baseline": {
+        "p50_ms": [
+          1.9998089992441237,
+          5.603780000456027,
+          3.6012949985888554
+        ],
+        "p95_ms": [
+          5.631904001347721,
+          8.763210000324761,
+          5.710845000066911
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          20,
+          20,
+          20
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          1.342035999186919,
+          0.5989069995848695,
+          2.0937770004820777
+        ],
+        "p95_ms": [
+          6.531012999403174,
+          5.488761000378872,
+          3.778466001676861
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          20,
+          20,
+          20
+        ]
+      }
+    },
+    {
+      "mode": "plain",
+      "depth": 1,
+      "input": "scroll",
+      "baseline": {
+        "p50_ms": [
+          3.920899998774985,
+          9.358178998809308,
+          7.4438800002099015
+        ],
+        "p95_ms": [
+          5.433170999822323,
+          17.655422001553234,
+          13.172151000617305
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          3.0860829992889194,
+          4.09833300000173,
+          5.01991799865209
+        ],
+        "p95_ms": [
+          8.361191999938455,
+          10.827153000718681,
+          8.799033999821404
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      }
+    },
+    {
+      "mode": "plain",
+      "depth": 3,
+      "input": "none",
+      "baseline": {
+        "p50_ms": [
+          2.641262999532046,
+          4.035356998429052,
+          8.276026001112768
+        ],
+        "p95_ms": [
+          5.791171999590006,
+          7.0865640009287745,
+          13.416542999038938
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          20,
+          20,
+          20
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          3.7945349995425204,
+          2.425376000246615,
+          2.4735280003369553
+        ],
+        "p95_ms": [
+          26.319669999793405,
+          13.293382999108871,
+          4.883064000750892
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          20,
+          20,
+          20
+        ]
+      }
+    },
+    {
+      "mode": "plain",
+      "depth": 3,
+      "input": "scroll",
+      "baseline": {
+        "p50_ms": [
+          10.477497999090701,
+          7.3541599995223805,
+          7.681909999519121
+        ],
+        "p95_ms": [
+          15.809761000127764,
+          13.365626000449993,
+          10.486425999260973
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          5.236406999756582,
+          4.942580999340862,
+          5.436102999738068
+        ],
+        "p95_ms": [
+          16.888662001292687,
+          12.817092001569108,
+          13.322929999048938
+        ],
+        "commands": [
+          315,
+          315,
+          315
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      }
+    },
+    {
+      "mode": "plain",
+      "depth": 5,
+      "input": "none",
+      "baseline": {
+        "p50_ms": [
+          6.1828260004404,
+          5.733834001148352,
+          4.732348999823444
+        ],
+        "p95_ms": [
+          391.3026139998692,
+          14.842574000795139,
+          6.512019001092995
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          20,
+          20,
+          20
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          1.793242001440376,
+          1.6865560010046465,
+          2.3050529998727143
+        ],
+        "p95_ms": [
+          8.750846000111778,
+          3.471967998848413,
+          4.560590999972192
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          20,
+          20,
+          20
+        ]
+      }
+    },
+    {
+      "mode": "plain",
+      "depth": 5,
+      "input": "scroll",
+      "baseline": {
+        "p50_ms": [
+          5.339424000339932,
+          11.947316999794566,
+          11.163598001076025
+        ],
+        "p95_ms": [
+          11.76797100015392,
+          36.35631299948727,
+          24.803667000014684
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          2.6678089998313226,
+          3.063111000301433,
+          4.615563999323058
+        ],
+        "p95_ms": [
+          7.302370000616065,
+          4.268739001417998,
+          8.5154930002318
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      }
+    },
+    {
+      "mode": "interactive",
+      "depth": 1,
+      "input": "none",
+      "baseline": {
+        "p50_ms": [
+          3.2698240011086455,
+          4.090955000719987,
+          7.056147000184865
+        ],
+        "p95_ms": [
+          9.416074000910157,
+          10.177726999245351,
+          8.849914000165882
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          4.400120998980128,
+          1.6785119987616781,
+          2.1212130013736896
+        ],
+        "p95_ms": [
+          13.074629998300225,
+          3.79090400019777,
+          3.2564379998802906
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      }
+    },
+    {
+      "mode": "interactive",
+      "depth": 1,
+      "input": "scroll",
+      "baseline": {
+        "p50_ms": [
+          8.465320999675896,
+          8.901212000637315,
+          11.578896999708377
+        ],
+        "p95_ms": [
+          44.659746999968775,
+          22.04770299977099,
+          37.387066999144736
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          80,
+          80,
+          80
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          2.8925280003022635,
+          3.1025949992908863,
+          4.379728999992949
+        ],
+        "p95_ms": [
+          5.598682000709232,
+          5.780774999948335,
+          13.399051000305917
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          80,
+          80,
+          80
+        ]
+      }
+    },
+    {
+      "mode": "interactive",
+      "depth": 3,
+      "input": "none",
+      "baseline": {
+        "p50_ms": [
+          7.868196000345051,
+          10.780624999824795,
+          9.212398999807192
+        ],
+        "p95_ms": [
+          12.501364000854664,
+          19.669452000016463,
+          16.705935000572936
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          80,
+          80,
+          80
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          1.5787789998285007,
+          2.8192259997013025,
+          3.0750070000067353
+        ],
+        "p95_ms": [
+          4.407759000969236,
+          6.942801999684889,
+          6.913298000654322
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      }
+    },
+    {
+      "mode": "interactive",
+      "depth": 3,
+      "input": "scroll",
+      "baseline": {
+        "p50_ms": [
+          16.243404999841005,
+          19.586669999625883,
+          37.021718999312725
+        ],
+        "p95_ms": [
+          27.74646699981531,
+          30.88244799982931,
+          52.703941000800114
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          160,
+          160,
+          160
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          3.2725609999033622,
+          3.6608709997381084,
+          5.087026998808142
+        ],
+        "p95_ms": [
+          13.586720000603236,
+          4.6501830001943745,
+          7.10233600148058
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          80,
+          80,
+          80
+        ]
+      }
+    },
+    {
+      "mode": "interactive",
+      "depth": 5,
+      "input": "none",
+      "baseline": {
+        "p50_ms": [
+          11.969582999881823,
+          19.34182399963902,
+          30.228876999899512
+        ],
+        "p95_ms": [
+          71.78121399920201,
+          32.34793299998273,
+          43.638617999022244
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          120,
+          120,
+          120
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          1.1556810004549334,
+          2.1725820006395224,
+          3.4010460003628395
+        ],
+        "p95_ms": [
+          2.5108970003202558,
+          4.072656000062125,
+          7.225468998512952
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          40,
+          40,
+          40
+        ]
+      }
+    },
+    {
+      "mode": "interactive",
+      "depth": 5,
+      "input": "scroll",
+      "baseline": {
+        "p50_ms": [
+          43.025955999837606,
+          43.7785009999061,
+          46.11757500060776
+        ],
+        "p95_ms": [
+          347.04301099918666,
+          62.49270800071827,
+          106.43408299984003
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          240,
+          240,
+          240
+        ]
+      },
+      "candidate": {
+        "p50_ms": [
+          4.541584999969928,
+          6.061366999347229,
+          5.365520000850665
+        ],
+        "p95_ms": [
+          7.3233349994552555,
+          12.742192000587238,
+          19.26807500058203
+        ],
+        "commands": [
+          314,
+          314,
+          314
+        ],
+        "row_construction_counter": [
+          80,
+          80,
+          80
+        ]
+      }
+    }
+  ],
+  "layout_process_order": [
+    {
+      "run": "layout-plain-0",
+      "variant": "baseline",
+      "wall_seconds": 2.987903446000928,
+      "user_system_cpu_seconds": 2.7538929999999997
+    },
+    {
+      "run": "layout-interactive-0",
+      "variant": "baseline",
+      "wall_seconds": 5.0264991620006185,
+      "user_system_cpu_seconds": 5.015875
+    },
+    {
+      "run": "layout-plain-0",
+      "variant": "candidate",
+      "wall_seconds": 1.5354240859996935,
+      "user_system_cpu_seconds": 1.5162039999999997
+    },
+    {
+      "run": "layout-interactive-0",
+      "variant": "candidate",
+      "wall_seconds": 0.570617178998873,
+      "user_system_cpu_seconds": 0.5694710000000003
+    },
+    {
+      "run": "layout-plain-1",
+      "variant": "candidate",
+      "wall_seconds": 1.0322860409996792,
+      "user_system_cpu_seconds": 1.0204950000000004
+    },
+    {
+      "run": "layout-interactive-1",
+      "variant": "candidate",
+      "wall_seconds": 0.6363062780001201,
+      "user_system_cpu_seconds": 0.6327660000000002
+    },
+    {
+      "run": "layout-plain-1",
+      "variant": "baseline",
+      "wall_seconds": 1.5047333940001408,
+      "user_system_cpu_seconds": 1.4798429999999991
+    },
+    {
+      "run": "layout-interactive-1",
+      "variant": "baseline",
+      "wall_seconds": 2.9922066899998754,
+      "user_system_cpu_seconds": 2.9858589999999996
+    },
+    {
+      "run": "layout-plain-2",
+      "variant": "baseline",
+      "wall_seconds": 1.331259427999612,
+      "user_system_cpu_seconds": 1.3273220000000012
+    },
+    {
+      "run": "layout-interactive-2",
+      "variant": "baseline",
+      "wall_seconds": 4.042032848999952,
+      "user_system_cpu_seconds": 4.022056999999999
+    },
+    {
+      "run": "layout-plain-2",
+      "variant": "candidate",
+      "wall_seconds": 0.821925968000869,
+      "user_system_cpu_seconds": 0.8117049999999999
+    },
+    {
+      "run": "layout-interactive-2",
+      "variant": "candidate",
+      "wall_seconds": 0.8406479130007938,
+      "user_system_cpu_seconds": 0.8251770000000018
+    }
+  ],
+  "input": [
+    {
+      "workload": "stress",
+      "configuration": {
+        "axes": 2,
+        "depth": 3,
+        "events": 60,
+        "inputHz": 60,
+        "rows": 1000,
+        "sections": 200,
+        "trials": 3,
+        "workload": "stress"
+      },
+      "baseline": {
+        "applications": 360,
+        "idle_established": true,
+        "unrendered_applications": 0,
+        "draw_completions": [
+          32,
+          31,
+          31
+        ],
+        "draw_commands": [
+          3626,
+          3626,
+          3626
+        ],
+        "cpu": {
+          "p50MS": 21.627486999999945,
+          "p95MS": 45.61744100000098,
+          "totalMS": 9153.25305699999
+        },
+        "wall": {
+          "p50MS": 21.467982000103802,
+          "p95MS": 45.61225299949001,
+          "totalMS": 9101.864634991216
+        }
+      },
+      "candidate": {
+        "applications": 360,
+        "idle_established": true,
+        "unrendered_applications": 0,
+        "draw_completions": [
+          31,
+          30,
+          31
+        ],
+        "draw_commands": [
+          3626,
+          3626,
+          3626
+        ],
+        "cpu": {
+          "p50MS": 10.162511999999957,
+          "p95MS": 22.069060999999834,
+          "totalMS": 4394.070084999991
+        },
+        "wall": {
+          "p50MS": 9.945279998646583,
+          "p95MS": 21.494488000826095,
+          "totalMS": 4337.689909023538
+        }
+      }
+    },
+    {
+      "workload": "markdown",
+      "configuration": {
+        "axes": 2,
+        "depth": 8,
+        "events": 60,
+        "inputHz": 60,
+        "rows": 100000,
+        "sections": 40,
+        "trials": 3,
+        "workload": "markdown"
+      },
+      "baseline": {
+        "applications": 360,
+        "idle_established": true,
+        "unrendered_applications": 0,
+        "draw_completions": [
+          30,
+          32,
+          31
+        ],
+        "draw_commands": [
+          2995,
+          2995,
+          2995
+        ],
+        "cpu": {
+          "p50MS": 8.160637000000026,
+          "p95MS": 25.927796000000058,
+          "totalMS": 3674.9324189999957
+        },
+        "wall": {
+          "p50MS": 7.893542999227066,
+          "p95MS": 23.29919000112568,
+          "totalMS": 3598.531425010151
+        }
+      },
+      "candidate": {
+        "applications": 360,
+        "idle_established": true,
+        "unrendered_applications": 0,
+        "draw_completions": [
+          52,
+          50,
+          52
+        ],
+        "draw_commands": [
+          2995,
+          2995,
+          2995
+        ],
+        "cpu": {
+          "p50MS": 1.2728340000001115,
+          "p95MS": 3.5752099999999953,
+          "totalMS": 546.8116490000009
+        },
+        "wall": {
+          "p50MS": 1.201623999804724,
+          "p95MS": 3.296139999292791,
+          "totalMS": 523.1493520168442
+        }
+      }
+    }
+  ],
+  "allocation_requests": [
+    {
+      "mode": "plain",
+      "baseline": {
+        "malloc": 894956,
+        "calloc": 27,
+        "realloc": 0,
+        "aligned": 610,
+        "total_calls": 895593,
+        "requested_bytes": 266200931
+      },
+      "candidate": {
+        "malloc": 153911,
+        "calloc": 32,
+        "realloc": 0,
+        "aligned": 1012,
+        "total_calls": 154955,
+        "requested_bytes": 75579486
+      },
+      "call_percent_change": -82.69805592495698
+    },
+    {
+      "mode": "interactive",
+      "baseline": {
+        "malloc": 2569502,
+        "calloc": 27,
+        "realloc": 0,
+        "aligned": 611,
+        "total_calls": 2570140,
+        "requested_bytes": 1003716509
+      },
+      "candidate": {
+        "malloc": 176313,
+        "calloc": 32,
+        "realloc": 0,
+        "aligned": 1060,
+        "total_calls": 177405,
+        "requested_bytes": 126258844
+      },
+      "call_percent_change": -93.09745772603827
+    }
+  ],
+  "plain_confirmation_process_order": [
+    {
+      "variant": "candidate",
+      "wall_seconds": 0.6176109150001139,
+      "cpu_seconds": 0.561554,
+      "depth3_no_scroll": {
+        "bodiesPerFrame": 20,
+        "commands": 315,
+        "depth": 3,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 1.316623998718569,
+        "p95MS": 3.997604999312898,
+        "rows": 20
+      }
+    },
+    {
+      "variant": "baseline",
+      "wall_seconds": 0.8104733250002027,
+      "cpu_seconds": 0.797668,
+      "depth3_no_scroll": {
+        "bodiesPerFrame": 20,
+        "commands": 315,
+        "depth": 3,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 2.5627319992054254,
+        "p95MS": 5.740061000324204,
+        "rows": 20
+      }
+    }
+  ],
+  "plain_confirmation_all_cases": {
+    "candidate": [
+      {
+        "bodiesPerFrame": 20,
+        "commands": 315,
+        "depth": 1,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 1.200823000544915,
+        "p95MS": 3.1489199991483474,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 40,
+        "commands": 315,
+        "depth": 1,
+        "frames": 20,
+        "input": "scroll",
+        "interactive": false,
+        "p50MS": 2.067315999738639,
+        "p95MS": 3.138775999104837,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 20,
+        "commands": 315,
+        "depth": 3,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 1.316623998718569,
+        "p95MS": 3.997604999312898,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 40,
+        "commands": 315,
+        "depth": 3,
+        "frames": 20,
+        "input": "scroll",
+        "interactive": false,
+        "p50MS": 3.0305809996207245,
+        "p95MS": 7.166850000430713,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 20,
+        "commands": 314,
+        "depth": 5,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 1.4063359994906932,
+        "p95MS": 3.5256009996373905,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 40,
+        "commands": 314,
+        "depth": 5,
+        "frames": 20,
+        "input": "scroll",
+        "interactive": false,
+        "p50MS": 2.9162930004531518,
+        "p95MS": 4.521573000602075,
+        "rows": 20
+      }
+    ],
+    "baseline": [
+      {
+        "bodiesPerFrame": 20,
+        "commands": 315,
+        "depth": 1,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 2.000079000936239,
+        "p95MS": 2.769138998701237,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 40,
+        "commands": 315,
+        "depth": 1,
+        "frames": 20,
+        "input": "scroll",
+        "interactive": false,
+        "p50MS": 3.834474000541377,
+        "p95MS": 6.527636000100756,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 20,
+        "commands": 315,
+        "depth": 3,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 2.5627319992054254,
+        "p95MS": 5.740061000324204,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 40,
+        "commands": 315,
+        "depth": 3,
+        "frames": 20,
+        "input": "scroll",
+        "interactive": false,
+        "p50MS": 8.214530998884584,
+        "p95MS": 11.287621999144903,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 20,
+        "commands": 314,
+        "depth": 5,
+        "frames": 20,
+        "input": "none",
+        "interactive": false,
+        "p50MS": 4.625006000424037,
+        "p95MS": 9.852833998593269,
+        "rows": 20
+      },
+      {
+        "bodiesPerFrame": 40,
+        "commands": 314,
+        "depth": 5,
+        "frames": 20,
+        "input": "scroll",
+        "interactive": false,
+        "p50MS": 5.151138000655919,
+        "p95MS": 7.387588999336003,
+        "rows": 20
+      }
+    ]
+  }
+}
