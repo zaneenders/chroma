@@ -51,12 +51,13 @@ extension Interaction {
       return
     }
 
-    if let path = tree.findLeaf(selectedID), let node = tree.node(at: path), node.acceptsFocus {
+    if selected.acceptsFocus {
+      let path = selected.renderPath
       selection = path
       selectedLeafID = selectedID
       // Virtual scrolling can replace an offscreen selection with a partially visible row.
       // Revealing it would move the viewport again before the next pointer event is hit-tested.
-      if previousLeafID != selectedID, node.hitRect == .zero { reveal(path, in: tree) }
+      if previousLeafID != selectedID, selected.hitRect == .zero { reveal(path, in: tree) }
     } else {
       selection = nil
       selectedLeafID = nil
@@ -79,13 +80,12 @@ extension Interaction {
     navigationPath = path
     rememberNavigation(path, in: navigation)
     if case .leaf(let leafID) = node.kind {
-      guard let tree, let renderPath = tree.findLeaf(leafID),
-        tree.node(at: renderPath)?.acceptsFocus == true
-      else {
+      guard let tree, node.acceptsFocus else {
         selection = nil
         selectedLeafID = nil
         return
       }
+      let renderPath = node.renderPath
       selection = renderPath
       selectedLeafID = leafID
       if let groupID = navigation.node(at: Array(path.dropLast()))?.id,

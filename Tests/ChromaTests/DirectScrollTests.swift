@@ -1,4 +1,5 @@
 import ChromaTesting
+import Synchronization
 import Testing
 
 @testable import Chroma
@@ -190,6 +191,43 @@ struct DirectScrollTests {
     #expect(controller.measurementBuffer.count == 0)
     #expect(controller.measurementBuffer.capacity == capacity)
     #expect(h.buffer.count < 30)
+  }
+
+  private final class CountedRowID: Hashable, Sendable {
+    let value: Int
+    let hashCount = Mutex(0)
+
+    init(_ value: Int) { self.value = value }
+    static func == (lhs: CountedRowID, rhs: CountedRowID) -> Bool { lhs.value == rhs.value }
+    func hash(into hasher: inout Hasher) {
+      hashCount.withLock { $0 += 1 }
+      hasher.combine(value)
+    }
+  }
+
+  @Test func unchangedVariableRowsSkipDuplicateKeyHashing() {
+    let controller = ScrollViewController()
+    let h = Harness()
+    let ids = (0..<10).map { CountedRowID($0) }
+    let rows = ids.map { id in
+      ScrollView.Row(
+        id: id,
+        build: { buffer, context in
+          buffer.sizing(buffer.color(.white, context: context), y: .fixed(20), context: context)
+        })
+    }
+    let build: LayoutBuilder = { buffer, context in
+      buffer.scrollView(ScrollView(controller: controller, rows: rows), context: context)
+    }
+    h.render(build)
+    let offscreenID = ids.last!
+    #expect(offscreenID.hashCount.withLock { $0 } > 0)
+    offscreenID.hashCount.withLock { $0 = 0 }
+    let measurements = controller.lazyStackCache.measurements
+
+    h.render(build)
+    #expect(offscreenID.hashCount.withLock { $0 } == 0)
+    #expect(zip(measurements, controller.lazyStackCache.measurements).allSatisfy { $0 === $1 })
   }
 
   @Test func revisionReuseKeepsCurrentRowValuesAndActions() {

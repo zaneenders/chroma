@@ -205,6 +205,38 @@ struct GroupRegistrationTests {
 
 @MainActor
 struct InteractionStorageTests {
+  @Test func navigationSelectionUsesCurrentFlattenedRenderPath() {
+    let interaction = Interaction()
+    let rect = Rect(x: 0, y: 0, width: 80, height: 20)
+    let first = WidgetID("first")
+    let second = WidgetID("second")
+    func register(_ ids: [WidgetID]) {
+      interaction.beginFrame(input: InputState())
+      interaction.beginGroup(rect: rect)
+      interaction.beginGroup(rect: rect, navigationID: WidgetID("panel"))
+      interaction.beginGroup(rect: rect)
+      for id in ids { interaction.registerLeaf(id: id, rect: rect) }
+      interaction.endGroup()
+      interaction.endGroup()
+      interaction.endGroup()
+      interaction.endFrame()
+    }
+
+    register([first, second])
+    interaction.selectNavigation([0, 1], revealing: false)
+    #expect(interaction.selectedLeafID == second)
+    #expect(interaction.selection == [0, 0, 0, 1])
+
+    register([second, first])
+    #expect(interaction.navigationPath == [0, 0])
+    #expect(interaction.selectedLeafID == second)
+    #expect(interaction.selection == [0, 0, 0, 0])
+
+    interaction.selectNavigation([0, 1], revealing: false)
+    #expect(interaction.selectedLeafID == first)
+    #expect(interaction.selection == [0, 0, 0, 1])
+  }
+
   @Test func commitSwapsReusableRowsAndReconcilesEditingByKey() {
     let interaction = Interaction()
     let rect = Rect(x: 0, y: 0, width: 80, height: 20)

@@ -5,11 +5,14 @@ extension Interaction {
     return Point(x: horizontal ? input.scrollDelta.x : 0, y: input.scrollDelta.y)
   }
 
-  func registerScrollInput(id: WidgetID, rect: Rect, horizontal: Bool = false) {
+  func registerScrollInput(
+    id: WidgetID, rect: Rect, horizontal: Bool = false, controller: ScrollViewController? = nil
+  ) {
     let rect = clippedRect(rect)
-    building.inputHandlers[id] = { [weak self] in
+    building.inputHandlers[id] = { [weak self, weak controller] in
       guard let self else { return }
       let delta = self.scrollDelta(in: rect, horizontal: horizontal)
+      if delta != .zero, case .visible? = controller?.request { controller?.request = nil }
       var state = self.scrollStates[id, default: ScrollState()]
       state.offset.x -= delta.x
       state.offset.y -= delta.y

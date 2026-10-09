@@ -49,7 +49,6 @@ public final class HeadlessHost: Host {
   @discardableResult
   public func render(input: InputState? = nil) -> HeadlessFrame {
     runtime.scheduler.recordProducedFrame()
-    runtime.scheduler.consumeContentRequest()
     let drawList = runtime.render(
       viewport: viewport, input: input ?? interaction.input.settled, processingInput: input != nil,
       onChange: { [weak self] in self?.requestRedraw() })
@@ -62,7 +61,7 @@ public final class HeadlessHost: Host {
   }
 
   /// Applies one input event through the runtime without presenting a frame.
-  /// Events before the first frame are queued in their original order.
+  /// Events before the first frame or sent by another event callback keep their original order.
   public func sendInput(_ input: InputState) {
     runtime.handleInput(input)
   }

@@ -23,8 +23,10 @@ Duplicate interaction leaf IDs fail early instead of silently sharing callbacks.
 
 `WindowRuntime` alone dispatches input. Every actionable event first commits current
 callbacks and geometry; raw key resolution and delivery share that preparation.
-Input is applied once. `HeadlessHost.render()` takes a snapshot; supplying its
-optional input argument explicitly dispatches one event first. The producer then
+Input is applied once through a FIFO, including input queued before the first frame
+and input sent from another event's callback. Both explicit and scheduled frames
+drain pending events first. `HeadlessHost.render()` takes a snapshot; supplying its
+optional input argument appends one event after already queued input. The producer then
 commits and draws the current root, so an
 action may replace it synchronously. Hover may use last-presented geometry.
 

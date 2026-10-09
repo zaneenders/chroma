@@ -68,8 +68,6 @@ package final class Interaction {
   @ObservationIgnored var activatePending = false
   @ObservationIgnored private var redrawRequested = false
   @ObservationIgnored package var onRedrawRequested: (() -> Void)?
-  @ObservationIgnored var pendingCommands: [Command] = []
-  @ObservationIgnored var handledCommandIndices: Set<Int> = []
   struct ScopedCommandHandler {
     var path: [Int]
     var command: Command
@@ -404,12 +402,7 @@ package final class Interaction {
     activatePending = false
     enterTextPending = false
     movementTextEvents = []
-    if !refreshingRegistrations {
-      pendingCommands = input.commands
-      handledCommandIndices = []
-      routePendingCommands()
-      pendingCommands = []
-    }
+    if !refreshingRegistrations { routeCommands(input.commands) }
 
     activatedLeaf = nil
 
@@ -482,7 +475,6 @@ package final class Interaction {
 
   package func endFrame() {
     defer { finishInput() }
-    if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
     animations = animations.filter { animationKeys.contains($0.key) }
     animationsActive = animations.values.contains { $0.isActive(at: animationTime) }
@@ -632,16 +624,14 @@ extension Interaction {
     return appBindings.command(for: chord, isTextEditing: isTextEditing)
   }
 
-  func routePendingCommands() {
-    for (index, command) in pendingCommands.enumerated() where !handledCommandIndices.contains(index) {
+  private func routeCommands(_ commands: [Command]) {
+    for command in commands {
       if mode == .editing, command == .action(.cancel) || command == .action(.dismiss) {
         stopInput()
-        handledCommandIndices.insert(index)
         continue
       }
       if editingLeaf != nil, command == .action(.cancel) || command == .action(.dismiss) {
         endEditing()
-        handledCommandIndices.insert(index)
         continue
       }
       let handlers =
@@ -649,13 +639,11 @@ extension Interaction {
         .filter { $0.command == command && isPrefix($0.path, of: activeCommandPath) }
         .sorted { $0.path.count > $1.path.count }
       if handlers.contains(where: { $0.action() == .handled }) {
-        handledCommandIndices.insert(index)
         continue
       }
       if case .navigation(let direction) = command,
         moveLogicalSelection(direction)
       {
-        handledCommandIndices.insert(index)
         continue
       }
       switch command {

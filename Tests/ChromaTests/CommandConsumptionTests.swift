@@ -1,3 +1,4 @@
+import ChromaTesting
 import Testing
 
 @testable import Chroma
@@ -39,41 +40,30 @@ struct CommandConsumptionTests {
     #expect(interaction.scrollState(for: id).offset.y == 0)
   }
 
-  @Test func commandConsumptionResetsBetweenFrames() {
-    let interaction = Interaction()
-    let id = WidgetID("scroll")
+  @Test func commandConsumptionIsLocalToOneInput() {
+    let host = HeadlessHost()
+    defer { host.close() }
     var consumes = true
-    func frame(_ input: InputState = InputState()) {
-      beginTestFrame(interaction, input: input)
-      var list = DrawList()
-      let view: LayoutBuilder = { buffer, context in
-        let node9 = buffer.scrollView(
-          ScrollView(build: { buffer, context in
-            let node7 = buffer.color(Color.white, context: context)
-            return buffer.sizing(node7, y: .fixed(100), context: context)
-          }), context: context.keyed(id))
-        let node10 = buffer.onCommand(
-          node9, .application("resize"), context: context,
-          action: {
-            consumes ? .handled : .ignored
-          })
-        return node10
+    var handled = 0
+    var defaults = 0
+    host.build = { buffer, context in
+      let button = buffer.button(Button("Submit", role: .defaultAction) { defaults += 1 }, context: context)
+      return buffer.onCommand(button, .action(.submit), context: context) {
+        handled += 1
+        return consumes ? .handled : .ignored
       }
-      do {
-        var resolvedBuffer = LayoutBuffer()
-        let resolved = view(&resolvedBuffer, LayoutContext(interaction: interaction))
-        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
-      }
-      interaction.endFrame()
     }
-    frame()
-    frame(InputState(commands: [.application("resize")]))
-    #expect(interaction.scrollState(for: id).offset.y == 0)
-    #expect(interaction.handledCommandIndices == [0])
+    host.render()
+    host.sendInput(InputState(commands: [.action(.submit)]))
+    #expect(handled == 1)
+    #expect(defaults == 0)
     consumes = false
-    frame(InputState(commands: [.application("resize")]))
-    #expect(interaction.scrollState(for: id).offset.y == 0)
-    #expect(interaction.handledCommandIndices.isEmpty)
+    host.sendInput(InputState(commands: [.action(.submit)]))
+    #expect(handled == 2)
+    #expect(defaults == 1)
+    host.render()
+    host.render()
+    #expect(handled == 2)
+    #expect(defaults == 1)
   }
 }

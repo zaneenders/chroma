@@ -7,9 +7,21 @@ public struct FontMetrics: Equatable, Sendable {
   public init() {}
 
   public func measure(_ text: String, scale: Float = 1) -> Size {
-    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    var longestLine = 0
+    var columns = 0
+    var lineBreaks = 0
+    for character in text {
+      // Match TextLayout's grapheme-level newline handling, including CRLF.
+      if character.isNewline {
+        longestLine = max(longestLine, columns)
+        columns = 0
+        lineBreaks += 1
+      } else {
+        columns += 1
+      }
+    }
     return Size(
-      width: Float(lines.map(\.count).max() ?? 0) * cellAdvance * scale,
-      height: (glyphHeight + Float(max(0, lines.count - 1)) * lineAdvance) * scale)
+      width: Float(max(longestLine, columns)) * cellAdvance * scale,
+      height: (glyphHeight + Float(lineBreaks) * lineAdvance) * scale)
   }
 }

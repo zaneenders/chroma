@@ -141,7 +141,8 @@ struct WindowRuntimeTests {
     #expect(runtime.interaction.caretOffset == 1)
   }
 
-  @Test func queuedInputIsFlushedBeforeRendering() {
+  @Test(arguments: [false, true])
+  func queuedInputIsFlushedBeforeRendering(scheduled: Bool) {
     let runtime = WindowRuntime()
     let model = InputModel()
     let viewport = Size(width: 100, height: 100)
@@ -154,7 +155,10 @@ struct WindowRuntimeTests {
       runtime.scheduler.requestContent()
     }
     runtime.dispatchInput { model.text += "b" }
-    let list = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    let list =
+      scheduled
+      ? runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+      : runtime.render(viewport: viewport, input: InputState(), onChange: {})
     #expect(model.text == "ab")
     #expect(
       list.paintSnapshot.contains {

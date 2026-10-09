@@ -267,7 +267,7 @@ public struct ScrollView {
         width: rect.size.width,
         height: Float(rows.count) * rows.height + spacing * Float(max(0, rows.count - 1)))
     }
-    interaction.registerScrollInput(id: id, rect: rect, horizontal: horizontal)
+    interaction.registerScrollInput(id: id, rect: rect, horizontal: horizontal, controller: controller)
     if case .uniform(let rows, let controller) = content, let selection = rows.selection {
       interaction.registerLogicalSelection(
         scrollID: id, selectedKey: selection.selectedKey, select: selection.select,
@@ -430,7 +430,6 @@ public struct ScrollView {
   @MainActor private func updateCache(
     rows: [Row], controller: ScrollViewController, width: Float, context: LayoutContext
   ) {
-    precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
     let cache = controller.lazyStackCache
     let environment = LazyMeasurementEnvironment(
       textScale: context.textScale, fontMetrics: context.fontMetrics, theme: context.theme)
@@ -444,6 +443,7 @@ public struct ScrollView {
     {
       return
     }
+    precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
     var oldSizes: [StructuralKey: (LazyRowIdentity, LazyRowMeasurement)] = [:]
     if sameEnvironment {
       for index in cache.rowKeys.indices {

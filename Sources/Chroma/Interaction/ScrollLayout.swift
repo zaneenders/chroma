@@ -31,26 +31,22 @@ extension Interaction {
     let pendingReveal = state.pendingReveal
     state.pendingReveal = nil
     if !refreshingRegistrations, let request = controller?.request {
-      if scrollDelta(in: viewport, horizontal: horizontal) != .zero, case .visible = request {
-        controller?.request = nil
-      } else {
-        var resolved = true
-        switch request {
-        case .top: offset.y = 0
-        case .bottom: offset.y = limit.y
-        case .offset(let requested): offset.y = requested
-        case .visible(let target): reveal(target)
-        case .row(let key):
-          guard let layout = scrollStates[id]?.layout,
-            let index = layout.index(of: key)
-          else {
-            resolved = false
-            break
-          }
-          offset.y = layout.position(of: index)
+      var resolved = true
+      switch request {
+      case .top: offset.y = 0
+      case .bottom: offset.y = limit.y
+      case .offset(let requested): offset.y = requested
+      case .visible(let target): reveal(target)
+      case .row(let key):
+        guard let layout = scrollStates[id]?.layout,
+          let index = layout.index(of: key)
+        else {
+          resolved = false
+          break
         }
-        if resolved { controller?.request = nil }
+        offset.y = layout.position(of: index)
       }
+      if resolved { controller?.request = nil }
     } else if sticksToBottom && wasAtBottom && limit.y > previousLimit {
       offset.y = limit.y
     }
