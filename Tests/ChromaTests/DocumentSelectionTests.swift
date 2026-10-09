@@ -5,8 +5,9 @@ import Testing
 @MainActor
 struct DocumentSelectionTests {
   @Test func selectionCrossesTextLeavesInDepthFirstOrderAndShrinks() {
-    let context = LayoutContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let first = FocusTarget()
     let content: LayoutBuilder = { buffer, context in
       let node59 = buffer.group("Session", context: context) { buffer, context in
@@ -23,10 +24,11 @@ struct DocumentSelectionTests {
       }
       return node59
     }
+    runtime.build = content
     func render(_ events: [TextEditEvent] = [], commands: [Command] = []) {
-      _ = producer.render(
-        build: content, viewport: Size(width: 500, height: 500),
-        input: InputState(commands: commands, textEvents: events), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 500, height: 500),
+        input: InputState(commands: commands, textEvents: events), onChange: {})
     }
     render()
     first.focus()
@@ -44,8 +46,9 @@ struct DocumentSelectionTests {
   }
 
   @Test func selectAllUsesSelectedGroupAndRootAndExcludesEditors() {
-    let context = LayoutContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let first = FocusTarget()
     let content: LayoutBuilder = { buffer, context in
       let node64 = buffer.group("Session", context: context.childScope(0)) { buffer, context in
@@ -62,10 +65,11 @@ struct DocumentSelectionTests {
         TextEditor(text: { "private draft" }, onChange: { _ in }), context: context.childScope(2))
       return buffer.stack([node64, node65, node66], axis: .vertical, context: context)
     }
+    runtime.build = content
     func render(_ commands: [Command] = []) {
-      _ = producer.render(
-        build: content, viewport: Size(width: 500, height: 500),
-        input: InputState(commands: commands), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 500, height: 500),
+        input: InputState(commands: commands), onChange: {})
     }
     render()
     first.focus()

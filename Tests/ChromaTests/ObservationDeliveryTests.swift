@@ -12,17 +12,17 @@ struct ObservationDeliveryTests {
     let renderer = HeadlessHost()
     defer { renderer.close() }
     let controller = ScrollViewController()
+    let scroll = ScrollView(
+      controller: controller,
+      rows: [
+        .init(
+          id: WidgetID("row"),
+          build: { buffer, context in
+            LazyLayoutCacheTests.row(model: model, capture: capture, into: &buffer, context: context)
+          })
+      ])
     renderer.build = { buffer, context in
-      buffer.scrollView(
-        ScrollView(
-          controller: controller,
-          rows: [
-            .init(
-              id: WidgetID("row"),
-              build: { buffer, context in
-                LazyLayoutCacheTests.row(model: model, capture: capture, into: &buffer, context: context)
-              })
-          ]), context: context.keyed(WidgetID("stack")))
+      buffer.scrollView(scroll, context: context.keyed(WidgetID("stack")))
     }
     let (redraws, continuation) = AsyncStream<Void>.makeStream()
     defer { continuation.finish() }

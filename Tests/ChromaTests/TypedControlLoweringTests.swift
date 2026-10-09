@@ -117,11 +117,17 @@ struct TypedControlLoweringTests {
     #expect(context.interaction.editingText == snapshot)
     #expect(context.interaction.caretOffset == 3)
     #expect(context.interaction.textSelectionRange == 1..<3)
-    #expect(
-      list.paintSnapshot.contains {
-        if case .text(_, let value, _, _) = $0 { return value == snapshot }
-        return false
-      })
+    // The atlas replaces unsupported emoji, so compare the actual glyph commands
+    // rather than trying to recover the original Unicode string from its texture.
+    var expectedText = DrawList()
+    expectedText.text(
+      snapshot, at: Point(x: editor.padding, y: editor.padding),
+      color: context.theme.textEditor.foreground)
+    let glyphs = list.commands.filter {
+      if case .quad(let quad) = $0 { return quad.texture == .fontAtlas }
+      return false
+    }
+    #expect(Array(glyphs.prefix(snapshot.count)) == expectedText.commands)
     context.interaction.endFrame()
     buffer.reset()
     let fresh = buffer.textEditor(editor, context: context)
@@ -296,7 +302,13 @@ struct TypedControlLoweringTests {
     let list = runtime.render(
       viewport: rect.size, input: InputState(commands: [.action(.submit)]), onChange: {})
     #expect(actions == 1)
-    #expect(list.commands.isEmpty)
+    // The empty window still paints its navigation boundary, but no stale root.
+    #expect(
+      list.paintSnapshot == [
+        .strokeRoundedRect(rect: rect, radii: CornerRadii(5), width: 1, color: runtime.context.theme.border)
+      ])
+    #expect(runtime.interaction.tree?.children.isEmpty == true)
+    #expect(runtime.interaction.registrations.commandHandlers.isEmpty)
     runtime.reset()
   }
 

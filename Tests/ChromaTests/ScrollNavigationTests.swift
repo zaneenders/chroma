@@ -7,8 +7,14 @@ struct ScrollNavigationTests {
   @MainActor private final class Harness {
     let runtime = WindowRuntime()
     var context: LayoutContext { runtime.context }
+    private var content: LayoutBuilder?
+    init() {
+      runtime.build = { [weak self] buffer, context in
+        self?.content?(&buffer, context) ?? buffer.empty(context: context)
+      }
+    }
     func render(_ build: @escaping LayoutBuilder, _ commands: [NavigationCommand] = []) {
-      runtime.build = build
+      content = build
       _ = runtime.render(
         viewport: Size(width: 200, height: 100),
         input: InputState(commands: commands.map { .navigation($0) }), onChange: {})

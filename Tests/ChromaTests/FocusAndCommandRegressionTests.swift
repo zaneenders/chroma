@@ -5,14 +5,24 @@ import Testing
 @MainActor
 struct FocusAndCommandRegressionTests {
   @MainActor private final class Harness {
-    let context = LayoutContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    var context: LayoutContext { runtime.context }
+    private var currentContent: LayoutBuilder = { buffer, context in
+      buffer.empty(context: context)
+    }
+
+    init() {
+      runtime.build = { [unowned self] buffer, context in
+        currentContent(&buffer, context)
+      }
+    }
 
     func render(_ content: @escaping LayoutBuilder, input: InputState = InputState()) {
       let isInitialFrame = context.interaction.tree == nil
-      _ = producer.render(
-        build: content, viewport: Size(width: 200, height: 100),
-        input: input, context: context, onChange: {})
+      currentContent = content
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: input, onChange: {})
       if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     }
   }

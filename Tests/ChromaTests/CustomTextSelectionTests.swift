@@ -44,8 +44,9 @@ struct CustomTextSelectionTests {
   }
 
   @Test func customRendererSelectsCopiesAndRejectsMutations() {
-    let context = LayoutContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let renderer = Renderer()
     let target = FocusTarget()
     let content: LayoutBuilder = { buffer, context in
@@ -59,10 +60,11 @@ struct CustomTextSelectionTests {
       }
       return node13
     }
+    runtime.build = content
     func render(_ commands: [Command] = [], text: [TextEditEvent] = []) {
-      _ = producer.render(
-        build: content, viewport: Size(width: 600, height: 400),
-        input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 600, height: 400),
+        input: InputState(commands: commands, textEvents: text), onChange: {})
     }
     render()
     target.focus()
@@ -96,16 +98,18 @@ struct CustomTextSelectionTests {
   }
 
   @Test func mouseAndKeyboardUseTheSameCustomSelection() {
-    let context = LayoutContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let renderer = Renderer()
     let content: LayoutBuilder = { buffer, context in
       return ReadOnlyText(renderer: renderer).build(into: &buffer, context: context)
     }
+    runtime.build = content
     func render(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: content, viewport: Size(width: 600, height: 400),
-        input: input, context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 600, height: 400),
+        input: input, onChange: {})
     }
     render()
     render(InputState(pointerPosition: Point(x: 10, y: 5), pointerDown: true, pointerPressed: true))

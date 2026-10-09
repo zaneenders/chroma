@@ -102,8 +102,9 @@ struct NavigationTreeTests {
 @MainActor
 struct GroupRegistrationTests {
   @Test func rootStartsUnselectedAndGroupsRequireEntry() {
-    let context = LayoutContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let first = FocusTarget()
     let inside = FocusTarget()
     let content: LayoutBuilder = { buffer, context in
@@ -123,10 +124,11 @@ struct GroupRegistrationTests {
       return buffer.stack([node301, node304], axis: .vertical, context: context)
     }
 
+    runtime.build = content
     func render(_ commands: [Command] = []) {
-      _ = producer.render(
-        build: content, viewport: Size(width: 200, height: 100),
-        input: InputState(commands: commands), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: InputState(commands: commands), onChange: {})
     }
     render()
     #expect(context.interaction.navigationPath.isEmpty)
@@ -145,8 +147,9 @@ struct GroupRegistrationTests {
   }
 
   @Test func clickingInsideAGroupEntersItsAncestorChain() {
-    let context = LayoutContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let target = FocusTarget()
     let content: LayoutBuilder = { buffer, context in
       let node308 = buffer.group(context: context.childScope(0)) { buffer, context in
@@ -161,17 +164,18 @@ struct GroupRegistrationTests {
       return buffer.stack([node308, node309], axis: .horizontal, context: context)
     }
 
-    _ = producer.render(
-      build: content, viewport: Size(width: 200, height: 100),
+    runtime.build = content
+    _ = runtime.render(
+      viewport: Size(width: 200, height: 100),
       input: InputState(),
-      context: context, onChange: {})
+      onChange: {})
     let path = context.interaction.tree!.findLeaf(target.boundID!)!
     let rect = context.interaction.tree!.node(at: path)!.rect
-    _ = producer.render(
-      build: content, viewport: Size(width: 200, height: 100),
+    _ = runtime.render(
+      viewport: Size(width: 200, height: 100),
       input: InputState(
         pointerPosition: Point(x: rect.minX + 1, y: rect.minY + 1), pointerDown: true,
-        pointerPressed: true), context: context, onChange: {})
+        pointerPressed: true), onChange: {})
 
     #expect(target.isFocused)
     #expect(context.interaction.navigationPath.count == 2)

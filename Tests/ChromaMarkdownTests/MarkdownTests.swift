@@ -143,8 +143,12 @@ struct MarkdownTests {
     #expect(buffer.sizeThatFits(scaledRoot, Size(width: cell * 2, height: 1000)).height == height * 20)
     let empty = MarkdownLeaf(block: .paragraph(""), scale: 1, lineSpacing: 0).build(into: &buffer, context: context)
     #expect(buffer.sizeThatFits(empty, Size(width: 100, height: 100)).height == 0)
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(root, in: rect)
+    context.interaction.endFrame()
     var drawList = DrawList()
-    buffer.paint(root, into: &drawList, in: Rect(x: 0, y: 0, width: 100, height: 100))
+    buffer.paint(root, into: &drawList, in: rect)
   }
 }
 

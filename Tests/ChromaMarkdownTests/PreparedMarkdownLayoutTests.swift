@@ -65,6 +65,9 @@ struct PreparedMarkdownLayoutTests {
         lines: lines, lineHeight: context.fontMetrics.lineAdvance * scale + current.lineSpacing,
         cellWidth: cellWidth, scale: scale, hasLeadingGap: true, rect: bounds)
       #expect(buffer.sizeThatFits(resolved, bounds.size).height == Float(lines.count) * expected.lineHeight)
+      context.interaction.beginFrame(input: InputState())
+      buffer.register(resolved, in: bounds)
+      context.interaction.endFrame()
       var actualCommands = DrawList()
       buffer.paint(resolved, into: &actualCommands, in: bounds)
       var expectedCommands = DrawList()
@@ -73,17 +76,25 @@ struct PreparedMarkdownLayoutTests {
     }
   }
 
-  @Test func paintingAloneDoesNotRegisterOrReplayInput() {
+  @Test func paintingCommittedLayoutDoesNotRegisterOrReplayInput() {
     let context = LayoutContext()
     var buffer = LayoutBuffer()
     let resolved = leaf.build(into: &buffer, context: context)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(resolved, in: rect)
+    context.interaction.endFrame()
+    let leaves = context.interaction.tree?.children.map(\.leafID)
+    let handlers = context.interaction.registrations.inputHandlers.count
+    let buildingHandlers = context.interaction.building.inputHandlers.count
+    let buildingActions = context.interaction.building.buttonActions.count
     var list = DrawList()
     buffer.paint(resolved, into: &list, in: rect)
     #expect(!list.commands.isEmpty)
-    #expect(context.interaction.tree == nil)
+    #expect(context.interaction.tree?.children.map(\.leafID) == leaves)
+    #expect(context.interaction.registrations.inputHandlers.count == handlers)
     #expect(context.interaction.builderRoot == nil)
-    #expect(context.interaction.building.inputHandlers.isEmpty)
-    #expect(context.interaction.building.buttonActions.isEmpty)
+    #expect(context.interaction.building.inputHandlers.count == buildingHandlers)
+    #expect(context.interaction.building.buttonActions.count == buildingActions)
     #expect(context.interaction.editingLeaf == nil)
   }
 
