@@ -17,9 +17,8 @@ public struct AnimatedValue<Content: Block>: Block {
   }
 
   @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    let context = context.component(Self.self)
-    let state = context.interaction.animation(context.widgetID, target: target, duration: duration)
-    let child = buffer.emit(content(state.value(at: context.interaction.animationTime)), context: context)
-    return buffer.node(.animation(child, state), context: context)
+    buffer.animatedValue(target, duration: duration, context: context) { buffer, context, value in
+      buffer.emit(content(value), context: context)
+    }
   }
 }

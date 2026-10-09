@@ -24,17 +24,18 @@ struct TextSelectionTests {
   }
 
   @Test func selectingPlainTextEndsEditableSelection() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     var value = "editable"
     let content = VStack {
       Text("selectable").selectable()
       TextEditor(singleLine: true, text: { value }, onChange: { value = $0 })
     }
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 300, height: 150),
-        input: input, context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 300, height: 150),
+        input: input, onChange: {})
     }
     render()
     render(InputState(pointerPosition: Point(x: 10, y: 40), pointerDown: true, pointerPressed: true))

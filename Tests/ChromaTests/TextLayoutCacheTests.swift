@@ -99,13 +99,14 @@ struct TextLayoutCacheTests {
   func freshFramesReuseImmutableShaping(kind: String) {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
-    runtime.setContent(
+    let content: any Block =
       switch kind {
       case "wrapped": Text("unchanged text").wrapping()
       case "selectable": Text("unchanged text").selectable()
       case "editor": TextEditor(text: { "unchanged text" }, onChange: { _ in })
       default: Text("unchanged text")
-      })
+      }
+    runtime.setContent(content)
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     for _ in 0..<4 {

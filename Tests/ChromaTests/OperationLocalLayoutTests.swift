@@ -196,12 +196,13 @@ struct OperationLocalLayoutTests {
       VStack { Leaf(capture: capture, height: { model.height }) }
     }
     var redraws = 0
-    _ = producer.render(
-      build: oldRoot.map { root in
-        { (buffer: inout LayoutBuffer, context: BlockContext) in buffer.emit(root, context: context) }
-      },
-      viewport: Size(width: 100, height: 100), input: InputState(),
-      context: context, onChange: { redraws += 1 })
+    do {
+      let root = oldRoot!
+      let build: LayoutBuilder = { buffer, context in buffer.emit(root, context: context) }
+      _ = producer.render(
+        build: build, viewport: Size(width: 100, height: 100), input: InputState(),
+        context: context, onChange: { redraws += 1 })
+    }
     model?.height = 22
     producer.reset()
     oldRoot = nil

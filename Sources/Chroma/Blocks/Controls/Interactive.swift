@@ -32,7 +32,9 @@ public struct Interactive<Content: Block>: Block {
 
 extension Interactive {
   @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.interactive(id: id, action: action, content: { content($0) }, context: context)
+    buffer.interactive(
+      id: id, action: action,
+      content: { buffer, context, phase in buffer.emit(content(phase), context: context) }, context: context)
   }
 }
 
@@ -42,7 +44,7 @@ extension Interactive {
 struct InteractiveNode {
   let id: WidgetID
   let action: @MainActor () -> Void
-  let content: @MainActor (InteractionPhase) -> any Block
+  let content: @MainActor (inout LayoutBuffer, BlockContext, InteractionPhase) -> LayoutNode
   let context: BlockContext
   private var idle: LayoutNode?
   private var hovered: LayoutNode?
@@ -51,7 +53,8 @@ struct InteractiveNode {
 
   init(
     id: WidgetID?, action: @escaping @MainActor () -> Void,
-    content: @escaping @MainActor (InteractionPhase) -> any Block, context: BlockContext
+    content: @escaping @MainActor (inout LayoutBuffer, BlockContext, InteractionPhase) -> LayoutNode,
+    context: BlockContext
   ) {
     self.id = id ?? context.widgetID
     self.action = action
@@ -70,7 +73,7 @@ struct InteractiveNode {
     var childContext = context
     childContext.focusTargets = []
     childContext.focusLeafClaimed = true
-    let child = buffer.emit(content(phase), context: childContext)
+    let child = content(&buffer, childContext, phase)
     switch phase {
     case .idle: idle = child
     case .hovered: hovered = child

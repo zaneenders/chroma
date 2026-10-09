@@ -163,7 +163,7 @@ struct LazyLayoutCacheTests {
       interaction.endFrame()
     }
     frame()
-    row.content = Color.white.sizing(y: .fixed(100))
+    row.setContent(Color.white.sizing(y: .fixed(100)))
     frame()
     #expect(interaction.scrollState(for: id).limit.y == 80)
   }

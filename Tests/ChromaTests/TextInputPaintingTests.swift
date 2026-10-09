@@ -26,17 +26,18 @@ struct TextInputPaintingTests {
 
   @Test(arguments: [false, true])
   func focusedTextInputHasBorderWithoutFocusFill(multiline: Bool) throws {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let content: any Block =
       multiline
       ? TextEditor(text: { "abcd" }, onChange: { _ in })
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
     let size = Size(width: 200, height: 40)
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render() -> DrawList {
-      producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: size, input: InputState(),
-        context: context, onChange: {})
+      runtime.render(
+        viewport: size, input: InputState(),
+        onChange: {})
     }
     _ = render()
     let tree = try #require(context.interaction.tree)
@@ -96,17 +97,18 @@ struct TextInputPaintingTests {
 
   @Test(arguments: [false, true])
   func selectionSuppressesCaretAndPreservesBalancedClips(multiline: Bool) throws {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let content: any Block =
       multiline
       ? TextEditor(text: { "ab\ncd" }, onChange: { _ in })
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render() -> DrawList {
-      producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+      runtime.render(
+        viewport: Size(width: 200, height: 100),
         input: InputState(),
-        context: context, onChange: {})
+        onChange: {})
     }
     _ = render()
     let tree = try #require(context.interaction.tree)

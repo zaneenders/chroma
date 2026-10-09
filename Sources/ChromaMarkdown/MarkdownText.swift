@@ -20,18 +20,20 @@ public struct MarkdownText: Block {
   }
 
   @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
     let blocks = document.blocks
     let revision = document.revision
     let preparation = document.layoutPreparation
-    let content = VStack(spacing: 0) {
-      ForEach(Array(blocks.indices), id: \.self) { index in
-        MarkdownLeaf(
-          block: blocks[index].block, scale: scale, lineSpacing: lineSpacing,
-          hasLeadingGap: hasGap(before: index, in: blocks), parsedRuns: blocks[index].runs,
-          preparation: preparation, source: (revision, index))
-      }
+    var children: [LayoutNode] = []
+    children.reserveCapacity(blocks.count)
+    for index in blocks.indices {
+      let leaf = MarkdownLeaf(
+        block: blocks[index].block, scale: scale, lineSpacing: lineSpacing,
+        hasLeadingGap: hasGap(before: index, in: blocks), parsedRuns: blocks[index].runs,
+        preparation: preparation, source: (revision, index))
+      children.append(leaf.emit(into: &buffer, context: context.keyed(index)))
     }
-    return buffer.emit(content, context: context.component(Self.self))
+    return buffer.stack(children, axis: .vertical, context: context)
   }
 
   private func hasGap(before index: Int, in blocks: [ParsedMarkdownBlock]) -> Bool {

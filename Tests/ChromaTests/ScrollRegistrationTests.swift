@@ -245,7 +245,7 @@ struct ScrollRegistrationTests {
     #expect(controller.lazyStackCache.measurements[2] === measurements[0])
 
     var replacement = rows[1]
-    replacement.content = Probe(index: 1, height: 30, capture: capture)
+    replacement.setContent(Probe(index: 1, height: 30, capture: capture))
     capture.registered = []
     h.register(content([rows[2], replacement, rows[0]]))
     #expect(capture.measurements == [1])

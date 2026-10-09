@@ -18,7 +18,6 @@ public struct MarqueeText: Block {
   }
 
   var focusRule: FocusRule { .standard }
-  var expandsHorizontally: Bool { true }
 
   @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: proposal.width, height: context.fontMetrics.measure(text, scale: fontScale * context.textScale).height)

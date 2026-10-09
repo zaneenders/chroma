@@ -400,8 +400,8 @@ struct ScrollViewTests {
   }
 
   @Test func keyboardNavigationHandlesMultipleVirtualizedMovementsInOneFrame() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     let view = ScrollView(
       data: 0..<10, rowHeight: 10, spacing: 5, showsIndicator: false, controller: controller
@@ -411,10 +411,11 @@ struct ScrollViewTests {
       }
     }.id(scrollID)
 
+    runtime.build = { buffer, context in buffer.emit(view, context: context) }
     func frame(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size, input: input,
-        context: context, onChange: {})
+      _ = runtime.render(
+        viewport: viewport.size, input: input,
+        onChange: {})
     }
 
     frame()
@@ -557,10 +558,10 @@ struct ScrollViewTests {
   }
 
   @Test(arguments: [(false, false), (false, true), (true, false)], ["first", "normal", "reset"])
-  func frameProducerWheelCancelsPendingRevealRequest(configuration: (Bool, Bool), frameState: String) {
+  func runtimeWheelCancelsPendingRevealRequest(configuration: (Bool, Bool), frameState: String) {
     let (lazy, horizontal) = configuration
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     let view: any Block =
       lazy
@@ -570,14 +571,15 @@ struct ScrollViewTests {
       : ScrollView(controller: controller) {
         FixedContent(size: Size(width: 1000, height: 1000))
       }.id(scrollID)
+    runtime.build = { buffer, context in buffer.emit(view, context: context) }
     func frame(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size, input: input,
-        context: context, onChange: {})
+      _ = runtime.render(
+        viewport: viewport.size, input: input,
+        onChange: {})
     }
 
     if frameState != "first" { frame() }
-    if frameState == "reset" { producer.reset() }
+    if frameState == "reset" { runtime.reset() }
     controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
     frame(
       InputState(
@@ -593,9 +595,9 @@ struct ScrollViewTests {
   }
 
   @Test(arguments: [false, true], ["first", "normal", "reset"])
-  func frameProducerAppliesExplicitScrollRequestAfterWheel(lazy: Bool, frameState: String) {
-    let context = BlockContext()
-    let producer = FrameProducer()
+  func runtimeAppliesExplicitScrollRequestAfterWheel(lazy: Bool, frameState: String) {
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     let view: any Block =
       lazy
@@ -605,14 +607,15 @@ struct ScrollViewTests {
       : ScrollView(controller: controller) {
         FixedContent(size: Size(width: 100, height: 1000))
       }.id(scrollID)
+    runtime.build = { buffer, context in buffer.emit(view, context: context) }
     func frame(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size, input: input,
-        context: context, onChange: {})
+      _ = runtime.render(
+        viewport: viewport.size, input: input,
+        onChange: {})
     }
 
     if frameState != "first" { frame() }
-    if frameState == "reset" { producer.reset() }
+    if frameState == "reset" { runtime.reset() }
     controller.scroll(to: 50)
     frame(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -12)))
     #expect(context.interaction.scrollState(for: scrollID).offset.y == 50)
@@ -621,19 +624,20 @@ struct ScrollViewTests {
 
   @Test(arguments: [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)])
   func lazyRevealSurvivesUnrelatedWheelInput(delta: Point) {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     let view = ScrollView(data: 0..<100, rowHeight: 10, controller: controller) { _ in
       Text("Row")
     }.id(scrollID)
     controller.scrollToVisible(Rect(x: 0, y: 500, width: 10, height: 10))
-    _ = producer.render(
-      build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size,
+    runtime.build = { buffer, context in buffer.emit(view, context: context) }
+    _ = runtime.render(
+      viewport: viewport.size,
       input: InputState(
         pointerPosition: delta.y != 0 ? Point(x: 200, y: 200) : Point(x: 10, y: 10),
         scrollDelta: delta),
-      context: context, onChange: {})
+      onChange: {})
     #expect(context.interaction.scrollState(for: scrollID).offset.y == 490)
     #expect(controller.request == nil)
   }
@@ -644,8 +648,8 @@ struct ScrollViewTests {
   func clippedRevealRespectsWheelHitTesting(lazy: Bool, frameState: String) {
     for pointer in [Point(x: 10, y: 10), Point(x: 10, y: 50), Point(x: 50, y: 10)] {
       for delta in [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)] {
-        let context = BlockContext()
-        let producer = FrameProducer()
+        let runtime = WindowRuntime()
+        let context = runtime.context
         let controller = ScrollViewController()
         let scroll: any Block =
           lazy
@@ -655,14 +659,14 @@ struct ScrollViewTests {
           : ScrollView(controller: controller) {
             FixedContent(size: Size(width: 1000, height: 1000))
           }.id(scrollID)
+        runtime.build = { buffer, context in buffer.emit(ClippedScrollContent(content: scroll), context: context) }
         func frame(_ input: InputState = InputState()) {
-          _ = producer.render(
-            build: { buffer, context in buffer.emit(ClippedScrollContent(content: scroll), context: context) },
+          _ = runtime.render(
             viewport: Size(width: 100, height: 100),
-            input: input, context: context, onChange: {})
+            input: input, onChange: {})
         }
         if frameState != "first" { frame() }
-        if frameState == "reset" { producer.reset() }
+        if frameState == "reset" { runtime.reset() }
         controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
         frame(InputState(pointerPosition: pointer, scrollDelta: delta))
         let receivesWheel = pointer == Point(x: 10, y: 10) && (delta.y != 0 || (!lazy && delta.x != 0))
@@ -939,7 +943,7 @@ struct ScrollViewTests {
     #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 10])
 
     var replacement = first
-    replacement.content = CountedRow(index: 2, height: 30, counter: counter)
+    replacement.setContent(CountedRow(index: 2, height: 30, counter: counter))
     frame([second, replacement])
     #expect(counter.measured == [2])
     #expect(controller.lazyStackCache.measurements[0] === measurements[1])

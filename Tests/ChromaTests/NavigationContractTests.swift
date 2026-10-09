@@ -5,14 +5,22 @@ import Testing
 @MainActor
 struct NavigationContractTests {
   @MainActor private final class Harness {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    var context: BlockContext { runtime.context }
+    private var currentContent: any Block = EmptyBlock()
+
+    init() {
+      runtime.build = { [unowned self] buffer, context in
+        buffer.emit(currentContent, context: context)
+      }
+    }
     @discardableResult func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = [])
       -> DrawList
     {
-      producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 600, height: 400),
-        input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
+      currentContent = content
+      return runtime.render(
+        viewport: Size(width: 600, height: 400),
+        input: InputState(commands: commands, textEvents: text), onChange: {})
     }
   }
 

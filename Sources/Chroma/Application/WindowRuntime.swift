@@ -118,7 +118,7 @@ package final class WindowRuntime {
     scheduler.requestContent()
   }
 
-  private func processInput(_ input: InputState, refreshing: Bool = true) {
+  private func processInput(_ input: InputState, refreshing: Bool = true, notifyingObservers: Bool = true) {
     // Hover can use the last frame's geometry. Actionable events need current callbacks
     // and layout, including between events whose presentation is coalesced.
     if refreshing
@@ -128,7 +128,7 @@ package final class WindowRuntime {
       producer.refreshRegistrations(
         build, viewport: interaction.viewport.size, context: context, commands: input.commands)
     }
-    interaction.processInput(input)
+    interaction.processInput(input, notifyingObservers: notifyingObservers)
     interaction.finishInput()
     scheduler.animationsActive = interaction.animationsActive
   }
@@ -169,9 +169,22 @@ package final class WindowRuntime {
     processingInput: Bool = true,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
-    let list = producer.render(
-      build: build, viewport: viewport, input: input, context: context,
-      processingInput: processingInput, onChange: onChange)
+    interaction.viewport = Rect(origin: .zero, size: viewport)
+    if interaction.tree == nil {
+      let editingLeaf = interaction.editingLeaf
+      let wasEditing = interaction.isTextEditing
+      let caret = interaction.caretOffset
+      let selection = interaction.textSelectionRange
+      producer.refreshRegistrations(build, viewport: viewport, context: context)
+      if let editingLeaf, interaction.tree?.findLeaf(editingLeaf) != nil {
+        interaction.beginEditing(editingLeaf, caretOffset: caret)
+        interaction.textSelectionRange = selection
+        if !wasEditing { interaction.stopInput() }
+      }
+    }
+    if processingInput { processInput(input, notifyingObservers: input != InputState()) }
+    // Read the root after dispatch: an action may have replaced it synchronously.
+    let list = producer.render(build: build, viewport: viewport, input: input, context: context, onChange: onChange)
     scheduler.animationsActive = interaction.animationsActive
     return list
   }

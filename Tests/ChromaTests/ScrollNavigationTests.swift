@@ -5,12 +5,20 @@ import Testing
 @MainActor
 struct ScrollNavigationTests {
   @MainActor private final class Harness {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    var context: BlockContext { runtime.context }
+    private var currentContent: any Block = EmptyBlock()
+
+    init() {
+      runtime.build = { [unowned self] buffer, context in
+        buffer.emit(currentContent, context: context)
+      }
+    }
     func render(_ content: any Block, _ commands: [NavigationCommand] = []) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
-        input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
+      currentContent = content
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: InputState(commands: commands.map { .navigation($0) }), onChange: {})
     }
   }
 
@@ -134,10 +142,10 @@ struct ScrollNavigationTests {
     interaction.scrollStates[scrollID]?.pendingReveal = Rect(x: 0, y: 300, width: 200, height: 20)
     let expectedFocus = Interaction.PendingFocus(leaf: WidgetID("row-15"), scrollID: scrollID)
     interaction.pendingFocus = expectedFocus
-    _ = h.producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 150, height: 100),
+    _ = h.runtime.render(
+      viewport: Size(width: 150, height: 100),
       input: InputState(),
-      context: h.context, onChange: {})
+      onChange: {})
     #expect(controller.offset > 0)
     #expect(interaction.pendingFocus == expectedFocus)
   }
@@ -149,10 +157,10 @@ struct ScrollNavigationTests {
       ScrollView(controller: controller) { Color.white.sizing(x: .fixed(500), y: .fixed(500)) }.id(id)
     }
     h.render(content(1))
-    _ = h.producer.render(
-      build: { buffer, context in buffer.emit(content(1), context: context) }, viewport: Size(width: 200, height: 100),
+    _ = h.runtime.render(
+      viewport: Size(width: 200, height: 100),
       input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: -25, y: -60)),
-      context: h.context, onChange: {})
+      onChange: {})
     #expect(controller.offset == 60)
     #expect(controller.horizontalOffset == 25)
     h.render(EmptyBlock())

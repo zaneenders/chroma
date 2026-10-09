@@ -5,18 +5,18 @@ import Testing
 @MainActor
 struct PointerScrollFocusTests {
   @Test func recoveringFocusAfterVirtualScrollDoesNotMoveTheNextClickTarget() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
     let controller = ScrollViewController()
     var clicks: [Int] = []
     let content = ScrollView(data: 0..<30, rowHeight: 30, controller: controller) { index in
       Interactive(action: { clicks.append(index) }) { _ in Text("Row \(index)") }
     }
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
         input: input,
-        context: context, onChange: {})
+        onChange: {})
     }
     render()
     let first = Point(x: 10, y: 10)
@@ -36,8 +36,8 @@ struct PointerScrollFocusTests {
 
   @Test(arguments: [false, true])
   func pressingOversizedRowPreservesScrollOffset(hasControl: Bool) {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     let target = FocusTarget()
     let row: any Block =
@@ -47,10 +47,11 @@ struct PointerScrollFocusTests {
     let content = ScrollView(
       "Transcript", controller: controller,
       rows: [ScrollView.Row(id: "message", content: row)])
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 400, height: 200),
-        input: input, context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 400, height: 200),
+        input: input, onChange: {})
     }
     render()
     controller.scroll(to: 500)
@@ -79,8 +80,7 @@ struct PointerScrollFocusTests {
 
   @Test func pointerSelectionPreservesLogicalSelectionAndKeyboardReveal() {
     struct Item: Identifiable { let id: Int }
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
     let controller = ScrollViewController()
     let selection = ScrollSelection<Int>()
     let targets = [FocusTarget(), FocusTarget()]
@@ -90,10 +90,11 @@ struct PointerScrollFocusTests {
     ) { item in
       Button("Message \(item.id)") {}.focusTarget(targets[item.id])
     }
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 400, height: 200),
-        input: input, context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 400, height: 200),
+        input: input, onChange: {})
     }
     render()
     controller.scroll(to: 500)

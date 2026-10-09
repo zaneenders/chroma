@@ -260,13 +260,13 @@ struct StackEvaluationTests {
         }
       }
     }
-    let producer = FrameProducer()
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    runtime.build = { buffer, context in buffer.emit(block, context: context) }
     func render(_ input: InputState) -> [String] {
-      producer.render(
-        build: { buffer, context in buffer.emit(block, context: context) }, viewport: Size(width: 200, height: 100),
+      runtime.render(
+        viewport: Size(width: 200, height: 100),
         input: input,
-        context: context, onChange: {}
+        onChange: {}
       ).paintSnapshot.compactMap {
         if case .text(_, let text, _, _) = $0 { return text }
         return nil

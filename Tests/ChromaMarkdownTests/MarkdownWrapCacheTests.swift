@@ -14,6 +14,14 @@ struct MarkdownWrapCacheTests {
       preparation: document.layoutPreparation, source: (document.revision, index))
   }
 
+  @Test func emissionAddsOnlyBlockLeavesAndOneStack() {
+    let document = MarkdownDocument("# Heading\n\nParagraph\n\n- first\n- second")
+    var buffer = LayoutBuffer()
+    _ = buffer.emit(MarkdownText(document), context: BlockContext())
+    #expect(document.blocks.count == 4)
+    #expect(buffer.count == document.blocks.count + 1)
+  }
+
   @Test func repeatedOperationsReuseEveryDocumentBlock() {
     let document = MarkdownDocument("**first paragraph**\n\nsecond paragraph")
     let content = MarkdownText(document)

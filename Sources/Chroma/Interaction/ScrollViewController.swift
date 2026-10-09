@@ -30,6 +30,7 @@ public final class ScrollViewController {
 
   var request: ScrollRequest?
   @ObservationIgnored var lazyStackCache = LazyStackCache()
+  @ObservationIgnored var measurementBuffer = LayoutBuffer()
   @ObservationIgnored var uniformRowIdentity: UniformRowIdentity?
   @ObservationIgnored private var uniformIdentityRevision: UInt64?
 

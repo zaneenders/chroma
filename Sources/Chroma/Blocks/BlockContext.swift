@@ -1,3 +1,8 @@
+private final class ThemeStorage {
+  let value: ChromaTheme
+  init(_ value: ChromaTheme) { self.value = value }
+}
+
 @MainActor
 public struct BlockContext {
   var keyboardNavigationOverscan = false
@@ -44,12 +49,12 @@ public struct BlockContext {
     return copy
   }
 
-  func childContext(for child: any Block, at index: Int) -> BlockContext {
-    scoped([.slot(index)])
-  }
-
   package var interaction: Interaction
-  public var theme: ChromaTheme
+  private var themeStorage: ThemeStorage
+  public var theme: ChromaTheme {
+    get { themeStorage.value }
+    set { themeStorage = ThemeStorage(newValue) }
+  }
   public var textScale: Float
 
   public var selection: TextSelectionManager { interaction.textSelection }
@@ -105,13 +110,13 @@ public struct BlockContext {
 
   public init(theme: ChromaTheme = .dark, textScale: Float = 1) {
     self.interaction = Interaction()
-    self.theme = theme
+    self.themeStorage = ThemeStorage(theme)
     self.textScale = textScale
   }
 
   package init(interaction: Interaction, theme: ChromaTheme = .dark, textScale: Float = 1) {
     self.interaction = interaction
-    self.theme = theme
+    self.themeStorage = ThemeStorage(theme)
     self.textScale = textScale
   }
 

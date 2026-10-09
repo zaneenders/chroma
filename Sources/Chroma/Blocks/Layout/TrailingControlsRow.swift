@@ -14,8 +14,9 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: Block {
   }
 
   @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    let input = buffer.emit(input, context: context.childScope(0))
-    let controls = buffer.emit(controls, context: context.childScope(1))
-    return buffer.node(.trailing(input, controls, spacing), context: context)
+    buffer.trailingControls(
+      spacing: spacing, context: context,
+      input: { buffer, context in buffer.emit(input, context: context) },
+      controls: { buffer, context in buffer.emit(controls, context: context) })
   }
 }

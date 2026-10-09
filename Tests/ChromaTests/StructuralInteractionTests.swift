@@ -7,14 +7,22 @@ import Testing
 @MainActor
 struct StructuralInteractionTests {
   @MainActor private final class Harness {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    var context: BlockContext { runtime.context }
+    private var currentContent: any Block = EmptyBlock()
+
+    init() {
+      runtime.build = { [unowned self] buffer, context in
+        buffer.emit(currentContent, context: context)
+      }
+    }
 
     func render(_ content: any Block, input: InputState = InputState()) {
       let isInitialFrame = context.interaction.tree == nil
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
-        input: input, context: context, onChange: {})
+      currentContent = content
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: input, onChange: {})
       if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     }
 

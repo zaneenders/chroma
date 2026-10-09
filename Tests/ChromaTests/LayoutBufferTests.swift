@@ -7,6 +7,11 @@ import Testing
 struct LayoutBufferTests {
   private let viewport = Rect(x: 0, y: 0, width: 120, height: 80)
 
+  @Test func commonRecordsDoNotInlineRareControlPayloads() {
+    #expect(MemoryLayout<LayoutBuffer.Record>.stride <= 128)
+    #expect(MemoryLayout<BlockContext>.stride <= 96)
+  }
+
   @Test func resetAndDifferentOwnersRejectRecycledHandles() {
     var first = LayoutBuffer()
     var second = LayoutBuffer()

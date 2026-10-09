@@ -1,26 +1,29 @@
 extension LayoutModifier {
   @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
     let child = buffer.emit(content, context: context)
-    return buffer.mapChildren(child, context: context) { buffer, child, context in
-      buffer.node(.layout(child, operation), context: context)
+    switch operation {
+    case .padding(let insets): return buffer.padding(child, insets, context: context)
+    case .sizing(let x, let y): return buffer.sizing(child, x: x, y: y, context: context)
     }
   }
 }
 extension PaintModifier {
   @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    let childContext: BlockContext
-    if case .background = operation { childContext = context.backgroundContentContext } else { childContext = context }
-    let child = buffer.emit(content, context: childContext)
-    return buffer.mapChildren(child, context: context) { buffer, child, context in
-      let decoration: LayoutBuffer.Decoration
-      switch operation {
-      case .background(let background):
-        decoration = .background(buffer.emit(background, context: context.backgroundContext))
-      case .roundedBackground(let color, let radii): decoration = .rounded(color, radii)
-      case .border(let color, let radii, let width): decoration = .border(color, radii, width)
-      case .clip: decoration = .clip
-      }
-      return buffer.node(.decoration(child, decoration), context: context)
+    switch operation {
+    case .background(let background):
+      return buffer.background(
+        context: context,
+        content: { buffer, context in buffer.emit(content, context: context) },
+        background: { buffer, context in buffer.emit(background, context: context) })
+    case .roundedBackground(let color, let radii):
+      let child = buffer.emit(content, context: context)
+      return buffer.roundedBackground(child, color: color, radii: radii, context: context)
+    case .border(let color, let radii, let width):
+      let child = buffer.emit(content, context: context)
+      return buffer.border(child, color: color, radii: radii, width: width, context: context)
+    case .clip:
+      let child = buffer.emit(content, context: context)
+      return buffer.clip(child, context: context)
     }
   }
 }
@@ -37,16 +40,15 @@ extension ContextModifier {
 extension CommandScope {
   @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
     let child = buffer.emit(content, context: context)
-    return buffer.mapChildren(child, context: context) { buffer, child, context in
-      buffer.node(.command(child, operation), context: context)
+    switch operation {
+    case .keyBindings(let bindings): return buffer.keyBindings(child, bindings, context: context)
+    case .handler(let command, let action): return buffer.onCommand(child, command, context: context, action: action)
     }
   }
 }
 extension Group {
   @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    let context = context.component(Self.self)
-    let child = buffer.emit(content, context: context)
-    return buffer.node(.group(child, name), context: context)
+    buffer.group(name, context: context) { buffer, context in buffer.emit(content, context: context) }
   }
 }
 extension ThemeBlock {
@@ -61,9 +63,6 @@ extension ThemeReader {
 }
 extension FocusTargetBlock {
   @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    var context = context
-    context.focusTargets.append(target)
-    let child = buffer.emit(content, context: context)
-    return buffer.node(.focus(child, target), context: context)
+    buffer.focus(target, context: context) { buffer, context in buffer.emit(content, context: context) }
   }
 }

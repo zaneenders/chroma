@@ -7,8 +7,8 @@ struct LayoutModifier: Block {
   var content: any Block
   var operation: Operation
 
-  @MainActor func sizeThatFits(
-    _ proposal: Size, context: BlockContext, measure: (Size) -> Size
+  @MainActor static func sizeThatFits(
+    _ operation: Operation, proposal: Size, measure: (Size) -> Size
   ) -> Size {
     switch operation {
     case .padding(let insets):
@@ -45,14 +45,14 @@ struct LayoutModifier: Block {
     }
   }
 
-  private func proposedSize(for sizing: Sizing, available: Float) -> Float {
+  private static func proposedSize(for sizing: Sizing, available: Float) -> Float {
     switch sizing {
     case .fit, .grow: available
     case .fixed(let size): size
     }
   }
 
-  private func resolvedSize(for sizing: Sizing, available: Float, fitted: Float) -> Float {
+  private static func resolvedSize(for sizing: Sizing, available: Float, fitted: Float) -> Float {
     switch sizing {
     case .fit: fitted
     case .fixed(let size): size

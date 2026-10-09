@@ -5,12 +5,20 @@ import Testing
 @MainActor
 struct HierarchicalNavigationTests {
   @MainActor private final class Harness {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    var context: BlockContext { runtime.context }
+    private var currentContent: any Block = EmptyBlock()
+
+    init() {
+      runtime.build = { [unowned self] buffer, context in
+        buffer.emit(currentContent, context: context)
+      }
+    }
     func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = []) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 800, height: 600),
-        input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
+      currentContent = content
+      _ = runtime.render(
+        viewport: Size(width: 800, height: 600),
+        input: InputState(commands: commands, textEvents: text), onChange: {})
     }
   }
 
@@ -206,10 +214,10 @@ extension HierarchicalNavigationTests {
     h.render(content)
     let tree = h.context.interaction.tree!
     let rect = tree.node(at: tree.findLeaf(second.boundID!)!)!.rect
-    _ = h.producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 800, height: 600),
+    _ = h.runtime.render(
+      viewport: Size(width: 800, height: 600),
       input: InputState(pointerPosition: Point(x: rect.minX + 2, y: rect.minY + 2)),
-      context: h.context, onChange: {})
+      onChange: {})
     #expect(first.isFocused)
     h.render(content, [.navigation(.stepOut), .navigation(.stepIn)])
     #expect(first.isFocused)

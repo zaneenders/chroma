@@ -6,8 +6,8 @@ import Testing
 struct ScrollMetadataTests {
   @Test(arguments: [false, true])
   func longScrollRetainsOnlyCurrentRowsAndRememberedLeaf(multipleControls: Bool) {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     let content = ScrollView(data: 0..<10_000, rowHeight: 20, controller: controller) { _ in
       if multipleControls {
@@ -19,10 +19,11 @@ struct ScrollMetadataTests {
         Color.white
       }
     }
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render(_ commands: [NavigationCommand] = []) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
-        input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: InputState(commands: commands.map { .navigation($0) }), onChange: {})
     }
     render()
     render([.down, .stepIn])
@@ -42,7 +43,7 @@ struct ScrollMetadataTests {
     render()
     #expect(controller.offset == 0)
     #expect(context.interaction.selectedLeafID == remembered)
-    producer.reset()
+    runtime.reset()
     #expect(context.interaction.scrollStates.isEmpty)
   }
 
@@ -141,8 +142,8 @@ struct ScrollMetadataTests {
   }
 
   @Test func contentOnlyControlReplacementDoesNotAccumulateMetadata() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     @MainActor final class Model { var revision = 0 }
     let model = Model()
@@ -151,10 +152,11 @@ struct ScrollMetadataTests {
         Button("Control") {}.id(model.revision)
       }
     }
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render(_ commands: [NavigationCommand] = []) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
-        input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: InputState(commands: commands.map { .navigation($0) }), onChange: {})
     }
     render()
     render([.down, .stepIn, .stepOut])

@@ -40,15 +40,16 @@ struct ContentAPITests {
   }
 
   @Test func editorInsertsNewlineAtCaretAndReplacesSelection() {
-    let producer = FrameProducer()
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     var text = "abcd"
     let editor = TextEditor(text: { text }, onChange: { text = $0 })
+    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
     func render(_ events: [TextEditEvent] = []) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(editor, context: context) }, viewport: Size(width: 200, height: 100),
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
         input: InputState(textEvents: events),
-        context: context, onChange: {})
+        onChange: {})
     }
     render()
     let id = context.interaction.tree!.firstLeafPath().flatMap { context.interaction.tree?.node(at: $0)?.leafID }!
@@ -64,8 +65,8 @@ struct ContentAPITests {
   }
 
   @Test func editorSubmitAndEndEditingCallbacksAreScoped() {
-    let producer = FrameProducer()
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     var submitted: [String] = []
     var ended = 0
     let editor = TextEditor(
@@ -74,11 +75,12 @@ struct ContentAPITests {
         ended += 1
         return .handled
       })
+    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
     func render(_ events: [TextEditEvent] = []) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(editor, context: context) }, viewport: Size(width: 200, height: 100),
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
         input: InputState(textEvents: events),
-        context: context, onChange: {})
+        onChange: {})
     }
     render()
     let id = context.interaction.tree!.firstLeafPath().flatMap { context.interaction.tree?.node(at: $0)?.leafID }!
@@ -136,17 +138,18 @@ struct ContentAPITests {
   }
 
   @Test func editorDragKeepsVisibleLinesStable() {
-    let producer = FrameProducer()
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let text = "a\nb\nc\nd\ne"
     let editor = TextEditor(lineLimits: 2...2, text: { text }, onChange: { _ in })
     let line = context.fontMetrics.lineAdvance
     let height = 2 * line + 16
+    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
     func render(_ input: InputState = InputState()) -> DrawList {
-      producer.render(
-        build: { buffer, context in buffer.emit(editor, context: context) }, viewport: Size(width: 200, height: height),
+      runtime.render(
+        viewport: Size(width: 200, height: height),
         input: input,
-        context: context, onChange: {})
+        onChange: {})
     }
     _ = render()
     let id = context.interaction.tree!.firstLeafPath().flatMap { context.interaction.tree?.node(at: $0)?.leafID }!
@@ -168,16 +171,17 @@ struct ContentAPITests {
   }
 
   @Test func editorDragScrollsBeyondVisibleLines() {
-    let producer = FrameProducer()
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let text = "a\nb\nc\nd\ne"
     let editor = TextEditor(lineLimits: 2...2, text: { text }, onChange: { _ in })
     let line = context.fontMetrics.lineAdvance
     let size = Size(width: 200, height: 2 * line + 16)
+    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
     func render(_ input: InputState = InputState()) {
-      _ = producer.render(
-        build: { buffer, context in buffer.emit(editor, context: context) }, viewport: size, input: input,
-        context: context, onChange: {})
+      _ = runtime.render(
+        viewport: size, input: input,
+        onChange: {})
     }
     render()
     let start = Point(x: 8, y: 8 + line / 2)
@@ -260,24 +264,23 @@ struct ContentAPITests {
 
   @Test func switchingToVerticalRowsClearsHorizontalOffset() {
     let controller = ScrollViewController()
-    let producer = FrameProducer()
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let viewport = Size(width: 100, height: 40)
     let wide = ScrollView(controller: controller) {
       Color.white.sizing(x: .fixed(300), y: .fixed(100))
     }
-    _ = producer.render(
-      build: { buffer, context in buffer.emit(wide, context: context) }, viewport: viewport, input: InputState(),
-      context: context, onChange: {})
-    _ = producer.render(
-      build: { buffer, context in buffer.emit(wide, context: context) }, viewport: viewport,
+    var content: any Block = wide
+    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    _ = runtime.render(
+      viewport: viewport,
       input: InputState(pointerPosition: Point(x: 20, y: 20), scrollDelta: Point(x: -50, y: 0)),
-      context: context, onChange: {})
+      onChange: {})
     #expect(controller.horizontalOffset == 50)
     let rows = ScrollView(data: 0..<20, rowHeight: 20, controller: controller) { "Row \($0)" }
-    _ = producer.render(
-      build: { buffer, context in buffer.emit(rows, context: context) }, viewport: viewport, input: InputState(),
-      context: context, onChange: {})
+    content = rows
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     #expect(controller.horizontalOffset == 0)
     #expect(context.interaction.scrollStates.values.allSatisfy { $0.offset.x == 0 && $0.limit.x == 0 })
   }

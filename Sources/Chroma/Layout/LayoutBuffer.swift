@@ -18,9 +18,9 @@ public struct LayoutBuffer: ~Copyable {
     case color(Color)
     case marquee(MarqueeText)
     case progress(ProgressIndicator)
-    case button(Button)
-    case editor(TextEditorNode)
-    case interactive(InteractiveNode)
+    case button(Int)
+    case editor(Int)
+    case interactive(Int)
     case empty, spacer
     case stack(Stack)
     case overlay(Range<Int>, Bool)
@@ -32,7 +32,7 @@ public struct LayoutBuffer: ~Copyable {
     case focus(LayoutNode, FocusTarget)
     case animation(LayoutNode, ScalarAnimation)
     case trailing(LayoutNode, LayoutNode, Float)
-    case scroll(ScrollView, ScrollView.PreparedScroll?)
+    case scroll(Int)
     case custom(CustomLeaf)
   }
   enum Decoration {
@@ -41,9 +41,12 @@ public struct LayoutBuffer: ~Copyable {
     case border(Color, CornerRadii, Float)
     case clip
   }
+  struct ScrollNode {
+    let scroll: ScrollView
+    var prepared: ScrollView.PreparedScroll?
+  }
   struct Record {
     var content: Content
-    let context: BlockContext
     var horizontal: Bool?
     var vertical: Bool?
     var measurements = -1
@@ -79,6 +82,11 @@ public struct LayoutBuffer: ~Copyable {
   private let owner: UInt64
   private var generation: UInt64 = 0
   private var nodes = BasicContainers.UniqueArray<Record>()
+  private var contexts = BasicContainers.UniqueArray<BlockContext>()
+  private var buttons = BasicContainers.UniqueArray<Button>()
+  private var editors = BasicContainers.UniqueArray<TextEditorNode>()
+  private var interactives = BasicContainers.UniqueArray<InteractiveNode>()
+  private var scrolls = BasicContainers.UniqueArray<ScrollNode>()
   private var measurements = BasicContainers.UniqueArray<Measurement>()
   private var children = BasicContainers.UniqueArray<Child>()
   private var placements = BasicContainers.UniqueArray<Rect>()
@@ -93,11 +101,21 @@ public struct LayoutBuffer: ~Copyable {
 
   public mutating func reset(releasingCapacity: Bool = false) {
     generation += 1
+    contexts.removeAll()
+    buttons.removeAll()
+    editors.removeAll()
+    interactives.removeAll()
+    scrolls.removeAll()
     nodes.removeAll()
     measurements.removeAll()
     children.removeAll()
     placements.removeAll()
     if releasingCapacity {
+      contexts = .init()
+      buttons = .init()
+      editors = .init()
+      interactives = .init()
+      scrolls = .init()
       nodes = .init()
       measurements = .init()
       children = .init()
@@ -114,7 +132,9 @@ public struct LayoutBuffer: ~Copyable {
     let node = LayoutNode(owner: owner, generation: generation, index: nodes.count)
     if nodes.count == nodes.capacity { PipelineMetrics.record(.bufferGrowth) }
     PipelineMetrics.record(.layoutNode)
-    nodes.append(Record(content: content, context: context))
+    if contexts.count == contexts.capacity { PipelineMetrics.record(.bufferGrowth) }
+    contexts.append(context)
+    nodes.append(Record(content: content))
     return node
   }
   public mutating func text(_ text: Text, context: BlockContext) -> LayoutNode {
@@ -133,28 +153,41 @@ public struct LayoutBuffer: ~Copyable {
     node(.progress(progress), context: context.component(ProgressIndicator.self))
   }
   public mutating func button(_ button: Button, context: BlockContext) -> LayoutNode {
-    node(.button(button), context: context.component(Button.self))
+    let index = buttons.count
+    if index == buttons.capacity { PipelineMetrics.record(.bufferGrowth) }
+    buttons.append(button)
+    return node(.button(index), context: context.component(Button.self))
   }
   public mutating func textEditor(_ editor: TextEditor, context: BlockContext) -> LayoutNode {
     let context = context.component(TextEditor.self)
-    return node(.editor(TextEditorNode(editor, context: context)), context: context)
+    let index = editors.count
+    if index == editors.capacity { PipelineMetrics.record(.bufferGrowth) }
+    editors.append(TextEditorNode(editor, context: context))
+    return node(.editor(index), context: context)
   }
   public mutating func interactive(
     action: @escaping @MainActor () -> Void,
-    content: @escaping @MainActor (InteractionPhase) -> any Block, context: BlockContext
+    content: @escaping @MainActor (inout LayoutBuffer, BlockContext, InteractionPhase) -> LayoutNode,
+    context: BlockContext
   ) -> LayoutNode {
     interactive(id: nil, action: action, content: content, context: context)
   }
   mutating func interactive(
     id: WidgetID?, action: @escaping @MainActor () -> Void,
-    content: @escaping @MainActor (InteractionPhase) -> any Block, context: BlockContext
+    content: @escaping @MainActor (inout LayoutBuffer, BlockContext, InteractionPhase) -> LayoutNode,
+    context: BlockContext
   ) -> LayoutNode {
     let context = context.component(InteractiveNode.self)
-    return node(
-      .interactive(InteractiveNode(id: id, action: action, content: content, context: context)), context: context)
+    let index = interactives.count
+    if index == interactives.capacity { PipelineMetrics.record(.bufferGrowth) }
+    interactives.append(InteractiveNode(id: id, action: action, content: content, context: context))
+    return node(.interactive(index), context: context)
   }
   public mutating func scrollView(_ scroll: ScrollView, context: BlockContext) -> LayoutNode {
-    node(.scroll(scroll, nil), context: context.component(ScrollView.self))
+    let index = scrolls.count
+    if index == scrolls.capacity { PipelineMetrics.record(.bufferGrowth) }
+    scrolls.append(ScrollNode(scroll: scroll))
+    return node(.scroll(index), context: context.component(ScrollView.self))
   }
   public mutating func spacer(context: BlockContext) -> LayoutNode { node(.spacer, context: context) }
   public mutating func empty(context: BlockContext) -> LayoutNode { node(.empty, context: context) }
@@ -189,9 +222,10 @@ public struct LayoutBuffer: ~Copyable {
     case .stack(let stack): value = stackExpands(stack, horizontally: horizontally)
     case .overlay(let range, _), .fragment(let range):
       value = range.contains { expands(children[$0].node, horizontally: horizontally) }
-    case .interactive(var state):
+    case .interactive(let index):
+      var state = interactives[index]
       value = horizontally ? state.expandsHorizontally(in: &self) : state.expandsVertically(in: &self)
-      nodes[node.index].content = .interactive(state)
+      interactives[index] = state
     case .custom(let leaf): value = horizontally ? leaf.horizontal : leaf.vertical
     default: value = false
     }
@@ -211,7 +245,7 @@ public struct LayoutBuffer: ~Copyable {
       }
       cached = entry.next
     }
-    let context = nodes[node.index].context
+    let context = contexts[node.index]
     let size: Size
     var layout: Range<Int>?
     switch nodes[node.index].content {
@@ -219,16 +253,17 @@ public struct LayoutBuffer: ~Copyable {
     case .image(let value): size = value.sizeThatFits(proposal, context: context)
     case .marquee(let value): size = value.sizeThatFits(proposal, context: context)
     case .progress(let value): size = value.sizeThatFits(proposal, context: context)
-    case .button(let value): size = value.sizeThatFits(proposal, context: context)
-    case .editor(let value): size = value.sizeThatFits(proposal)
+    case .button(let index): size = buttons[index].sizeThatFits(proposal, context: context)
+    case .editor(let index): size = editors[index].sizeThatFits(proposal)
     case .color, .spacer, .scroll: size = proposal
     case .empty: size = .zero
     case .custom(let leaf): size = leaf.measure(proposal)
-    case .interactive(var state):
+    case .interactive(let index):
+      var state = interactives[index]
       size = state.sizeThatFits(proposal, in: &self)
-      nodes[node.index].content = .interactive(state)
+      interactives[index] = state
     case .layout(let child, let operation):
-      size = LayoutModifier(content: EmptyBlock(), operation: operation).sizeThatFits(proposal, context: context) {
+      size = LayoutModifier.sizeThatFits(operation, proposal: proposal) {
         sizeThatFits(child, $0)
       }
     case .decoration(let child, _), .group(let child, _), .command(let child, _), .focus(let child, _),
@@ -263,7 +298,7 @@ public struct LayoutBuffer: ~Copyable {
     precondition(contains(node), "Stale layout handle")
     PipelineMetrics.record(.placement)
     PipelineMetrics.record(.registration)
-    let context = nodes[node.index].context
+    let context = contexts[node.index]
     let parent = context.interaction.builderStack.last
     let before = parent?.children.count
     var rule = FocusRule.container
@@ -281,15 +316,14 @@ public struct LayoutBuffer: ~Copyable {
       value.register(in: rect, context: context)
       rule = value.focusRule
     case .color: rule = .standard
-    case .button(let value):
-      value.register(in: rect, context: context)
+    case .button(let index):
+      buttons[index].register(in: rect, context: context)
       rule = .control
-    case .editor(var state):
-      state.register(in: rect)
-      nodes[node.index].content = .editor(state)
-    case .interactive(var state):
+    case .editor(let index): editors[index].register(in: rect)
+    case .interactive(let index):
+      var state = interactives[index]
       state.register(in: rect, buffer: &self)
-      nodes[node.index].content = .interactive(state)
+      interactives[index] = state
     case .custom(let leaf):
       leaf.register(rect)
       rule = leaf.focusRule
@@ -336,9 +370,10 @@ public struct LayoutBuffer: ~Copyable {
         register(input, in: placed(placements[range.lowerBound], in: rect))
         register(controls, in: placed(placements[range.lowerBound + 1], in: rect))
       }
-    case .scroll(let scroll, _):
+    case .scroll(let index):
+      let scroll = scrolls[index].scroll
       let prepared = scroll.registerContent(in: rect, context: context, buffer: &self)
-      nodes[node.index].content = .scroll(scroll, prepared)
+      scrolls[index].prepared = prepared
     case .empty, .spacer: break
     }
     if let parent, parent.children.count == before {
@@ -361,7 +396,7 @@ public struct LayoutBuffer: ~Copyable {
       paintingDepth -= 1
       if outermost { PipelineMetrics.record(.drawingCommands, count: list.commands.count - before) }
     }
-    let context = nodes[node.index].context
+    let context = contexts[node.index]
     var highlight = false
     switch nodes[node.index].content {
     case .text(let value):
@@ -379,9 +414,11 @@ public struct LayoutBuffer: ~Copyable {
     case .color(let color):
       list.fillRect(rect, color: color)
       highlight = true
-    case .button(let value): value.paint(into: &list, in: rect, context: context)
-    case .editor(let state): state.paint(into: &list, in: rect)
-    case .interactive(let state): state.paint(into: &list, in: rect, buffer: &self)
+    case .button(let index): buttons[index].paint(into: &list, in: rect, context: context)
+    case .editor(let index): editors[index].paint(into: &list, in: rect)
+    case .interactive(let index):
+      let state = interactives[index]
+      state.paint(into: &list, in: rect, buffer: &self)
     case .custom(let leaf):
       leaf.paint(&list, rect)
       highlight = leaf.focusRule == .standard
@@ -421,7 +458,9 @@ public struct LayoutBuffer: ~Copyable {
     case .trailing(let input, let controls, _):
       paint(input, into: &list, in: nodes[input.index].registeredRect!)
       paint(controls, into: &list, in: nodes[controls.index].registeredRect!)
-    case .scroll(let scroll, let prepared): scroll.paint(prepared!, into: &list, context: context, buffer: &self)
+    case .scroll(let index):
+      let state = scrolls[index]
+      state.scroll.paint(state.prepared!, into: &list, context: context, buffer: &self)
     case .empty, .spacer: break
     }
     if highlight, !context.focusLeafClaimed, !context.navigationIgnored {
@@ -457,7 +496,7 @@ public struct LayoutBuffer: ~Copyable {
       var result: [LayoutNode] = []
       for index in range {
         let child = children[index].node
-        let childContext = nodes[child.index].context
+        let childContext = contexts[child.index]
         result.append(transform(&self, child, childContext))
       }
       return fragment(result, context: context)

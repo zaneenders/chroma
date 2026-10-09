@@ -23,9 +23,6 @@ public struct Image: Block {
     resource.size
   }
 
-  var expandsHorizontally: Bool { false }
-  var expandsVertically: Bool { false }
-
   func register(in rect: Rect, context: BlockContext) {}
 
   func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {

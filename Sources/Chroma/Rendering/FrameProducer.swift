@@ -68,12 +68,12 @@ package final class FrameProducer {
   /// Input refresh and presentation share this commit path and this buffer owner.
   private func commit(
     _ build: LayoutBuilder?, viewport: Size, context: BlockContext,
-    input: InputState, processingInput: Bool, refreshing: Bool, drawing: Bool
+    input: InputState, refreshing: Bool, drawing: Bool
   ) {
     let interaction = context.interaction
     interaction.animationTime = clock()
     interaction.refreshingRegistrations = refreshing
-    interaction.beginFrame(input: input, processingInput: processingInput)
+    interaction.beginFrame(input: input, processingInput: false)
     defer { interaction.refreshingRegistrations = false }
     layout.reset()
     defer { layout.reset() }
@@ -87,31 +87,13 @@ package final class FrameProducer {
 
   package func render(
     build: LayoutBuilder?, viewport: Size, input: InputState, context: BlockContext,
-    processingInput: Bool = true, onChange: @escaping @MainActor @Sendable () -> Void
+    onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     resetTracking()
     self.interaction = context.interaction
     let generation = generation
     let interaction = context.interaction
     interaction.viewport = Rect(origin: .zero, size: viewport)
-    if interaction.tree == nil {
-      let editingLeaf = interaction.editingLeaf
-      let wasEditing = interaction.isTextEditing
-      let caret = interaction.caretOffset
-      let selection = interaction.textSelectionRange
-      refreshRegistrations(build, viewport: viewport, context: context)
-      if let editingLeaf, interaction.tree?.findLeaf(editingLeaf) != nil {
-        interaction.beginEditing(editingLeaf, caretOffset: caret)
-        interaction.textSelectionRange = selection
-        if !wasEditing { interaction.stopInput() }
-      }
-    }
-    if processingInput
-      && (!input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed
-        || input.pointerReleased || input.scrollDelta != .zero)
-    {
-      refreshRegistrations(build, viewport: viewport, context: context, commands: input.commands)
-    }
     let subscription = FrameTrackingSubscription(
       onChange, metricsLifetime: PipelineMetrics.trackObservationLifetime())
     self.subscription = subscription
@@ -121,7 +103,7 @@ package final class FrameProducer {
       drawBuffer.removeAll()
       commit(
         build, viewport: viewport, context: context, input: input,
-        processingInput: processingInput, refreshing: false, drawing: true)
+        refreshing: false, drawing: true)
     } onChange: { [weak self, weak subscription] event in
       event.cancel()
       guard let onChange = subscription?.takeCallback() else { return }
@@ -144,6 +126,6 @@ package final class FrameProducer {
     context.keyboardNavigationOverscan = keyboardNavigationOverscan
     commit(
       build, viewport: viewport, context: context, input: InputState(commands: commands),
-      processingInput: false, refreshing: true, drawing: false)
+      refreshing: true, drawing: false)
   }
 }
