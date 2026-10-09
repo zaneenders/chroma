@@ -280,6 +280,7 @@ package final class Interaction {
     var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
     var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
     var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
+    var scrollRows: [WidgetID: Set<WidgetID>] = [:]
   }
 
   @ObservationIgnored var registrations = FrameRegistrations()
@@ -496,6 +497,7 @@ package final class Interaction {
 
     selectedLeafID = selection.flatMap { newTree.node(at: $0)?.leafID }
     if let editingLeaf, editingLeaf != selectedLeafID { endEditing() }
+    pruneScrollRows()
     registrations = building
     logicalSelections = buildingLogicalSelections
     builderRoot = nil
