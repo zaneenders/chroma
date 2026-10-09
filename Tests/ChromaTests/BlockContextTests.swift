@@ -3,14 +3,13 @@ import Testing
 @testable import Chroma
 
 @MainActor
-struct BlockContextTests {
+struct LayoutContextTests {
 
   @Test func contextBundlesInteractionState() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
 
     #expect(context.interaction === interaction)
-    #expect(context.selection === interaction.textSelection)
     #expect(context.fontMetrics == interaction.fontMetrics)
   }
 
@@ -19,15 +18,17 @@ struct BlockContextTests {
     let origin = Point(x: 10, y: 20)
     let current = Point(x: 30, y: 40)
 
-    interaction.beginFrame(
+    beginTestFrame(
+      interaction,
       input: InputState(
         pointerPosition: origin, pointerPressPosition: origin,
         pointerDown: true, pointerPressed: true))
     interaction.endFrame()
-    interaction.beginFrame(
+    beginTestFrame(
+      interaction,
       input: InputState(pointerPosition: current, pointerDown: true))
 
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     #expect(context.isPointerDragging)
     #expect(context.pointerDragOrigin == origin)
     #expect(context.pointerDragPosition == current)
@@ -35,7 +36,7 @@ struct BlockContextTests {
 
   @Test func contextFontMetricsWriteThroughToInteraction() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
 
     var metrics = FontMetrics()
     metrics.glyphWidth = 10
@@ -47,31 +48,42 @@ struct BlockContextTests {
   @Test func interactionOwnsFreshContextState() {
     let interaction = Interaction()
     #expect(interaction.fontMetrics == FontMetrics())
-    #expect(interaction.textSelection.selectedText() == nil)
-    #expect(!interaction.textSelection.isSelecting)
+    #expect(interaction.copyText() == nil)
+    #expect(!interaction.isDragging)
   }
 
-  @Test func contextsOwnIndependentSelectionManagers() {
-    let first = BlockContext()
-    let second = BlockContext()
+  @Test func contextsOwnIndependentInteractionState() {
+    let first = LayoutContext()
+    let second = LayoutContext()
 
-    #expect(first.selection !== second.selection)
+    #expect(first.interaction !== second.interaction)
   }
 
-  @Test func blockEngineForwardsExplicitContext() {
+  @Test func directLayoutForwardsExplicitContext() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let recorder = ContextRecorder()
-    let block = ContextRecordingBlock(recorder: recorder)
-
-    _ = BlockEngine.measure(block, proposal: Size(width: 20, height: 10), context: context)
-    var drawList = DrawList()
-    do {
-      let resolved = BlockEngine.prepare(block, context: context)
-      resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 10))
-      resolved.paint(into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
+    let build: LayoutBuilder = { buffer, context in
+      buffer.customLeaf(
+        context: context,
+        measure: { proposal in
+          recorder.measuredInteraction = context.interaction
+          return proposal
+        },
+        register: { _ in }, paint: { _, _ in recorder.drawnInteraction = context.interaction })
     }
 
+    _ = measureLayout(build, proposal: Size(width: 20, height: 10), context: context)
+    context.interaction.beginFrame(input: InputState())
+    var drawList = DrawList()
+    do {
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = build(&resolvedBuffer, context)
+      resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 20, height: 10))
+      resolvedBuffer.paint(resolved, into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
+    }
+
+    context.interaction.endFrame()
     #expect(recorder.measuredInteraction === interaction)
     #expect(recorder.drawnInteraction === interaction)
   }
@@ -79,7 +91,6 @@ struct BlockContextTests {
   @Test func rendererContextWrapsItsInteraction() {
     let renderer = FakeRenderer()
     #expect(renderer.context.interaction === renderer.interaction)
-    #expect(renderer.context.selection === renderer.interaction.textSelection)
   }
 
   @Test func redrawInvalidationIsCoalescedUntilConsumed() {
@@ -104,27 +115,10 @@ private final class ContextRecorder {
   var drawnInteraction: Interaction?
 }
 
-private struct ContextRecordingBlock: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
-
-  let recorder: ContextRecorder
-
-  var focusRule: FocusRule { .standard }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    recorder.measuredInteraction = context.interaction
-    return proposal
-  }
-
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    recorder.drawnInteraction = context.interaction
-  }
-}
-
 @MainActor
 private final class FakeRenderer: Host {
   let name = "Fake"
-  var content: (any Block)?
+  var build: LayoutBuilder?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()

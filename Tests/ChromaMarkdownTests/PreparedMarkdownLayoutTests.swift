@@ -6,29 +6,33 @@ import Testing
 @MainActor
 struct PreparedMarkdownLayoutTests {
   private let rect = Rect(x: 20, y: 30, width: 72, height: 200)
-  private let leaf = MarkdownLeaf(block: .paragraph("**café** 👨‍👩‍👧‍👦 tea"), scale: 1, lineSpacing: 4)
+  private var leaf: MarkdownLeaf {
+    markdownLeaf(MarkdownDocument("**café** 👨‍👩‍👧‍👦 tea"))
+  }
 
   @Test func measurementRegistrationAndPaintingShareOneLayout() {
-    let context = BlockContext()
-    let preparation = MarkdownLayoutPreparation()
-    let resolved = leaf.prepareLayout(context: context, preparation: preparation)
+    let context = LayoutContext()
+    let current = leaf
+    let preparation = current.preparation
+    var buffer = LayoutBuffer()
+    let resolved = current.build(into: &buffer, context: context)
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    let size = resolved.sizeThatFits(rect.size)
+    let size = buffer.sizeThatFits(resolved, rect.size)
     #expect(size.height > 0)
-    #expect(resolved.sizeThatFits(Size(width: rect.size.width, height: 999)) == size)
+    #expect(buffer.sizeThatFits(resolved, Size(width: rect.size.width, height: 999)) == size)
     #expect(preparation.layoutsBuilt == 1)
     context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
+    buffer.register(resolved, in: rect)
     #expect(preparation.layoutsBuilt == 1)
     #expect(context.interaction.builderRoot?.children.count == 1)
     #expect(PipelineMetrics.snapshot.paints == 0)
     #expect(PipelineMetrics.snapshot.drawingCommands == 0)
     let handlers = context.interaction.building.inputHandlers.count
     var first = DrawList()
-    resolved.paint(into: &first, in: rect)
+    buffer.paint(resolved, into: &first, in: rect)
     var second = DrawList()
-    resolved.paint(into: &second, in: rect)
+    buffer.paint(resolved, into: &second, in: rect)
     #expect(preparation.layoutsBuilt == 1)
     #expect(first.commands == second.commands)
     #expect(context.interaction.builderRoot?.children.count == 1)
@@ -46,105 +50,62 @@ struct PreparedMarkdownLayoutTests {
       "**unfinished `code",
     ], [Float(12), 72, 500])
   func preparedCommandsMatchUncachedLayout(source: String, width: Float) {
-    let context = BlockContext(textScale: 1.5)
+    let context = LayoutContext(textScale: 1.5)
     let bounds = Rect(x: 37, y: 41, width: width, height: 500)
-    for block in segmentMarkdown(source) {
-      let current = MarkdownLeaf(block: block, scale: 2, lineSpacing: 3, hasLeadingGap: true)
-      let resolved = current.prepareLayout(context: context)
+    let document = MarkdownDocument(source)
+    for index in document.blocks.indices {
+      let current = markdownLeaf(document, at: index, scale: 2, lineSpacing: 3)
+      var buffer = LayoutBuffer()
+      let resolved = current.build(into: &buffer, context: context)
       let scale = current.scale * context.textScale
       let cellWidth = context.fontMetrics.cellAdvance * scale
-      var lines = layoutMarkdown(
-        [block], columns: max(1, Int(width / cellWidth)),
-        theme: context.theme, baseColor: context.theme.foreground)
-      lines.insert(VisualLine(), at: 0)
+      let plan = layoutMarkdown(
+        current.block, columns: max(1, Int(width / cellWidth)), colors: MarkdownColors(context.theme))
       let expected = MarkdownLayout(
-        lines: lines, lineHeight: context.fontMetrics.lineAdvance * scale + current.lineSpacing,
-        cellWidth: cellWidth, scale: scale, hasLeadingGap: true, rect: bounds)
-      #expect(resolved.sizeThatFits(bounds.size).height == Float(lines.count) * expected.lineHeight)
+        plan: plan, lineHeight: context.fontMetrics.lineAdvance * scale + current.lineSpacing,
+        cellWidth: cellWidth, scale: scale, rect: bounds)
+      #expect(buffer.sizeThatFits(resolved, bounds.size).height == Float(plan.lines.count) * expected.lineHeight)
+      context.interaction.beginFrame(input: InputState())
+      buffer.register(resolved, in: bounds)
+      context.interaction.endFrame()
       var actualCommands = DrawList()
-      resolved.paint(into: &actualCommands, in: bounds)
+      buffer.paint(resolved, into: &actualCommands, in: bounds)
       var expectedCommands = DrawList()
       expected.draw(into: &expectedCommands, theme: context.theme, selection: context.textInputVisualState())
       #expect(actualCommands.commands == expectedCommands.commands)
     }
   }
 
-  @Test func paintingAloneDoesNotRegisterOrReplayInput() {
-    let context = BlockContext()
-    let resolved = leaf.prepareLayout(context: context)
+  @Test func paintingCommittedLayoutDoesNotRegisterOrReplayInput() {
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    let resolved = leaf.build(into: &buffer, context: context)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(resolved, in: rect)
+    context.interaction.endFrame()
+    let leaves = context.interaction.tree?.children.map(\.leafID)
+    let handlers = context.interaction.registrations.inputHandlers.count
+    let buildingHandlers = context.interaction.building.inputHandlers.count
+    let buildingActions = context.interaction.building.buttonActions.count
     var list = DrawList()
-    resolved.paint(into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
     #expect(!list.commands.isEmpty)
-    #expect(context.interaction.tree == nil)
+    #expect(context.interaction.tree?.children.map(\.leafID) == leaves)
+    #expect(context.interaction.registrations.inputHandlers.count == handlers)
     #expect(context.interaction.builderRoot == nil)
-    #expect(context.interaction.building.inputHandlers.isEmpty)
-    #expect(context.interaction.building.buttonActions.isEmpty)
+    #expect(context.interaction.building.inputHandlers.count == buildingHandlers)
+    #expect(context.interaction.building.buttonActions.count == buildingActions)
     #expect(context.interaction.editingLeaf == nil)
   }
 
-  @Test func changedInputsReplaceTheSingleEntry() {
-    var context = BlockContext()
-    let preparation = MarkdownLayoutPreparation()
-    var current = leaf
-    var bounds = rect
-    func resolve() -> MarkdownLayout { preparation.resolve(current, in: bounds, context: context) }
-    let original = resolve()
-    #expect(preparation.layoutsBuilt == 1)
-    #expect(resolve().lines == original.lines)
-    #expect(preparation.layoutsBuilt == 1)
-    current = MarkdownLeaf(block: .paragraph("replacement"), scale: 1, lineSpacing: 4)
-    #expect(resolve().text == "replacement")
-    #expect(preparation.layoutsBuilt == 2)
-    bounds.size.width = 24
-    #expect(resolve().lines.count > original.lines.count)
-    #expect(preparation.layoutsBuilt == 3)
-    context.theme.foreground = .black
-    #expect(resolve().lines.flatMap(\.runs).allSatisfy { $0.color == .black })
-    #expect(preparation.layoutsBuilt == 4)
-    context.textScale = 2
-    #expect(resolve().cellWidth == 24)
-    #expect(preparation.layoutsBuilt == 5)
-    context.fontMetrics.lineAdvance = 50
-    #expect(resolve().lineHeight == 104)
-    #expect(preparation.layoutsBuilt == 6)
-    context.fontMetrics.cellAdvance = 8
-    #expect(resolve().cellWidth == 16)
-    #expect(preparation.layoutsBuilt == 7)
-    current = MarkdownLeaf(block: current.block, scale: 1, lineSpacing: 8)
-    #expect(resolve().lineHeight == 108)
-    #expect(preparation.layoutsBuilt == 8)
-    current.hasLeadingGap = true
-    #expect(resolve().lines.first == VisualLine())
-    #expect(resolve().text == "replacement")
-    #expect(preparation.layoutsBuilt == 9)
-    current = leaf
-    context = BlockContext()
-    bounds = rect
-    #expect(resolve().lines == original.lines)
-    #expect(preparation.layoutsBuilt == 10)  // Older keys are not retained.
-  }
-
-  @Test func originAndSameColumnWidthReuseShapingButRefreshGeometry() {
-    let context = BlockContext()
-    let preparation = MarkdownLayoutPreparation()
-    let original = preparation.resolve(leaf, in: rect, context: context)
-    let moved = Rect(x: 140, y: 230, width: 73, height: 250)
-    let changed = preparation.resolve(leaf, in: moved, context: context)
-    #expect(preparation.layoutsBuilt == 1)
-    #expect(changed.rect == moved)
-    #expect(original.rect == rect)
-    #expect(changed.hitTest(Point(x: 152, y: 231)) == 1)
-    #expect(original.hitTest(Point(x: 32, y: 31)) == 1)
-    #expect(changed.verticalOffset(1, direction: 1) == original.verticalOffset(1, direction: 1))
-  }
-
   @Test func newOperationsInstallFreshTextAndGeometry() {
-    let context = BlockContext()
+    let context = LayoutContext()
     func register(_ text: String, width: Float) {
       context.interaction.beginFrame(input: InputState())
       let content = MarkdownText(text)
-      let resolved = BlockEngine.prepare(content, context: context)
-      resolved.register(in: Rect(x: 20, y: 30, width: width, height: 400))
+      var buffer = LayoutBuffer()
+      let resolved = content.build(into: &buffer, context: context)
+      buffer.register(resolved, in: Rect(x: 20, y: 30, width: width, height: 400))
       context.interaction.endFrame()
       context.interaction.selectAll(at: .zero)
     }
@@ -157,18 +118,19 @@ struct PreparedMarkdownLayoutTests {
   }
 
   @Test func registrationRetainsSnapshotButNotPreparation() {
-    let context = BlockContext()
+    let context = LayoutContext()
     weak var weakPreparation: MarkdownLayoutPreparation?
     context.interaction.beginFrame(input: InputState())
     do {
-      let preparation = MarkdownLayoutPreparation()
-      weakPreparation = preparation
-      let resolved = leaf.prepareLayout(context: context, preparation: preparation)
-      resolved.register(in: rect)
-      // Replacing the cache cannot change text captured by registered callbacks.
-      _ = preparation.resolve(
-        MarkdownLeaf(block: .paragraph("new value"), scale: 1, lineSpacing: 4),
-        in: rect, context: context)
+      let document = MarkdownDocument("**café** 👨‍👩‍👧‍👦 tea")
+      let current = markdownLeaf(document)
+      weakPreparation = document.layoutPreparation
+      var buffer = LayoutBuffer()
+      let resolved = current.build(into: &buffer, context: context)
+      buffer.register(resolved, in: rect)
+      // Changing the document cannot change text captured by registered callbacks.
+      document.markdown = "new value"
+      _ = document.layoutPreparation.resolve(markdownLeaf(document), in: rect, context: context)
     }
     #expect(weakPreparation == nil)
     context.interaction.endFrame()
@@ -176,26 +138,29 @@ struct PreparedMarkdownLayoutTests {
     #expect(context.interaction.copyText() == "café 👨‍👩‍👧‍👦 tea")
   }
 
-  @Test func preparedWrapperPreservesTheExistingLeafIdentity() {
-    let context = BlockContext()
+  @Test func emissionPreservesTheExistingLeafIdentity() {
+    let context = LayoutContext()
     let expected = context.scoped([.component(ObjectIdentifier(MarkdownLeaf.self))]).widgetID
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.prepare(leaf, context: context).register(in: rect)
+    var buffer = LayoutBuffer()
+    let resolved = leaf.build(into: &buffer, context: context)
+    buffer.register(resolved, in: rect)
     #expect(context.interaction.builderRoot?.children.map(\.leafID) == [expected])
     context.interaction.endFrame()
   }
 
   @Test(arguments: [false, true], [false, true])
   func focusHighlightPreservesPrimitiveBehavior(claimed: Bool, ignored: Bool) {
-    var context = BlockContext()
+    var context = LayoutContext()
     context.focusLeafClaimed = claimed
     context.navigationIgnored = ignored
-    let resolved = leaf.prepareLayout(context: context)
+    var buffer = LayoutBuffer()
+    let resolved = leaf.build(into: &buffer, context: context)
     context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
-    context.interaction.selectedLeafID = context.widgetID
+    buffer.register(resolved, in: rect)
+    context.interaction.selectedLeafID = context.component(MarkdownLeaf.self).widgetID
     var list = DrawList()
-    resolved.paint(into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
     var highlight = DrawList()
     highlight.strokeRect(rect, width: 2, color: context.theme.focus.ring)
     #expect(list.commands.contains(highlight.commands[0]) == (!claimed && !ignored))

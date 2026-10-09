@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 package final class WindowRuntime {
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
-    producer = FrameProducer()
+    producer = FrameProducer(clock: clock)
     scheduler = FrameScheduler(clock: clock)
   }
 
@@ -11,54 +11,54 @@ package final class WindowRuntime {
   private var inputActions: [@MainActor () -> Void] = []
   private var inputTask: Task<Void, Never>?
   private enum PendingInput {
-    case state(InputState)
+    case state(InputState, notifyingObservers: Bool)
     case keyboard(KeyboardInput, @MainActor (ResolvedKeyboardInput) -> Void)
   }
   private var pendingInputs: [PendingInput] = []
+  private var nextInput = 0
+  private var drainingInputs = false
+  private var hasViewport = false
   private var preparedKeyboardInput = false
   private let producer: FrameProducer
   package let scheduler: FrameScheduler
 
-  package var content: (any Block)? {
+  package var build: LayoutBuilder? {
     didSet {
       producer.reset()
       preparedKeyboardInput = false
       scheduler.scrollMomentumActive = false
+      scheduler.animationsActive = false
       scheduler.requestContent()
     }
   }
+
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
-  package var context: BlockContext { BlockContext(interaction: interaction) }
+  package var context: LayoutContext { LayoutContext(interaction: interaction) }
 
   package func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
     if interaction.tree != nil {
       let previousInput = interaction.input
       producer.refreshRegistrations(
-        content, viewport: interaction.viewport.size, context: context,
+        build, viewport: interaction.viewport.size, context: context,
         keyboardNavigationOverscan: true)
       // Clipboard translation may consult the last pointer position before the
       // resolved event is dispatched; the registration-only input is synthetic.
       interaction.restoreInputAfterRegistration(previousInput)
+      scheduler.animationsActive = interaction.animationsActive
     }
     return interaction.resolve(input, appBindings: keyBindings)
   }
 
-  /// Resolves and synchronously delivers one native key against one fresh update.
+  /// Delivers one native key in input order against one fresh update.
   /// The delivery may translate clipboard events, then call `handleInput` once.
   /// No validity token survives this scope or an intervening input dispatch.
   package func handleKeyboardInput(
     _ input: KeyboardInput, deliver: @escaping @MainActor (ResolvedKeyboardInput) -> Void
   ) {
-    guard interaction.tree != nil else {
-      pendingInputs.append(.keyboard(input, deliver))
-      scheduler.requestContent()
-      return
-    }
-    guard let resolved = resolve(input) else { return }
-    preparedKeyboardInput = true
-    defer { preparedKeyboardInput = false }
-    deliver(resolved)
+    pendingInputs.append(.keyboard(input, deliver))
+    if !hasViewport { scheduler.requestContent() }
+    drainInputs()
   }
 
   isolated deinit {
@@ -71,6 +71,8 @@ package final class WindowRuntime {
     inputTask = nil
     inputActions = []
     pendingInputs = []
+    nextInput = 0
+    hasViewport = false
     preparedKeyboardInput = false
     producer.reset()
     scheduler.reset()
@@ -98,58 +100,75 @@ package final class WindowRuntime {
   }
 
   package func handleInput(_ input: InputState) {
-    let refresh = !preparedKeyboardInput
-    preparedKeyboardInput = false
-    if interaction.tree == nil {
-      pendingInputs.append(.state(input))
+    if preparedKeyboardInput {
+      // Translation is part of the current raw-key event, before later FIFO entries.
+      // Clear preparation before dispatch so callbacks enqueue their own input.
+      preparedKeyboardInput = false
+      processInput(input, refreshing: false)
     } else {
-      processInput(input, refreshing: refresh)
+      pendingInputs.append(.state(input, notifyingObservers: true))
+      drainInputs()
     }
     scheduler.requestContent()
   }
 
-  private func processInput(_ input: InputState, refreshing: Bool = true) {
+  private func prepareRegistrations() {
+    guard interaction.tree == nil else { return }
+    let previousInput = interaction.input
+    let editingLeaf = interaction.editingLeaf
+    let wasEditing = interaction.isTextEditing
+    let caret = interaction.caretOffset
+    let selection = interaction.textSelectionRange
+    producer.refreshRegistrations(build, viewport: interaction.viewport.size, context: context)
+    interaction.restoreInputAfterRegistration(previousInput)
+    if let editingLeaf, interaction.tree?.findLeaf(editingLeaf) != nil {
+      interaction.beginEditing(editingLeaf, caretOffset: caret)
+      interaction.textSelectionRange = selection
+      if !wasEditing { interaction.stopInput() }
+    }
+  }
+
+  private func drainInputs() {
+    guard hasViewport, !drainingInputs else { return }
+    drainingInputs = true
+    defer {
+      pendingInputs.removeAll(keepingCapacity: true)
+      nextInput = 0
+      drainingInputs = false
+    }
+    while hasViewport, nextInput < pendingInputs.count {
+      let pending = pendingInputs[nextInput]
+      nextInput += 1
+      prepareRegistrations()
+      switch pending {
+      case .state(let input, let notifyingObservers):
+        processInput(input, notifyingObservers: notifyingObservers)
+      case .keyboard(let input, let deliver):
+        guard let resolved = resolve(input) else { continue }
+        preparedKeyboardInput = true
+        deliver(resolved)
+        preparedKeyboardInput = false
+      }
+    }
+  }
+
+  private func processInput(_ input: InputState, refreshing: Bool = true, notifyingObservers: Bool = true) {
     // Hover can use the last frame's geometry. Actionable events need current callbacks
     // and layout, including between events whose presentation is coalesced.
-    if refreshing
-      && (input.pointerDown || input.pointerPressed || input.pointerReleased || input.scrollDelta != .zero
-        || !input.commands.isEmpty || !input.textEvents.isEmpty)
-    {
+    if refreshing && input.isActionable {
       producer.refreshRegistrations(
-        content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+        build, viewport: interaction.viewport.size, context: context, commands: input.commands)
     }
-    interaction.processInput(input)
+    interaction.processInput(input, notifyingObservers: notifyingObservers)
     interaction.finishInput()
+    scheduler.animationsActive = interaction.animationsActive
   }
 
   package func renderScheduled(
-    _ kind: FrameScheduler.FrameKind,
     viewport: Size,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
-    flushInput()
-    _ = interaction.consumeRedrawRequest()
-    while !pendingInputs.isEmpty {
-      let pending = pendingInputs
-      pendingInputs.removeAll(keepingCapacity: true)
-      for input in pending {
-        if interaction.tree == nil {
-          _ = render(viewport: viewport, input: InputState(), onChange: onChange)
-        }
-        switch input {
-        case .state(let input): handleInput(input)
-        case .keyboard(let input, let deliver): handleKeyboardInput(input, deliver: deliver)
-        }
-      }
-    }
-    scheduler.consumeContentRequest()
-    var input = interaction.input
-    input.pointerPressed = false
-    input.pointerReleased = false
-    input.scrollDelta = .zero
-    input.commands = []
-    input.textEvents = []
-    return render(viewport: viewport, input: input, processingInput: false, onChange: onChange)
+    render(viewport: viewport, input: interaction.input.settled, processingInput: false, onChange: onChange)
   }
 
   package func render(
@@ -158,9 +177,20 @@ package final class WindowRuntime {
     processingInput: Bool = true,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
+    interaction.viewport = Rect(origin: .zero, size: viewport)
+    hasViewport = true
+    flushInput()
+    if processingInput {
+      pendingInputs.append(.state(input, notifyingObservers: input != InputState()))
+    }
+    drainInputs()
+    prepareRegistrations()
+    _ = interaction.consumeRedrawRequest()
+    scheduler.consumeContentRequest()
+    // Read the root and settled state after dispatch: actions may replace either.
     let list = producer.render(
-      content: content, viewport: viewport, input: input, context: context,
-      processingInput: processingInput, onChange: onChange)
+      build: build, viewport: viewport, input: interaction.input.settled, context: context, onChange: onChange)
+    scheduler.animationsActive = interaction.animationsActive
     return list
   }
 

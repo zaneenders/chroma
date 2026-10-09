@@ -4,31 +4,29 @@ import Testing
 
 @MainActor
 struct StackPlacementTests {
-  private struct Wrapping: PaintableBlock {
-    func register(in rect: Rect, context: BlockContext) {}
-
-    var focusRule: FocusRule { .standard }
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      Size(width: proposal.width, height: proposal.width < 80 ? 40 : 20)
+  @Test func growMeasuresAtRemainingWidthAndBottomAligns() {
+    let row: LayoutBuilder = { buffer, context in
+      let firstContext = context.childScope(0)
+      let first = buffer.customLeaf(
+        context: firstContext,
+        measure: { Size(width: $0.width, height: $0.width < 80 ? 40 : 20) },
+        register: { _ in }, paint: { $0.fillRect($1, color: .white) })
+      let input = buffer.sizing(first, x: .grow, context: firstContext)
+      let secondContext = context.childScope(1)
+      let second = buffer.color(.black, context: secondContext)
+      let controls = buffer.sizing(second, x: .fixed(30), y: .fixed(10), context: secondContext)
+      return buffer.stack([input, controls], axis: .horizontal, spacing: 8, bottomAligned: true, context: context)
     }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      list.fillRect(rect, color: .white)
-    }
-  }
-
-  @Test func growRemeasuresAtRemainingWidthAndBottomAligns() {
-    let row = HStack(spacing: 8, alignment: .bottom) {
-      Wrapping().sizing(x: .grow)
-      Color.black.sizing(x: .fixed(30), y: .fixed(10))
-    }
-    let context = BlockContext()
-    #expect(row.sizeThatFits(Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
-    #expect(row.sizeThatFits(Size(width: 150, height: 200), context: context).height == 20)
+    let context = LayoutContext()
+    #expect(
+      measureLayout(row, proposal: Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
+    #expect(measureLayout(row, proposal: Size(width: 150, height: 200), context: context).height == 20)
     var list = DrawList()
-    context.interaction.beginFrame(input: InputState())
-    let resolved = row.prepareLayout(context: context)
-    resolved.register(in: Rect(x: 10, y: 20, width: 100, height: 60))
-    resolved.paint(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
+    beginTestFrame(context.interaction, input: InputState())
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = row(&resolvedBuffer, context)
+    resolvedBuffer.register(resolved, in: Rect(x: 10, y: 20, width: 100, height: 60))
+    resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
     context.interaction.endFrame()
     let rects = list.paintSnapshot.compactMap { command -> Rect? in
       if case .fillRect(let rect, _) = command { return rect }
@@ -37,34 +35,76 @@ struct StackPlacementTests {
     #expect(rects == [Rect(x: 10, y: 40, width: 62, height: 40), Rect(x: 80, y: 70, width: 30, height: 10)])
   }
 
+  @Test func growSkipsDiscardedProposalAndPaintingOnlyUsesRegisteredRectangles() {
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    var proposals: [Size] = []
+    var registered: [Rect] = []
+    var painted: [Rect] = []
+    let grow = buffer.customLeaf(
+      context: context.childScope(0), focusRule: .decorative, expandsHorizontally: true,
+      measure: {
+        proposals.append($0)
+        return Size(width: $0.width, height: 12)
+      },
+      register: { registered.append($0) }, paint: { _, rect in painted.append(rect) })
+    let fixed = buffer.sizing(buffer.empty(context: context.childScope(1)), x: .fixed(20), context: context)
+    let root = buffer.stack([grow, fixed], axis: .horizontal, spacing: 5, context: context)
+    let rect = Rect(x: 20, y: 30, width: 100, height: 60)
+    beginTestFrame(context.interaction, input: InputState())
+    buffer.register(root, in: rect)
+    context.interaction.endFrame()
+    #expect(proposals == [Size(width: 75, height: 60)])
+    PipelineMetrics.isEnabled = true
+    defer { PipelineMetrics.isEnabled = false }
+    var list = DrawList()
+    buffer.paint(root, into: &list, in: rect)
+    #expect(painted == registered)
+    #expect(painted == [Rect(x: 20, y: 30, width: 75, height: 12)])
+    #expect(PipelineMetrics.snapshot.measurements == 0)
+  }
+
+  @Test(arguments: [false, true])
+  func focusDoesNotChangeSpacerCrossAxis(horizontal: Bool) {
+    let target = FocusTarget()
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    let spacer = buffer.focus(target, context: context.childScope(0)) { buffer, context in
+      buffer.spacer(context: context)
+    }
+    #expect(buffer.count == 1)
+    let fixed = buffer.sizing(
+      buffer.empty(context: context.childScope(1)), x: .fixed(20), y: .fixed(12), context: context)
+    let root = buffer.stack([spacer, fixed], axis: horizontal ? .horizontal : .vertical, context: context)
+    #expect(
+      buffer.sizeThatFits(root, Size(width: 100, height: 60))
+        == (horizontal ? Size(width: 100, height: 12) : Size(width: 20, height: 60)))
+  }
+
   @Test(arguments: [false, true], [false, true])
   func placementPreservesAxisAndReversal(horizontal: Bool, reversed: Bool) {
-    let first = Color.white.sizing(x: .fixed(20), y: .fixed(30))
-    let second = Color.black.sizing(x: .fixed(40), y: .fixed(50))
-    let stack: any Block
-    if horizontal {
-      let value = HStack(spacing: 5) {
-        first
-        second
-      }
-      stack = reversed ? value.reverseLayout() : value
-    } else {
-      let value = VStack(spacing: 5) {
-        first
-        second
-      }
-      stack = reversed ? value.reverseLayout() : value
+    let stack: LayoutBuilder = { buffer, context in
+      let firstContext = context.childScope(0)
+      let first = buffer.color(.white, context: firstContext)
+      let firstSized = buffer.sizing(first, x: .fixed(20), y: .fixed(30), context: firstContext)
+      let secondContext = context.childScope(1)
+      let second = buffer.color(.black, context: secondContext)
+      let secondSized = buffer.sizing(second, x: .fixed(40), y: .fixed(50), context: secondContext)
+      return buffer.stack(
+        [firstSized, secondSized], axis: horizontal ? .horizontal : .vertical,
+        spacing: 5, reversed: reversed, context: context)
     }
-    let context = BlockContext()
+    let context = LayoutContext()
     let rect = Rect(x: 10, y: 15, width: 200, height: 150)
-    let measured = BlockEngine.measure(stack, proposal: rect.size, context: context)
+    let measured = measureLayout(stack, proposal: rect.size, context: context)
     #expect(measured == (horizontal ? Size(width: 65, height: 50) : Size(width: 40, height: 85)))
     var drawList = DrawList()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     do {
-      let resolved = BlockEngine.prepare(stack, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &drawList, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = stack(&resolvedBuffer, context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &drawList, in: rect)
     }
     context.interaction.endFrame()
     let rectangles = drawList.paintSnapshot.compactMap { command -> Rect? in

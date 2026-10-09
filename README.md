@@ -12,7 +12,35 @@ UI Library in swift
 
 ## Examples
 
-The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma-examples) repository.
+Runnable CPU examples live in `HeadlessModeTests/Sources`. The separate
+[chroma-examples](https://github.com/zaneenders/chroma-examples) repository needs
+migration when adopting this breaking direct-construction API.
+
+```swift
+import Chroma
+import ChromaHeadless
+
+@main struct Demo: HeadlessApp {
+  func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.text(Text("Hello"), context: context.keyed("greeting"))
+  }
+}
+```
+
+## Runtime and CPU-only development
+
+Direct construction writes typed nodes into one reusable, integer-handle layout buffer.
+See [runtime and migration](RUNTIME.md) for the small public API and freshness rules.
+
+Run CPU-side tests without Metal/Wayland development dependencies:
+
+```sh
+CHROMA_HEADLESS_ONLY=1 swift test -j 2
+```
+
+This omits native backend and ChromaApp products for that SwiftPM invocation.
+Use the same environment setting for dependency resolution, builds and tests;
+unset it for the normal package. SwiftPM replans when the manifest environment changes.
 
 ## Installing apps
 

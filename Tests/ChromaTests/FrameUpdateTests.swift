@@ -14,14 +14,14 @@ struct FrameUpdateTests {
   @Test func actionUpdatesEarlierSiblingInTheSameFrame() {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock {
-      VStack {
-        Text(model.text)
+    renderer.build = { buffer, context in
+      let node169 = buffer.text(Text(model.text), context: context.childScope(0))
+      let node170 = buffer.button(
         Button("Change", id: WidgetID("button")) {
           model.actions += 1
           model.text = "after"
-        }
-      }
+        }, context: context.childScope(1))
+      return buffer.stack([node169, node170], axis: .vertical, context: context)
     }
     renderer.render()
     let frame = renderer.render(
@@ -39,11 +39,12 @@ struct FrameUpdateTests {
   @Test func textEditingUpdatesEarlierSiblingBeforeDrawing() {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock {
-      VStack {
-        Text(model.text)
-        TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 })
-      }
+    renderer.build = { buffer, context in
+      let node172 = buffer.text(Text(model.text), context: context.childScope(0))
+      let node173 = buffer.textEditor(
+        TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 }),
+        context: context.childScope(1))
+      return buffer.stack([node172, node173], axis: .vertical, context: context)
     }
     renderer.render()
     renderer.render(
@@ -62,9 +63,15 @@ struct FrameUpdateTests {
   func externalScrollRequestInvalidatesObservedFrame() async {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
-    renderer.content = ScrollView(controller: controller) {
-      Text("hello")
-    }.id(WidgetID("scroll"))
+    renderer.build = { buffer, context in
+      let node176 = buffer.scrollView(
+        ScrollView(
+          controller: controller,
+          build: { buffer, context in
+            return buffer.text(Text("hello"), context: context)
+          }), context: context.keyed(WidgetID("scroll")))
+      return node176
+    }
     var requests = 0
     renderer.onRedrawRequested = { requests += 1 }
     renderer.render()

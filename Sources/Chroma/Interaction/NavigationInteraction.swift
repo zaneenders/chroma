@@ -1,7 +1,7 @@
 @MainActor
 extension Interaction {
-  func reconcileNavigation(in tree: FocusNode) {
-    let next = NavigationNode(root: tree, viewport: viewport)
+  func reconcileNavigation(in tree: InteractionNode) {
+    let next = tree.storage.navigationRoot(viewport: viewport)
     let previous = navigation
     let previousSelection = navigationPath
     let previousLeafID = previous?.node(at: previousSelection)?.id
@@ -28,10 +28,10 @@ extension Interaction {
       var parentPath = Array(previousSelection.dropLast())
       while !parentPath.isEmpty {
         if let id = previous.node(at: parentPath)?.id, let survivingPath = next.path(to: id) {
-          let children = next.node(at: survivingPath)?.children ?? []
+          let count = next.node(at: survivingPath)?.children.count ?? 0
           navigationPath =
-            children.isEmpty
-            ? survivingPath : survivingPath + [min(previousSelection[parentPath.count], children.count - 1)]
+            count == 0
+            ? survivingPath : survivingPath + [min(previousSelection[parentPath.count], count - 1)]
           synchronizeKeyboardSelection(in: tree, previousLeafID: previousLeafID)
           return
         }
@@ -43,7 +43,7 @@ extension Interaction {
     synchronizeKeyboardSelection(in: tree, previousLeafID: previousLeafID)
   }
 
-  private func synchronizeKeyboardSelection(in tree: FocusNode, previousLeafID: WidgetID?) {
+  private func synchronizeKeyboardSelection(in tree: InteractionNode, previousLeafID: WidgetID?) {
     guard let selected = navigation?.node(at: navigationPath), case .leaf(let selectedID) = selected.kind else {
       selection = nil
       selectedLeafID = nil
@@ -51,19 +51,20 @@ extension Interaction {
       return
     }
 
-    if let path = tree.findLeaf(selectedID), let node = tree.node(at: path), node.acceptsFocus {
+    if selected.acceptsFocus {
+      let path = selected.renderPath
       selection = path
       selectedLeafID = selectedID
       // Virtual scrolling can replace an offscreen selection with a partially visible row.
       // Revealing it would move the viewport again before the next pointer event is hit-tested.
-      if previousLeafID != selectedID, node.hitRect == .zero { reveal(path, in: tree) }
+      if previousLeafID != selectedID, selected.hitRect == .zero { reveal(path, in: tree) }
     } else {
       selection = nil
       selectedLeafID = nil
     }
   }
 
-  func rememberNavigation(_ path: [Int], in root: NavigationNode) {
+  func rememberNavigation(_ path: [Int], in root: InteractionNode) {
     guard !path.isEmpty else { return }
     for depth in 0..<path.count {
       let parent = root.node(at: Array(path.prefix(depth)))
@@ -79,13 +80,12 @@ extension Interaction {
     navigationPath = path
     rememberNavigation(path, in: navigation)
     if case .leaf(let leafID) = node.kind {
-      guard let tree, let renderPath = tree.findLeaf(leafID),
-        tree.node(at: renderPath)?.acceptsFocus == true
-      else {
+      guard let tree, node.acceptsFocus else {
         selection = nil
         selectedLeafID = nil
         return
       }
+      let renderPath = node.renderPath
       selection = renderPath
       selectedLeafID = leafID
       if let groupID = navigation.node(at: Array(path.dropLast()))?.id,
@@ -134,7 +134,7 @@ extension Interaction {
     switch command {
     case .nextFocus, .previousFocus:
       var leaves: [[Int]] = []
-      func collect(_ node: NavigationNode, path: [Int]) {
+      func collect(_ node: InteractionNode, path: [Int]) {
         if !node.isGroup { leaves.append(path) }
         for (index, child) in node.children.enumerated() {
           collect(child, path: path + [index])
@@ -200,14 +200,14 @@ extension Interaction {
   }
 
   private func directionalNeighbor(
-    _ command: NavigationCommand, currentPath: [Int], activeGroup: NavigationNode,
-    navigation: NavigationNode
+    _ command: NavigationCommand, currentPath: [Int], activeGroup: InteractionNode,
+    navigation: InteractionNode
   ) -> [Int]? {
     guard !activeGroup.children.isEmpty, let current = navigation.node(at: currentPath) else {
       return nil
     }
     let direction: Int
-    let primaryAxis: FocusNode.Axis
+    let primaryAxis: FocusGroupAxis
     switch command {
     case .left, .sectionLeft:
       direction = -1
@@ -306,7 +306,7 @@ extension Interaction {
     return true
   }
 
-  func reconcileLogicalSelection(in tree: FocusNode) {
+  func reconcileLogicalSelection(in tree: InteractionNode) {
     guard let navigation else { return }
     for (groupID, registration) in buildingLogicalSelections {
       guard let groupPath = navigation.path(to: groupID),

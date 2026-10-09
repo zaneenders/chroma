@@ -8,7 +8,9 @@ struct TextEditorSelectionCommandTests {
   @Test func clickingFieldThenEscapingAllowsShiftSelectionInMovementMode() {
     var text = "Copy this text"
     let test = NavigationTestHost(
-      content: TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }),
+      build: { buffer, context in
+        buffer.textEditor(TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }), context: context)
+      },
       keyBindings: .modalNavigation)
     let point = Point(x: 45, y: 15)
     test.host.render(
@@ -29,7 +31,11 @@ struct TextEditorSelectionCommandTests {
     var text = "abcdefghijklmnopqrstuvwxyz"
     let focus = FocusTarget()
     let test = NavigationTestHost(
-      content: TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(focus),
+      build: { buffer, context in
+        buffer.focus(focus, context: context) { buffer, context in
+          buffer.textEditor(TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }), context: context)
+        }
+      },
       size: Size(width: 100, height: 44))
     focus.focus(editing: true)
     let frame = test.host.render(input: InputState(textEvents: [.moveCaretToEnd]))
@@ -51,7 +57,11 @@ struct TextEditorSelectionCommandTests {
     var text = "abcd"
     let focus = FocusTarget()
     let test = NavigationTestHost(
-      content: TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(focus),
+      build: { buffer, context in
+        buffer.focus(focus, context: context) { buffer, context in
+          buffer.textEditor(TextEditor(text: { text }, onChange: { text = $0 }), context: context)
+        }
+      },
       keyBindings: .desktopNavigation)
     focus.focus(editing: true)
     test.host.render(input: InputState(textEvents: [.moveCaretToEnd]))
@@ -79,7 +89,11 @@ struct TextEditorSelectionCommandTests {
     var text = "a👨‍👩‍👧‍👦\ncd"
     let focus = FocusTarget()
     let test = NavigationTestHost(
-      content: TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(focus),
+      build: { buffer, context in
+        buffer.focus(focus, context: context) { buffer, context in
+          buffer.textEditor(TextEditor(text: { text }, onChange: { text = $0 }), context: context)
+        }
+      },
       keyBindings: KeyBindings.desktopNavigation.overlay {
         bind("a", modifiers: .command, to: .editing(.selectAll))
       })
@@ -104,7 +118,11 @@ struct TextEditorSelectionCommandTests {
     var text = "ab\ncd\nef"
     let focus = FocusTarget()
     let test = NavigationTestHost(
-      content: TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(focus),
+      build: { buffer, context in
+        buffer.focus(focus, context: context) { buffer, context in
+          buffer.textEditor(TextEditor(text: { text }, onChange: { text = $0 }), context: context)
+        }
+      },
       keyBindings: .desktopNavigation)
     focus.focus(editing: true)
     test.host.render(input: InputState(textEvents: [.moveCaretToEnd]))

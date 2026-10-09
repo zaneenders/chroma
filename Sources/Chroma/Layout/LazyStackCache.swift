@@ -43,7 +43,7 @@ final class LazyRowMeasurement {
     let validity = validity
     let subscription = FrameTrackingSubscription(
       { [weak self] in self?.invalidationDelivered = true },
-      metricsLifetime: PipelineMetrics.trackLifetime(.observationSubscription))
+      metricsLifetime: PipelineMetrics.trackObservationLifetime())
     self.subscription = subscription
     let enqueue = ObservationDelivery.enqueue
     size = withObservationTracking(options: .didSet) {

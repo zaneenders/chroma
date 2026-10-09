@@ -2,19 +2,11 @@ struct StructuralPath: Hashable, Sendable {
   enum Segment: Hashable, Sendable {
     case key(StructuralKey)
     case slot(Int)
-    case branch(Int)
     case background(Int)
     case component(ObjectIdentifier)
   }
 
   var segments: [Segment] = []
-}
-
-struct ScopedBlock: Block {
-  let content: any Block
-  let path: [StructuralPath.Segment]
-
-  var body: Never { fatalError("ScopedBlock is resolved by BlockEngine") }
 }
 
 struct StructuralKey: Hashable, Sendable {
@@ -30,15 +22,5 @@ struct StructuralKey: Hashable, Sendable {
   func hash(into hasher: inout Hasher) {
     hasher.combine(ObjectIdentifier(type(of: value)))
     hasher.combine(AnyHashable(value))
-  }
-}
-
-protocol KeyedBlockCollection: Block {
-  var keyedContent: TupleBlock { get }
-}
-
-extension Block {
-  public func id(_ key: some Hashable & Sendable) -> some Block {
-    ScopedBlock(content: self, path: [.key(StructuralKey(key))])
   }
 }

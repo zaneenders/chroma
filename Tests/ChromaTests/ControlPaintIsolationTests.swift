@@ -6,26 +6,34 @@ import Testing
 struct ControlPaintIsolationTests {
   private let rect = Rect(x: 0, y: 0, width: 200, height: 80)
 
-  @Test func paintingControlsWithoutAnUpdateDoesNotCreateInteractionState() {
+  @Test func emittingAndMeasuringControlsDoesNotCreateInteractionState() {
     var actions = 0
     var changes = 0
-    let controls: [any Block] = [
-      Button("Action", action: { actions += 1 }),
-      Interactive(action: { actions += 1 }, content: { phase in Text("\(phase)") }),
-      TextEditor(text: { "draft" }, onChange: { _ in changes += 1 }),
-      Text("selectable").selectable(),
+    let controls: [LayoutBuilder] = [
+      { buffer, context in buffer.button(Button("Action", action: { actions += 1 }), context: context) },
+      { buffer, context in
+        buffer.interactive(
+          action: { actions += 1 },
+          content: { buffer, context, phase in buffer.text(Text("\(phase)"), context: context) }, context: context)
+      },
+      { buffer, context in
+        buffer.textEditor(TextEditor(text: { "draft" }, onChange: { _ in changes += 1 }), context: context)
+      },
+      { buffer, context in buffer.text(Text("selectable").selectable(), context: context) },
     ]
     for control in controls {
-      let context = BlockContext()
-      var list = DrawList()
-      BlockEngine.resolve(control, context: context).paint(into: &list, in: rect)
-      #expect(!list.paintSnapshot.isEmpty)
+      let context = LayoutContext()
+      var buffer = LayoutBuffer()
+      let resolved = control(&buffer, context)
+      _ = buffer.sizeThatFits(resolved, rect.size)
+      _ = buffer.expandsHorizontally(resolved)
+      _ = buffer.expandsVertically(resolved)
       #expect(context.interaction.tree == nil)
       #expect(context.interaction.builderRoot == nil)
       #expect(context.interaction.building.inputHandlers.isEmpty)
       #expect(context.interaction.building.buttonActions.isEmpty)
       #expect(context.interaction.building.focusTargets.isEmpty)
-      #expect(context.interaction.textSelection.layoutRegistry.entry(at: Point(x: 10, y: 10)) == nil)
+      #expect(context.interaction.building.readOnlyTexts.isEmpty)
       #expect(context.interaction.editingLeaf == nil)
     }
     #expect(actions == 0)
@@ -33,7 +41,7 @@ struct ControlPaintIsolationTests {
   }
 
   @Test func visualStateDoesNotExposeActivationEdgesOrConsumePendingFocus() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let id = context.widgetID
     context.interaction.selectedLeafID = id
     context.interaction.activatedLeaf = id
@@ -50,15 +58,21 @@ struct ControlPaintIsolationTests {
     #expect(context.interaction.editingSessionGeneration == generation)
   }
 
-  @Test func paintingShortenedEditorClampsOnlyTheVisualSnapshot() {
-    let context = BlockContext()
-    context.interaction.beginEditing(context.widgetID, caretOffset: 20)
-    context.interaction.textSelectionRange = 10..<20
-    context.interaction.editingText = "old long value"
+  @Test func paintingShortenedEditorClampsOnlyTheVisualSnapshot() throws {
+    let context = LayoutContext()
     var changes = 0
     let editor = TextEditor(text: { "x" }, onChange: { _ in changes += 1 })
     var list = DrawList()
-    editor.paint(into: &list, in: rect, context: context)
+    var buffer = LayoutBuffer()
+    let node = buffer.textEditor(editor, context: context)
+    beginTestFrame(context.interaction, input: InputState())
+    buffer.register(node, in: rect)
+    context.interaction.endFrame()
+    let id = try #require(context.interaction.tree?.children.first?.leafID)
+    context.interaction.beginEditing(id, caretOffset: 20)
+    context.interaction.textSelectionRange = 10..<20
+    context.interaction.editingText = "old long value"
+    buffer.paint(node, into: &list, in: rect)
     #expect(context.interaction.caretOffset == 20)
     #expect(context.interaction.textSelectionRange == 10..<20)
     #expect(context.interaction.editingText == "old long value")
@@ -76,40 +90,33 @@ struct ControlPaintIsolationTests {
     var paints = 0
   }
 
-  private struct PhaseLeaf: PaintableBlock {
-    let phase: InteractionPhase
-    let capture: Capture
-    var focusRule: FocusRule { .decorative }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func register(in rect: Rect, context: BlockContext) { capture.registrations += 1 }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      capture.paints += 1
-      list.text("\(phase)", at: rect.origin, color: .white)
-    }
-
-  }
-
   @Test func interactivePaintUsesTheRegisteredPhaseWithoutResolvingOrRegisteringAgain() {
     let capture = Capture()
-    let context = BlockContext()
+    let context = LayoutContext()
     let id = WidgetID("interactive")
-    let interactive = Interactive(
-      id: id, action: {},
-      content: { phase in
-        capture.phases.append(phase)
-        return PhaseLeaf(phase: phase, capture: capture)
-      })
     context.interaction.hoveredLeafID = id
-    let resolved = BlockEngine.resolve(interactive, context: context)
-    _ = resolved.sizeThatFits(rect.size)
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
-    resolved.register(in: rect)
+    var buffer = LayoutBuffer()
+    let resolved = buffer.interactive(
+      id: id, action: {},
+      content: { buffer, context, phase in
+        capture.phases.append(phase)
+        return buffer.customLeaf(
+          context: context, focusRule: .decorative, measure: { $0 },
+          register: { _ in capture.registrations += 1 },
+          paint: { list, rect in
+            capture.paints += 1
+            list.text("\(phase)", at: rect.origin, color: .white)
+          })
+      }, context: context)
+    _ = buffer.sizeThatFits(resolved, rect.size)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(resolved, in: rect)
     let phases = capture.phases
     let registrations = capture.registrations
     let leaves = context.interaction.builderRoot?.children.count
     var list = DrawList()
-    resolved.paint(into: &list, in: rect)
-    resolved.paint(into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
     #expect(capture.phases == phases)
     #expect(capture.registrations == registrations)
     #expect(context.interaction.builderRoot?.children.count == leaves)
@@ -123,20 +130,23 @@ struct ControlPaintIsolationTests {
   }
 
   @Test func editorPaintDoesNotAdvanceDragViewportOrReplayEditing() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let editor = TextEditor(text: { "ab\ncd\nef\ngh\nij" }, onChange: { _ in })
     func update(_ input: InputState) {
-      context.interaction.beginFrame(input: input)
-      BlockEngine.register(editor, in: rect, context: context)
+      beginTestFrame(context.interaction, input: input)
+      var buffer = LayoutBuffer()
+      let node = buffer.textEditor(editor, context: context)
+      buffer.register(node, in: rect)
       context.interaction.endFrame()
     }
     update(InputState())
     let origin = Point(x: 20, y: 10)
     update(InputState(pointerPosition: origin, pointerDown: true, pointerPressed: true))
     let below = Point(x: 20, y: 80)
-    context.interaction.beginFrame(input: InputState(pointerPosition: below, pointerDown: true))
-    let resolved = BlockEngine.resolve(editor, context: context)
-    resolved.register(in: rect)
+    beginTestFrame(context.interaction, input: InputState(pointerPosition: below, pointerDown: true))
+    var buffer = LayoutBuffer()
+    let resolved = buffer.textEditor(editor, context: context)
+    buffer.register(resolved, in: rect)
     let row = context.interaction.textDragViewportRow
     let caret = context.interaction.caretOffset
     let selection = context.interaction.textSelectionRange
@@ -144,7 +154,7 @@ struct ControlPaintIsolationTests {
     #expect(row == 1)
     for _ in 0..<3 {
       var list = DrawList()
-      resolved.paint(into: &list, in: rect)
+      buffer.paint(resolved, into: &list, in: rect)
       #expect(context.interaction.textDragViewportRow == row)
       #expect(context.interaction.caretOffset == caret)
       #expect(context.interaction.textSelectionRange == selection)
@@ -153,45 +163,29 @@ struct ControlPaintIsolationTests {
     context.interaction.endFrame()
   }
 
-  @Test func shapingSnapshotValidityIncludesTextAndColumnsAndHasBoundedOwnership() {
-    let preparation = TextLayoutPreparation()
-    let original = preparation.resolve("ab\ncd", columns: 10)
-    #expect(preparation.resolve("ab\ncd", columns: 10) === original)
-    let changedText = preparation.resolve("ab\ncd\nef", columns: 10)
-    #expect(changedText !== original)
-    #expect(changedText.layout.lines.count == 3)
-    let changedColumns = preparation.resolve("ab\ncd\nef", columns: 1)
-    #expect(changedColumns !== changedText)
-    #expect(changedColumns.layout.lines.count == 6)
-    #expect(preparation.snapshot === changedColumns)
-    // Only the latest value is cached, and a new update has its own preparation.
-    #expect(preparation.resolve("ab\ncd", columns: 10) !== original)
-    #expect(TextLayoutPreparation().resolve("ab\ncd", columns: 10) !== original)
-  }
-
   @Test(arguments: [false, true])
   func updateAndPaintingShareTheMeasuredTextLayout(editor: Bool) {
-    let context = BlockContext()
-    let block: any Block =
-      editor
-      ? TextEditor(text: { "ab\ncd\nef" }, onChange: { _ in })
-      : Text("ab\ncd\nef").wrapping().selectable()
+    let context = LayoutContext()
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    let resolved = BlockEngine.resolve(block, context: context)
-    _ = resolved.sizeThatFits(rect.size)
+    var buffer = LayoutBuffer()
+    let resolved =
+      editor
+      ? buffer.textEditor(TextEditor(text: { "ab\ncd\nef" }, onChange: { _ in }), context: context)
+      : buffer.text(Text("ab\ncd\nef").wrapping().selectable(), context: context)
+    _ = buffer.sizeThatFits(resolved, rect.size)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
-    context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
+    beginTestFrame(context.interaction, input: InputState())
+    buffer.register(resolved, in: rect)
     var list = DrawList()
-    resolved.paint(into: &list, in: rect)
-    resolved.paint(into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
     context.interaction.endFrame()
   }
 
   @Test func editorPaintUsesTheCommittedUpdateWithoutReevaluatingTheTextBinding() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var reads = 0
     var text = "before"
     let editor = TextEditor(
@@ -199,13 +193,14 @@ struct ControlPaintIsolationTests {
         reads += 1
         return text
       }, onChange: { text = $0 })
-    let resolved = BlockEngine.resolve(editor, context: context)
-    context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
+    var buffer = LayoutBuffer()
+    let resolved = buffer.textEditor(editor, context: context)
+    beginTestFrame(context.interaction, input: InputState())
+    buffer.register(resolved, in: rect)
     let registeredReads = reads
     text = "after"
     var first = DrawList()
-    resolved.paint(into: &first, in: rect)
+    buffer.paint(resolved, into: &first, in: rect)
     #expect(reads == registeredReads)
     #expect(
       first.paintSnapshot.contains {
@@ -213,11 +208,12 @@ struct ControlPaintIsolationTests {
         return false
       })
     context.interaction.endFrame()
-    context.interaction.beginFrame(input: InputState())
-    let updated = BlockEngine.resolve(editor, context: context)
-    updated.register(in: rect)
+    beginTestFrame(context.interaction, input: InputState())
+    buffer.reset()
+    let updated = buffer.textEditor(editor, context: context)
+    buffer.register(updated, in: rect)
     var second = DrawList()
-    updated.paint(into: &second, in: rect)
+    buffer.paint(updated, into: &second, in: rect)
     #expect(
       second.paintSnapshot.contains {
         if case .text(_, "after", _, _) = $0 { return true }
@@ -229,10 +225,12 @@ struct ControlPaintIsolationTests {
   @Test func editorHandlersDoNotRetainTheirInteractionOwner() {
     weak var interaction: Interaction?
     do {
-      let context = BlockContext()
+      let context = LayoutContext()
       interaction = context.interaction
-      context.interaction.beginFrame(input: InputState())
-      BlockEngine.register(TextEditor(text: { "text" }, onChange: { _ in }), in: rect, context: context)
+      beginTestFrame(context.interaction, input: InputState())
+      var buffer = LayoutBuffer()
+      let node = buffer.textEditor(TextEditor(text: { "text" }, onChange: { _ in }), context: context)
+      buffer.register(node, in: rect)
       context.interaction.endFrame()
       #expect(interaction != nil)
     }
@@ -242,14 +240,15 @@ struct ControlPaintIsolationTests {
   @Test(arguments: [false, true])
   func opaqueTextHoverPreservesCommandOrder(selectable: Bool) {
     let text = selectable ? Text("visible glyphs").selectable() : Text("visible glyphs")
-    var context = BlockContext()
+    var context = LayoutContext()
     context.hoverStyle = .tint(.black)
-    context.interaction.hoveredLeafID = context.widgetID
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
-    let resolved = text.prepareLayout(context: context)
+    context.interaction.hoveredLeafID = context.scoped([.component(ObjectIdentifier(Text.self))]).widgetID
+    context.interaction.beginFrame(input: InputState())
+    var buffer = LayoutBuffer()
+    let resolved = buffer.text(text, context: context)
     var list = DrawList()
-    resolved.register(in: rect)
-    resolved.paint(into: &list, in: rect)
+    buffer.register(resolved, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
     context.interaction.endFrame()
     let highlight = PaintSnapshotEntry.fillRect(rect: rect, color: .black)
     if selectable {

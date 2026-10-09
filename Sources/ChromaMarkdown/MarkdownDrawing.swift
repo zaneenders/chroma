@@ -1,39 +1,49 @@
 import Chroma
 
-struct MarkdownLayout {
-  var lines: [VisualLine]
-  var lineHeight: Float
-  var cellWidth: Float
-  var scale: Float
-  var hasLeadingGap = false
-  var rect: Rect
+/// Wrapping and selection share one immutable, document-owned snapshot.
+struct MarkdownLinePlan {
+  let lines: [VisualLine]
+  let text: String
+  let starts: [Int]
+  let characterCount: Int
 
-  // Soft wraps consume no characters; explicit separators do. The leading
-  // inter-block spacer is visual only and never enters the copied text.
-  var text: String {
-    lines.enumerated().map { index, line in
-      line.runs.map(\.text).joined() + separator(after: index)
-    }.joined()
-  }
-
-  private func separator(after row: Int) -> String {
-    guard row < lines.count - 1 else { return "" }
-    if row == 0, hasLeadingGap { return "" }
-    return lines[row].trailingText
-  }
-
-  private var starts: [Int] {
+  init(lines: [VisualLine], hasLeadingGap: Bool) {
+    self.lines = lines
+    var text = ""
+    var starts: [Int] = []
+    starts.reserveCapacity(lines.count)
     var offset = 0
-    return lines.indices.map { row in
-      defer { offset += lines[row].columnCount + separator(after: row).count }
-      return offset
+    for (row, line) in lines.enumerated() {
+      starts.append(offset)
+      for run in line.runs { text += run.text }
+      offset += line.columnCount
+      // Soft wraps consume no characters; explicit separators do. The leading
+      // inter-block spacer is visual only and never enters the copied text.
+      if row < lines.count - 1, !(row == 0 && hasLeadingGap) {
+        text += line.trailingText
+        offset += line.trailingText.count
+      }
     }
+    self.text = text
+    self.starts = starts
+    characterCount = text.count
   }
+}
+
+struct MarkdownLayout {
+  let plan: MarkdownLinePlan
+  let lineHeight: Float
+  let cellWidth: Float
+  let scale: Float
+  let rect: Rect
+
+  var lines: [VisualLine] { plan.lines }
+  var text: String { plan.text }
 
   func position(at offset: Int) -> (row: Int, column: Int) {
     guard !lines.isEmpty else { return (0, 0) }
-    let offset = max(0, min(offset, text.count))
-    let starts = starts
+    let offset = max(0, min(offset, plan.characterCount))
+    let starts = plan.starts
     let row = starts.lastIndex(where: { $0 <= offset }) ?? 0
     return (row, min(lines[row].columnCount, offset - starts[row]))
   }
@@ -46,7 +56,7 @@ struct MarkdownLayout {
       min(
         lines[row].columnCount,
         Int(((point.x - rect.minX) / cellWidth).rounded(.toNearestOrAwayFromZero))))
-    return starts[row] + column
+    return plan.starts[row] + column
   }
 
   func verticalOffset(_ offset: Int, direction: Int) -> Int {
@@ -54,12 +64,12 @@ struct MarkdownLayout {
     let current = position(at: offset)
     let row = current.row + direction
     if row < 0 { return 0 }
-    if row >= lines.count { return text.count }
-    return starts[row] + min(current.column, lines[row].columnCount)
+    if row >= lines.count { return plan.characterCount }
+    return plan.starts[row] + min(current.column, lines[row].columnCount)
   }
 
   func draw(into drawList: inout DrawList, theme: ChromaTheme, selection: TextInputState) {
-    let starts = starts
+    let starts = plan.starts
     for (index, line) in lines.enumerated() {
       let y = rect.minY + Float(index) * lineHeight
       if line.kind == .code {

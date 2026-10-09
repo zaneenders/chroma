@@ -6,7 +6,7 @@ import Testing
 struct DefaultFocusTests {
   private let viewport = Rect(x: 0, y: 0, width: 100, height: 40)
   private let parked = InputState(pointerPosition: Point(x: 500, y: 500))
-  private let context = BlockContext()
+  private let context = LayoutContext()
 
   private func focusBorder(_ rect: Rect) -> PaintSnapshotEntry {
     .strokeRect(rect: rect, width: 2, color: context.theme.focus.ring)
@@ -17,14 +17,15 @@ struct DefaultFocusTests {
   }
 
   @discardableResult
-  private func render(_ content: any Block, input: InputState) -> DrawList {
+  private func render(_ content: @escaping LayoutBuilder, input: InputState) -> DrawList {
     let isInitialFrame = context.interaction.tree == nil
-    context.interaction.beginFrame(input: input)
+    beginTestFrame(context.interaction, input: input)
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(content, context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var buffer = LayoutBuffer()
+      let root = content(&buffer, context)
+      buffer.register(root, in: viewport)
+      buffer.paint(root, into: &list, in: viewport)
     }
     context.interaction.endFrame()
     if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
@@ -33,11 +34,11 @@ struct DefaultFocusTests {
 
   private func leafRects() -> [Rect] {
     var rects: [Rect] = []
-    func visit(_ node: FocusNode) {
+    func visit(_ node: InteractionNode) {
       if node.isLeaf { rects.append(node.rect) }
       node.children.forEach(visit)
     }
-    visit(context.interaction.tree ?? FocusNode(kind: .group, rect: .zero))
+    if let tree = context.interaction.tree { visit(tree) }
     return rects
   }
 
@@ -49,9 +50,10 @@ struct DefaultFocusTests {
   }
 
   @Test func plainTextIsKeyboardReachable() {
-    let content = VStack(spacing: 10) {
-      Text("alpha")
-      Text("beta")
+    let content: LayoutBuilder = { buffer, context in
+      let node15 = buffer.text(Text("alpha"), context: context.childScope(0))
+      let node16 = buffer.text(Text("beta"), context: context.childScope(1))
+      return buffer.stack([node15, node16], axis: .vertical, spacing: 10, context: context)
     }
 
     render(content, input: parked)
@@ -67,9 +69,10 @@ struct DefaultFocusTests {
   }
 
   @Test func keyboardFocusUsesBorderWhilePointerHoverUsesTint() {
-    let content = VStack(spacing: 10) {
-      Text("alpha")
-      Text("beta")
+    let content: LayoutBuilder = { buffer, context in
+      let node18 = buffer.text(Text("alpha"), context: context.childScope(0))
+      let node19 = buffer.text(Text("beta"), context: context.childScope(1))
+      return buffer.stack([node18, node19], axis: .vertical, spacing: 10, context: context)
     }
 
     render(content, input: parked)
@@ -91,9 +94,10 @@ struct DefaultFocusTests {
   }
 
   @Test func pressingUsesThePressedTint() {
-    let content = VStack(spacing: 10) {
-      Text("alpha")
-      Text("beta")
+    let content: LayoutBuilder = { buffer, context in
+      let node21 = buffer.text(Text("alpha"), context: context.childScope(0))
+      let node22 = buffer.text(Text("beta"), context: context.childScope(1))
+      return buffer.stack([node21, node22], axis: .vertical, spacing: 10, context: context)
     }
 
     render(content, input: parked)
@@ -110,9 +114,12 @@ struct DefaultFocusTests {
 
   @Test func hoverStyleOverridesTheHighlight() {
     let tint = Color(r: 1, g: 0, b: 0, a: 0.25)
-    let content = VStack(spacing: 10) {
-      Text("alpha")
-      Text("beta").hover(.tint(tint))
+    let content: LayoutBuilder = { buffer, context in
+      let node24 = buffer.text(Text("alpha"), context: context.childScope(0))
+      var context25 = context.childScope(1)
+      context25.hoverStyle = .tint(tint)
+      let node26 = buffer.text(Text("beta"), context: context25)
+      return buffer.stack([node24, node26], axis: .vertical, spacing: 10, context: context)
     }
 
     render(content, input: parked)
@@ -124,9 +131,12 @@ struct DefaultFocusTests {
   }
 
   @Test func navigationIgnoredRemovesDefaultFocusability() {
-    let content = VStack(spacing: 10) {
-      Text("alpha")
-      Text("beta").navigationIgnored()
+    let content: LayoutBuilder = { buffer, context in
+      let node28 = buffer.text(Text("alpha"), context: context.childScope(0))
+      var context29 = context.childScope(1)
+      context29.navigationIgnored = true
+      let node30 = buffer.text(Text("beta"), context: context29)
+      return buffer.stack([node28, node30], axis: .vertical, spacing: 10, context: context)
     }
 
     render(content, input: parked)
@@ -139,9 +149,14 @@ struct DefaultFocusTests {
   }
 
   @Test func controlsOwnTheirContent() {
-    let content = VStack(spacing: 10) {
-      Interactive(action: {}) { _ in Text("inside interactive") }
-      Text("beside")
+    let content: LayoutBuilder = { buffer, context in
+      let node33 = buffer.interactive(
+        action: {},
+        content: { buffer, context, _ in
+          return buffer.text(Text("inside interactive"), context: context)
+        }, context: context.childScope(0))
+      let node34 = buffer.text(Text("beside"), context: context.childScope(1))
+      return buffer.stack([node33, node34], axis: .vertical, spacing: 10, context: context)
     }
 
     render(content, input: parked)
@@ -150,15 +165,17 @@ struct DefaultFocusTests {
 
   @Test func lazyRowsClaimTheirTextContent() {
     let controller = ScrollViewController()
-    let content = ScrollView(
-      data: 0..<3, rowHeight: 20, spacing: 0,
-      showsIndicator: false, controller: controller
-    ) { index in
-      VStack(spacing: 2) {
-        Text("label \(index)")
-        Text("value \(index)")
-      }
-    }.id(WidgetID("claim-list"))
+    let content: LayoutBuilder = { buffer, context in
+      let node39 = buffer.scrollView(
+        ScrollView(
+          data: 0..<3, rowHeight: 20, spacing: 0, showsIndicator: false, controller: controller,
+          build: { buffer, context, index in
+            let node36 = buffer.text(Text("label \(index)"), context: context.childScope(0))
+            let node37 = buffer.text(Text("value \(index)"), context: context.childScope(1))
+            return buffer.stack([node36, node37], axis: .vertical, spacing: 2, context: context)
+          }), context: context.keyed(WidgetID("claim-list")))
+      return node39
+    }
 
     render(content, input: parked)
     #expect(leafRects().count == 3, "each row is one focus stop, not one per text")
@@ -169,24 +186,43 @@ struct DefaultFocusTests {
   }
 
   @Test func backgroundsStayDecorative() {
-    let content = Text("foreground").background(Text("background"))
+    let content: LayoutBuilder = { buffer, context in
+      let node42 = buffer.background(
+        context: context,
+        content: { buffer, context in
+          return buffer.text(Text("foreground"), context: context)
+        },
+        background: { buffer, context in
+          return buffer.text(Text("background"), context: context)
+        })
+      return node42
+    }
 
     render(content, input: parked)
     #expect(leafRects().count == 1)
     #expect(context.interaction.tree?.firstLeafPath() != nil)
   }
 
-  private struct CellGrid: PaintableBlock {
+  @MainActor private struct CellGrid {
+
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
 
     let action: (@MainActor () -> Void)?
 
     var focusRule: FocusRule { .container }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
       Size(width: proposal.width, height: 40)
     }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       context.withFocusGroup(in: rect, axis: .horizontal) {
         for column in 0..<2 {
           let box = Rect(
@@ -195,7 +231,7 @@ struct DefaultFocusTests {
         }
       }
     }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       for column in 0..<2 {
         context.childScope(column).paintFocusHighlight(
           in: Rect(x: rect.minX + Float(column) * 50, y: rect.minY, width: 50, height: 40), into: &list)
@@ -204,7 +240,9 @@ struct DefaultFocusTests {
   }
 
   @Test func focusableCellsPaintTheStandardHighlight() {
-    let content = CellGrid(action: nil)
+    let content: LayoutBuilder = { buffer, context in
+      return CellGrid(action: nil).build(into: &buffer, context: context)
+    }
 
     render(content, input: parked)
     let rects = leafRects()
@@ -226,8 +264,16 @@ struct DefaultFocusTests {
 
   @Test func focusableCellsHonorHoverOverrides() {
     let tint = Color(r: 1, g: 0, b: 0, a: 0.25)
-    let decorative = CellGrid(action: nil).navigationIgnored()
-    let tinted = CellGrid(action: nil).hover(.tint(tint))
+    let decorative: LayoutBuilder = { buffer, context in
+      var context44 = context
+      context44.navigationIgnored = true
+      return CellGrid(action: nil).build(into: &buffer, context: context44)
+    }
+    let tinted: LayoutBuilder = { buffer, context in
+      var context46 = context
+      context46.hoverStyle = .tint(tint)
+      return CellGrid(action: nil).build(into: &buffer, context: context46)
+    }
 
     render(decorative, input: parked)
     #expect(leafRects().isEmpty, "decorative cells register no focus leaf")
@@ -242,7 +288,9 @@ struct DefaultFocusTests {
 
   @Test func focusableCellsActivateTheirAction() {
     var calls = 0
-    let content = CellGrid { calls += 1 }
+    let content: LayoutBuilder = { buffer, context in
+      return CellGrid { calls += 1 }.build(into: &buffer, context: context)
+    }
 
     render(content, input: parked)
     render(content, input: InputState(commands: [.action(.activate)]))
@@ -250,9 +298,12 @@ struct DefaultFocusTests {
   }
 
   @Test func stacksOfOnlyDecorativeContentRegisterNoLeaf() {
-    let content = VStack(spacing: 0) {
-      Text("hidden").navigationIgnored()
-      Spacer()
+    let content: LayoutBuilder = { buffer, context in
+      var context49 = context.childScope(0)
+      context49.navigationIgnored = true
+      let node50 = buffer.text(Text("hidden"), context: context49)
+      let node51 = buffer.spacer(context: context.childScope(1))
+      return buffer.stack([node50, node51], axis: .vertical, spacing: 0, context: context)
     }
 
     render(content, input: parked)

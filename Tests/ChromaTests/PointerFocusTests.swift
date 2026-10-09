@@ -27,7 +27,7 @@ struct PointerFocusTests {
     draw: @MainActor (Interaction, inout [WidgetID: ButtonState]) -> Void = drawFixture
   ) -> [WidgetID: ButtonState] {
     let isInitialFrame = ctx.tree == nil
-    ctx.beginFrame(input: input)
+    beginTestFrame(ctx, input: input)
     var states: [WidgetID: ButtonState] = [:]
     draw(ctx, &states)
     ctx.endFrame()

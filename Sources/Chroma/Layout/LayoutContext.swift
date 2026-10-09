@@ -1,0 +1,304 @@
+private final class ThemeStorage {
+  let value: ChromaTheme
+  init(_ value: ChromaTheme) { self.value = value }
+}
+
+@MainActor
+public struct LayoutContext {
+  var keyboardNavigationOverscan = false
+  var structuralPath = StructuralPath()
+  var widgetID: WidgetID { WidgetID(path: structuralPath) }
+  var backgroundDepth = 0
+  var focusTargets: [FocusTarget] = []
+
+  var focusLeafClaimed = false
+  /// Excludes emitted content from keyboard and spatial navigation.
+  public var navigationIgnored = false
+
+  public var hoverStyle: HoverStyle?
+
+  public func childScope(_ slot: Int) -> LayoutContext {
+    scoped([.slot(slot)])
+  }
+
+  /// A stable child identity for direct layout construction. Use unique sibling keys.
+  public func component(_ type: Any.Type) -> LayoutContext {
+    scoped([.component(ObjectIdentifier(type))])
+  }
+
+  public func keyed(_ key: some Hashable & Sendable) -> LayoutContext {
+    scoped([.key(StructuralKey(key))])
+  }
+
+  var backgroundContentContext: LayoutContext {
+    var copy = self
+    copy.backgroundDepth += 1
+    return copy
+  }
+
+  var backgroundContext: LayoutContext {
+    var copy = scoped([.background(backgroundDepth)])
+    copy.focusTargets = []
+    copy.focusLeafClaimed = true
+    return copy
+  }
+
+  func scoped(_ segments: [StructuralPath.Segment]) -> LayoutContext {
+    var copy = self
+    copy.structuralPath.segments += segments
+    copy.backgroundDepth = 0
+    return copy
+  }
+
+  package var interaction: Interaction
+  private var themeStorage: ThemeStorage
+  public var theme: ChromaTheme {
+    get { themeStorage.value }
+    set { themeStorage = ThemeStorage(newValue) }
+  }
+  public var textScale: Float
+
+  /// Installs a provider for the current registration; omitted providers expire on the next update.
+  public func setCopyTextProvider(_ provider: (@MainActor () -> String?)?) {
+    interaction.building.copyProvider = provider
+  }
+
+  /// Installs a handler for the current registration; omitted handlers expire on the next update.
+  public func setSelectAllHandler(_ handler: (@MainActor () -> Bool)?) {
+    interaction.building.selectAll = handler
+  }
+
+  public var navigationBreadcrumb: [String] {
+    guard let root = interaction.navigation else { return ["Window"] }
+    return ["Window"]
+      + interaction.navigationPath.indices.compactMap { depth in
+        root.node(at: Array(interaction.navigationPath.prefix(depth + 1)))?.name
+      }
+  }
+
+  public var navigationSelectionIsGroup: Bool {
+    interaction.navigation?.node(at: interaction.navigationPath)?.isGroup ?? true
+  }
+
+  public var isSelectingText: Bool { interaction.editingLeaf != nil && !interaction.isTextEditing }
+
+  public var interactionMode: InteractionMode { interaction.mode }
+
+  var activeTextInput: WidgetID? {
+    interaction.isTextEditing ? interaction.editingLeaf : nil
+  }
+
+  public var fontMetrics: FontMetrics {
+    get { interaction.fontMetrics }
+    nonmutating set { interaction.fontMetrics = newValue }
+  }
+
+  public var input: InputState { interaction.input }
+
+  public var pointerDragOrigin: Point? { interaction.dragOrigin }
+
+  public var pointerDragPosition: Point { interaction.dragCurrent }
+
+  public var isPointerDragging: Bool { interaction.isDragging }
+
+  public init(theme: ChromaTheme = .dark, textScale: Float = 1) {
+    self.interaction = Interaction()
+    self.themeStorage = ThemeStorage(theme)
+    self.textScale = textScale
+  }
+
+  package init(interaction: Interaction, theme: ChromaTheme = .dark, textScale: Float = 1) {
+    self.interaction = interaction
+    self.themeStorage = ThemeStorage(theme)
+    self.textScale = textScale
+  }
+
+  public func withTheme(_ theme: ChromaTheme) -> LayoutContext {
+    var copy = self
+    copy.theme = theme
+    return copy
+  }
+
+  func buttonState(
+    id: WidgetID, in rect: Rect, role: ActionRole = .normal,
+    action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.interactiveBehavior(
+      id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
+  }
+
+  public func buttonState(
+    in rect: Rect, role: ActionRole = .normal,
+    action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    let id = widgetID
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.interactiveBehavior(
+      id: id, rect: rect, role: role, action: action, navigationIgnored: navigationIgnored)
+  }
+
+  /// Reads the current visual phase without registering a control or replaying an action.
+  /// `clicked` is always false: input edges belong to dispatch, never painting.
+  public func buttonVisualState() -> ButtonState {
+    buttonVisualState(id: widgetID)
+  }
+
+  func buttonVisualState(id: WidgetID) -> ButtonState {
+    let state = interaction.untrackedLeafState
+    return ButtonState(
+      hovered: state.hovered == id, focused: state.selected == id,
+      held: state.pressed == id && interaction.input.pointerDown, clicked: false)
+  }
+
+  /// Reads focus, editing, caret and selection without installing handlers, clamping
+  /// editing state, consuming focus requests, or evaluating the application's text binding.
+  public func textInputVisualState() -> TextInputState {
+    textInputVisualState(id: widgetID)
+  }
+
+  func textInputVisualState(id: WidgetID) -> TextInputState {
+    let state = buttonVisualState(id: id)
+    let hasCaret = interaction.editingLeaf == id
+    return TextInputState(
+      hovered: state.hovered, focused: state.focused, held: state.held,
+      editing: hasCaret && interaction.isTextEditing,
+      caretOffset: hasCaret ? interaction.caretOffset : nil,
+      selectionRange: interaction.documentRange(for: id) ?? (hasCaret ? interaction.textSelectionRange : nil))
+  }
+
+  /// Paints the current focus/hover indication without registering a focus leaf.
+  public func paintFocusHighlight(in rect: Rect, into drawList: inout DrawList) {
+    guard !navigationIgnored else { return }
+    paintFocusHighlight(for: widgetID, in: rect, into: &drawList)
+  }
+
+  /// Registers a focus leaf and current behavior without emitting a visual highlight.
+  @discardableResult
+  public func registerFocusable(
+    in rect: Rect, role: ActionRole = .normal, action: (@MainActor () -> Void)? = nil
+  ) -> ButtonState {
+    guard !navigationIgnored else {
+      return ButtonState(hovered: false, held: false, clicked: false)
+    }
+    return buttonState(in: rect, role: role, action: action)
+  }
+
+  func textInputState(
+    id: WidgetID,
+    in rect: Rect,
+    text: @escaping @MainActor () -> String,
+    onChange: @escaping @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
+    submitInsertsNewline: Bool = false
+  ) -> TextInputState {
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.registerTextInput(
+      id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
+      onEndEditing: onEndEditing, onTextEvent: onTextEvent,
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored,
+      submitInsertsNewline: submitInsertsNewline)
+  }
+
+  public func textInputState(
+    in rect: Rect,
+    text: @escaping @MainActor () -> String,
+    onChange: @escaping @MainActor (String) -> Void,
+    onSubmit: (@MainActor (String) -> Void)? = nil,
+    onEndEditing: (@MainActor () -> CommandResult)? = nil,
+    onTextEvent: (@MainActor (TextEditEvent, String) -> String?)? = nil,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
+    submitInsertsNewline: Bool = false
+  ) -> TextInputState {
+    let id = widgetID
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.registerTextInput(
+      id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,
+      onEndEditing: onEndEditing, onTextEvent: onTextEvent,
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset, navigationIgnored: navigationIgnored,
+      submitInsertsNewline: submitInsertsNewline)
+  }
+
+  public func textSelectionState(
+    in rect: Rect,
+    text: @escaping @MainActor () -> String,
+    pointerOffset: (@MainActor (Point, Int?) -> Int)? = nil,
+    verticalOffset: (@MainActor (Int, Int) -> Int)? = nil
+  ) -> TextInputState {
+    let id = widgetID
+    interaction.registerFocusTargets(focusTargets, id: id)
+    return interaction.registerTextInput(
+      id: id, rect: rect, text: text, onChange: { _ in },
+      pointerOffset: pointerOffset, verticalOffset: verticalOffset,
+      navigationIgnored: navigationIgnored, readOnly: true)
+  }
+
+  public func withFocusGroup<Result>(
+    in rect: Rect,
+    axis: FocusGroupAxis? = nil,
+    _ body: () throws -> Result
+  ) rethrows -> Result {
+    interaction.beginGroup(rect: rect, axis: axis)
+    defer { interaction.endGroup() }
+    return try body()
+  }
+
+  public func withInteractionClip<Result>(
+    _ rect: Rect,
+    _ body: () throws -> Result
+  ) rethrows -> Result {
+    interaction.pushClip(rect)
+    defer { interaction.popClip() }
+    return try body()
+  }
+
+  public func requestRedraw() {
+    interaction.requestRedraw()
+  }
+
+  public func endEditing() {
+    interaction.endEditing()
+  }
+
+  func focus(_ id: WidgetID, editing: Bool = false) {
+    interaction.focus(id, editing: editing)
+  }
+}
+
+extension Host {
+  package var context: LayoutContext { runtime.context }
+}
+
+extension LayoutContext {
+  /// Registers an ordered event observer. It runs once after core input dispatch,
+  /// before release/drag cleanup; presentation never invokes it.
+  public func registerInputHandler(_ handler: @escaping @MainActor (InputState) -> Void) {
+    interaction.building.inputObservers.append(handler)
+  }
+}
+
+extension LayoutContext {
+  func paintFocusHighlight(for id: WidgetID, in rect: Rect, into drawList: inout DrawList) {
+    let leafState = interaction.untrackedLeafState
+    let pressed = leafState.pressed == id && interaction.input.pointerDown
+    guard leafState.selected == id || leafState.hovered == id || pressed else { return }
+    if hoverStyle == HoverStyle.none { return }
+    if leafState.selected == id && !pressed && hoverStyle == nil {
+      drawList.strokeRect(rect, width: 2, color: theme.focus.ring)
+      return
+    }
+    switch hoverStyle ?? .standard {
+    case .none:
+      return
+    case .tint(let color):
+      drawList.fillRect(rect, color: color)
+    case .standard:
+      drawList.fillRect(rect, color: HoverStyle.standardTint(in: theme, pressed: pressed))
+    }
+  }
+}

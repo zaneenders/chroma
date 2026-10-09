@@ -138,4 +138,121 @@ struct UniformRowIdentityTests {
       layout == Interaction.ScrollLayout(width: 100, spacing: 0, rows: .uniform(count: 1, height: 20, keys: second)))
     #expect(layout.index(of: StructuralKey(1)) == 0)
   }
+
+  private final class IDReads {
+    var count = 0
+  }
+
+  @Test func identifiableInitializerUsesKeysWithoutAnExplicitRevision() {
+    let controller = ScrollViewController()
+    _ = ScrollView(
+      data: [Item(id: 7), Item(id: 9)], rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        return buffer.text(Text("row"), context: context)
+      })
+    #expect(controller.uniformRowIdentity?.keys == [StructuralKey(7), StructuralKey(9)])
+    #expect(controller.uniformRowIdentity?.indices[StructuralKey(9)] == 1)
+  }
+
+  @Test func unconstrainedInitializerRemainsPositionalWithOrWithoutARevision() {
+    let controller = ScrollViewController()
+    func positional<Data: RandomAccessCollection>(_ data: Data, revision: UInt64?) -> ScrollView {
+      ScrollView(
+        data: data, rowHeight: 20, controller: controller, identityRevision: revision,
+        build: { buffer, context, _ in buffer.text(Text("row"), context: context) })
+    }
+    _ = positional([Item(id: 7), Item(id: 9)], revision: nil)
+    #expect(controller.uniformRowIdentity == nil)
+    _ = positional([Item(id: 7), Item(id: 9)], revision: 1)
+    #expect(controller.uniformRowIdentity == nil)
+  }
+
+  private struct CountedItem: Identifiable {
+    let key: Int
+    let reads: IDReads
+    var id: Int {
+      reads.count += 1
+      return key
+    }
+  }
+
+  @Test func unchangedRevisionDoesNotVisitAnyIDs() {
+    let controller = ScrollViewController()
+    let reads = IDReads()
+    let items = (0..<100_000).map { CountedItem(key: $0, reads: reads) }
+    let first = controller.rowIdentity(for: items, identityRevision: 1)
+    #expect(reads.count == items.count)
+    reads.count = 0
+    for _ in 0..<10 {
+      #expect(controller.rowIdentity(for: items, identityRevision: 1) === first)
+    }
+    #expect(reads.count == 0)
+  }
+
+  @Test func newRevisionUpdatesReorderedAndReplacedIDs() {
+    let controller = ScrollViewController()
+    let first = controller.rowIdentity(for: [Item(id: 1), Item(id: 2)], identityRevision: 1)
+    let reordered = controller.rowIdentity(for: [Item(id: 2), Item(id: 1)], identityRevision: 2)
+    #expect(reordered !== first)
+    #expect(reordered.indices[StructuralKey(1)] == 1)
+    let replaced = controller.rowIdentity(for: [Item(id: 2), Item(id: 3)], identityRevision: 3)
+    #expect(replaced !== reordered)
+    #expect(replaced.indices[StructuralKey(1)] == nil)
+    #expect(replaced.indices[StructuralKey(3)] == 1)
+    #expect(first.indices[StructuralKey(1)] == 0)
+  }
+
+  @Test func revisionFastPathStillChecksCountAndIDType() {
+    let controller = ScrollViewController()
+    let first = controller.rowIdentity(for: [Item(id: 1)], identityRevision: 1)
+    let larger = controller.rowIdentity(for: [Item(id: 1), Item(id: 2)], identityRevision: 1)
+    #expect(larger !== first)
+    #expect(larger.keys.count == 2)
+    let changedType = controller.rowIdentity(for: [Item(id: Int64(1)), Item(id: Int64(2))], identityRevision: 1)
+    #expect(changedType !== larger)
+    #expect(changedType.indices[StructuralKey(Int64(2))] == 1)
+  }
+
+  @Test func unrevisionedAccessCannotLeaveAStaleRevisionToken() {
+    let controller = ScrollViewController()
+    let first = controller.rowIdentity(for: [Item(id: 1)], identityRevision: 1)
+    #expect(controller.rowIdentity(for: [Item(id: 1)]) === first)
+    let replacement = controller.rowIdentity(for: [Item(id: 2)], identityRevision: 1)
+    #expect(replacement !== first)
+    #expect(replacement.indices[StructuralKey(2)] == 0)
+    _ = controller.rowIdentity(for: [Item(id: 3)])
+    let restored = controller.rowIdentity(for: [Item(id: 2)], identityRevision: 1)
+    #expect(restored.indices[StructuralKey(2)] == 0)
+  }
+
+  @Test func unchangedIdentityRevisionStillRefreshesRowValuesAndCallbacks() {
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let controller = ScrollViewController()
+    @MainActor final class Model {
+      var value = 1
+      var label = "old"
+      var actions: [String] = []
+    }
+    let model = Model()
+    runtime.build = { buffer, context in
+      let capturedLabel = model.label
+      return buffer.scrollView(
+        ScrollView(
+          data: [Item(id: 1, value: model.value)], rowHeight: 40,
+          controller: controller, identityRevision: 1,
+          build: { buffer, context, item in
+            buffer.button(
+              Button(capturedLabel) { model.actions.append("\(item.value):\(capturedLabel)") }, context: context)
+          }), context: context)
+    }
+    _ = runtime.render(viewport: Size(width: 200, height: 100), input: InputState(), onChange: {})
+    runtime.interaction.focusFirstControlForTest()
+    let identity = controller.uniformRowIdentity
+    model.value = 10
+    model.label = "new"
+    runtime.handleInput(InputState(commands: [.action(.activate)]))
+    #expect(model.actions == ["10:new"])
+    #expect(controller.uniformRowIdentity === identity)
+  }
 }

@@ -6,23 +6,25 @@ import Testing
 struct ScrollMetadataTests {
   @Test(arguments: [false, true])
   func longScrollRetainsOnlyCurrentRowsAndRememberedLeaf(multipleControls: Bool) {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
-    let content = ScrollView(data: 0..<10_000, rowHeight: 20, controller: controller) { _ in
-      if multipleControls {
-        HStack {
-          Button("Left") {}
-          VStack { Button("Right") {} }
+    let content = ScrollView(
+      data: 0..<10_000, rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        if multipleControls {
+          let left = buffer.button(Button("Left") {}, context: context.childScope(0))
+          let right = buffer.button(Button("Right") {}, context: context.childScope(1).childScope(0))
+          let rightStack = buffer.stack([right], axis: .vertical, context: context.childScope(1))
+          return buffer.stack([left, rightStack], axis: .horizontal, context: context)
         }
-      } else {
-        Color.white
-      }
-    }
+        return buffer.color(.white, context: context)
+      })
+    runtime.build = { buffer, context in buffer.scrollView(content, context: context) }
     func render(_ commands: [NavigationCommand] = []) {
-      _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
-        input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: InputState(commands: commands.map { .navigation($0) }), onChange: {})
     }
     render()
     render([.down, .stepIn])
@@ -42,22 +44,30 @@ struct ScrollMetadataTests {
     render()
     #expect(controller.offset == 0)
     #expect(context.interaction.selectedLeafID == remembered)
-    producer.reset()
+    runtime.reset()
     #expect(context.interaction.scrollStates.isEmpty)
   }
 
   @Test func registrationOnlyScrollAlsoEvictsOldRows() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
-    let content = ScrollView(data: 0..<10_000, rowHeight: 20, controller: controller) { _ in Color.white }
+    let content = ScrollView(
+      data: 0..<10_000, rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        return buffer.color(Color.white, context: context)
+      })
     context.interaction.viewport = Rect(x: 0, y: 0, width: 200, height: 100)
-    producer.refreshRegistrations(content, viewport: Size(width: 200, height: 100), context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.scrollView(content, context: context) }, viewport: Size(width: 200, height: 100),
+      context: context)
     for _ in 1...1_000 {
       context.interaction.processInput(
         InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -180)))
       context.interaction.finishInput()
-      producer.refreshRegistrations(content, viewport: Size(width: 200, height: 100), context: context)
+      producer.refreshRegistrations(
+        { buffer, context in buffer.scrollView(content, context: context) }, viewport: Size(width: 200, height: 100),
+        context: context)
     }
     #expect(controller.offset == 180_000)
     let state = context.interaction.scrollStates.values.first!
@@ -65,7 +75,9 @@ struct ScrollMetadataTests {
     #expect(state.rowKeys.count == 7)
     #expect(context.interaction.registrations.scrollRows.isEmpty)
     #expect(context.interaction.building.scrollRows.isEmpty)
-    producer.refreshRegistrations(EmptyBlock(), viewport: Size(width: 200, height: 100), context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.empty(context: context) }, viewport: Size(width: 200, height: 100),
+      context: context)
     #expect(context.interaction.scrollStates.isEmpty)
   }
 
@@ -74,8 +86,8 @@ struct ScrollMetadataTests {
     let scrollID = WidgetID("scroll")
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
 
-    func register(_ leaves: [(WidgetID, Int)], count: Int = 100) {
-      interaction.beginFrame(input: InputState(), processingInput: false)
+    @MainActor func register(_ leaves: [(WidgetID, Int)], count: Int = 100) {
+      interaction.beginFrame(input: InputState())
       interaction.registerScrollInput(id: scrollID, rect: rect)
       interaction.updateScrollLayout(
         id: scrollID, layout: .init(width: 200, spacing: 0, rows: .uniform(count: count, height: 20, keys: nil)))
@@ -135,20 +147,21 @@ struct ScrollMetadataTests {
   }
 
   @Test func contentOnlyControlReplacementDoesNotAccumulateMetadata() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     @MainActor final class Model { var revision = 0 }
     let model = Model()
-    let content = DeferredBlock {
-      ScrollView(data: 0..<100, rowHeight: 20, controller: controller) { _ in
-        Button("Control") {}.id(model.revision)
-      }
-    }
+    let content = ScrollView(
+      data: 0..<100, rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        buffer.button(Button("Control") {}, context: context.keyed(model.revision))
+      })
+    runtime.build = { buffer, context in buffer.scrollView(content, context: context) }
     func render(_ commands: [NavigationCommand] = []) {
-      _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
-        input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: InputState(commands: commands.map { .navigation($0) }), onChange: {})
     }
     render()
     render([.down, .stepIn, .stepOut])

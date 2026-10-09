@@ -1,3 +1,4 @@
+import ChromaTesting
 import Testing
 
 @testable import Chroma
@@ -9,18 +10,27 @@ struct CommandConsumptionTests {
     let id = WidgetID("scroll")
     var handled = 0
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
-      let view = ScrollView {
-        Color.white.sizing(y: .fixed(100))
-      }.id(id).onCommand(.application("resize")) {
-        handled += 1
-        return .handled
+      let view: LayoutBuilder = { buffer, context in
+        let node5 = buffer.scrollView(
+          ScrollView(build: { buffer, context in
+            let node3 = buffer.color(Color.white, context: context)
+            return buffer.sizing(node3, y: .fixed(100), context: context)
+          }), context: context.keyed(id))
+        let node6 = buffer.onCommand(
+          node5, .application("resize"), context: context,
+          action: {
+            handled += 1
+            return .handled
+          })
+        return node6
       }
       do {
-        let resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = view(&resolvedBuffer, LayoutContext(interaction: interaction))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
       interaction.endFrame()
     }
@@ -30,32 +40,30 @@ struct CommandConsumptionTests {
     #expect(interaction.scrollState(for: id).offset.y == 0)
   }
 
-  @Test func commandConsumptionResetsBetweenFrames() {
-    let interaction = Interaction()
-    let id = WidgetID("scroll")
+  @Test func commandConsumptionIsLocalToOneInput() {
+    let host = HeadlessHost()
+    defer { host.close() }
     var consumes = true
-    func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
-      var list = DrawList()
-      let view = ScrollView {
-        Color.white.sizing(y: .fixed(100))
-      }.id(id).onCommand(.application("resize")) {
-        consumes ? .handled : .ignored
+    var handled = 0
+    var defaults = 0
+    host.build = { buffer, context in
+      let button = buffer.button(Button("Submit", role: .defaultAction) { defaults += 1 }, context: context)
+      return buffer.onCommand(button, .action(.submit), context: context) {
+        handled += 1
+        return consumes ? .handled : .ignored
       }
-      do {
-        let resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
-      }
-      interaction.endFrame()
     }
-    frame()
-    frame(InputState(commands: [.application("resize")]))
-    #expect(interaction.scrollState(for: id).offset.y == 0)
-    #expect(interaction.handledCommandIndices == [0])
+    host.render()
+    host.sendInput(InputState(commands: [.action(.submit)]))
+    #expect(handled == 1)
+    #expect(defaults == 0)
     consumes = false
-    frame(InputState(commands: [.application("resize")]))
-    #expect(interaction.scrollState(for: id).offset.y == 0)
-    #expect(interaction.handledCommandIndices.isEmpty)
+    host.sendInput(InputState(commands: [.action(.submit)]))
+    #expect(handled == 2)
+    #expect(defaults == 1)
+    host.render()
+    host.render()
+    #expect(handled == 2)
+    #expect(defaults == 1)
   }
 }

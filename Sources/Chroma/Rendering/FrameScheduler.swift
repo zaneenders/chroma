@@ -2,11 +2,8 @@ import Foundation
 
 @MainActor
 package final class FrameScheduler {
-  package enum FrameKind: Sendable { case content }
-
   package struct ScheduledFrame: Equatable {
     package let deadline: Double
-    package let kind: FrameKind
     package let priority: TaskPriority
   }
 
@@ -18,10 +15,11 @@ package final class FrameScheduler {
   package private(set) var lastFrameTime: Double?
   package private(set) var minimumRefreshRate = 30.0
   package private(set) var maximumRefreshRate = 60.0
+  package var animationsActive = false { didSet { schedule() } }
   package var scrollMomentumActive = false { didSet { schedule() } }
   package var inputPending = false { didSet { schedule() } }
   package var isReady = false { didSet { schedule() } }
-  package var onFrame: (@MainActor (FrameKind) -> Void)? { didSet { schedule() } }
+  package var onFrame: (@MainActor () -> Void)? { didSet { schedule() } }
 
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
     self.clock = clock
@@ -45,20 +43,20 @@ package final class FrameScheduler {
     if let pendingSince {
       return ScheduledFrame(
         deadline: lastFrameTime.map { $0 + 1 / maximumRefreshRate } ?? pendingSince,
-        kind: .content, priority: .userInitiated)
+        priority: .userInitiated)
     }
-    guard scrollMomentumActive, let lastFrameTime else { return nil }
+    guard scrollMomentumActive || animationsActive, let lastFrameTime else { return nil }
     return ScheduledFrame(
       deadline: lastFrameTime + 1 / minimumRefreshRate,
-      kind: .content, priority: .utility)
+      priority: .utility)
   }
 
-  package func takeFrame() -> FrameKind? {
+  package func takeFrame() -> Bool {
     let now = clock()
-    guard let nextFrame, now >= nextFrame.deadline else { return nil }
+    guard let nextFrame, now >= nextFrame.deadline else { return false }
     pendingSince = nil
     lastFrameTime = now
-    return nextFrame.kind
+    return true
   }
 
   package func consumeContentRequest() {
@@ -78,6 +76,7 @@ package final class FrameScheduler {
     pendingSince = nil
     lastFrameTime = nil
     scrollMomentumActive = false
+    animationsActive = false
     inputPending = false
   }
 
@@ -97,9 +96,9 @@ package final class FrameScheduler {
       guard let self, !Task.isCancelled else { return }
       self.wakeTask = nil
       self.scheduled = nil
-      if let kind = self.takeFrame() {
+      if self.takeFrame() {
         self.isProducing = true
-        self.onFrame?(kind)
+        self.onFrame?()
         self.isProducing = false
         // takeFrame records the start; rendering must count toward the frame interval.
       }

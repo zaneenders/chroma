@@ -185,24 +185,3 @@ public struct ChromaTheme: Equatable, Sendable {
       selectionForeground: .white)
   )
 }
-
-public struct ThemeReader<Content: Block>: LayoutPreparingBlock {
-  public var content: (ChromaTheme) -> Content
-
-  public init(@BlockBuilder content: @escaping (ChromaTheme) -> Content) {
-    self.content = content
-  }
-
-}
-
-public struct ThemeBlock: LayoutPreparingBlock {
-  public var content: any Block
-  public var theme: ChromaTheme
-
-}
-
-extension Block {
-  public func chromaTheme(_ theme: ChromaTheme) -> ThemeBlock {
-    ThemeBlock(content: self, theme: theme)
-  }
-}

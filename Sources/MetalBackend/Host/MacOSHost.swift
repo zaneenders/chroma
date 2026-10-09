@@ -15,12 +15,9 @@ extension MacOSApp {
 @MainActor
 public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDelegate {
   public let name = "Metal"
-  public var content: (any Block)? {
-    get { runtime.content }
-    set {
-      runtime.content = newValue
-      runtime.scheduler.requestContent()
-    }
+  public var build: LayoutBuilder? {
+    get { runtime.build }
+    set { runtime.build = newValue }
   }
   public var frameObserver: FrameObserver? {
     get { runtime.frameObserver }
@@ -32,7 +29,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   private let queue: MTLCommandQueue
   private let displayRenderer: MetalDisplayListRenderer
   private var window: NSWindow?
-  private var scheduledFrame: FrameScheduler.FrameKind?
+  private var scheduledFrame = false
   private var lastFrameTime: Double = 0
 
   public init(size: Size = Size(width: 800, height: 600)) throws {
@@ -60,9 +57,9 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
       self.runtime.dispatchInput { [weak self] in self?.handleKey(input, frameInput: frameInput) }
     }
     interaction.onRedrawRequested = { [weak self] in self?.runtime.scheduler.requestContent() }
-    runtime.scheduler.onFrame = { [weak self] kind in
+    runtime.scheduler.onFrame = { [weak self] in
       guard let self else { return }
-      self.scheduledFrame = kind
+      self.scheduledFrame = true
       self.view.draw()
     }
   }
@@ -149,19 +146,19 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
   public func draw(in view: MTKView) {
     let viewport = Size(width: Float(view.bounds.width), height: Float(view.bounds.height))
     guard viewport.width > 0, viewport.height > 0 else {
-      scheduledFrame = nil
+      scheduledFrame = false
       return
     }
-    guard let kind = scheduledFrame else {
+    guard scheduledFrame else {
       runtime.scheduler.requestContent()
       return
     }
-    scheduledFrame = nil
+    scheduledFrame = false
     let now = ProcessInfo.processInfo.systemUptime
     if lastFrameTime > 0, now > lastFrameTime { interaction.frameRate = 1 / (now - lastFrameTime) }
     lastFrameTime = now
     let list = runtime.renderScheduled(
-      kind, viewport: viewport,
+      viewport: viewport,
       onChange: { [weak self] in self?.runtime.scheduler.requestContent() })
     let redraw = interaction.consumeRedrawRequest()
     defer { if redraw { runtime.scheduler.requestContent() } }

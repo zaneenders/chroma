@@ -5,37 +5,35 @@ import Testing
 @MainActor
 struct TrailingControlsRowTests {
   private final class Recorder { var rects: [Rect] = [] }
-  private struct Wrapping: PaintableBlock {
-    func register(in rect: Rect, context: BlockContext) {}
-
-    let recorder: Recorder
-    var focusRule: FocusRule { .standard }
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      Size(width: proposal.width, height: proposal.width < 80 ? 40 : 20)
-    }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      recorder.rects.append(rect)
-    }
-  }
-
   @Test func measuresRemainingWidthAndBottomAligns() {
     let recorder = Recorder()
-    let row = TrailingControlsRow(spacing: 8) {
-      Wrapping(recorder: recorder)
-    } controls: {
-      Color.white.sizing(x: .fixed(30), y: .fixed(10))
+    let row: LayoutBuilder = { buffer, context in
+      buffer.trailingControls(
+        spacing: 8, context: context,
+        input: { buffer, context in
+          buffer.customLeaf(
+            context: context,
+            measure: { Size(width: $0.width, height: $0.width < 80 ? 40 : 20) },
+            register: { _ in }, paint: { _, rect in recorder.rects.append(rect) })
+        },
+        controls: { buffer, context in
+          let color = buffer.color(.white, context: context)
+          return buffer.sizing(color, x: .fixed(30), y: .fixed(10), context: context)
+        })
     }
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
-    #expect(row.sizeThatFits(Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
-    #expect(row.sizeThatFits(Size(width: 150, height: 200), context: context).height == 20)
-    interaction.beginFrame(input: InputState())
+    let context = LayoutContext(interaction: interaction)
+    #expect(
+      measureLayout(row, proposal: Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
+    #expect(measureLayout(row, proposal: Size(width: 150, height: 200), context: context).height == 20)
+    beginTestFrame(interaction, input: InputState())
     var list = DrawList()
-    let resolved = row.prepareLayout(context: context)
-    resolved.register(in: Rect(x: 10, y: 20, width: 100, height: 60))
-    resolved.paint(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = row(&resolvedBuffer, context)
+    resolvedBuffer.register(resolved, in: Rect(x: 10, y: 20, width: 100, height: 60))
+    resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
     interaction.endFrame()
     #expect(recorder.rects == [Rect(x: 10, y: 40, width: 62, height: 40)])
-    #expect(row.sizeThatFits(Size(width: 20, height: 200), context: context).height == 40)
+    #expect(measureLayout(row, proposal: Size(width: 20, height: 200), context: context).height == 40)
   }
 }

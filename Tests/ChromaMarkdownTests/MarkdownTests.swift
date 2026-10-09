@@ -51,8 +51,7 @@ struct MarkdownTests {
   @Test func streamingTablePrefixesCanBeLaidOut() {
     let source = "| Name | Value |\n| --- | --- |\n| Apple | 1 |"
     for length in 1...source.count {
-      let blocks = segmentMarkdown(String(source.prefix(length)))
-      let lines = layoutMarkdown(blocks, columns: 80, theme: .dark, baseColor: .white)
+      let lines = markdownLines(String(source.prefix(length)))
       #expect(!lines.isEmpty)
     }
   }
@@ -71,20 +70,20 @@ struct MarkdownTests {
 
   @Test func handlesCRLFAndPreservesTrailingCodeBlankLines() {
     #expect(segmentMarkdown("# Title\r\n\r\nBody") == [.heading(level: 1, text: "Title"), .paragraph("Body")])
-    let lines = layoutMarkdown(segmentMarkdown("```\na\n\n```"), columns: 80, theme: .dark, baseColor: .white)
+    let lines = markdownLines("```\na\n\n```")
     #expect(lines.count == 2)
     #expect(lines.last?.kind == .code)
   }
 
   @Test func wrapsNarrowWidthsWithoutSplittingUnicodeCharacters() {
-    let lines = layoutMarkdown(segmentMarkdown("café 👋 日本語"), columns: 1, theme: .dark, baseColor: .white)
+    let lines = markdownLines("café 👋 日本語", columns: 1)
     #expect(!lines.isEmpty)
     #expect(lines.allSatisfy { $0.columnCount <= 1 })
     #expect(lines.flatMap(\.runs).map(\.text).joined().contains("👋"))
   }
 
   @Test func fencedCodePreservesBlankLinesAndLiteralMarkup() {
-    let lines = layoutMarkdown(segmentMarkdown("```\na\n\n**b**\n```"), columns: 80, theme: .dark, baseColor: .white)
+    let lines = markdownLines("```\na\n\n**b**\n```")
     #expect(lines.count == 3)
     #expect(lines.allSatisfy { $0.kind == .code })
     #expect(lines[1].runs.map(\.text).joined().isEmpty)
@@ -108,9 +107,7 @@ struct MarkdownTests {
         .listItem(marker: "•", text: "nested", depth: 1),
         .listItem(marker: "4.", text: "second", depth: 0),
       ])
-    let lines = layoutMarkdown(
-      segmentMarkdown("> first\n> second\n>\n> third"),
-      columns: 80, theme: .dark, baseColor: .white)
+    let lines = markdownLines("> first\n> second\n>\n> third")
     #expect(lines.map { $0.runs.map(\.text).joined() }.joined(separator: "\n") == "| first\nsecond\n\nthird")
   }
 
@@ -124,63 +121,71 @@ struct MarkdownTests {
     #expect(inlineRuns("``a ` b``") == [MarkdownRun(text: "a ` b", code: true)])
     #expect(inlineRuns("[label](https://example.com) ![alt](image.png)") == [MarkdownRun(text: "label alt")])
     #expect(inlineRuns("# literal") == [MarkdownRun(text: "# literal")])
-    let lines = layoutMarkdown(
-      segmentMarkdown(#"# **Title** &amp; \*literal\*"#),
-      columns: 80, theme: .dark, baseColor: .white)
+    let lines = markdownLines(#"# **Title** &amp; \*literal\*"#)
     #expect(lines.flatMap(\.runs).map(\.text).joined() == "# Title & *literal*")
   }
 
   @Test @MainActor func measurementUsesWidthAndContextScale() {
-    let block = MarkdownLeaf(block: .paragraph("abcdefghij"), scale: 1, lineSpacing: 0)
-    let context = BlockContext()
+    let block = markdownLeaf(MarkdownDocument("abcdefghij"), lineSpacing: 0)
+    let context = LayoutContext()
     let cell = context.fontMetrics.cellAdvance
     let height = context.fontMetrics.lineAdvance
-    #expect(block.sizeThatFits(Size(width: cell * 2, height: 1000), context: context).height == height * 5)
-    let scaled = BlockContext(textScale: 2)
-    #expect(block.sizeThatFits(Size(width: cell * 2, height: 1000), context: scaled).height == height * 20)
-    #expect(
-      MarkdownLeaf(block: .paragraph(""), scale: 1, lineSpacing: 0).sizeThatFits(
-        Size(width: 100, height: 100), context: context
-      ).height == 0)
+    var buffer = LayoutBuffer()
+    let root = block.build(into: &buffer, context: context)
+    #expect(buffer.sizeThatFits(root, Size(width: cell * 2, height: 1000)).height == height * 5)
+    let scaled = LayoutContext(textScale: 2)
+    let scaledRoot = block.build(into: &buffer, context: scaled)
+    #expect(buffer.sizeThatFits(scaledRoot, Size(width: cell * 2, height: 1000)).height == height * 20)
+    let empty = MarkdownText("", lineSpacing: 0).build(into: &buffer, context: context)
+    #expect(buffer.sizeThatFits(empty, Size(width: 100, height: 100)).height == 0)
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(root, in: rect)
+    context.interaction.endFrame()
     var drawList = DrawList()
-    block.paint(into: &drawList, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
+    buffer.paint(root, into: &drawList, in: rect)
   }
 }
 
 @MainActor
 struct MarkdownNavigationTests {
   @Test func eachSemanticBlockIsAStableNavigationLeaf() {
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let content = MarkdownText("# Heading\n\nParagraph\n\n- first\n- second\n\n```swift\nlet x = 1\n```")
-    let rect = Rect(x: 0, y: 0, width: 500, height: 600)
+    runtime.build = { buffer, context in content.build(into: &buffer, context: context) }
     func render(_ commands: [Command] = []) {
-      context.interaction.beginFrame(input: InputState(commands: commands))
-      let resolved = BlockEngine.prepare(content, context: context)
-      resolved.register(in: rect)
-      var list = DrawList()
-      resolved.paint(into: &list, in: rect)
-      context.interaction.endFrame()
+      _ = runtime.render(
+        viewport: Size(width: 500, height: 600), input: InputState(commands: commands), onChange: {})
     }
-    func leaves(_ node: FocusNode) -> [FocusNode] {
+    func leaves(_ node: InteractionNode) -> [InteractionNode] {
       node.isLeaf ? [node] : node.children.flatMap(leaves)
     }
     render()
     let initial = leaves(context.interaction.tree!)
     #expect(initial.count == 5)
+    let initialRects = initial.map(\.rect)
     context.interaction.focus(initial[0].leafID!)
     let first = context.interaction.selectedLeafID
     render([.navigation(.down)])
     #expect(context.interaction.selectedLeafID != first)
     render([.navigation(.up)])
     #expect(context.interaction.selectedLeafID == first)
-    #expect(leaves(context.interaction.tree!).map(\.rect) == initial.map(\.rect))
+    #expect(leaves(context.interaction.tree!).map(\.rect) == initialRects)
   }
 
   @Test func keyboardNavigationScrollsLaterBlocksIntoView() {
     let controller = ScrollViewController()
+    let document = MarkdownText((0..<30).map { "Paragraph \($0)" }.joined(separator: "\n\n"))
     let ui = NavigationTestHost(
-      content: ScrollView(controller: controller) {
-        MarkdownText((0..<30).map { "Paragraph \($0)" }.joined(separator: "\n\n"))
+      build: { buffer, context in
+        buffer.scrollView(
+          ScrollView(
+            controller: controller,
+            build: { buffer, context in
+              document.build(into: &buffer, context: context)
+            }), context: context)
       }, size: Size(width: 300, height: 100))
     ui.press("j", "l")
     for _ in 0..<20 { ui.press("j") }
@@ -193,15 +198,18 @@ struct MarkdownNavigationTests {
 @MainActor
 struct MarkdownSelectionTests {
   @Test func selectsRenderedCharactersCopiesAndRejectsEdits() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let target = FocusTarget()
-    let content = MarkdownLeaf(block: .paragraph("**café** `👨‍👩‍👧‍👦` tea"), scale: 1, lineSpacing: 0)
-      .focusTarget(target)
+    let content = markdownLeaf(MarkdownDocument("**café** `👨‍👩‍👧‍👦` tea"), lineSpacing: 0)
+    runtime.build = { buffer, context in
+      buffer.focus(target, context: context) { buffer, context in content.build(into: &buffer, context: context) }
+    }
     func render(_ commands: [Command] = [], text: [TextEditEvent] = []) {
-      _ = producer.render(
-        content: content, viewport: Size(width: 40, height: 300),
-        input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 40, height: 300),
+        input: InputState(commands: commands, textEvents: text), onChange: {})
     }
     render()
     target.focus()
@@ -220,11 +228,11 @@ struct MarkdownSelectionTests {
   }
 
   @Test func layoutOffsetsRespectSoftWrapsUnicodeAndExplicitNewlines() {
-    let lines = layoutMarkdown(
-      [.code(language: nil, code: "é👨‍👩‍👧‍👦abcd\n\nend")], columns: 3,
-      theme: .dark, baseColor: .white)
+    let plan = layoutMarkdown(
+      ParsedMarkdownBlock(.code(language: nil, code: "é👨‍👩‍👧‍👦abcd\n\nend")), columns: 3,
+      colors: MarkdownColors(.dark))
     let layout = MarkdownLayout(
-      lines: lines, lineHeight: 20, cellWidth: 10, scale: 1,
+      plan: plan, lineHeight: 20, cellWidth: 10, scale: 1,
       rect: Rect(x: 0, y: 0, width: 30, height: 200))
     #expect(layout.text == "é👨‍👩‍👧‍👦abcd\n\nend")
     #expect(layout.position(at: 3).row == 1)
@@ -237,15 +245,20 @@ struct MarkdownSelectionTests {
 @MainActor
 struct MarkdownDocumentSelectionTests {
   @Test func parentScopeCopiesMarkdownAndPlainTextInTreeOrder() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
-    let content = Group("Session") {
-      Text("Header").selectable()
-      MarkdownText("**café**\n\n`code`")
-      Text("Footer").selectable()
+    let document = MarkdownText("**café**\n\n`code`")
+    let content: LayoutBuilder = { buffer, context in
+      buffer.group("Session", context: context) { buffer, context in
+        let header = buffer.text(Text("Header").selectable(), context: context.childScope(0))
+        let markdown = document.build(into: &buffer, context: context.childScope(1))
+        let footer = buffer.text(Text("Footer").selectable(), context: context.childScope(2))
+        return buffer.stack([header, markdown, footer], axis: .vertical, context: context)
+      }
     }
     _ = producer.render(
-      content: content, viewport: Size(width: 500, height: 500),
+      build: content,
+      viewport: Size(width: 500, height: 500),
       input: InputState(), context: context, onChange: {})
     context.interaction.navigationPath = []
     context.interaction.selectAll(at: .zero)

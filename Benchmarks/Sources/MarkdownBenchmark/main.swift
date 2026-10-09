@@ -30,10 +30,16 @@ private struct Result: Encodable {
     ] {
       let host = HeadlessHost(size: Size(width: width, height: 600))
       var source = base
-      host.content = ScrollView { MarkdownText(base) }
+      let initialMarkdown = MarkdownText(base)
+      let initialView = ScrollView { buffer, context in initialMarkdown.build(into: &buffer, context: context) }
+      host.build = { buffer, context in buffer.scrollView(initialView, context: context) }
       func render(_ index: Int) -> Int {
         source = name == "streaming" ? base + "\n\n**streaming " + String(repeating: "x", count: index + 1) : base
-        if name == "streaming" { host.content = ScrollView { MarkdownText(source) } }
+        if name == "streaming" {
+          let markdown = MarkdownText(source)
+          let view = ScrollView { buffer, context in markdown.build(into: &buffer, context: context) }
+          host.build = { buffer, context in buffer.scrollView(view, context: context) }
+        }
         return host.render().commands.count
       }
       PipelineMetrics.isEnabled = false

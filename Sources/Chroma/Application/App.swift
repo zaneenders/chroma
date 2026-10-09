@@ -1,8 +1,6 @@
 @MainActor
 public protocol App {
-  associatedtype Body: Block
-
-  @MainActor @BlockBuilder var body: Body { get }
+  func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode
 
   init()
 
@@ -32,7 +30,7 @@ extension App {
     host.runtime.scheduler.setRefreshRates(minimum: minimumRefreshRate, maximum: maximumRefreshRate)
     host.runtime.keyBindings = keyBindings
     host.frameObserver = frameObserver
-    host.content = DeferredBlock { self.body }
+    host.runtime.build = { buffer, context in self.build(into: &buffer, context: context) }
     try host.run(title: "\(title) — \(host.name)")
   }
 }

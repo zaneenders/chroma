@@ -26,15 +26,18 @@ struct TextInputPaintingTests {
 
   @Test(arguments: [false, true])
   func focusedTextInputHasBorderWithoutFocusFill(multiline: Bool) throws {
-    let context = BlockContext()
-    let producer = FrameProducer()
-    let content: any Block =
+    let runtime = WindowRuntime()
+    let context = runtime.context
+    let content: TextEditor =
       multiline
       ? TextEditor(text: { "abcd" }, onChange: { _ in })
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
     let size = Size(width: 200, height: 40)
+    runtime.build = { buffer, context in buffer.textEditor(content, context: context) }
     func render() -> DrawList {
-      producer.render(content: content, viewport: size, input: InputState(), context: context, onChange: {})
+      runtime.render(
+        viewport: size, input: InputState(),
+        onChange: {})
     }
     _ = render()
     let tree = try #require(context.interaction.tree)
@@ -76,33 +79,37 @@ struct TextInputPaintingTests {
   }
 
   @Test func draggingBelowShortEditorKeepsViewportAtFirstRow() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let editor = TextEditor(text: { "short" }, onChange: { _ in })
-    context.interaction.beginFrame(
+    beginTestFrame(
+      context.interaction,
       input: InputState(
         pointerPosition: Point(x: 20, y: 99), pointerPressPosition: Point(x: 20, y: 16),
         pointerDown: true, pointerPressed: true))
     context.interaction.textDragViewportRow = 0
     #expect(context.interaction.isDragging)
     var list = DrawList()
-    let resolved = editor.prepareLayout(context: context)
-    resolved.register(in: Rect(x: 0, y: 0, width: 200, height: 100))
-    resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.textEditor(editor, context: context)
+    resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 200, height: 100))
+    resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
     #expect(context.interaction.textDragViewportRow == 0)
   }
 
   @Test(arguments: [false, true])
   func selectionSuppressesCaretAndPreservesBalancedClips(multiline: Bool) throws {
-    let context = BlockContext()
-    let producer = FrameProducer()
-    let content: any Block =
+    let runtime = WindowRuntime()
+    let context = runtime.context
+    let content: TextEditor =
       multiline
       ? TextEditor(text: { "ab\ncd" }, onChange: { _ in })
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
+    runtime.build = { buffer, context in buffer.textEditor(content, context: context) }
     func render() -> DrawList {
-      producer.render(
-        content: content, viewport: Size(width: 200, height: 100), input: InputState(),
-        context: context, onChange: {})
+      runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: InputState(),
+        onChange: {})
     }
     _ = render()
     let tree = try #require(context.interaction.tree)
@@ -136,4 +143,52 @@ struct TextInputPaintingTests {
     }
     #expect(depth == 0)
   }
+
+  @Test func neutralRenderingAndHoverDoNotReplayStaleEditorSnapshots() {
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let focus = FocusTarget()
+    var text = ""
+    var changes = 0
+    runtime.build = { buffer, context in
+      buffer.focus(focus, context: context) { buffer, context in
+        buffer.textEditor(
+          TextEditor(
+            singleLine: true, text: { text },
+            onChange: {
+              text = $0
+              changes += 1
+            }), context: context)
+      }
+    }
+    let viewport = Size(width: 200, height: 40)
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    focus.focus(editing: true)
+    runtime.handleInput(InputState(textEvents: [.insert("Alpha")]))
+    #expect(text == "Alpha")
+    #expect(runtime.interaction.caretOffset == 5)
+    runtime.interaction.textSelectionRange = 2..<5
+
+    // Hover is delivered before presentation has replaced the old empty-text handlers.
+    runtime.handleInput(InputState(pointerPosition: Point(x: 10, y: 10)))
+    #expect(runtime.interaction.caretOffset == 5)
+    #expect(runtime.interaction.textSelectionRange == 2..<5)
+    #expect(changes == 1)
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    #expect(runtime.interaction.caretOffset == 5)
+    #expect(runtime.interaction.textSelectionRange == 2..<5)
+    #expect(runtime.interaction.copyText() == "pha")
+    #expect(changes == 1)
+
+    runtime.handleInput(InputState(textEvents: [.insert("!")]))
+    #expect(text == "Al!")
+    #expect(runtime.interaction.caretOffset == 3)
+    #expect(runtime.interaction.textSelectionRange == nil)
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    runtime.handleInput(InputState(pointerPosition: Point(x: 20, y: 10)))
+    #expect(runtime.interaction.caretOffset == 3)
+    #expect(runtime.interaction.textSelectionRange == nil)
+    #expect(changes == 2)
+  }
+
 }

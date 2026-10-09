@@ -24,22 +24,18 @@ public final class NavigationTestHost {
   }
 
   public init(
-    content: any Block, size: Size = Size(width: 800, height: 600),
+    build: @escaping LayoutBuilder, size: Size = Size(width: 800, height: 600),
     keyBindings: KeyBindings = .modalNavigation
   ) {
     host = HeadlessHost(size: size)
     host.keyBindings = keyBindings
-    host.content = content
+    host.build = build
     host.render()
   }
 
   public func press(_ inputs: KeyboardInput...) {
     for input in inputs {
-      guard let resolved = host.resolve(input) else { continue }
-      switch resolved {
-      case .command(let command): host.render(input: InputState(commands: [command]))
-      case .text(let event): host.render(input: InputState(textEvents: [event]))
-      }
+      host.sendKeyboardInput(input)
       host.render()
     }
   }

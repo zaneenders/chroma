@@ -8,6 +8,11 @@ public enum InteractionMode: Equatable, Sendable {
 @Observable
 @MainActor
 package final class Interaction {
+  @ObservationIgnored var animations: [WidgetID: ScalarAnimation] = [:]
+  @ObservationIgnored var animationKeys: Set<WidgetID> = []
+  @ObservationIgnored var animationTime: Double = 0
+  @ObservationIgnored var animationsActive = false
+
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
 
@@ -15,7 +20,7 @@ package final class Interaction {
   var documentAnchor: TextEndpoint?
   var documentEnd: TextEndpoint?
 
-  package let textSelection = TextSelectionManager()
+  @ObservationIgnored let textLayouts = TextLayoutPreparation()
 
   package var fontMetrics = FontMetrics()
 
@@ -24,7 +29,7 @@ package final class Interaction {
   @ObservationIgnored package var frameRate: Double = 0
 
   package internal(set) var selection: [Int]?
-  @ObservationIgnored var navigation: NavigationNode?
+  @ObservationIgnored var navigation: InteractionNode?
   @ObservationIgnored var navigationPath: [Int] = []
   @ObservationIgnored var rememberedNavigation: [WidgetID: WidgetID] = [:]
   struct LogicalSelectionRegistration {
@@ -39,7 +44,9 @@ package final class Interaction {
 
   @ObservationIgnored var viewport: Rect = .zero
 
-  @ObservationIgnored var tree: FocusNode?
+  @ObservationIgnored var tree: InteractionNode?
+  @ObservationIgnored private var committedTree = InteractionTree()
+  @ObservationIgnored private var buildingTree = InteractionTree()
 
   package internal(set) var editingLeaf: WidgetID?
   package private(set) var editingSessionGeneration: Int = 0
@@ -60,8 +67,6 @@ package final class Interaction {
   @ObservationIgnored var activatePending = false
   @ObservationIgnored private var redrawRequested = false
   @ObservationIgnored package var onRedrawRequested: (() -> Void)?
-  @ObservationIgnored var pendingCommands: [Command] = []
-  @ObservationIgnored var handledCommandIndices: Set<Int> = []
   struct ScopedCommandHandler {
     var path: [Int]
     var command: Command
@@ -92,9 +97,6 @@ package final class Interaction {
       height: abs(dragCurrent.y - origin.y))
   }
 
-  @ObservationIgnored package var onCopy: (() -> String?)?
-  @ObservationIgnored package var onSelectAll: (() -> Bool)?
-
   package func editableSelectionText() -> String? {
     guard editingLeaf != nil, let range = textSelectionRange, let editingText else { return nil }
     let characters = Array(editingText)
@@ -103,10 +105,10 @@ package final class Interaction {
   }
 
   package func copyText() -> String? {
-    if let text = documentCopyText() { return text }
+    if !pointerOnlySelection, let text = documentCopyText() { return text }
     if let text = editableSelectionText() { return text }
-    if let text = (registrations.copyProvider ?? onCopy)?(), !text.isEmpty { return text }
-    return textSelection.selectedText()
+    if let text = registrations.copyProvider?(), !text.isEmpty { return text }
+    return documentCopyText()
   }
 
   package func selectAll(at point: Point) {
@@ -118,8 +120,8 @@ package final class Interaction {
       return
     }
     if selectTextScope() { return }
-    if (registrations.selectAll ?? onSelectAll)?() == true { return }
-    textSelection.selectAll(at: point)
+    if registrations.selectAll?() == true { return }
+    selectPointerText(at: point)
   }
 
   struct PendingFocus: Equatable {
@@ -227,7 +229,7 @@ package final class Interaction {
     if let selected = navigation?.node(at: navigationPath), selected.isGroup {
       if navigationPath.isEmpty, let first = selected.children.first {
         var common = first.renderPath
-        for child in selected.children.dropFirst() {
+        for (index, child) in selected.children.enumerated() where index > 0 {
           while !isPrefix(common, of: child.renderPath) { common.removeLast() }
         }
         return common
@@ -263,8 +265,8 @@ package final class Interaction {
     set { leafState.hovered = newValue }
   }
 
-  @ObservationIgnored var builderRoot: FocusNode?
-  @ObservationIgnored var builderStack: [FocusNode] = []
+  @ObservationIgnored var builderRoot: InteractionNode?
+  @ObservationIgnored var builderStack: [InteractionNode] = []
   @ObservationIgnored var builderPath: [Int] = []
 
   @ObservationIgnored var activatedLeaf: WidgetID?
@@ -276,7 +278,7 @@ package final class Interaction {
     var keyBindingScopes: [ScopedKeyBindings] = []
     var actionRoles: [ScopedActionRole] = []
     var inputObservers: [@MainActor (InputState) -> Void] = []
-    var readOnlyTexts: [WidgetID: @MainActor () -> String] = [:]
+    var readOnlyTexts: [WidgetID: ReadOnlyTextRegistration] = [:]
     var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
     var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
     var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
@@ -297,16 +299,20 @@ package final class Interaction {
 
     registrations = FrameRegistrations()
     building = FrameRegistrations()
-    onCopy = nil
-    onSelectAll = nil
-    textSelection.clear()
     documentAnchor = nil
     documentEnd = nil
-    textSelection.layoutRegistry.clear()
+    textLayouts.clear()
+    animations.removeAll()
+    animationKeys.removeAll()
+    animationsActive = false
     pendingFocus = nil
     scrollStates = [:]
     tree = nil
     navigation = nil
+    builderRoot = nil
+    builderStack.removeAll(keepingCapacity: true)
+    committedTree.clear()
+    buildingTree.clear()
     navigationPath = []
     rememberedNavigation = [:]
     logicalSelections = [:]
@@ -318,7 +324,10 @@ package final class Interaction {
   }
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
-    textSelection.clear()
+    if pointerOnlySelection {
+      documentAnchor = nil
+      documentEnd = nil
+    }
     editingReadOnly = false
     editingSessionGeneration &+= 1
     editingLeaf = id
@@ -338,8 +347,10 @@ package final class Interaction {
   }
 
   func endEditing() {
-    documentAnchor = nil
-    documentEnd = nil
+    if !pointerOnlySelection {
+      documentAnchor = nil
+      documentEnd = nil
+    }
     if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
     editingReadOnly = false
@@ -361,24 +372,26 @@ package final class Interaction {
     return redrawRequested
   }
 
-  @ObservationIgnored var refreshingRegistrations = false
+  enum CommitIntent { case registration, presentation }
+  @ObservationIgnored var commitIntent: CommitIntent = .presentation
 
   func restoreInputAfterRegistration(_ input: InputState) {
     self.input = input
     hoveredLeafID = tree?.hitTest(input.pointerPosition).flatMap { tree?.node(at: $0)?.leafID }
   }
 
-  package func beginFrame(input: InputState, processingInput: Bool = true) {
+  package func beginFrame(input: InputState) {
+    animationKeys.removeAll(keepingCapacity: true)
     building = FrameRegistrations()
     buildingLogicalSelections = [:]
 
-    if processingInput { processInput(input, notifyingObservers: input != InputState()) } else { self.input = input }
-    let root = FocusNode(kind: .group, rect: .zero)
-    builderRoot = root
-    builderStack = [root]
-    builderPath = []
+    self.input = input
+    buildingTree.reset()
+    builderRoot = buildingTree.root
+    builderStack.removeAll(keepingCapacity: true)
+    builderStack.append(buildingTree.root)
+    builderPath.removeAll(keepingCapacity: true)
     clipStack = []
-    textSelection.layoutRegistry.clear()
   }
 
   package func processInput(_ input: InputState, notifyingObservers: Bool = true) {
@@ -386,23 +399,15 @@ package final class Interaction {
     activatePending = false
     enterTextPending = false
     movementTextEvents = []
-    if !refreshingRegistrations {
-      pendingCommands = input.commands
-      handledCommandIndices = []
-      routePendingCommands()
-      pendingCommands = []
-    }
+    routeCommands(input.commands)
 
     activatedLeaf = nil
-
-    if refreshingRegistrations { return }
 
     if input.pointerPressed {
       dragOrigin = input.pointerPressPosition
       dragCurrent = input.pointerPosition
       textDragAnchor = nil
       textDragViewportRow = nil
-      textSelection.clear()
       documentAnchor = nil
       documentEnd = nil
     } else if input.pointerReleased {
@@ -410,7 +415,6 @@ package final class Interaction {
     } else if isDragging {
       dragCurrent = input.pointerPosition
     }
-    textSelection.updateFromDrag(interaction: self)
 
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
@@ -419,7 +423,11 @@ package final class Interaction {
       }
       lastPointerPosition = input.pointerPosition
       documentMovementHandled = false
-      for handler in registrations.inputHandlers.values { handler() }
+      // Hover and presentation-only snapshots may use the previous committed geometry.
+      // Their handlers also carry that update's text; only actionable input may invoke them.
+      if input.isActionable {
+        for handler in registrations.inputHandlers.values { handler() }
+      }
       if activatePending, let id = selectedLeafID {
         activatePending = false
         activatedLeaf = id
@@ -460,13 +468,13 @@ package final class Interaction {
 
   package func endFrame() {
     defer { finishInput() }
-    if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
+    animations = animations.filter { animationKeys.contains($0.key) }
+    animationsActive = animations.values.contains { $0.isActive(at: animationTime) }
 
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil { endEditing() }
     if let pressedLeaf, newTree.findLeaf(pressedLeaf) == nil { self.pressedLeaf = nil }
     scrollStates = scrollStates.filter { building.inputHandlers[$0.key] != nil }
-    textSelection.reconcile()
     tree = newTree
     if let anchor = documentAnchor, let end = documentEnd,
       building.readOnlyTexts[anchor.id] == nil || building.readOnlyTexts[end.id] == nil
@@ -500,8 +508,9 @@ package final class Interaction {
     pruneScrollRows()
     registrations = building
     logicalSelections = buildingLogicalSelections
+    swap(&committedTree, &buildingTree)
     builderRoot = nil
-    builderStack = []
+    builderStack.removeAll(keepingCapacity: true)
     activatedLeaf = nil
     activatePending = false
     enterTextPending = false
@@ -514,7 +523,7 @@ package final class Interaction {
 extension Interaction {
   func beginGroup(
     rect: Rect,
-    axis: FocusNode.Axis? = nil,
+    axis: FocusGroupAxis? = nil,
     scrollID: WidgetID? = nil,
     navigationID: WidgetID? = nil,
     navigationName: String? = nil
@@ -522,11 +531,10 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
-    let node = FocusNode(
-      kind: .group, rect: rect, hitRect: clippedRect(rect), axis: axis, scrollID: scrollID,
+    let node = buildingTree.append(
+      kind: .group, rect: rect, hitRect: clippedRect(rect), parent: parent, scrollID: scrollID,
       navigationID: navigationID, navigationName: navigationName,
-      canBeRevealed: scrollID != nil || (builderStack.last?.canBeRevealed ?? false))
-    parent.children.append(node)
+      canBeRevealed: scrollID != nil || parent.canBeRevealed)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
   }
@@ -538,7 +546,7 @@ extension Interaction {
     }
     builderPath.removeLast()
     if node.children.isEmpty {
-      builderStack.last?.children.removeLast()
+      buildingTree.removeEmptyGroup(node)
       return false
     }
     return true
@@ -562,7 +570,7 @@ extension Interaction {
     }
   }
 
-  func reveal(_ path: [Int], in tree: FocusNode) {
+  func reveal(_ path: [Int], in tree: InteractionNode) {
     guard let target = tree.node(at: path)?.rect else { return }
     for depth in 0...path.count {
       let ancestorPath = Array(path.prefix(depth))
@@ -575,7 +583,7 @@ extension Interaction {
     prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
   }
 
-  private func isDescendant(_ path: [Int], of scrollID: WidgetID, in tree: FocusNode) -> Bool {
+  private func isDescendant(_ path: [Int], of scrollID: WidgetID, in tree: InteractionNode) -> Bool {
     path.indices.contains { depth in
       tree.node(at: Array(path.prefix(depth)))?.scrollID == scrollID
     }
@@ -608,16 +616,14 @@ extension Interaction {
     return appBindings.command(for: chord, isTextEditing: isTextEditing)
   }
 
-  func routePendingCommands() {
-    for (index, command) in pendingCommands.enumerated() where !handledCommandIndices.contains(index) {
+  private func routeCommands(_ commands: [Command]) {
+    for command in commands {
       if mode == .editing, command == .action(.cancel) || command == .action(.dismiss) {
         stopInput()
-        handledCommandIndices.insert(index)
         continue
       }
       if editingLeaf != nil, command == .action(.cancel) || command == .action(.dismiss) {
         endEditing()
-        handledCommandIndices.insert(index)
         continue
       }
       let handlers =
@@ -625,13 +631,11 @@ extension Interaction {
         .filter { $0.command == command && isPrefix($0.path, of: activeCommandPath) }
         .sorted { $0.path.count > $1.path.count }
       if handlers.contains(where: { $0.action() == .handled }) {
-        handledCommandIndices.insert(index)
         continue
       }
       if case .navigation(let direction) = command,
         moveLogicalSelection(direction)
       {
-        handledCommandIndices.insert(index)
         continue
       }
       switch command {
@@ -715,13 +719,7 @@ extension Interaction {
     id: WidgetID, rect: Rect, role: ActionRole = .normal,
     action: (@MainActor () -> Void)? = nil, navigationIgnored: Bool = false
   ) -> ButtonState {
-    guard let parent = builderStack.last else {
-      preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
-    }
-    parent.children.append(
-      FocusNode(
-        kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role,
-        canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
+    registerLeaf(id: id, rect: rect, navigationIgnored: navigationIgnored)
     if role != .normal, let action {
       building.actionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
     }
@@ -731,6 +729,33 @@ extension Interaction {
     let held = pressedLeaf == id && input.pointerDown
     if let action { building.buttonActions[id] = action }
     return ButtonState(hovered: hovered, focused: focused, held: held, clicked: activatedLeaf == id)
+  }
+
+  func registerLeaf(id: WidgetID, rect: Rect, navigationIgnored: Bool = false) {
+    guard let parent = builderStack.last else {
+      preconditionFailure("registerLeaf outside of a frame; call beginFrame first")
+    }
+    buildingTree.append(
+      kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), parent: parent,
+      canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored)
+  }
+
+  func recordScrollRows(
+    in group: InteractionNode, fromChild: Int, offset: Float, scrollID: WidgetID, rowKey: StructuralKey
+  ) {
+    func record(_ node: InteractionNode) {
+      if let leafID = node.leafID {
+        recordScrollRow(
+          id: scrollID, leafID: leafID, rowKey: rowKey,
+          rect: Rect(
+            x: node.rect.minX, y: node.rect.minY + offset,
+            width: node.rect.size.width, height: node.rect.size.height))
+      } else {
+        for child in node.children { record(child) }
+      }
+    }
+    var children = group.children.makeIterator(startingAt: fromChild)
+    while let child = children.next() { record(child) }
   }
 
   func clippedRect(_ rect: Rect) -> Rect {

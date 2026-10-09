@@ -2,31 +2,36 @@ import Testing
 
 @testable import Chroma
 
-private struct FixedContent: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct FixedContent {
+
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: LayoutContext) {}
 
   var size: Size
   var focusRule: FocusRule { .standard }
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { size }
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: LayoutContext) {
     drawList.fillRect(rect, color: .white)
   }
 }
 
-private struct ClippedScrollContent: LayoutPreparingBlock {
-
-  let content: any Block
-
-  var focusRule: FocusRule { .container }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    let child = BlockEngine.prepare(content, context: context)
-    return BlockEngine.Resolved(
-      measure: { $0 },
-      register: { rect in
-        context.withInteractionClip(Rect(x: 0, y: 0, width: 20, height: 20)) { child.register(in: rect) }
-      }, paint: child.paint)
+private struct ClippedScrollContent {
+  let content: ScrollView
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    let child = buffer.scrollView(content, context: context)
+    let padded = buffer.padding(child, EdgeInsets(bottom: -80, trailing: -80), context: context)
+    let sized = buffer.sizing(padded, x: .fixed(20), y: .fixed(20), context: context)
+    let clipped = buffer.clip(sized, context: context)
+    return buffer.overlay([clipped], context: context)
   }
 }
 
@@ -39,8 +44,19 @@ private final class PhaseLog {
   var phases: [Int: InteractionPhase] = [:]
 }
 
-private struct CountedRow: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct CountedRow {
+
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: LayoutContext) {}
 
   let index: Int
   let height: Float
@@ -48,29 +64,40 @@ private struct CountedRow: PaintableBlock {
 
   var focusRule: FocusRule { .standard }
 
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
     counter.measured.append(index)
     return Size(width: proposal.width, height: height)
   }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: LayoutContext) {
     counter.drawn.append(index)
   }
 }
 
-private struct RowContent: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct RowContent {
+
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: LayoutContext) {}
 
   let height: Float
   let color: Color
 
   var focusRule: FocusRule { .standard }
 
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
     Size(width: proposal.width, height: height)
   }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: LayoutContext) {
     drawList.fillRect(rect, color: color)
   }
 }
@@ -87,19 +114,22 @@ struct ScrollViewTests {
     controller: ScrollViewController? = nil,
     sticksToBottom: Bool = false
   ) -> DrawList {
-    let context = BlockContext(interaction: interaction)
-    interaction.beginFrame(input: input)
+    let context = LayoutContext(interaction: interaction)
+    beginTestFrame(interaction, input: input)
     var list = DrawList()
     let view = ScrollView(
       showsIndicator: true, sticksToBottom: sticksToBottom,
-      controller: controller
-    ) {
-      FixedContent(size: Size(width: 100, height: 100))
-    }.id(scrollID)
+      controller: controller,
+      build: { buffer, context in
+        let child = FixedContent(size: Size(width: 100, height: 100)).build(
+          into: &buffer, context: context.childScope(0))
+        return buffer.stack([child], axis: .vertical, context: context)
+      })
     do {
-      let resolved = BlockEngine.prepare(view, context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
     return list
@@ -122,16 +152,21 @@ struct ScrollViewTests {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) -> DrawList {
-      let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      let context = LayoutContext(interaction: interaction)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
-      let view = ScrollView(showsIndicator: true) {
-        FixedContent(size: Size(width: 200, height: 20))
-      }.id(scrollID)
+      let view = ScrollView(
+        showsIndicator: true,
+        build: { buffer, context in
+          let child = FixedContent(size: Size(width: 200, height: 20)).build(
+            into: &buffer, context: context.childScope(0))
+          return buffer.stack([child], axis: .vertical, context: context)
+        })
       do {
-        let resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
       return list
@@ -159,20 +194,30 @@ struct ScrollViewTests {
     let secondViewport = Rect(x: 0, y: 30, width: 100, height: 20)
 
     func frame(_ input: InputState = InputState()) {
-      let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      let context = LayoutContext(interaction: interaction)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView { FixedContent(size: Size(width: 100, height: 100)) }.id(firstID), context: context)
-        resolved.register(in: firstViewport)
-        resolved.paint(into: &list, in: firstViewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(build: { buffer, context in
+            let child = FixedContent(size: Size(width: 100, height: 100)).build(
+              into: &buffer, context: context.childScope(0))
+            return buffer.stack([child], axis: .vertical, context: context)
+          }), context: context.keyed(firstID))
+        resolvedBuffer.register(resolved, in: firstViewport)
+        resolvedBuffer.paint(resolved, into: &list, in: firstViewport)
       }
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView { FixedContent(size: Size(width: 100, height: 100)) }.id(secondID), context: context)
-        resolved.register(in: secondViewport)
-        resolved.paint(into: &list, in: secondViewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(build: { buffer, context in
+            let child = FixedContent(size: Size(width: 100, height: 100)).build(
+              into: &buffer, context: context.childScope(0))
+            return buffer.stack([child], axis: .vertical, context: context)
+          }), context: context.keyed(secondID))
+        resolvedBuffer.register(resolved, in: secondViewport)
+        resolvedBuffer.paint(resolved, into: &list, in: secondViewport)
       }
       interaction.endFrame()
     }
@@ -189,23 +234,32 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationRevealsFocusedScrollContent() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView(showsIndicator: false) {
-            for _ in 0..<4 {
-              Interactive(action: {}) { _ in
-                RowContent(height: 10, color: .white)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(
+            showsIndicator: false,
+            build: { buffer, context in
+              var nodes: [LayoutNode] = []
+              for rowOffset in 0..<4 {
+                nodes.append(
+                  buffer.sizing(
+                    buffer.interactive(
+                      action: {},
+                      content: { buffer, context, _ in
+                        return RowContent(height: 10, color: .white).build(into: &buffer, context: context)
+                      }, context: context.childScope(rowOffset)), y: .fixed(10), context: context.childScope(rowOffset))
+                )
               }
-              .sizing(y: .fixed(10))
-            }
-          }.id(scrollID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+              return buffer.stack(nodes, axis: .vertical, context: context)
+            }), context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -221,21 +275,26 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationReachesSpacedVirtualizedRows() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView(data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller) { index in
-            Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
-              RowContent(height: 10, color: .white)
-            }
-          }.id(scrollID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(
+            data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller,
+            build: { buffer, context, index in
+              return buffer.interactive(
+                id: WidgetID("row-\(index)"), action: {},
+                content: { buffer, context, _ in
+                  return RowContent(height: 10, color: .white).build(into: &buffer, context: context)
+                }, context: context)
+            }), context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -252,24 +311,29 @@ struct ScrollViewTests {
 
   @Test func keyboardFocusedRowsShowHoverPhase() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let controller = ScrollViewController()
     let listRect = Rect(x: 0, y: 0, width: 100, height: 40)
     let log = PhaseLog()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView(data: 0..<4, rowHeight: 10, showsIndicator: false, controller: controller) { index in
-            Interactive(id: WidgetID("row-\(index)"), action: {}) { phase in
-              log.phases[index] = phase
-              return RowContent(height: 10, color: .white)
-            }
-          }.id(scrollID), context: context)
-        resolved.register(in: listRect)
-        resolved.paint(into: &list, in: listRect)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(
+            data: 0..<4, rowHeight: 10, showsIndicator: false, controller: controller,
+            build: { buffer, context, index in
+              return buffer.interactive(
+                id: WidgetID("row-\(index)"), action: {},
+                content: { buffer, context, phase in
+                  log.phases[index] = phase
+                  return RowContent(height: 10, color: .white).build(into: &buffer, context: context)
+                }, context: context)
+            }), context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: listRect)
+        resolvedBuffer.paint(resolved, into: &list, in: listRect)
       }
       interaction.endFrame()
     }
@@ -289,11 +353,16 @@ struct ScrollViewTests {
   }
 
   @Test func variableRowsUseCachedPositionsAtDistantOffsets() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let controller = ScrollViewController()
     let counter = DrawCounter()
     let rows = (0..<1_000).map { index in
-      ScrollView.Row(id: index, content: CountedRow(index: index, height: Float(index % 3 + 1), counter: counter))
+      ScrollView.Row(
+        id: index,
+        build: { buffer, context in
+          CountedRow(index: index, height: Float(index % 3 + 1), counter: counter).build(
+            into: &buffer, context: context)
+        })
     }
     let positions = Interaction.VariableScrollRows(
       keys: [], heights: rows.indices.map { Float($0 % 3 + 1) }, spacing: 2)
@@ -302,12 +371,13 @@ struct ScrollViewTests {
     let view = ScrollView(spacing: 2, showsIndicator: false, controller: controller, rows: rows)
 
     func frame() {
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       context.interaction.endFrame()
     }
@@ -325,26 +395,31 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationReachesVariableHeightRowsInBothDirections() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let controller = ScrollViewController()
     let heights: [Float] = [8, 18, 6, 15, 9]
     let rows = heights.enumerated().map { index, height in
       ScrollView.Row(
         id: index,
-        content: Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
-          RowContent(height: height, color: .white)
+        build: { buffer, context in
+          buffer.interactive(
+            id: WidgetID("row-\(index)"), action: {},
+            content: { buffer, context, _ in
+              return RowContent(height: height, color: .white).build(into: &buffer, context: context)
+            }, context: context)
         })
     }
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView(spacing: 7, showsIndicator: false, controller: controller, rows: rows).id(scrollID),
-          context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(spacing: 7, showsIndicator: false, controller: controller, rows: rows),
+          context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -362,19 +437,24 @@ struct ScrollViewTests {
   }
 
   @Test func keyboardNavigationHandlesMultipleVirtualizedMovementsInOneFrame() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
     let view = ScrollView(
-      data: 0..<10, rowHeight: 10, spacing: 5, showsIndicator: false, controller: controller
-    ) { index in
-      Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
-        RowContent(height: 10, color: .white)
-      }
-    }.id(scrollID)
+      data: 0..<10, rowHeight: 10, spacing: 5, showsIndicator: false, controller: controller,
+      build: { buffer, context, index in
+        return buffer.interactive(
+          id: WidgetID("row-\(index)"), action: {},
+          content: { buffer, context, _ in
+            return RowContent(height: 10, color: .white).build(into: &buffer, context: context)
+          }, context: context)
+      })
 
+    runtime.build = { buffer, context in buffer.scrollView(view, context: context.keyed(scrollID)) }
     func frame(_ input: InputState = InputState()) {
-      _ = producer.render(content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+      _ = runtime.render(
+        viewport: viewport.size, input: input,
+        onChange: {})
     }
 
     frame()
@@ -387,28 +467,41 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationRevealsNestedScrollContent() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let outerID = WidgetID("outer-scroll")
     let innerID = WidgetID("inner-scroll")
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView(showsIndicator: false) {
-            ScrollView(showsIndicator: false) {
-              for index in 0..<4 {
-                Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
-                  RowContent(height: 10, color: .white)
-                }
-                .sizing(y: .fixed(10))
-              }
-            }.id(innerID)
-              .sizing(y: .fixed(20))
-          }.id(outerID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(
+            showsIndicator: false,
+            build: { buffer, context in
+              let child = buffer.sizing(
+                buffer.scrollView(
+                  ScrollView(
+                    showsIndicator: false,
+                    build: { buffer, context in
+                      var nodes: [LayoutNode] = []
+                      for (rowOffset, index) in (0..<4).enumerated() {
+                        nodes.append(
+                          buffer.sizing(
+                            buffer.interactive(
+                              id: WidgetID("row-\(index)"), action: {},
+                              content: { buffer, context, _ in
+                                return RowContent(height: 10, color: .white).build(into: &buffer, context: context)
+                              }, context: context.childScope(rowOffset)), y: .fixed(10),
+                            context: context.childScope(rowOffset)))
+                      }
+                      return buffer.stack(nodes, axis: .vertical, context: context)
+                    }), context: context.childScope(0).keyed(innerID)), y: .fixed(20), context: context.childScope(0))
+              return buffer.stack([child], axis: .vertical, context: context)
+            }), context: context.keyed(outerID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -424,21 +517,26 @@ struct ScrollViewTests {
 
   @Test func keyboardNavigationRevealsVirtualizedRows() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView(data: 0..<10, rowHeight: 10, showsIndicator: false, controller: controller) { _ in
-            Interactive(action: {}) { _ in
-              RowContent(height: 10, color: .white)
-            }
-          }.id(scrollID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(
+            data: 0..<10, rowHeight: 10, showsIndicator: false, controller: controller,
+            build: { buffer, context, _ in
+              return buffer.interactive(
+                action: {},
+                content: { buffer, context, _ in
+                  return RowContent(height: 10, color: .white).build(into: &buffer, context: context)
+                }, context: context)
+            }), context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -464,16 +562,21 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame() {
-      let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: InputState())
+      let context = LayoutContext(interaction: interaction)
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
-      let view = ScrollView(controller: controller) {
-        FixedContent(size: Size(width: 200, height: 20))
-      }.id(scrollID)
+      let view = ScrollView(
+        controller: controller,
+        build: { buffer, context in
+          let child = FixedContent(size: Size(width: 200, height: 20)).build(
+            into: &buffer, context: context.childScope(0))
+          return buffer.stack([child], axis: .vertical, context: context)
+        })
       do {
-        let resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -489,16 +592,21 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      let context = LayoutContext(interaction: interaction)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
-      let view = ScrollView(controller: controller) {
-        FixedContent(size: Size(width: 100, height: 100))
-      }.id(scrollID)
+      let view = ScrollView(
+        controller: controller,
+        build: { buffer, context in
+          let child = FixedContent(size: Size(width: 100, height: 100)).build(
+            into: &buffer, context: context.childScope(0))
+          return buffer.stack([child], axis: .vertical, context: context)
+        })
       do {
-        let resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -513,26 +621,34 @@ struct ScrollViewTests {
   }
 
   @Test(arguments: [(false, false), (false, true), (true, false)], ["first", "normal", "reset"])
-  func frameProducerWheelCancelsPendingRevealRequest(configuration: (Bool, Bool), frameState: String) {
+  func runtimeWheelCancelsPendingRevealRequest(configuration: (Bool, Bool), frameState: String) {
     let (lazy, horizontal) = configuration
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
-    let view: any Block =
+    let view: ScrollView =
       lazy
-      ? ScrollView(data: 0..<100, rowHeight: 10, controller: controller) { _ in
-        Text("Row")
-      }.id(scrollID)
-      : ScrollView(controller: controller) {
-        FixedContent(size: Size(width: 1000, height: 1000))
-      }.id(scrollID)
+      ? ScrollView(
+        data: 0..<100, rowHeight: 10, controller: controller,
+        build: { buffer, context, _ in
+          return buffer.text(Text("Row"), context: context)
+        })
+      : ScrollView(
+        controller: controller,
+        build: { buffer, context in
+          let child = FixedContent(size: Size(width: 1000, height: 1000)).build(
+            into: &buffer, context: context.childScope(0))
+          return buffer.stack([child], axis: .vertical, context: context)
+        })
+    runtime.build = { buffer, context in buffer.scrollView(view, context: context.keyed(scrollID)) }
     func frame(_ input: InputState = InputState()) {
-      _ = producer.render(
-        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+      _ = runtime.render(
+        viewport: viewport.size, input: input,
+        onChange: {})
     }
 
     if frameState != "first" { frame() }
-    if frameState == "reset" { producer.reset() }
+    if frameState == "reset" { runtime.reset() }
     controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
     frame(
       InputState(
@@ -548,25 +664,33 @@ struct ScrollViewTests {
   }
 
   @Test(arguments: [false, true], ["first", "normal", "reset"])
-  func frameProducerAppliesExplicitScrollRequestAfterWheel(lazy: Bool, frameState: String) {
-    let context = BlockContext()
-    let producer = FrameProducer()
+  func runtimeAppliesExplicitScrollRequestAfterWheel(lazy: Bool, frameState: String) {
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
-    let view: any Block =
+    let view: ScrollView =
       lazy
-      ? ScrollView(data: 0..<100, rowHeight: 10, controller: controller) { _ in
-        Text("Row")
-      }.id(scrollID)
-      : ScrollView(controller: controller) {
-        FixedContent(size: Size(width: 100, height: 1000))
-      }.id(scrollID)
+      ? ScrollView(
+        data: 0..<100, rowHeight: 10, controller: controller,
+        build: { buffer, context, _ in
+          return buffer.text(Text("Row"), context: context)
+        })
+      : ScrollView(
+        controller: controller,
+        build: { buffer, context in
+          let child = FixedContent(size: Size(width: 100, height: 1000)).build(
+            into: &buffer, context: context.childScope(0))
+          return buffer.stack([child], axis: .vertical, context: context)
+        })
+    runtime.build = { buffer, context in buffer.scrollView(view, context: context.keyed(scrollID)) }
     func frame(_ input: InputState = InputState()) {
-      _ = producer.render(
-        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+      _ = runtime.render(
+        viewport: viewport.size, input: input,
+        onChange: {})
     }
 
     if frameState != "first" { frame() }
-    if frameState == "reset" { producer.reset() }
+    if frameState == "reset" { runtime.reset() }
     controller.scroll(to: 50)
     frame(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -12)))
     #expect(context.interaction.scrollState(for: scrollID).offset.y == 50)
@@ -575,19 +699,22 @@ struct ScrollViewTests {
 
   @Test(arguments: [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)])
   func lazyRevealSurvivesUnrelatedWheelInput(delta: Point) {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    let context = runtime.context
     let controller = ScrollViewController()
-    let view = ScrollView(data: 0..<100, rowHeight: 10, controller: controller) { _ in
-      Text("Row")
-    }.id(scrollID)
+    let view = ScrollView(
+      data: 0..<100, rowHeight: 10, controller: controller,
+      build: { buffer, context, _ in
+        return buffer.text(Text("Row"), context: context)
+      })
     controller.scrollToVisible(Rect(x: 0, y: 500, width: 10, height: 10))
-    _ = producer.render(
-      content: view, viewport: viewport.size,
+    runtime.build = { buffer, context in buffer.scrollView(view, context: context.keyed(scrollID)) }
+    _ = runtime.render(
+      viewport: viewport.size,
       input: InputState(
         pointerPosition: delta.y != 0 ? Point(x: 200, y: 200) : Point(x: 10, y: 10),
         scrollDelta: delta),
-      context: context, onChange: {})
+      onChange: {})
     #expect(context.interaction.scrollState(for: scrollID).offset.y == 490)
     #expect(controller.request == nil)
   }
@@ -598,24 +725,33 @@ struct ScrollViewTests {
   func clippedRevealRespectsWheelHitTesting(lazy: Bool, frameState: String) {
     for pointer in [Point(x: 10, y: 10), Point(x: 10, y: 50), Point(x: 50, y: 10)] {
       for delta in [Point.zero, Point(x: 0, y: -12), Point(x: -12, y: 0)] {
-        let context = BlockContext()
-        let producer = FrameProducer()
+        let runtime = WindowRuntime()
+        let context = runtime.context
         let controller = ScrollViewController()
-        let scroll: any Block =
+        let scroll: ScrollView =
           lazy
-          ? ScrollView(data: 0..<100, rowHeight: 10, controller: controller) { _ in
-            Text("Row")
-          }.id(scrollID)
-          : ScrollView(controller: controller) {
-            FixedContent(size: Size(width: 1000, height: 1000))
-          }.id(scrollID)
+          ? ScrollView(
+            data: 0..<100, rowHeight: 10, controller: controller,
+            build: { buffer, context, _ in
+              return buffer.text(Text("Row"), context: context)
+            })
+          : ScrollView(
+            controller: controller,
+            build: { buffer, context in
+              let child = FixedContent(size: Size(width: 1000, height: 1000)).build(
+                into: &buffer, context: context.childScope(0))
+              return buffer.stack([child], axis: .vertical, context: context)
+            })
+        runtime.build = { buffer, context in
+          ClippedScrollContent(content: scroll).build(into: &buffer, context: context.keyed(scrollID))
+        }
         func frame(_ input: InputState = InputState()) {
-          _ = producer.render(
-            content: ClippedScrollContent(content: scroll), viewport: Size(width: 100, height: 100),
-            input: input, context: context, onChange: {})
+          _ = runtime.render(
+            viewport: Size(width: 100, height: 100),
+            input: input, onChange: {})
         }
         if frameState != "first" { frame() }
-        if frameState == "reset" { producer.reset() }
+        if frameState == "reset" { runtime.reset() }
         controller.scrollToVisible(Rect(x: 500, y: 500, width: 10, height: 10))
         frame(InputState(pointerPosition: pointer, scrollDelta: delta))
         let receivesWheel = pointer == Point(x: 10, y: 10) && (delta.y != 0 || (!lazy && delta.x != 0))
@@ -636,16 +772,21 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      let context = LayoutContext(interaction: interaction)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
-      let view = ScrollView(controller: controller) {
-        FixedContent(size: Size(width: 200, height: 20))
-      }.id(scrollID)
+      let view = ScrollView(
+        controller: controller,
+        build: { buffer, context in
+          let child = FixedContent(size: Size(width: 200, height: 20)).build(
+            into: &buffer, context: context.childScope(0))
+          return buffer.stack([child], axis: .vertical, context: context)
+        })
       do {
-        let resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -682,23 +823,29 @@ struct ScrollViewTests {
 
   @Test func loopRowsStackAndCreateScrollableContent() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
-    interaction.beginFrame(input: InputState())
+    let context = LayoutContext(interaction: interaction)
+    beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     let colors = [
       Color(r: 1, g: 0, b: 0, a: 1),
       Color(r: 0, g: 1, b: 0, a: 1),
       Color(r: 0, g: 0, b: 1, a: 1),
     ]
-    let view = ScrollView(showsIndicator: true) {
-      for color in colors {
-        RowContent(height: 10, color: color)
-      }
-    }.id(scrollID)
+    let view = ScrollView(
+      showsIndicator: true,
+      build: { buffer, context in
+        var nodes: [LayoutNode] = []
+        for (rowOffset, color) in (colors).enumerated() {
+          nodes.append(
+            RowContent(height: 10, color: color).build(into: &buffer, context: context.childScope(rowOffset)))
+        }
+        return buffer.stack(nodes, axis: .vertical, context: context)
+      })
     do {
-      let resolved = BlockEngine.prepare(view, context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
 
@@ -717,18 +864,21 @@ struct ScrollViewTests {
     let rows = (0..<10_000).map { index in
       ScrollView.Row(
         id: WidgetID("row-\(index)"),
-        content: CountedRow(index: index, height: 10, counter: counter))
+        build: { buffer, context in
+          CountedRow(index: index, height: 10, counter: counter).build(into: &buffer, context: context)
+        })
     }
 
     func frame() {
-      let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: InputState())
+      let context = LayoutContext(interaction: interaction)
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
-      let view = ScrollView(controller: controller, rows: rows).id(scrollID)
+      let view = ScrollView(controller: controller, rows: rows)
       do {
-        let resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(view, context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -769,17 +919,21 @@ struct ScrollViewTests {
     func frame(_ data: ArraySlice<Int>, width: Float = 100, spacing: Float = 0) {
       built = []
       counter.drawn = []
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       let stack = ScrollView(
         data: data, rowHeight: 10, spacing: spacing,
-        controller: controller
-      ) { index in row(index) }.id(scrollID)
+        controller: controller,
+        build: { buffer, context, index in
+          return row(index).build(into: &buffer, context: context)
+        })
       #expect(built.isEmpty)
       do {
-        let resolved = BlockEngine.prepare(stack, context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: width, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: width, height: 20))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          stack, context: LayoutContext(interaction: interaction).keyed(scrollID))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: width, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: width, height: 20))
       }
       interaction.endFrame()
       #expect(counter.measured.isEmpty)
@@ -818,18 +972,22 @@ struct ScrollViewTests {
     let retainedRows = (0..<5).map { index in
       ScrollView.Row(
         id: WidgetID("row-\(index)"),
-        content: CountedRow(index: index, height: 10, counter: counter))
+        build: { buffer, context in
+          CountedRow(index: index, height: 10, counter: counter).build(into: &buffer, context: context)
+        })
     }
 
     func frame(_ indices: [Int], width: Float = 100) {
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       let rows = indices.map { retainedRows[$0] }
       do {
-        let resolved = BlockEngine.prepare(
-          ScrollView(controller: controller, rows: rows).id(scrollID), context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: width, height: 100))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: width, height: 100))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(controller: controller, rows: rows),
+          context: LayoutContext(interaction: interaction).keyed(scrollID))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: width, height: 100))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: width, height: 100))
       }
       interaction.endFrame()
     }
@@ -854,23 +1012,31 @@ struct ScrollViewTests {
   }
 
   @Test func lazyStackCachePreservesDistinctKeyTypesAcrossReordering() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let controller = ScrollViewController()
     let counter = DrawCounter()
     let first = ScrollView.Row(
-      id: Int(1), content: CountedRow(index: 0, height: 10, counter: counter))
+      id: Int(1),
+      build: { buffer, context in
+        CountedRow(index: 0, height: 10, counter: counter).build(into: &buffer, context: context)
+      })
     let second = ScrollView.Row(
-      id: Int64(1), content: CountedRow(index: 1, height: 20, counter: counter))
+      id: Int64(1),
+      build: { buffer, context in
+        CountedRow(index: 1, height: 20, counter: counter).build(into: &buffer, context: context)
+      })
 
     func frame(_ rows: [ScrollView.Row]) {
       counter.measured = []
       counter.drawn = []
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(ScrollView(controller: controller, rows: rows), context: context)
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 100))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(controller: controller, rows: rows), context: context.keyed(scrollID))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 100))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
       }
       context.interaction.endFrame()
     }
@@ -886,7 +1052,9 @@ struct ScrollViewTests {
     #expect(controller.lazyStackCache.rowSizes.map(\.height) == [20, 10])
 
     var replacement = first
-    replacement.content = CountedRow(index: 2, height: 30, counter: counter)
+    replacement.build = { buffer, context in
+      CountedRow(index: 2, height: 30, counter: counter).build(into: &buffer, context: context)
+    }
     frame([second, replacement])
     #expect(counter.measured == [2])
     #expect(controller.lazyStackCache.measurements[0] === measurements[1])
@@ -897,7 +1065,7 @@ struct ScrollViewTests {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       interaction.pushClip(Rect(x: 0, y: 0, width: 50, height: 50))
       interaction.registerScrollInput(
         id: scrollID, rect: Rect(x: 0, y: 0, width: 100, height: 100), horizontal: true)
@@ -919,7 +1087,7 @@ struct ScrollViewTests {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       interaction.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 100))
       _ = interaction.interactiveBehavior(
         id: WidgetID("visible"), rect: Rect(x: 0, y: 0, width: 100, height: 10))

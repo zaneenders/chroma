@@ -2,8 +2,6 @@
 package protocol Host: AnyObject {
   var name: String { get }
 
-  var content: (any Block)? { get set }
-
   var frameObserver: FrameObserver? { get set }
 
   var onClose: (() -> Void)? { get set }

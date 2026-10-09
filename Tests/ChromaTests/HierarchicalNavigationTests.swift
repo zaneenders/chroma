@@ -5,12 +5,22 @@ import Testing
 @MainActor
 struct HierarchicalNavigationTests {
   @MainActor private final class Harness {
-    let context = BlockContext()
-    let producer = FrameProducer()
-    func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = []) {
-      _ = producer.render(
-        content: content, viewport: Size(width: 800, height: 600),
-        input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
+    let runtime = WindowRuntime()
+    var context: LayoutContext { runtime.context }
+    private var currentContent: LayoutBuilder = { buffer, context in
+      return buffer.empty(context: context)
+    }
+
+    init() {
+      runtime.build = { [unowned self] buffer, context in
+        currentContent(&buffer, context)
+      }
+    }
+    func render(_ content: @escaping LayoutBuilder, _ commands: [Command] = [], text: [TextEditEvent] = []) {
+      currentContent = content
+      _ = runtime.render(
+        viewport: Size(width: 800, height: 600),
+        input: InputState(commands: commands, textEvents: text), onChange: {})
     }
   }
 
@@ -18,24 +28,37 @@ struct HierarchicalNavigationTests {
     let h = Harness()
     let input = FocusTarget()
     let session = FocusTarget()
-    let content = HStack(spacing: 20) {
-      Group("Sessions") {
-        VStack {
-          Button("Session") {}.focusTarget(session)
-          Button("Another") {}
+    let content: LayoutBuilder = { buffer, context in
+      let node182 = buffer.group("Sessions", context: context.childScope(0)) { buffer, context in
+        let node179 = buffer.focus(
+          session, context: context.childScope(0).childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("Session") {}, context: context)
+          })
+        let node180 = buffer.button(Button("Another") {}, context: context.childScope(0).childScope(1))
+        return buffer.stack([node179, node180], axis: .vertical, context: context.childScope(0))
+      }
+      let node183 = buffer.sizing(node182, x: .fixed(200), y: .grow, context: context.childScope(0))
+      let node193 = buffer.group("Conversation", context: context.childScope(1)) { buffer, context in
+        let node185 = buffer.group("History", context: context.childScope(0).childScope(0)) { buffer, context in
+          return buffer.button(Button("Message") {}, context: context.childScope(0))
         }
-      }.sizing(x: .fixed(200), y: .grow)
-      Group("Conversation") {
-        VStack {
-          Group("History") { Button("Message") {} }.sizing(x: .grow, y: .grow)
-          Group("Composer") {
-            HStack {
-              TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(input)
-              Button("Send") {}
-            }
-          }
+        let node186 = buffer.sizing(node185, x: .grow, y: .grow, context: context.childScope(0).childScope(0))
+        let node191 = buffer.group("Composer", context: context.childScope(0).childScope(1)) { buffer, context in
+          let node188 = buffer.focus(
+            input, context: context.childScope(0).childScope(0),
+            content: { buffer, context in
+              let node187 = buffer.textEditor(
+                TextEditor(singleLine: true, text: { "" }, onChange: { _ in }), context: context)
+              return node187
+            })
+          let node189 = buffer.button(Button("Send") {}, context: context.childScope(0).childScope(1))
+          return buffer.stack([node188, node189], axis: .horizontal, context: context.childScope(0))
         }
-      }.sizing(x: .grow, y: .grow)
+        return buffer.stack([node186, node191], axis: .vertical, context: context.childScope(0))
+      }
+      let node194 = buffer.sizing(node193, x: .grow, y: .grow, context: context.childScope(1))
+      return buffer.stack([node183, node194], axis: .horizontal, spacing: 20, context: context)
     }
     h.render(content)
     input.focus()
@@ -59,11 +82,21 @@ struct HierarchicalNavigationTests {
     let h = Harness()
     let first = FocusTarget()
     let second = FocusTarget()
-    let content = Group {
-      VStack {
-        Button("First") {}.focusTarget(first)
-        Button("Second") {}.focusTarget(second)
+    let content: LayoutBuilder = { buffer, context in
+      let node201 = buffer.group(context: context) { buffer, context in
+        let node197 = buffer.focus(
+          first, context: context.childScope(0).childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("First") {}, context: context)
+          })
+        let node199 = buffer.focus(
+          second, context: context.childScope(0).childScope(1),
+          content: { buffer, context in
+            return buffer.button(Button("Second") {}, context: context)
+          })
+        return buffer.stack([node197, node199], axis: .vertical, context: context.childScope(0))
       }
+      return node201
     }
     h.render(content)
     first.focus()
@@ -81,11 +114,23 @@ struct HierarchicalNavigationTests {
     let button = FocusTarget()
     var text = ""
     var activations = 0
-    let content = Group {
-      HStack {
-        TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(input)
-        Button("Send") { activations += 1 }.focusTarget(button)
+    let content: LayoutBuilder = { buffer, context in
+      let node207 = buffer.group(context: context) { buffer, context in
+        let node203 = buffer.focus(
+          input, context: context.childScope(0).childScope(0),
+          content: { buffer, context in
+            let node202 = buffer.textEditor(
+              TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }), context: context)
+            return node202
+          })
+        let node205 = buffer.focus(
+          button, context: context.childScope(0).childScope(1),
+          content: { buffer, context in
+            return buffer.button(Button("Send") { activations += 1 }, context: context)
+          })
+        return buffer.stack([node203, node205], axis: .horizontal, context: context.childScope(0))
       }
+      return node207
     }
     h.render(content)
     input.focus()
@@ -108,12 +153,26 @@ struct HierarchicalNavigationTests {
     let editor = FocusTarget()
     let sessions = FocusTarget()
     var text = "hello"
-    let content = HStack {
-      Group("Sessions") { Button("Session") {}.focusTarget(sessions) }
-        .sizing(x: .fixed(200), y: .grow)
-      Group("Conversation") {
-        TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(editor)
-      }.sizing(x: .grow, y: .grow)
+    let content: LayoutBuilder = { buffer, context in
+      let node210 = buffer.group("Sessions", context: context.childScope(0)) { buffer, context in
+        let node209 = buffer.focus(
+          sessions, context: context.childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("Session") {}, context: context)
+          })
+        return node209
+      }
+      let node211 = buffer.sizing(node210, x: .fixed(200), y: .grow, context: context.childScope(0))
+      let node214 = buffer.group("Conversation", context: context.childScope(1)) { buffer, context in
+        let node213 = buffer.focus(
+          editor, context: context.childScope(0),
+          content: { buffer, context in
+            return buffer.textEditor(TextEditor(text: { text }, onChange: { text = $0 }), context: context)
+          })
+        return node213
+      }
+      let node215 = buffer.sizing(node214, x: .grow, y: .grow, context: context.childScope(1))
+      return buffer.stack([node211, node215], axis: .horizontal, context: context)
     }
     h.render(content)
     editor.focus(editing: true)
@@ -130,7 +189,14 @@ struct HierarchicalNavigationTests {
     let h = Harness()
     let editor = FocusTarget()
     var text = "hello"
-    let content = TextEditor(text: { text }, onChange: { text = $0 }).focusTarget(editor)
+    let content: LayoutBuilder = { buffer, context in
+      let node218 = buffer.focus(
+        editor, context: context,
+        content: { buffer, context in
+          return buffer.textEditor(TextEditor(text: { text }, onChange: { text = $0 }), context: context)
+        })
+      return node218
+    }
     h.render(content)
     editor.focus(editing: true)
     h.render(content)
@@ -145,12 +211,22 @@ struct HierarchicalNavigationTests {
   @Test func selectingOffscreenMessageGroupRevealsItWithoutEntering() {
     let h = Harness()
     let controller = ScrollViewController()
-    let content = ScrollView("History", controller: controller) {
-      ForEach(0..<12, id: \.self) { index in
-        Group("Message \(index)") {
-          Button("Read") {}
-        }.sizing(x: .grow, y: .fixed(100))
-      }
+    let content: LayoutBuilder = { buffer, context in
+      let node224 = buffer.scrollView(
+        ScrollView(
+          "History", controller: controller,
+          build: { buffer, context in
+            var children222: [LayoutNode] = []
+            for index in 0..<12 {
+              let node220 = buffer.group("Message \(index)", context: context.keyed(index)) { buffer, context in
+                return buffer.button(Button("Read") {}, context: context.childScope(0))
+              }
+              let node221 = buffer.sizing(node220, x: .grow, y: .fixed(100), context: context.keyed(index))
+              children222.append(node221)
+            }
+            return buffer.stack(children222, axis: .vertical, spacing: 0, context: context)
+          }), context: context)
+      return node224
     }
     h.render(content)
     h.render(content, [.navigation(.down)])
@@ -173,14 +249,21 @@ extension HierarchicalNavigationTests {
   @Test func removingSelectedGroupDoesNotEnterItsReplacement() {
     let h = Harness()
     var ids = [0, 1, 2]
-    let content = DeferredBlock {
-      Group("Sections") {
-        VStack {
-          ForEach(ids, id: \.self) { id in
-            Group("Section \(id)") { Button("Use") {} }
+    let content: LayoutBuilder = { buffer, context in
+      let node230 = buffer.group("Sections", context: context) { buffer, context in
+        var children227: [LayoutNode] = []
+        for id in ids {
+          let node226 = buffer.group("Section \(id)", context: context.childScope(0).childScope(0).keyed(id)) {
+            buffer, context in
+            return buffer.button(Button("Use") {}, context: context.childScope(0))
           }
+          children227.append(node226)
         }
+        let node228 = buffer.stack(
+          children227, axis: .vertical, spacing: 0, context: context.childScope(0).childScope(0))
+        return buffer.stack([node228], axis: .vertical, context: context.childScope(0))
       }
+      return node230
     }
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn), .navigation(.down)])
@@ -195,21 +278,31 @@ extension HierarchicalNavigationTests {
     let h = Harness()
     let first = FocusTarget()
     let second = FocusTarget()
-    let content = Group("Controls") {
-      HStack {
-        Button("First") {}.focusTarget(first)
-        Button("Second") {}.focusTarget(second)
+    let content: LayoutBuilder = { buffer, context in
+      let node236 = buffer.group("Controls", context: context) { buffer, context in
+        let node232 = buffer.focus(
+          first, context: context.childScope(0).childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("First") {}, context: context)
+          })
+        let node234 = buffer.focus(
+          second, context: context.childScope(0).childScope(1),
+          content: { buffer, context in
+            return buffer.button(Button("Second") {}, context: context)
+          })
+        return buffer.stack([node232, node234], axis: .horizontal, context: context.childScope(0))
       }
+      return node236
     }
     h.render(content)
     first.focus()
     h.render(content)
     let tree = h.context.interaction.tree!
     let rect = tree.node(at: tree.findLeaf(second.boundID!)!)!.rect
-    _ = h.producer.render(
-      content: content, viewport: Size(width: 800, height: 600),
+    _ = h.runtime.render(
+      viewport: Size(width: 800, height: 600),
       input: InputState(pointerPosition: Point(x: rect.minX + 2, y: rect.minY + 2)),
-      context: h.context, onChange: {})
+      onChange: {})
     #expect(first.isFocused)
     h.render(content, [.navigation(.stepOut), .navigation(.stepIn)])
     #expect(first.isFocused)
@@ -218,15 +311,22 @@ extension HierarchicalNavigationTests {
   @Test func rootCommandsRemainAvailableBeforeASectionIsSelected() {
     let h = Harness()
     var calls = 0
-    let content = TupleBlock(children: [
-      HStack {
-        Group("Left") { Button("One") {} }
-        Group("Right") { Button("Two") {} }
-      }.onCommand(.application("capture")) {
-        calls += 1
-        return .handled
+    let content: LayoutBuilder = { buffer, context in
+      let node238 = buffer.group("Left", context: context.childScope(0).childScope(0)) { buffer, context in
+        return buffer.button(Button("One") {}, context: context.childScope(0))
       }
-    ])
+      let node240 = buffer.group("Right", context: context.childScope(0).childScope(1)) { buffer, context in
+        return buffer.button(Button("Two") {}, context: context.childScope(0))
+      }
+      let node241 = buffer.stack([node238, node240], axis: .horizontal, context: context.childScope(0))
+      let node242 = buffer.onCommand(
+        node241, .application("capture"), context: context.childScope(0),
+        action: {
+          calls += 1
+          return .handled
+        })
+      return buffer.overlay([node242], group: false, context: context)
+    }
     h.render(content)
     h.render(content, [.application("capture")])
     #expect(calls == 1)

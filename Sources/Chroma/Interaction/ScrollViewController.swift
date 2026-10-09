@@ -30,15 +30,28 @@ public final class ScrollViewController {
 
   var request: ScrollRequest?
   @ObservationIgnored var lazyStackCache = LazyStackCache()
+  @ObservationIgnored var measurementBuffer = LayoutBuffer()
   @ObservationIgnored var uniformRowIdentity: UniformRowIdentity?
+  @ObservationIgnored private var uniformIdentityRevision: UInt64?
 
-  func rowIdentity<Data: RandomAccessCollection>(for data: Data) -> TypedUniformRowIdentity<Data.Element.ID>
+  func rowIdentity<Data: RandomAccessCollection>(
+    for data: Data, identityRevision: UInt64? = nil
+  ) -> TypedUniformRowIdentity<Data.Element.ID>
   where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    if let cached = uniformRowIdentity as? TypedUniformRowIdentity<Data.Element.ID>, cached.matches(data) {
-      return cached
+    if let cached = uniformRowIdentity as? TypedUniformRowIdentity<Data.Element.ID> {
+      // A supplied revision is the caller's promise that ID values and order are unchanged.
+      // Row values and callbacks are never retained here.
+      if let identityRevision, uniformIdentityRevision == identityRevision, cached.keys.count == data.count {
+        return cached
+      }
+      if cached.matches(data) {
+        uniformIdentityRevision = identityRevision
+        return cached
+      }
     }
     let identity = TypedUniformRowIdentity(data: data)
     uniformRowIdentity = identity
+    uniformIdentityRevision = identityRevision
     return identity
   }
 

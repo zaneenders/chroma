@@ -8,10 +8,11 @@ struct PlainTextFastPathTests {
 
   @Test(arguments: ["", "label", "first\nsecond\n", "a\r\nb", "é 👩🏽‍💻\n世界"])
   func plainTextPreservesCommandsAndMeasurement(content: String) {
-    let context = BlockContext(textScale: 1.5)
+    let context = LayoutContext(textScale: 1.5)
     let text = Text(content).fontScale(2).foregroundColor(.black)
-    let resolved = text.prepareLayout(context: context)
-    #expect(resolved.sizeThatFits(rect.size) == context.fontMetrics.measure(content, scale: 3))
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.text(text, context: context)
+    #expect(resolvedBuffer.sizeThatFits(resolved, rect.size) == context.fontMetrics.measure(content, scale: 3))
     var expected = DrawList()
     for (row, line) in TextLayout(content).lines.enumerated() {
       expected.text(
@@ -20,12 +21,22 @@ struct PlainTextFastPathTests {
         color: .black, scale: 3)
     }
     var prepared = DrawList()
-    resolved.paint(into: &prepared, in: rect)
+    context.interaction.beginFrame(input: InputState())
+    resolvedBuffer.register(resolved, in: rect)
+    #expect(context.interaction.builderRoot?.children.count == 1)
+    resolvedBuffer.paint(resolved, into: &prepared, in: rect)
+    #expect(context.interaction.builderRoot?.children.count == 1)
+    context.interaction.endFrame()
     var directPaint = DrawList()
-    text.paint(into: &directPaint, in: rect, context: context)
+    var direct = LayoutBuffer()
+    let directNode = direct.text(text, context: context)
+    context.interaction.beginFrame(input: InputState())
+    direct.register(directNode, in: rect)
+    direct.paint(directNode, into: &directPaint, in: rect)
+    context.interaction.endFrame()
     #expect(prepared.paintSnapshot == expected.paintSnapshot)
     #expect(directPaint.paintSnapshot == expected.paintSnapshot)
-    #expect(context.interaction.tree == nil)
+    #expect(context.interaction.tree?.children.count == 1)
     #expect(context.interaction.builderRoot == nil)
     #expect(context.interaction.building.inputHandlers.isEmpty)
     #expect(context.interaction.building.buttonActions.isEmpty)
@@ -34,19 +45,20 @@ struct PlainTextFastPathTests {
 
   @Test(arguments: [false, true], [false, true])
   func plainTextPreservesFocusAndPaintIsolation(claimed: Bool, ignored: Bool) {
-    var context = BlockContext()
+    var context = LayoutContext()
     context.focusLeafClaimed = claimed
     context.navigationIgnored = ignored
-    let resolved = Text("label").prepareLayout(context: context)
-    context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.text(Text("label"), context: context)
+    beginTestFrame(context.interaction, input: InputState())
+    resolvedBuffer.register(resolved, in: rect)
     let leaves = context.interaction.builderRoot?.children.count
     #expect(leaves == (claimed || ignored ? 0 : 1))
-    context.interaction.selectedLeafID = context.widgetID
+    context.interaction.selectedLeafID = context.scoped([.component(ObjectIdentifier(Text.self))]).widgetID
     var first = DrawList()
-    resolved.paint(into: &first, in: rect)
+    resolvedBuffer.paint(resolved, into: &first, in: rect)
     var second = DrawList()
-    resolved.paint(into: &second, in: rect)
+    resolvedBuffer.paint(resolved, into: &second, in: rect)
     #expect(first.paintSnapshot == second.paintSnapshot)
     #expect(first.paintSnapshot.count == (claimed || ignored ? 1 : 2))
     if !claimed, !ignored {
@@ -58,22 +70,23 @@ struct PlainTextFastPathTests {
     context.interaction.endFrame()
   }
 
-  @Test func plainTextShapesOnlyWhenPaintedAndCountsEachLayout() {
-    let context = BlockContext()
+  @Test func plainTextShapesOnlyWhenPaintedAndReusesEachLayout() {
+    let context = LayoutContext()
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     PipelineMetrics.reset()
-    let resolved = Text("plain").prepareLayout(context: context)
-    _ = resolved.sizeThatFits(rect.size)
-    context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.text(Text("plain"), context: context)
+    _ = resolvedBuffer.sizeThatFits(resolved, rect.size)
+    beginTestFrame(context.interaction, input: InputState())
+    resolvedBuffer.register(resolved, in: rect)
     #expect(PipelineMetrics.snapshot.textLayouts == 0)
     #expect(PipelineMetrics.snapshot.paints == 0)
     var list = DrawList()
-    resolved.paint(into: &list, in: rect)
+    resolvedBuffer.paint(resolved, into: &list, in: rect)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
-    resolved.paint(into: &list, in: rect)
-    #expect(PipelineMetrics.snapshot.textLayouts == 2)
+    resolvedBuffer.paint(resolved, into: &list, in: rect)
+    #expect(PipelineMetrics.snapshot.textLayouts == 1)
     context.interaction.endFrame()
   }
 }

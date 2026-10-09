@@ -11,19 +11,18 @@ struct FrameSchedulerTests {
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.setRefreshRates(minimum: 30, maximum: 60)
     #expect(scheduler.nextFrame == nil)
-    #expect(scheduler.takeFrame() == nil)
+    #expect(!scheduler.takeFrame())
     scheduler.requestContent()
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     #expect(scheduler.nextFrame == nil)
     scheduler.scrollMomentumActive = true
     let next = try #require(scheduler.nextFrame)
     #expect(next.deadline == 100 + 1.0 / 30)
-    #expect(next.kind == .content)
     #expect(next.priority == .utility)
     clock.now = 100 + 1.0 / 60
-    #expect(scheduler.takeFrame() == nil)
+    #expect(!scheduler.takeFrame())
     clock.now = next.deadline
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 30)
     scheduler.scrollMomentumActive = false
     #expect(scheduler.nextFrame == nil)
@@ -33,36 +32,35 @@ struct FrameSchedulerTests {
     let clock = Clock()
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.requestContent()
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     scheduler.scrollMomentumActive = true
     clock.now += 0.001
     for _ in 0..<100 { scheduler.requestContent() }
     let next = try #require(scheduler.nextFrame)
-    #expect(next.kind == .content)
     #expect(next.priority == .userInitiated)
     #expect(next.deadline == 100 + 1.0 / 60)
-    #expect(scheduler.takeFrame() == nil)
+    #expect(!scheduler.takeFrame())
     clock.now = next.deadline
-    #expect(scheduler.takeFrame() == .content)
-    #expect(scheduler.nextFrame?.kind == .content)
+    #expect(scheduler.takeFrame())
+    #expect(scheduler.nextFrame != nil)
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 30)
-    #expect(scheduler.takeFrame() == nil)
+    #expect(!scheduler.takeFrame())
     clock.now = try #require(scheduler.nextFrame).deadline
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     scheduler.requestContent()
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
-    #expect(scheduler.takeFrame() == nil)
+    #expect(!scheduler.takeFrame())
   }
 
   @Test func slowFramesAndLateWakeupsDoNotCatchUpWithBursts() throws {
     let clock = Clock()
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.requestContent()
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     scheduler.scrollMomentumActive = true
     clock.now += 2
-    #expect(scheduler.takeFrame() == .content)
-    #expect(scheduler.takeFrame() == nil)
+    #expect(scheduler.takeFrame())
+    #expect(!scheduler.takeFrame())
     clock.now += 0.1
     scheduler.recordProducedFrame()
     scheduler.requestContent()
@@ -76,18 +74,18 @@ struct FrameSchedulerTests {
     let clock = Clock()
     let scheduler = FrameScheduler(clock: { clock.now })
     scheduler.requestContent()
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     scheduler.scrollMomentumActive = true
     scheduler.setRefreshRates(minimum: 20, maximum: 40)
     #expect(scheduler.nextFrame?.deadline == 100 + 1.0 / 20)
-    #expect(scheduler.nextFrame?.kind == .content)
+    #expect(scheduler.nextFrame != nil)
     #expect(scheduler.nextFrame?.priority == .utility)
     scheduler.requestContent()
     #expect(scheduler.nextFrame?.deadline == 100 + 1.0 / 40)
     #expect(scheduler.nextFrame?.priority == .userInitiated)
     scheduler.setRefreshRates(minimum: 40, maximum: 40)
     clock.now = try #require(scheduler.nextFrame).deadline
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     #expect(scheduler.nextFrame?.deadline == clock.now + 1.0 / 40)
   }
 
@@ -95,9 +93,9 @@ struct FrameSchedulerTests {
     let scheduler = FrameScheduler()
     let clock = ContinuousClock()
     let frames = await withCheckedContinuation { continuation in
-      var frames: [(FrameScheduler.FrameKind, TaskPriority, ContinuousClock.Instant)] = []
-      scheduler.onFrame = { kind in
-        frames.append((kind, Task.currentPriority, clock.now))
+      var frames: [(TaskPriority, ContinuousClock.Instant)] = []
+      scheduler.onFrame = {
+        frames.append((Task.currentPriority, clock.now))
         switch frames.count {
         case 1: scheduler.scrollMomentumActive = true
         case 2: scheduler.requestContent()
@@ -109,17 +107,17 @@ struct FrameSchedulerTests {
       scheduler.isReady = true
       scheduler.requestContent()
     }
-    #expect(frames.map { $0.0 } == [.content, .content, .content])
-    #expect(frames.map { $0.1 } == [.userInitiated, .utility, .userInitiated])
-    #expect(frames[0].2.duration(to: frames[1].2) >= .seconds(1.0 / 30))
-    #expect(frames[1].2.duration(to: frames[2].2) >= .seconds(1.0 / 60))
+    #expect(frames.count == 3)
+    #expect(frames.map { $0.0 } == [.userInitiated, .utility, .userInitiated])
+    #expect(frames[0].1.duration(to: frames[1].1) >= .seconds(1.0 / 30))
+    #expect(frames[1].1.duration(to: frames[2].1) >= .seconds(1.0 / 60))
     scheduler.reset()
   }
 
   @Test func readinessAndResetCancelScheduledWork() async {
     let scheduler = FrameScheduler()
     var frames = 0
-    scheduler.onFrame = { _ in frames += 1 }
+    scheduler.onFrame = { frames += 1 }
     scheduler.isReady = true
     scheduler.requestContent()
     scheduler.isReady = false

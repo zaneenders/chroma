@@ -6,7 +6,11 @@ import Observation
 import Testing
 
 @MainActor struct HeadlessSessionTests {
-  struct Fixture: App { var body: some Block { Text("Hello") } }
+  struct Fixture: App {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      buffer.text(Text("Hello"), context: context)
+    }
+  }
 
   private func response(_ session: HeadlessSession, _ request: String) throws -> HeadlessResponse {
     try JSONDecoder().decode(HeadlessResponse.self, from: Data(session.respond(to: request).utf8))
@@ -140,15 +144,18 @@ import Testing
   struct EditorApp: App {
     let model = EditorModel()
     var keyBindings: KeyBindings { .desktopNavigation }
-    var body: some Block {
-      TextEditor("Edit", singleLine: true, text: { model.text }, onChange: { model.text = $0 })
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      buffer.textEditor(
+        TextEditor("Edit", singleLine: true, text: { model.text }, onChange: { model.text = $0 }), context: context)
     }
   }
 
   @Observable final class TimerModel { var tick = 0 }
   struct TimerApp: App {
     let model = TimerModel()
-    var body: some Block { Text("Tick: \(model.tick)") }
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      buffer.text(Text("Tick: \(model.tick)"), context: context)
+    }
   }
 
   @Test func asyncTimerUpdatesAppearInFrameSnapshots() async throws {
@@ -206,15 +213,15 @@ import Testing
     #expect(app.model.text == "hello")
   }
 
-  struct InvalidGeometry: PaintableBlock {
-    var focusRule: FocusRule { .standard }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func register(in rect: Rect, context: BlockContext) {}
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      list.fillRect(Rect(x: .nan, y: 0, width: 10, height: 10), color: Color(r: 1, g: 0, b: 0, a: 1))
+  struct InvalidApp: App {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      buffer.customLeaf(
+        context: context, measure: { $0 }, register: { _ in },
+        paint: { list, _ in
+          list.fillRect(Rect(x: .nan, y: 0, width: 10, height: 10), color: Color(r: 1, g: 0, b: 0, a: 1))
+        })
     }
   }
-  struct InvalidApp: App { var body: some Block { InvalidGeometry() } }
 
   @Test func unencodableAppGeometryReturnsAnError() throws {
     let session = try HeadlessSession(InvalidApp())

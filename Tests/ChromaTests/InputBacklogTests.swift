@@ -13,11 +13,21 @@ struct InputBacklogTests {
     var frames = 0
   }
 
-  struct Probe: PaintableBlock {
+  @MainActor struct Probe {
+
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     let state: State
     var focusRule: FocusRule { .decorative }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func register(in rect: Rect, context: BlockContext) {
+    func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
+    func register(in rect: Rect, context: LayoutContext) {
       let revision = state.applied.count
       context.registerInputHandler { input in
         // Ignore registration-only synthetic input and initial/idle input.
@@ -29,7 +39,7 @@ struct InputBacklogTests {
         state.applied.append(input)
       }
     }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       state.paints += 1
     }
   }
@@ -43,9 +53,11 @@ struct InputBacklogTests {
       runtime.reset()
     }
     let state = State()
-    runtime.content = Probe(state: state)
+    runtime.build = { buffer, context in
+      return Probe(state: state).build(into: &buffer, context: context)
+    }
     let viewport = Size(width: 100, height: 100)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     runtime.scheduler.recordProducedFrame()
     var inputs: [InputState] = []
     for sample in 1...180 {
@@ -56,11 +68,11 @@ struct InputBacklogTests {
     }
     let samples = inputs
     await withCheckedContinuation { continuation in
-      runtime.scheduler.onFrame = { kind in
+      runtime.scheduler.onFrame = {
         state.frames += 1
         #expect(!runtime.scheduler.inputPending)
         #expect(state.applied == samples)
-        _ = runtime.renderScheduled(kind, viewport: viewport, onChange: {})
+        _ = runtime.renderScheduled(viewport: viewport, onChange: {})
         runtime.scheduler.isReady = false
         continuation.resume()
       }
@@ -85,7 +97,7 @@ struct InputBacklogTests {
     #expect(abs(clock.now - (100 + Double(samples.count) * 0.023)) < 0.000_001)
     // Advancing the clock alone must not create idle work or a catch-up frame.
     clock.now += 10
-    #expect(runtime.scheduler.takeFrame() == nil)
+    #expect(!runtime.scheduler.takeFrame())
   }
 
   @Test func reentrantDispatchStaysOrderedAndDrainsBeforeTheRecoveryFrame() async {
@@ -98,11 +110,11 @@ struct InputBacklogTests {
     var order: [Int] = []
     var frames = 0
     await withCheckedContinuation { continuation in
-      runtime.scheduler.onFrame = { kind in
+      runtime.scheduler.onFrame = {
         frames += 1
         #expect(order == [0, 1, 2, 3])
         #expect(!runtime.scheduler.inputPending)
-        _ = runtime.renderScheduled(kind, viewport: Size(width: 1, height: 1), onChange: {})
+        _ = runtime.renderScheduled(viewport: Size(width: 1, height: 1), onChange: {})
         runtime.scheduler.isReady = false
         continuation.resume()
       }
@@ -131,10 +143,12 @@ struct InputBacklogTests {
       runtime.reset()
     }
     let state = State()
-    runtime.content = Probe(state: state)
+    runtime.build = { buffer, context in
+      return Probe(state: state).build(into: &buffer, context: context)
+    }
     let viewport = Size(width: 100, height: 100)
     if !beforeInitialFrame {
-      _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+      _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     }
     let inputs = [
       InputState(pointerPosition: Point(x: 10, y: 10), pointerDown: true, pointerPressed: true),
@@ -145,12 +159,12 @@ struct InputBacklogTests {
       InputState(textEvents: [.insert("c")]),
     ]
     for input in inputs { runtime.dispatchInput { runtime.handleInput(input) } }
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(state.applied == inputs)
     #expect(state.callbackRevisions == Array(inputs.indices))
     #expect(!runtime.scheduler.inputPending)
     #expect(runtime.scheduler.nextFrame == nil)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(state.applied == inputs)
   }
 
@@ -162,7 +176,7 @@ struct InputBacklogTests {
       runtime.reset()
     }
     var frames = 0
-    runtime.scheduler.onFrame = { _ in frames += 1 }
+    runtime.scheduler.onFrame = { frames += 1 }
     // This continuation is an input-drain barrier, not a timed sleep/yield guess.
     await withCheckedContinuation { continuation in
       runtime.dispatchInput {
@@ -181,10 +195,10 @@ struct InputBacklogTests {
     clock.now += 2  // Separate simulated compositor-not-ready interval.
     #expect(runtime.scheduler.nextFrame?.deadline == requestedDeadline)
     await withCheckedContinuation { continuation in
-      runtime.scheduler.onFrame = { kind in
+      runtime.scheduler.onFrame = {
         frames += 1
         #expect(runtime.scheduler.isReady)
-        _ = runtime.renderScheduled(kind, viewport: Size(width: 1, height: 1), onChange: {})
+        _ = runtime.renderScheduled(viewport: Size(width: 1, height: 1), onChange: {})
         runtime.scheduler.isReady = false
         continuation.resume()
       }

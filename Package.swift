@@ -1,10 +1,13 @@
 // swift-tools-version: 6.4
+import Foundation
 import PackageDescription
+
+// Keep CPU-only development independent of native display libraries.
+let headlessOnly = ProcessInfo.processInfo.environment["CHROMA_HEADLESS_ONLY"] == "1"
 
 var products: [Product] = [
   .library(name: "Chroma", targets: ["Chroma"]),
   .library(name: "ChromaMarkdown", targets: ["ChromaMarkdown"]),
-  .library(name: "ChromaApp", targets: ["ChromaApp"]),
   .library(name: "ChromaFont", targets: ["ChromaFont"]),
   .library(name: "ChromaTesting", targets: ["ChromaTesting"]),
   .library(name: "ChromaHeadless", targets: ["ChromaHeadless"]),
@@ -38,89 +41,96 @@ var targets: [Target] = [
   .testTarget(name: "ChromaHeadlessTests", dependencies: ["ChromaHeadless", "Chroma", "ChromaFont"]),
 ]
 #if os(macOS)
-appDependencies.append("MetalBackend")
-products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))
-targets.append(contentsOf: [
-  .testTarget(name: "MetalBackendTests", dependencies: ["MetalBackend"]),
-  .target(
-    name: "MetalBackend",
-    dependencies: ["Chroma", "ChromaFont"],
-    exclude: ["Shaders"],
-    swiftSettings: [.strictMemorySafety()],
-    plugins: [.plugin(name: "ShaderSourcePlugin")]
-  ),
-])
+if !headlessOnly {
+  appDependencies.append("MetalBackend")
+  products.append(.library(name: "MetalBackend", targets: ["MetalBackend"]))
+  targets.append(contentsOf: [
+    .testTarget(name: "MetalBackendTests", dependencies: ["MetalBackend"]),
+    .target(
+      name: "MetalBackend",
+      dependencies: ["Chroma", "ChromaFont"],
+      exclude: ["Shaders"],
+      swiftSettings: [.strictMemorySafety()],
+      plugins: [.plugin(name: "ShaderSourcePlugin")]
+    ),
+  ])
+}
 #endif
 
 #if os(Linux)
-appDependencies.append("WaylandBackend")
-products.append(.library(name: "WaylandBackend", targets: ["WaylandBackend"]))
-targets.append(contentsOf: [
-  .testTarget(
-    name: "WaylandBackendTests",
-    dependencies: ["WaylandBackend"],
-    swiftSettings: [.strictMemorySafety()]
-  ),
-  .target(
-    name: "WaylandBackend",
-    dependencies: [
-      "Chroma",
-      "ChromaFont",
-      "CWaylandClient",
-      "CWaylandCursor",
-      "CWaylandEGL",
-      "CWaylandProtocols",
-      "CEGL",
-      "CGLES3",
-      "CXKBKeyboard",
-    ],
-    exclude: ["Shaders"],
-    swiftSettings: [.strictMemorySafety()],
-    plugins: [.plugin(name: "ShaderSourcePlugin")]
-  ),
-  .systemLibrary(
-    name: "CWaylandClient",
-    path: "Sources/LinkedLibraries/CWaylandClient",
-    pkgConfig: "wayland-client"
-  ),
-  .systemLibrary(
-    name: "CWaylandCursor",
-    path: "Sources/LinkedLibraries/CWaylandCursor",
-    pkgConfig: "wayland-cursor"
-  ),
-  .systemLibrary(
-    name: "CWaylandEGL",
-    path: "Sources/LinkedLibraries/CWaylandEGL",
-    pkgConfig: "wayland-egl"
-  ),
-  .systemLibrary(
-    name: "CEGL",
-    path: "Sources/LinkedLibraries/CEGL",
-    pkgConfig: "egl"
-  ),
-  .systemLibrary(
-    name: "CGLES3",
-    path: "Sources/LinkedLibraries/CGLES3",
-    pkgConfig: "glesv2"
-  ),
-  .target(
-    name: "CWaylandProtocols",
-    dependencies: ["CWaylandClient"],
-    path: "Sources/LinkedLibraries/CWaylandProtocols",
-    publicHeadersPath: "include"
-  ),
-  .target(
-    name: "CXKBKeyboard",
-    path: "Sources/LinkedLibraries/CXKBKeyboard",
-    publicHeadersPath: "include",
-    linkerSettings: [.linkedLibrary("xkbcommon")]
-  ),
-])
+if !headlessOnly {
+  appDependencies.append("WaylandBackend")
+  products.append(.library(name: "WaylandBackend", targets: ["WaylandBackend"]))
+  targets.append(contentsOf: [
+    .testTarget(
+      name: "WaylandBackendTests",
+      dependencies: ["WaylandBackend"],
+      swiftSettings: [.strictMemorySafety()]
+    ),
+    .target(
+      name: "WaylandBackend",
+      dependencies: [
+        "Chroma",
+        "ChromaFont",
+        "CWaylandClient",
+        "CWaylandCursor",
+        "CWaylandEGL",
+        "CWaylandProtocols",
+        "CEGL",
+        "CGLES3",
+        "CXKBKeyboard",
+      ],
+      exclude: ["Shaders"],
+      swiftSettings: [.strictMemorySafety()],
+      plugins: [.plugin(name: "ShaderSourcePlugin")]
+    ),
+    .systemLibrary(
+      name: "CWaylandClient",
+      path: "Sources/LinkedLibraries/CWaylandClient",
+      pkgConfig: "wayland-client"
+    ),
+    .systemLibrary(
+      name: "CWaylandCursor",
+      path: "Sources/LinkedLibraries/CWaylandCursor",
+      pkgConfig: "wayland-cursor"
+    ),
+    .systemLibrary(
+      name: "CWaylandEGL",
+      path: "Sources/LinkedLibraries/CWaylandEGL",
+      pkgConfig: "wayland-egl"
+    ),
+    .systemLibrary(
+      name: "CEGL",
+      path: "Sources/LinkedLibraries/CEGL",
+      pkgConfig: "egl"
+    ),
+    .systemLibrary(
+      name: "CGLES3",
+      path: "Sources/LinkedLibraries/CGLES3",
+      pkgConfig: "glesv2"
+    ),
+    .target(
+      name: "CWaylandProtocols",
+      dependencies: ["CWaylandClient"],
+      path: "Sources/LinkedLibraries/CWaylandProtocols",
+      publicHeadersPath: "include"
+    ),
+    .target(
+      name: "CXKBKeyboard",
+      path: "Sources/LinkedLibraries/CXKBKeyboard",
+      publicHeadersPath: "include",
+      linkerSettings: [.linkedLibrary("xkbcommon")]
+    ),
+  ])
+}
 #endif
 
-targets.append(
-  .target(name: "ChromaApp", dependencies: appDependencies, swiftSettings: [.strictMemorySafety()])
-)
+if !headlessOnly {
+  products.append(.library(name: "ChromaApp", targets: ["ChromaApp"]))
+  targets.append(
+    .target(name: "ChromaApp", dependencies: appDependencies, swiftSettings: [.strictMemorySafety()])
+  )
+}
 
 #if os(macOS) || os(Linux)
 products.append(.plugin(name: "ChromaInstall", targets: ["ChromaInstall"]))

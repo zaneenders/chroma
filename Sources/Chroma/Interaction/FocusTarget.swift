@@ -25,20 +25,6 @@ public final class FocusTarget {
   }
 }
 
-public struct FocusTargetBlock: LayoutPreparingBlock, CollectionDistributingBlock {
-  var content: any Block
-  let target: FocusTarget
-
-  public var preservesContentIdentity: Bool { true }
-
-}
-
-extension Block {
-  public func focusTarget(_ target: FocusTarget) -> FocusTargetBlock {
-    FocusTargetBlock(content: self, target: target)
-  }
-}
-
 extension Interaction {
   func registerFocusTargets(_ targets: [FocusTarget], id: WidgetID) {
     for target in targets {

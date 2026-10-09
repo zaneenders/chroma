@@ -14,8 +14,11 @@ struct AppTests {
     #expect(renderer.title == "App \(app.identifier) — Test")
     #expect(renderer.runtime.scheduler.minimumRefreshRate == 24)
     #expect(renderer.runtime.scheduler.maximumRefreshRate == 48)
-    let root = renderer.content as? DeferredBlock<TupleBlock>
-    #expect((root?.body.children.first as? AppContent)?.identifier == app.identifier)
+    #expect(
+      renderer.frame.paintSnapshot.contains {
+        if case .text(_, let text, _, _) = $0 { return text == app.identifier.uuidString }
+        return false
+      })
   }
 
   @Test func runPropagatesBackendErrors() {
@@ -35,29 +38,14 @@ private struct StatefulApp: App {
   var maximumRefreshRate: Double { 48 }
   var title: String { "App \(identifier)" }
 
-  @MainActor var body: some Block {
-    AppContent(identifier: identifier)
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.text(Text(identifier.uuidString), context: context)
   }
-}
-
-private struct AppContent: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
-
-  let identifier: UUID
-
-  var focusRule: FocusRule { .standard }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    proposal
-  }
-
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
 }
 
 @MainActor
 private final class FailingAppRenderer: Chroma.Host {
   let name = "Test"
-  var content: (any Block)?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
@@ -75,13 +63,14 @@ private final class FailingAppRenderer: Chroma.Host {
 @MainActor
 private final class AppRenderer: Chroma.Host {
   let name = "Test"
-  var content: (any Block)?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
   var title: String?
+  var frame = DrawList()
 
   func run(title: String) {
     self.title = title
+    frame = runtime.render(viewport: Size(width: 400, height: 40), input: InputState(), onChange: {})
   }
 }

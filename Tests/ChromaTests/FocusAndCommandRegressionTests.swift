@@ -5,14 +5,24 @@ import Testing
 @MainActor
 struct FocusAndCommandRegressionTests {
   @MainActor private final class Harness {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    var context: LayoutContext { runtime.context }
+    private var currentContent: LayoutBuilder = { buffer, context in
+      buffer.empty(context: context)
+    }
 
-    func render(_ content: any Block, input: InputState = InputState()) {
+    init() {
+      runtime.build = { [unowned self] buffer, context in
+        currentContent(&buffer, context)
+      }
+    }
+
+    func render(_ content: @escaping LayoutBuilder, input: InputState = InputState()) {
       let isInitialFrame = context.interaction.tree == nil
-      _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
-        input: input, context: context, onChange: {})
+      currentContent = content
+      _ = runtime.render(
+        viewport: Size(width: 200, height: 100),
+        input: input, onChange: {})
       if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     }
   }
@@ -20,16 +30,23 @@ struct FocusAndCommandRegressionTests {
   @Test func stackedRootHandlersRemainAvailableWithoutControls() {
     let harness = Harness()
     var calls: [String] = []
-    let content = Text("No controls")
-      .onCommand(.application("inner")) {
-        calls.append("inner")
-        return .handled
-      }
-      .padding(4)
-      .onCommand(.application("outer")) {
-        calls.append("outer")
-        return .handled
-      }
+    let content: LayoutBuilder = { buffer, context in
+      let node69 = buffer.text(Text("No controls"), context: context)
+      let node70 = buffer.onCommand(
+        node69, .application("inner"), context: context,
+        action: {
+          calls.append("inner")
+          return .handled
+        })
+      let node71 = buffer.padding(node70, 4, context: context)
+      let node72 = buffer.onCommand(
+        node71, .application("outer"), context: context,
+        action: {
+          calls.append("outer")
+          return .handled
+        })
+      return node72
+    }
     harness.render(content)
     harness.render(content, input: InputState(commands: [.application("inner"), .application("outer")]))
     #expect(calls == ["inner", "outer"])
@@ -38,12 +55,16 @@ struct FocusAndCommandRegressionTests {
   @Test func keyedRootHandlerRemainsAvailableWithoutControls() {
     let harness = Harness()
     var calls = 0
-    let content = Text("No controls")
-      .onCommand(.application("test")) {
-        calls += 1
-        return .handled
-      }
-      .id("document")
+    let content: LayoutBuilder = { buffer, context in
+      let node73 = buffer.text(Text("No controls"), context: context.keyed("document"))
+      let node74 = buffer.onCommand(
+        node73, .application("test"), context: context.keyed("document"),
+        action: {
+          calls += 1
+          return .handled
+        })
+      return node74
+    }
     let input = InputState(commands: [.application("test")])
     harness.render(content, input: input)
     #expect(calls == 1)
@@ -54,14 +75,17 @@ struct FocusAndCommandRegressionTests {
   @Test func keyedTupleChildHandlerDoesNotInterceptSibling() {
     let harness = Harness()
     var calls = 0
-    let content = BlockBuilder.buildBlock(
-      Button("Sibling") {},
-      Text("No controls")
-        .onCommand(.application("test")) {
+    let content: LayoutBuilder = { buffer, context in
+      let node75 = buffer.button(Button("Sibling") {}, context: context.childScope(0))
+      let node76 = buffer.text(Text("No controls"), context: context.childScope(1).keyed("document"))
+      let node77 = buffer.onCommand(
+        node76, .application("test"), context: context.childScope(1).keyed("document"),
+        action: {
           calls += 1
           return .handled
-        }
-        .id("document"))
+        })
+      return buffer.overlay([node75, node77], group: false, context: context)
+    }
     harness.render(content, input: InputState(commands: [.application("test")]))
     #expect(calls == 0)
   }
@@ -69,15 +93,22 @@ struct FocusAndCommandRegressionTests {
   @Test func rootHandlersBubbleFromInnerToOuter() {
     let harness = Harness()
     var calls: [String] = []
-    let content = Text("No controls")
-      .onCommand(.application("test")) {
-        calls.append("inner")
-        return .ignored
-      }
-      .onCommand(.application("test")) {
-        calls.append("outer")
-        return .handled
-      }
+    let content: LayoutBuilder = { buffer, context in
+      let node79 = buffer.text(Text("No controls"), context: context)
+      let node80 = buffer.onCommand(
+        node79, .application("test"), context: context,
+        action: {
+          calls.append("inner")
+          return .ignored
+        })
+      let node81 = buffer.onCommand(
+        node80, .application("test"), context: context,
+        action: {
+          calls.append("outer")
+          return .handled
+        })
+      return node81
+    }
     harness.render(content, input: InputState(commands: [.application("test")]))
     #expect(calls == ["inner", "outer"])
   }
@@ -86,12 +117,21 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let target = FocusTarget()
     var calls = 0
-    let content = BlockBuilder.buildBlock(
-      Button("A") {}.onCommand(.application("test")) {
-        calls += 1
-        return .handled
-      },
-      Button("B") {}.focusTarget(target))
+    let content: LayoutBuilder = { buffer, context in
+      let node82 = buffer.button(Button("A") {}, context: context.childScope(0))
+      let node83 = buffer.onCommand(
+        node82, .application("test"), context: context.childScope(0),
+        action: {
+          calls += 1
+          return .handled
+        })
+      let node85 = buffer.focus(
+        target, context: context.childScope(1),
+        content: { buffer, context in
+          return buffer.button(Button("B") {}, context: context)
+        })
+      return buffer.overlay([node83, node85], group: false, context: context)
+    }
     target.focus()
     harness.render(content)
     harness.render(content, input: InputState(commands: [.application("test")]))
@@ -102,15 +142,26 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let target = FocusTarget()
     var calls: [String] = []
-    let content = VStack {
-      Button("A") {}.onCommand(.application("test")) {
-        calls.append("A")
-        return .handled
-      }
-      Button("B") {}.focusTarget(target).onCommand(.application("test")) {
-        calls.append("B")
-        return .handled
-      }
+    let content: LayoutBuilder = { buffer, context in
+      let node87 = buffer.button(Button("A") {}, context: context.childScope(0))
+      let node88 = buffer.onCommand(
+        node87, .application("test"), context: context.childScope(0),
+        action: {
+          calls.append("A")
+          return .handled
+        })
+      let node90 = buffer.focus(
+        target, context: context.childScope(1),
+        content: { buffer, context in
+          return buffer.button(Button("B") {}, context: context)
+        })
+      let node91 = buffer.onCommand(
+        node90, .application("test"), context: context.childScope(1),
+        action: {
+          calls.append("B")
+          return .handled
+        })
+      return buffer.stack([node88, node91], axis: .vertical, context: context)
     }
     target.focus()
     harness.render(content)
@@ -121,12 +172,16 @@ struct FocusAndCommandRegressionTests {
   @Test func prunedCommandScopeDoesNotInterceptSibling() {
     let harness = Harness()
     var calls = 0
-    let content = VStack {
-      EmptyBlock().onCommand(.application("test")) {
-        calls += 1
-        return .handled
-      }
-      Button("B") {}
+    let content: LayoutBuilder = { buffer, context in
+      let node93 = buffer.empty(context: context.childScope(0))
+      let node94 = buffer.onCommand(
+        node93, .application("test"), context: context.childScope(0),
+        action: {
+          calls += 1
+          return .handled
+        })
+      let node95 = buffer.button(Button("B") {}, context: context.childScope(1))
+      return buffer.stack([node94, node95], axis: .vertical, context: context)
     }
     harness.render(content)
     harness.render(content, input: InputState(commands: [.application("test")]))
@@ -136,9 +191,15 @@ struct FocusAndCommandRegressionTests {
   @Test func focusRecoversAfterEmptyTree() {
     let harness = Harness()
     var calls = 0
-    let replacement = Button("After") { calls += 1 }
-    harness.render(Button("Before") {})
-    harness.render(EmptyBlock())
+    let replacement: LayoutBuilder = { buffer, context in
+      return buffer.button(Button("After") { calls += 1 }, context: context)
+    }
+    harness.render({ buffer, context in
+      return buffer.button(Button("Before") {}, context: context)
+    })
+    harness.render({ buffer, context in
+      return buffer.empty(context: context)
+    })
     #expect(harness.context.interaction.selection == nil)
     harness.render(replacement)
     harness.render(replacement, input: InputState(commands: [.navigation(.down), .action(.activate)]))
@@ -148,8 +209,13 @@ struct FocusAndCommandRegressionTests {
   @Test func focusRecoversWhenReplacementPathEndsAtGroup() {
     let harness = Harness()
     var calls = 0
-    harness.render(Button("Before") {})
-    let replacement = VStack { Button("After") { calls += 1 } }
+    harness.render({ buffer, context in
+      return buffer.button(Button("Before") {}, context: context)
+    })
+    let replacement: LayoutBuilder = { buffer, context in
+      let node101 = buffer.button(Button("After") { calls += 1 }, context: context.childScope(0))
+      return buffer.stack([node101], axis: .vertical, context: context)
+    }
     harness.render(replacement)
     harness.render(replacement, input: InputState(commands: [.navigation(.down), .action(.activate)]))
     #expect(calls == 1)
@@ -158,12 +224,12 @@ struct FocusAndCommandRegressionTests {
   @Test func navigationMovesOnlyBetweenInteractiveLeaves() {
     let harness = Harness()
     var activations = 0
-    let content = VStack {
-      HStack {
-        Button("First") { activations += 1 }
-        Button("Second") { activations += 1 }
-      }
-      Button("Third") { activations += 1 }
+    let content: LayoutBuilder = { buffer, context in
+      let node103 = buffer.button(Button("First") { activations += 1 }, context: context.childScope(0).childScope(0))
+      let node104 = buffer.button(Button("Second") { activations += 1 }, context: context.childScope(0).childScope(1))
+      let node105 = buffer.stack([node103, node104], axis: .horizontal, context: context.childScope(0))
+      let node106 = buffer.button(Button("Third") { activations += 1 }, context: context.childScope(1))
+      return buffer.stack([node105, node106], axis: .vertical, context: context)
     }
 
     harness.render(content)
@@ -184,15 +250,30 @@ struct FocusAndCommandRegressionTests {
     let second = FocusTarget()
     let third = FocusTarget()
     let fourth = FocusTarget()
-    let content = VStack {
-      HStack {
-        Button("First") {}.focusTarget(first)
-        Button("Second") {}.focusTarget(second)
-      }
-      HStack {
-        Button("Third") {}.focusTarget(third)
-        Button("Fourth") {}.focusTarget(fourth)
-      }
+    let content: LayoutBuilder = { buffer, context in
+      let node109 = buffer.focus(
+        first, context: context.childScope(0).childScope(0),
+        content: { buffer, context in
+          return buffer.button(Button("First") {}, context: context)
+        })
+      let node111 = buffer.focus(
+        second, context: context.childScope(0).childScope(1),
+        content: { buffer, context in
+          return buffer.button(Button("Second") {}, context: context)
+        })
+      let node112 = buffer.stack([node109, node111], axis: .horizontal, context: context.childScope(0))
+      let node114 = buffer.focus(
+        third, context: context.childScope(1).childScope(0),
+        content: { buffer, context in
+          return buffer.button(Button("Third") {}, context: context)
+        })
+      let node116 = buffer.focus(
+        fourth, context: context.childScope(1).childScope(1),
+        content: { buffer, context in
+          return buffer.button(Button("Fourth") {}, context: context)
+        })
+      let node117 = buffer.stack([node114, node116], axis: .horizontal, context: context.childScope(1))
+      return buffer.stack([node112, node117], axis: .vertical, context: context)
     }
 
     second.focus()
@@ -211,7 +292,9 @@ struct FocusAndCommandRegressionTests {
 
   @Test func customFocusGroupsNavigateAsAGrid() {
     let harness = Harness()
-    let content = GridProbe(rows: 3, columns: 3)
+    let content: LayoutBuilder = { buffer, context in
+      return GridProbe(rows: 3, columns: 3).build(into: &buffer, context: context)
+    }
 
     harness.render(content)
     #expect(harness.context.interaction.selection == [0, 0, 0])
@@ -233,9 +316,15 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let controller = ScrollViewController()
     let listID = WidgetID("plain-row-list")
-    let content = ScrollView(data: 0..<20, rowHeight: 25, controller: controller) { index in
-      Text("Row \(index)")
-    }.id(listID)
+    let content: LayoutBuilder = { buffer, context in
+      let node121 = buffer.scrollView(
+        ScrollView(
+          data: 0..<20, rowHeight: 25, controller: controller,
+          build: { buffer, context, index in
+            return buffer.text(Text("Row \(index)"), context: context)
+          }), context: context.keyed(listID))
+      return node121
+    }
 
     harness.render(content)
     let firstRow = harness.context.interaction.selectedLeafID
@@ -257,9 +346,14 @@ struct FocusAndCommandRegressionTests {
   @Test func editingBlocksStructuralNavigation() {
     let harness = Harness()
     let first = FocusTarget()
-    let content = VStack {
-      Button("First") {}.focusTarget(first)
-      Button("Second") {}
+    let content: LayoutBuilder = { buffer, context in
+      let node123 = buffer.focus(
+        first, context: context.childScope(0),
+        content: { buffer, context in
+          return buffer.button(Button("First") {}, context: context)
+        })
+      let node124 = buffer.button(Button("Second") {}, context: context.childScope(1))
+      return buffer.stack([node123, node124], axis: .vertical, context: context)
     }
 
     harness.render(content)
@@ -273,15 +367,20 @@ struct FocusAndCommandRegressionTests {
     let left = FocusTarget()
     var leftCalls = 0
     var rightCalls = 0
-    let content = HStack {
-      VStack {
-        Button("Left control") {}.focusTarget(left)
-        Button("Left default", role: .defaultAction) { leftCalls += 1 }
-      }
-      VStack {
-        Button("Right control") {}
-        Button("Right default", role: .defaultAction) { rightCalls += 1 }
-      }
+    let content: LayoutBuilder = { buffer, context in
+      let node127 = buffer.focus(
+        left, context: context.childScope(0).childScope(0),
+        content: { buffer, context in
+          return buffer.button(Button("Left control") {}, context: context)
+        })
+      let node128 = buffer.button(
+        Button("Left default", role: .defaultAction) { leftCalls += 1 }, context: context.childScope(0).childScope(1))
+      let node129 = buffer.stack([node127, node128], axis: .vertical, context: context.childScope(0))
+      let node130 = buffer.button(Button("Right control") {}, context: context.childScope(1).childScope(0))
+      let node131 = buffer.button(
+        Button("Right default", role: .defaultAction) { rightCalls += 1 }, context: context.childScope(1).childScope(1))
+      let node132 = buffer.stack([node130, node131], axis: .vertical, context: context.childScope(1))
+      return buffer.stack([node129, node132], axis: .horizontal, context: context)
     }
 
     harness.render(content)
@@ -295,11 +394,19 @@ struct FocusAndCommandRegressionTests {
 
   @Test func cancelLeavesEditingWhenTheFocusedScopeHasNoCancelAction() {
     let harness = Harness()
-    harness.render(TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }))
+    harness.render({ buffer, context in
+      let node134 = buffer.textEditor(
+        TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }), context: context)
+      return node134
+    })
     harness.context.interaction.beginEditing(harness.context.interaction.selectedLeafID!, caretOffset: 0)
 
     harness.render(
-      TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }),
+      { buffer, context in
+        let node135 = buffer.textEditor(
+          TextEditor(singleLine: true, text: { "text" }, onChange: { _ in }), context: context)
+        return node135
+      },
       input: InputState(commands: [.action(.cancel)]))
 
     #expect(harness.context.interaction.mode == .movement)
@@ -309,13 +416,22 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let target = FocusTarget()
     var appCalls = 0
-    let content = Button("Control") {}.focusTarget(target)
-      .keyBindings { bind("x", to: .application("local")) }
-      .onCommand(.application("local")) { .ignored }
-      .onCommand(.application("app")) {
-        appCalls += 1
-        return .handled
-      }
+    let content: LayoutBuilder = { buffer, context in
+      let node137 = buffer.focus(
+        target, context: context,
+        content: { buffer, context in
+          return buffer.button(Button("Control") {}, context: context)
+        })
+      let node138 = buffer.keyBindings(node137, KeyBindings { bind("x", to: .application("local")) }, context: context)
+      let node139 = buffer.onCommand(node138, .application("local"), context: context, action: { .ignored })
+      let node140 = buffer.onCommand(
+        node139, .application("app"), context: context,
+        action: {
+          appCalls += 1
+          return .handled
+        })
+      return node140
+    }
     let appBindings = KeyBindings { bind("x", to: .application("app")) }
 
     target.focus()
@@ -331,9 +447,15 @@ struct FocusAndCommandRegressionTests {
   @Test func innermostFocusedBindingWins() {
     let harness = Harness()
     let target = FocusTarget()
-    let content = Button("Control") {}.focusTarget(target)
-      .keyBindings { bind("x", to: .application("inner")) }
-      .keyBindings { bind("x", to: .application("outer")) }
+    let content: LayoutBuilder = { buffer, context in
+      let node142 = buffer.focus(
+        target, context: context,
+        content: { buffer, context in
+          return buffer.button(Button("Control") {}, context: context)
+        })
+      let node143 = buffer.keyBindings(node142, KeyBindings { bind("x", to: .application("inner")) }, context: context)
+      return buffer.keyBindings(node143, KeyBindings { bind("x", to: .application("outer")) }, context: context)
+    }
 
     target.focus()
     harness.render(content)
@@ -349,15 +471,22 @@ struct FocusAndCommandRegressionTests {
     let harness = Harness()
     let target = FocusTarget()
     let bindings = KeyBindings { bind("x", to: .application("local")) }
-    let control = Button("Control") {}.focusTarget(target).keyBindings(bindings)
+    let control: LayoutBuilder = { buffer, context in
+      let node146 = buffer.focus(
+        target, context: context,
+        content: { buffer, context in
+          return buffer.button(Button("Control") {}, context: context)
+        })
+      return buffer.keyBindings(node146, bindings, context: context)
+    }
 
     target.focus()
     harness.render(control)
-    harness.render(
-      VStack {
-        control
-        Text("Added")
-      })
+    harness.render({ buffer, context in
+      let node148 = control(&buffer, context.childScope(0))
+      let node149 = buffer.text(Text("Added"), context: context.childScope(1))
+      return buffer.stack([node148, node149], axis: .vertical, context: context)
+    })
 
     #expect(harness.context.interaction.selectedLeafID == target.boundID)
     #expect(
@@ -383,37 +512,49 @@ struct FocusAndCommandRegressionTests {
       bind("o", modifiers: .control, to: .application("open-panel"))
     }
 
-    func content() -> any Block {
-      VStack {
-        ScrollView(data: 0...40, rowHeight: 20, controller: controller) { index in
-          if index < rows.count {
-            Button("Row \(index)") {}.focusTarget(rows[index])
-          } else if fieldIsPresent {
-            TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }).focusTarget(field)
-          } else {
-            Button("Fallback") {}.focusTarget(fallback)
-          }
-        }.id(listID)
-        if panelIsOpen { Button("Panel") {}.focusTarget(panel) }
-      }
-      .onCommand(.application("custom")) {
-        customShortcutCalls += 1
-        return .handled
-      }
-      .onCommand(.application("open-panel")) {
-        panelIsOpen = true
-        panel.focus()
-        return .handled
-      }
-      .onCommand(.action(.cancel)) {
-        guard panelIsOpen else { return .ignored }
-        panelIsOpen = false
-        if fieldIsPresent {
-          field.focus()
-        } else {
-          fallback.focus()
+    func content() -> LayoutBuilder {
+      { buffer, context in
+        let scroll = ScrollView(
+          data: 0...40, rowHeight: 20, controller: controller,
+          build: { buffer, context, index in
+            if index < rows.count {
+              return buffer.focus(rows[index], context: context) { buffer, context in
+                buffer.button(Button("Row \(index)") {}, context: context)
+              }
+            } else if fieldIsPresent {
+              return buffer.focus(field, context: context) { buffer, context in
+                buffer.textEditor(
+                  TextEditor(singleLine: true, text: { text }, onChange: { text = $0 }), context: context)
+              }
+            } else {
+              return buffer.focus(fallback, context: context) { buffer, context in
+                buffer.button(Button("Fallback") {}, context: context)
+              }
+            }
+          })
+        var children = [buffer.scrollView(scroll, context: context.childScope(0).keyed(listID))]
+        if panelIsOpen {
+          children.append(
+            buffer.focus(panel, context: context.childScope(1)) { buffer, context in
+              buffer.button(Button("Panel") {}, context: context)
+            })
         }
-        return .handled
+        let stack = buffer.stack(children, axis: .vertical, context: context)
+        let custom = buffer.onCommand(stack, .application("custom"), context: context) {
+          customShortcutCalls += 1
+          return .handled
+        }
+        let open = buffer.onCommand(custom, .application("open-panel"), context: context) {
+          panelIsOpen = true
+          panel.focus()
+          return .handled
+        }
+        return buffer.onCommand(open, .action(.cancel), context: context) {
+          guard panelIsOpen else { return .ignored }
+          panelIsOpen = false
+          if fieldIsPresent { field.focus() } else { fallback.focus() }
+          return .handled
+        }
       }
     }
 
@@ -469,9 +610,16 @@ struct FocusAndCommandRegressionTests {
     ) -> ResolvedKeyboardInput? {
       let harness = Harness()
       let target = FocusTarget()
-      let field = TextEditor(singleLine: true, text: { "" }, onChange: { _ in })
-        .focusTarget(target)
-        .keyBindings(scoped)
+      let field: LayoutBuilder = { buffer, context in
+        let node152 = buffer.focus(
+          target, context: context,
+          content: { buffer, context in
+            let node151 = buffer.textEditor(
+              TextEditor(singleLine: true, text: { "" }, onChange: { _ in }), context: context)
+            return node151
+          })
+        return buffer.keyBindings(node152, scoped, context: context)
+      }
       target.focus(editing: true)
       harness.render(field)
       return harness.context.interaction.resolve(input, appBindings: app)
@@ -502,7 +650,16 @@ struct FocusAndCommandRegressionTests {
   }
 }
 
-private struct GridProbe: PaintableBlock {
+@MainActor private struct GridProbe {
+
+  func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      measure: { self.sizeThatFits($0, context: context) },
+      register: { self.register(in: $0, context: context) },
+      paint: { self.paint(into: &$0, in: $1, context: context) })
+  }
 
   let rows: Int
   let columns: Int
@@ -510,11 +667,11 @@ private struct GridProbe: PaintableBlock {
 
   var focusRule: FocusRule { .container }
 
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
     Size(width: Float(columns) * cell, height: Float(rows) * cell)
   }
 
-  func register(in rect: Rect, context: BlockContext) {
+  func register(in rect: Rect, context: LayoutContext) {
     context.withFocusGroup(in: rect, axis: .vertical) {
       for row in 0..<rows {
         let rowRect = Rect(
@@ -529,5 +686,5 @@ private struct GridProbe: PaintableBlock {
       }
     }
   }
-  func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
+  func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {}
 }

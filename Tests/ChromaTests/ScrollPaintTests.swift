@@ -24,52 +24,57 @@ struct ScrollPaintTests {
     var value: Float = 10
   }
 
-  private struct Row: PaintableBlock {
+  @MainActor private struct Row {
+
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     let index: Int
     let capture: Capture
     var height: Height? = nil
     var lifetime: Lifetime? = nil
     var focusRule: FocusRule { .standard }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
       capture.measured.append(index)
       return Size(width: proposal.width, height: height?.value ?? 10)
     }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       capture.registered.append(index)
     }
 
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       capture.painted.append((index, rect))
       list.fillRect(rect, color: .white)
     }
 
   }
 
-  private struct Wrapper: LayoutPreparingBlock {
-    let content: any Block
-    var focusRule: FocusRule { .container }
-    func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-      let child = BlockEngine.prepare(content, context: context)
-      return BlockEngine.Resolved(measure: { $0 }, register: child.register, paint: child.paint)
-    }
-  }
-
-  @Test func frameProducerReusesScrollPreparedThroughCustomWrapper() {
-    let context = BlockContext()
+  @Test func frameProducerReusesScrollPreparedByFactory() {
+    let context = LayoutContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
     let capture = Capture()
-    let view = Wrapper(
-      content: ScrollView(data: 0..<10_000, rowHeight: 10, controller: controller) { index in
+    let view = ScrollView(
+      data: 0..<10_000, rowHeight: 10, controller: controller,
+      build: { buffer, context, index in
         capture.built.append(index)
         let lifetime = Lifetime()
         capture.lastRowLifetime = lifetime
-        return Row(index: index, capture: capture, lifetime: lifetime)
+        return Row(index: index, capture: capture, lifetime: lifetime).build(into: &buffer, context: context)
       })
     func render() {
-      _ = producer.render(content: view, viewport: viewport.size, input: InputState(), context: context, onChange: {})
+      _ = producer.render(
+        build: { buffer, context in buffer.scrollView(view, context: context.keyed(scrollID)) },
+        viewport: viewport.size, input: InputState(),
+        context: context, onChange: {})
     }
     render()
     #expect(capture.lastRowLifetime == nil)
@@ -85,17 +90,20 @@ struct ScrollPaintTests {
   }
 
   @Test func uniformPaintUsesPreparedRowsWithoutChangingInteractionOrController() throws {
-    let context = BlockContext()
+    let context = LayoutContext()
     let interaction = context.interaction
     let controller = ScrollViewController()
     let capture = Capture()
-    let view = ScrollView(data: 0..<10_000, rowHeight: 10, controller: controller) { index in
-      capture.built.append(index)
-      return Row(index: index, capture: capture)
-    }.id(scrollID)
-    let resolved = BlockEngine.resolve(view, context: context)
-    interaction.beginFrame(input: InputState(pointerPosition: Point(x: -10, y: -10)))
-    resolved.register(in: viewport)
+    let view = ScrollView(
+      data: 0..<10_000, rowHeight: 10, controller: controller,
+      build: { buffer, context, index in
+        capture.built.append(index)
+        return Row(index: index, capture: capture).build(into: &buffer, context: context)
+      })
+    var buffer = LayoutBuffer()
+    let root = buffer.scrollView(view, context: context.keyed(scrollID))
+    beginTestFrame(interaction, input: InputState(pointerPosition: Point(x: -10, y: -10)))
+    buffer.register(root, in: viewport)
     interaction.endFrame()
     #expect(capture.built == [0, 1, 2])
     #expect(capture.registered == [0, 1, 2])
@@ -115,7 +123,7 @@ struct ScrollPaintTests {
     interaction.buildingLogicalSelections = [:]
 
     var list = DrawList()
-    resolved.paint(into: &list, in: viewport)
+    buffer.paint(root, into: &list, in: viewport)
 
     #expect(capture.built == [0, 1, 2])
     #expect(capture.measured.isEmpty)
@@ -134,7 +142,7 @@ struct ScrollPaintTests {
     #expect(interaction.scrollStates[registeredID]?.rowKeys == state.rowKeys)
     #expect(interaction.scrollStates[registeredID]?.pendingReveal == reveal)
     #expect(interaction.pendingFocus == focus)
-    #expect(interaction.tree === tree)
+    #expect(interaction.tree == tree)
     #expect(interaction.builderRoot == nil)
     #expect(interaction.builderStack.isEmpty)
     #expect(interaction.clipStack.isEmpty)
@@ -145,34 +153,40 @@ struct ScrollPaintTests {
   }
 
   @Test func variablePaintDoesNotRefreshInvalidatedMeasurementsOrPlacements() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let controller = ScrollViewController()
     let capture = Capture()
     let height = Height()
     let view = ScrollView(
       showsIndicator: false, controller: controller,
       rows: [
-        .init(id: 0, content: Row(index: 0, capture: capture, height: height)),
-        .init(id: 1, content: Row(index: 1, capture: capture)),
+        .init(
+          id: 0,
+          build: { buffer, context in
+            Row(index: 0, capture: capture, height: height).build(into: &buffer, context: context)
+          }),
+        .init(
+          id: 1, build: { buffer, context in Row(index: 1, capture: capture).build(into: &buffer, context: context) }),
       ]
-    ).id(scrollID)
+    )
 
-    func register() -> BlockEngine.Resolved {
-      let resolved = BlockEngine.resolve(view, context: context)
-      context.interaction.beginFrame(input: InputState())
-      resolved.register(in: viewport)
+    func register(in buffer: inout LayoutBuffer) -> LayoutNode {
+      let root = buffer.scrollView(view, context: context.keyed(scrollID))
+      beginTestFrame(context.interaction, input: InputState())
+      buffer.register(root, in: viewport)
       context.interaction.endFrame()
-      return resolved
+      return root
     }
 
-    let resolved = register()
+    var buffer = LayoutBuffer()
+    let root = register(in: &buffer)
     let measurements = controller.lazyStackCache.measurements
     let layout = controller.lazyStackCache.layout
     #expect(capture.measured == [0, 1])
     height.value = 40
     #expect(!measurements[0].valid)
     var list = DrawList()
-    resolved.paint(into: &list, in: viewport)
+    buffer.paint(root, into: &list, in: viewport)
     #expect(capture.measured == [0, 1])
     #expect(capture.registered == [0, 1])
     #expect(capture.painted.map(\.rect.size.height) == [10, 10])
@@ -181,8 +195,9 @@ struct ScrollPaintTests {
     #expect(!controller.lazyStackCache.measurements[0].valid)
 
     capture.painted = []
-    let next = register()
-    next.paint(into: &list, in: viewport)
+    var nextBuffer = LayoutBuffer()
+    let next = register(in: &nextBuffer)
+    nextBuffer.paint(next, into: &list, in: viewport)
     #expect(capture.measured == [0, 1, 0])
     #expect(capture.painted.map(\.index) == [0])
     #expect(capture.painted.map(\.rect.size.height) == [40])
@@ -190,32 +205,35 @@ struct ScrollPaintTests {
     #expect(controller.lazyStackCache.measurements[1] === measurements[1])
   }
 
-  @Test func ordinaryPaintReusesMeasuredBodyAndReleasesPreparedContentAfterOperation() {
-    struct Content: Block {
-      let capture: Capture
-      var body: some Block {
-        capture.built.append(0)
-        return Row(index: 0, capture: capture).sizing(y: .fixed(100))
-      }
-    }
-    let context = BlockContext()
+  @Test func ordinaryPaintReusesEmittedContentAndReleasesItAfterOperation() {
+    let context = LayoutContext()
     let capture = Capture()
-    let view = ScrollView(showsIndicator: false) { Content(capture: capture) }
-    weak var retained: BlockEngine.Resolved?
+    let view = ScrollView(
+      showsIndicator: false,
+      build: { buffer, context in
+        capture.built.append(0)
+        let lifetime = Lifetime()
+        capture.lastRowLifetime = lifetime
+        let row = Row(index: 0, capture: capture, lifetime: lifetime).build(
+          into: &buffer, context: context.childScope(0))
+        let sized = buffer.sizing(row, y: .fixed(100), context: context.childScope(0))
+        return buffer.stack([sized], axis: .vertical, context: context)
+      })
     do {
-      let resolved = BlockEngine.resolve(view, context: context)
-      retained = resolved
-      context.interaction.beginFrame(input: InputState())
-      resolved.register(in: viewport)
+      var buffer = LayoutBuffer()
+      let root = buffer.scrollView(view, context: context.keyed(scrollID))
+      beginTestFrame(context.interaction, input: InputState())
+      buffer.register(root, in: viewport)
       context.interaction.endFrame()
       let measurements = capture.measured
       var list = DrawList()
-      resolved.paint(into: &list, in: viewport)
+      buffer.paint(root, into: &list, in: viewport)
       #expect(capture.built == [0])
+      #expect(capture.lastRowLifetime != nil)
       #expect(capture.measured == measurements)
       #expect(capture.registered == [0])
       #expect(capture.painted.map(\.rect) == [Rect(x: 0, y: 0, width: 100, height: 100)])
     }
-    #expect(retained == nil)
+    #expect(capture.lastRowLifetime == nil)
   }
 }

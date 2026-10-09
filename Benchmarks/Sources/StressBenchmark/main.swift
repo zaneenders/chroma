@@ -45,7 +45,7 @@ struct StressBenchmark {
       PipelineMetrics.isEnabled = instrumented
       let scene = StressScene(configuration: options.configuration)
       let host = HeadlessHost(size: StressConfiguration.viewport)
-      host.content = DeferredBlock { scene.content }
+      host.build = { buffer, context in scene.build(into: &buffer, context: context) }
       func phase(_ index: Int, record: Bool, _ operation: () -> Void) {
         if instrumented { PipelineMetrics.reset() }
         let start = ProcessInfo.processInfo.systemUptime
@@ -80,7 +80,6 @@ struct StressBenchmark {
       }
       host.close()
       if instrumented {
-        precondition(PipelineMetrics.snapshot.liveResolvedNodes == 0)
         precondition(PipelineMetrics.snapshot.liveObservationSubscriptions == 0)
       }
       PipelineMetrics.isEnabled = false

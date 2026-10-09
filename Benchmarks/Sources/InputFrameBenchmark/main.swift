@@ -8,19 +8,24 @@ func benchmark(count: Int, identified: Bool, rebuildContent: Bool) {
   let host = HeadlessHost(size: Size(width: 200, height: 200))
   let data = 0..<count
   let items = identified ? data.map { Item(id: $0) } : []
-  let makeView: () -> ScrollView = {
+  let makeView: @MainActor () -> ScrollView = {
     if identified {
-      return ScrollView(data: items, rowHeight: 20, controller: controller) { _ in
-        Color.white
+      return ScrollView(data: items, rowHeight: 20, controller: controller) { buffer, context, _ in
+        buffer.color(.white, context: context)
       }
     }
-    return ScrollView(data: data, rowHeight: 20, controller: controller) { _ in Color.white }
+    return ScrollView(data: data, rowHeight: 20, controller: controller) { buffer, context, _ in
+      buffer.color(.white, context: context)
+    }
   }
-  // App.run keeps a deferred root alive and reevaluates its body during traversal.
-  if rebuildContent { host.content = DeferredBlock { makeView() } }
+  // App.run keeps a root factory alive and emits its current content for each update.
+  if rebuildContent { host.build = { buffer, context in buffer.scrollView(makeView(), context: context) } }
   for iteration in 0..<6 {
     let start = ProcessInfo.processInfo.systemUptime
-    if !rebuildContent { host.content = makeView() }
+    if !rebuildContent {
+      let view = makeView()
+      host.build = { buffer, context in buffer.scrollView(view, context: context) }
+    }
     let renderStart = ProcessInfo.processInfo.systemUptime
     let list = host.render(
       input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -1)))

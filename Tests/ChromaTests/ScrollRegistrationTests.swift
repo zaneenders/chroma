@@ -15,7 +15,17 @@ struct ScrollRegistrationTests {
     var paints = 0
   }
 
-  struct Probe: PaintableBlock {
+  @MainActor struct Probe {
+
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     let index: Int
     let height: Float
     let capture: Capture
@@ -23,29 +33,29 @@ struct ScrollRegistrationTests {
 
     var focusRule: FocusRule { action == nil ? .standard : .control }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
       capture.measurements.append(index)
       capture.proposals.append(proposal)
       return Size(width: proposal.width, height: height)
     }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       capture.registered.append((index, rect))
       if let action { context.registerFocusable(in: rect, action: action) }
     }
 
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       capture.paints += 1
       list.fillRect(rect, color: .white)
       if action != nil { context.paintFocusHighlight(in: rect, into: &list) }
     }
   }
 
-  struct Composite: Block {
+  @MainActor struct Composite {
     let capture: Capture
-    var body: some Block {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
       capture.bodies += 1
-      return Probe(index: 0, height: 100, capture: capture)
+      return Probe(index: 0, height: 100, capture: capture).build(into: &buffer, context: context.component(Self.self))
     }
   }
 
@@ -53,36 +63,48 @@ struct ScrollRegistrationTests {
     var height: Float = 10
   }
 
-  struct ObservableRow: PaintableBlock {
+  @MainActor struct ObservableRow {
+
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     let model: HeightModel
     let capture: Capture
     var focusRule: FocusRule { .standard }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
       capture.measurements.append(0)
       return Size(width: proposal.width, height: model.height)
     }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       capture.registered.append((0, rect))
     }
 
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       capture.paints += 1
     }
   }
 
   @MainActor final class Harness {
-    var context = BlockContext()
+    var context = LayoutContext()
     let producer = FrameProducer()
     var viewport = Size(width: 100, height: 20)
 
-    func register(_ content: any Block, commands: [Command] = []) {
+    func register(_ content: ScrollView, commands: [Command] = []) {
       context.interaction.viewport = Rect(origin: .zero, size: viewport)
-      producer.refreshRegistrations(content, viewport: viewport, context: context, commands: commands)
+      producer.refreshRegistrations(
+        { buffer, context in buffer.scrollView(content, context: context) }, viewport: viewport, context: context,
+        commands: commands)
     }
 
-    func send(_ input: InputState, to content: any Block) {
+    func send(_ input: InputState, to content: ScrollView) {
       register(content, commands: input.commands)
       context.interaction.processInput(input)
       context.interaction.finishInput()
@@ -95,7 +117,7 @@ struct ScrollRegistrationTests {
       context.interaction.finishInput()
     }
 
-    func leaf(at point: Point) -> FocusNode? {
+    func leaf(at point: Point) -> InteractionNode? {
       let tree = context.interaction.tree
       guard let path = tree?.hitTest(point) else { return nil }
       return tree?.node(at: path)
@@ -108,9 +130,12 @@ struct ScrollRegistrationTests {
     let h = Harness()
     let capture = Capture()
     let controller = ScrollViewController()
-    let content = ScrollView(showsIndicator: true, controller: controller) {
-      Composite(capture: capture)
-    }
+    let content = ScrollView(
+      showsIndicator: true, controller: controller,
+      build: { buffer, context in
+        let child = Composite(capture: capture).build(into: &buffer, context: context.childScope(0))
+        return buffer.stack([child], axis: .vertical, context: context)
+      })
     h.register(content)
     #expect(capture.bodies == 1)
     #expect(capture.measurements == [0, 0])
@@ -140,10 +165,12 @@ struct ScrollRegistrationTests {
     let capture = Capture()
     let controller = ScrollViewController()
     var built: [Int] = []
-    let content = ScrollView(data: 0..<10_000, rowHeight: 10, controller: controller) { index in
-      built.append(index)
-      return Probe(index: index, height: 10, capture: capture)
-    }
+    let content = ScrollView(
+      data: 0..<10_000, rowHeight: 10, controller: controller,
+      build: { buffer, context, index in
+        built.append(index)
+        return Probe(index: index, height: 10, capture: capture).build(into: &buffer, context: context)
+      })
     h.register(content)
     #expect(built == [0, 1, 2])
     #expect(capture.registered.map(\.index) == built)
@@ -171,9 +198,11 @@ struct ScrollRegistrationTests {
     let h = Harness()
     let capture = Capture()
     let controller = ScrollViewController()
-    let content = ScrollView(data: 0..<30, rowHeight: 10, controller: controller) { index in
-      Probe(index: index, height: 10, capture: capture)
-    }
+    let content = ScrollView(
+      data: 0..<30, rowHeight: 10, controller: controller,
+      build: { buffer, context, index in
+        return Probe(index: index, height: 10, capture: capture).build(into: &buffer, context: context)
+      })
     h.register(content)
     controller.scroll(to: 50)
     h.register(content)
@@ -186,9 +215,11 @@ struct ScrollRegistrationTests {
     let h = Harness()
     let capture = Capture()
     let controller = ScrollViewController()
-    let content = ScrollView(data: 0..<30, rowHeight: 10, controller: controller) { index in
-      Probe(index: index, height: 10, capture: capture)
-    }
+    let content = ScrollView(
+      data: 0..<30, rowHeight: 10, controller: controller,
+      build: { buffer, context, index in
+        return Probe(index: index, height: 10, capture: capture).build(into: &buffer, context: context)
+      })
     h.register(content)
     h.wheel(by: 50)
     capture.registered = []
@@ -203,7 +234,13 @@ struct ScrollRegistrationTests {
     let h = Harness()
     let capture = Capture()
     let controller = ScrollViewController()
-    let rows = (0..<5).map { ScrollView.Row(id: $0, content: Probe(index: $0, height: 10, capture: capture)) }
+    let rows = (0..<5).map { index in
+      ScrollView.Row(
+        id: index,
+        build: { buffer, context in
+          Probe(index: index, height: 10, capture: capture).build(into: &buffer, context: context)
+        })
+    }
     func content(_ rows: [ScrollView.Row]) -> ScrollView {
       ScrollView(controller: controller, rows: rows)
     }
@@ -220,7 +257,9 @@ struct ScrollRegistrationTests {
     #expect(controller.lazyStackCache.measurements[2] === measurements[0])
 
     var replacement = rows[1]
-    replacement.content = Probe(index: 1, height: 30, capture: capture)
+    replacement.build = { buffer, context in
+      Probe(index: 1, height: 30, capture: capture).build(into: &buffer, context: context)
+    }
     capture.registered = []
     h.register(content([rows[2], replacement, rows[0]]))
     #expect(capture.measurements == [1])
@@ -238,21 +277,25 @@ struct ScrollRegistrationTests {
     let h = Harness()
     let capture = Capture()
     let controller = ScrollViewController()
-    let rows = (0..<3).map { ScrollView.Row(id: $0, content: Probe(index: $0, height: 10, capture: capture)) }
-    func content(_ identity: Int) -> some Block {
-      ScrollView(controller: controller, rows: rows).id(identity)
+    let rows = (0..<3).map { index in
+      ScrollView.Row(
+        id: index,
+        build: { buffer, context in
+          Probe(index: index, height: 10, capture: capture).build(into: &buffer, context: context)
+        })
     }
-    h.register(content(0))
+    let content = ScrollView(controller: controller, rows: rows)
+    h.register(content)
     capture.measurements = []
     switch change {
     case "width": h.viewport.width = 200
     case "textScale": h.context.textScale = 2
     case "fontMetrics": h.context.fontMetrics.glyphHeight = 40
     case "theme": h.context.theme = .dark.accentColor(.white)
-    case "identity": break
+    case "identity": h.context = h.context.keyed(1)
     default: Issue.record("Unexpected environment change")
     }
-    h.register(content(change == "identity" ? 1 : 0))
+    h.register(content)
     #expect(capture.measurements == [0, 1, 2])
     #expect(capture.paints == 0)
   }
@@ -266,8 +309,16 @@ struct ScrollRegistrationTests {
     let content = ScrollView(
       controller: controller,
       rows: [
-        .init(id: 0, content: ObservableRow(model: model, capture: capture)),
-        .init(id: 1, content: Probe(index: 1, height: 10, capture: capture)),
+        .init(
+          id: 0,
+          build: { buffer, context in
+            ObservableRow(model: model, capture: capture).build(into: &buffer, context: context)
+          }),
+        .init(
+          id: 1,
+          build: { buffer, context in
+            Probe(index: 1, height: 10, capture: capture).build(into: &buffer, context: context)
+          }),
       ])
     h.register(content)
     capture.measurements = []
@@ -289,10 +340,13 @@ struct ScrollRegistrationTests {
     let controller = ScrollViewController()
     var first = ScrollView.Row(
       id: 0,
-      content: DeferredBlock {
-        Probe(index: 0, height: model.height, capture: capture)
+      build: { buffer, context in
+        return Probe(index: 0, height: model.height, capture: capture).build(into: &buffer, context: context)
       })
-    let second = ScrollView.Row(id: 1, content: Probe(index: 1, height: 10, capture: capture))
+    let second = ScrollView.Row(
+      id: 1,
+      build: { buffer, context in Probe(index: 1, height: 10, capture: capture).build(into: &buffer, context: context) }
+    )
     func content() -> ScrollView { ScrollView(controller: controller, rows: [first, second]) }
     h.register(content())
     capture.measurements = []
@@ -313,9 +367,10 @@ struct ScrollRegistrationTests {
     var actions = 0
     let row = ScrollView.Row(
       id: 0,
-      content: DeferredBlock {
+      build: { buffer, context in
         let current = actions
-        return Probe(index: 0, height: 10, capture: capture, action: { actions = current + 1 })
+        return Probe(index: 0, height: 10, capture: capture, action: { actions = current + 1 }).build(
+          into: &buffer, context: context)
       })
     let content = ScrollView(controller: controller, rows: [row])
     h.register(content)
@@ -333,9 +388,12 @@ struct ScrollRegistrationTests {
     let controller = ScrollViewController()
     var actions: [String] = []
     func content(_ value: String) -> ScrollView {
-      ScrollView(data: 0..<30, rowHeight: 10, controller: controller) { index in
-        Probe(index: index, height: 10, capture: capture, action: { actions.append(value) })
-      }
+      ScrollView(
+        data: 0..<30, rowHeight: 10, controller: controller,
+        build: { buffer, context, index in
+          return Probe(index: index, height: 10, capture: capture, action: { actions.append(value) }).build(
+            into: &buffer, context: context)
+        })
     }
     let point = Point(x: 5, y: 5)
     let press = InputState(
@@ -364,9 +422,12 @@ struct ScrollRegistrationTests {
     let capture = Capture()
     let controller = ScrollViewController()
     var actions: [Int] = []
-    let content = ScrollView(data: 0..<30, rowHeight: 30, controller: controller) { index in
-      Probe(index: index, height: 30, capture: capture, action: { actions.append(index) })
-    }
+    let content = ScrollView(
+      data: 0..<30, rowHeight: 30, controller: controller,
+      build: { buffer, context, index in
+        return Probe(index: index, height: 30, capture: capture, action: { actions.append(index) }).build(
+          into: &buffer, context: context)
+      })
     func click(_ point: Point) {
       h.send(
         InputState(pointerPosition: point, pointerPressPosition: point, pointerDown: true, pointerPressed: true),
