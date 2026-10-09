@@ -5,5 +5,4 @@ Package.resolved
 .vscode/
 
 Benchmarks/results/
-Benchmarks/Scripts/__pycache__/
 !HeadlessModeTests/Package.resolved

@@ -56,16 +56,10 @@ if command -v pacman >/dev/null 2>&1; then
   pacman -Q hyprland mesa wayland wayland-protocols > "$out/platform-packages.txt" 2>&1 || true
 fi
 swift package --package-path "$app" show-dependencies --format json > "$out/dependency-graph.json" 2> "$out/dependencies.log"
-python3 - "$out/dependency-graph.json" "$source" <<'PY'
-import json, os, sys
-with open(sys.argv[1], encoding="utf-8") as file:
-    graph = json.load(file)
-def paths(node):
-    found = [node.get("path", "")] if node.get("identity") == "chroma" else []
-    return found + [path for child in node.get("dependencies", []) for path in paths(child)]
-if os.path.realpath(sys.argv[2]) not in [os.path.realpath(path) for path in paths(graph)]:
-    sys.exit("Chroma dependency does not use the requested source checkout; configure a local override first.")
-PY
+swift build --package-path "$root/Benchmarks" -c release --product NativeTrace > "$out/reporter-build.log" 2>&1
+reporter_dir=$(swift build --package-path "$root/Benchmarks" -c release --show-bin-path)
+reporter=$reporter_dir/NativeTrace
+"$reporter" --verify-dependency "$out/dependency-graph.json" "$source"
 swift build --package-path "$app" -c release -Xswiftc -g --product "$product" > "$out/build.log" 2>&1
 [ ! -f "$app/Package.resolved" ] || cp "$app/Package.resolved" "$out/Package.resolved"
 bin_dir=$(swift build --package-path "$app" -c release --show-bin-path)
@@ -82,6 +76,6 @@ status=0
 CHROMA_NATIVE_TRACE="$out/trace.json" CHROMA_NATIVE_TRACE_SECONDS="$seconds" "$bin" "$@" || status=$?
 printf '%s\n' "$status" > "$out/exit-status.txt"
 [ -f "$out/trace.json" ] || { echo 'No trace written; see build.log/exit-status.txt.' >&2; exit 1; }
-python3 "$root/Benchmarks/Scripts/native_trace.py" "$out/trace.json" --refresh-hz "$refresh" > "$out/summary.json"
+"$reporter" "$out/trace.json" --refresh-hz "$refresh" > "$out/summary.json"
 printf 'Saved %s/summary.json\n' "$out"
 exit "$status"

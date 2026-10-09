@@ -49,6 +49,12 @@ Use the native example for manual profiling, not as evidence of frame-rate guara
 OpenGL/EGL, scheduler and compositor timing. Includes a release-symbol `StressExample`,
 identified/plain/long-Markdown variants, capture metadata and p50/p95 reporting.
 Native results require a real desktop run; callback readiness is not presentation.
+`NativeTrace` summarizes captures and verifies local Chroma dependency paths without Python:
+
+```sh
+swift run --package-path Benchmarks -c release NativeTrace PATH/trace.json --refresh-hz 60
+swift test --package-path Benchmarks --filter NativeTrace
+```
 
 ## Input frames
 

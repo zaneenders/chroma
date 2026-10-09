@@ -43,9 +43,9 @@ normally after the timer writes the trace. Mark the actual gesture/momentum/idle
 in a separate notes file; do not include transcript content.
 
 ```sh
-python3 Benchmarks/Scripts/native_trace.py PATH/trace.json --refresh-hz 60 \
+swift run --package-path Benchmarks -c release NativeTrace PATH/trace.json --refresh-hz 60 \
   --start 3 --end 13 > PATH/active-summary.json
-python3 Benchmarks/Scripts/native_trace.py PATH/trace.json --refresh-hz 60 \
+swift run --package-path Benchmarks -c release NativeTrace PATH/trace.json --refresh-hz 60 \
   --start 18 --end 28 > PATH/idle-summary.json
 ```
 
@@ -73,6 +73,33 @@ package versions. The trace records actual app min/max rates, initial viewport/s
 GL/EGL vendor/renderer/version, presentation support/clock, and scale changes. On another
 compositor add its version and output configuration manually. Retain the matching binary
 privately for symbolication; revision alone is insufficient for a dirty build.
+
+### Repeatable synthetic input
+
+`Benchmarks/Tools/scroll-input.c` injects bounded gestures through the compositor's
+`wlr-virtual-pointer` protocol. It requires Wayland development headers, `wayland-scanner`,
+and a compositor exposing that protocol. Use an isolated test session: it moves the
+pointer to (240, 450) in a 1440×900 logical output and scrolls the window underneath.
+It is not a physical input-device or scanout measurement.
+
+```sh
+input_dir=$(mktemp -d)
+curl -fsSL https://raw.githubusercontent.com/swaywm/wlr-protocols/master/unstable/wlr-virtual-pointer-unstable-v1.xml \
+  -o "$input_dir/protocol.xml"
+wayland-scanner client-header "$input_dir/protocol.xml" "$input_dir/virtual-pointer.h"
+wayland-scanner private-code "$input_dir/protocol.xml" "$input_dir/virtual-pointer.c"
+cc -std=c11 -O2 -Wall -Wextra -Werror $(pkg-config --cflags wayland-client) \
+  -I "$input_dir" Benchmarks/Tools/scroll-input.c "$input_dir/virtual-pointer.c" \
+  $(pkg-config --libs wayland-client) -lm -o "$input_dir/scroll-input"
+# In another terminal, after initial layout of the captured window:
+"$input_dir/scroll-input" vertical finger 3 60 3 > PATH/gesture.json
+# Or: "$input_dir/scroll-input" diagonal finger 3 60 3 > PATH/gesture.json
+```
+
+Retain the protocol XML and injector source with the run. Directions reverse every two
+seconds to avoid endpoints. Finger release sends axis stops and keeps the device alive
+for two seconds so immediate removal does not cancel momentum. The JSON contains injection
+start/release times and maximum deadline lateness; client receipt may occur much later.
 
 ## Boundaries
 
@@ -124,6 +151,15 @@ idle gaps are excluded. `missedDemandSlots` sums
 beyond the target interval, not a jank or universal dropped-frame count. Momentum at a
 configured 30 Hz on a 60 Hz display deliberately skips slots; report that policy separately.
 All-frame/callback/presentation intervals include idle and must not be called FPS.
+`consecutiveFrameIntervalsByMode` separates adjacent frame starts with the same mode,
+excluding mode transitions and missing frame IDs; `other` still includes idle gaps.
+
+`axisEventCoverage` counts selected axis receipts without a selected frame start,
+successful swap, or matching-clock presentation time. Check it before using latency
+percentiles: omitted events can mean a range cuts off feedback, capture saturation,
+shutdown, or input work that never reached a frame. `inputWallUnionWithoutFrameStart`
+retains input spans grouped by the intended frame ID even when no selected frame starts;
+these groups are not rendered frames or a frame-interval distribution.
 
 `workInclusive` lists call counts and pipeline work totals for input, momentum,
 registration refresh and frame production separately. Do not sum nested input/refresh
@@ -152,22 +188,21 @@ per-node timers, logging or capture allocation.
 
 ## Diagnosis / validation status
 
-Built `StressExample` release with DWARF symbols on Linux/Swift 6.4; core and benchmark
-regressions plus deterministic capture/report tests pass. Native launch was attempted but
-failed to connect: this shell has no user Wayland socket; the only Hyprland process is the
-SDDM greeter. `perf` is unavailable. **No native scrolling distribution, representative
-ShapeTree capture, GPU timing, or macOS comparison has been measured here.**
+Built `StressExample` release with DWARF symbols on Linux/Swift 6.4; deterministic
+capture/report, runtime freshness, scheduler and Wayland timing tests pass. Saved
+Wayland-client runs and CPU samples are summarized in [the diagnostic report](NativeScrollingResults.md).
+They used Sway's **headless output**, not physical display presentation. They identify
+synthetic registration/layout pressure, not native desktop smoothness or hardware latency.
 
-Next optimization remains unselected until native captures exist. Use matched identified
-vs plain input work to isolate identity scans (#93), Markdown resolution/layout/paint to
-isolate preparation (#96), and backend/swap/readiness/presentation timings to isolate native
-queueing. Do not assume swap plus callback gating adds two waits. If CPU scopes dominate,
-collect release-symbol stack samples separately with `perf` when available; inclusive stack
-costs are not additive phase costs. Hardware results stay manual artifacts, not CI thresholds.
+A physical desktop capture remains blocked in this shell: `XDG_RUNTIME_DIR` and
+`WAYLAND_DISPLAY` are unset. **No representative ShapeTree capture, physical-display
+Linux/macOS comparison, or GPU execution timing has been measured.** Keep #111 open for
+those runs and matched trials. Do not assume swap plus callback gating adds two waits.
+Hardware results stay manual artifacts, not CI thresholds.
 
 ```sh
 swift test --filter 'FrameTimingCaptureTests|WaylandTimingTests|FrameSchedulerTests|WindowRuntimeTests'
-python3 -m unittest discover -s Benchmarks/Scripts -p 'test_native_trace.py'
+swift test --package-path Benchmarks --filter NativeTrace
 ```
 
 Protocol bindings are generated with `wayland-scanner client-header` / `private-code` from
