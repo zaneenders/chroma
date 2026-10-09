@@ -10,42 +10,43 @@ struct PreparedPrimitiveTests {
     var painted: [String] = []
   }
 
-  struct Leaf: PaintableBlock {
+  struct Leaf: Block {
+
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        expandsHorizontally: false, expandsVertically: false,
+        measure: { sizeThatFits($0, context: context) },
+        register: { register(in: $0, context: context) },
+        paint: { paint(into: &$0, in: $1, context: context) })
+    }
+
     let name: String
     let counts: Counts
     var focusRule: FocusRule { .decorative }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func register(in rect: Rect, context: BlockContext) { counts.registered += 1 }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) { counts.painted.append(name) }
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    @MainActor func register(in rect: Rect, context: BlockContext) { counts.registered += 1 }
+    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) { counts.painted.append(name) }
 
   }
 
-  struct Pair: LayoutPreparingBlock {
+  struct Pair: Block {
     let counts: Counts
-    var focusRule: FocusRule { .container }
-    func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
       counts.built += 1
-      let first = buffer.prepare(Leaf(name: "first", counts: counts), context: context)
-      let last = buffer.prepare(Leaf(name: "last", counts: counts), context: context)
-      return buffer.append(
-        measure: { buffer, proposal in buffer.sizeThatFits(first, proposal) },
-        register: { buffer, rect in
-          buffer.register(first, in: rect)
-          buffer.register(last, in: rect)
-        },
-        paint: { buffer, list, rect in
-          // Local child ownership permits compositing order independent of visitation order.
-          buffer.paint(last, into: &list, in: rect)
-          buffer.paint(first, into: &list, in: rect)
-        })
+      let context = context.component(Self.self)
+      let first = buffer.emit(Leaf(name: "first", counts: counts), context: context.childScope(0))
+      let last = buffer.emit(Leaf(name: "last", counts: counts), context: context.childScope(1))
+      return buffer.overlay([last, first], group: false, context: context)
     }
   }
 
-  @Test func localChildrenNeedNoMatchingTraversalOrSecondConstruction() {
+  @Test func emittedChildrenKeepExplicitOrderWithoutSecondConstruction() {
     let counts = Counts()
     let host = HeadlessHost()
     defer { host.close() }
-    host.content = Pair(counts: counts)
+    host.setContent(Pair(counts: counts))
     host.render()
     #expect(counts.built == 2)  // Initial registration, then presentation.
     #expect(counts.registered == 4)
@@ -60,9 +61,10 @@ struct PreparedPrimitiveTests {
     let counts = Counts()
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(Pair(counts: counts), context: BlockContext())
-      resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 20))
-      resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 20, height: 20))
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(Pair(counts: counts), context: BlockContext())
+      resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 20, height: 20))
+      resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 20, height: 20))
     }
     #expect(counts.built == 1)
     #expect(counts.registered == 2)

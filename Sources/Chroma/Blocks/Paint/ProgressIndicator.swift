@@ -1,6 +1,10 @@
 import Foundation
 
-public struct ProgressIndicator: PaintableBlock {
+public struct ProgressIndicator: Block {
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.progressIndicator(self, context: context)
+  }
+
   public var color: Color
   public var diameter: Float
   public var isActive: Bool
@@ -12,15 +16,15 @@ public struct ProgressIndicator: PaintableBlock {
     self.isActive = isActive
   }
 
-  public var focusRule: FocusRule { .decorative }
+  var focusRule: FocusRule { .decorative }
 
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     Size(width: diameter, height: diameter)
   }
 
-  public func register(in rect: Rect, context: BlockContext) {}
+  func register(in rect: Rect, context: BlockContext) {}
 
-  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     let dot = diameter / 5
     let radius = (diameter - dot) / 2
     for index in 0..<8 {

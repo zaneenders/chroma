@@ -99,13 +99,13 @@ struct TextLayoutCacheTests {
   func freshFramesReuseImmutableShaping(kind: String) {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
-    runtime.content =
+    runtime.setContent(
       switch kind {
       case "wrapped": Text("unchanged text").wrapping()
       case "selectable": Text("unchanged text").selectable()
       case "editor": TextEditor(text: { "unchanged text" }, onChange: { _ in })
       default: Text("unchanged text")
-      }
+      })
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     for _ in 0..<4 {
@@ -120,26 +120,26 @@ struct TextLayoutCacheTests {
     let proposal = Size(width: 96, height: 100)
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    #expect(BlockEngine.measure(text, proposal: proposal, context: context).height == 64)
+    #expect(measureBlock(text, proposal: proposal, context: context).height == 64)
     context.fontMetrics.lineAdvance = 40
-    #expect(BlockEngine.measure(text, proposal: proposal, context: context).height == 80)
+    #expect(measureBlock(text, proposal: proposal, context: context).height == 80)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
     context.fontMetrics.cellAdvance = 24
-    #expect(BlockEngine.measure(text, proposal: proposal, context: context).height == 160)
+    #expect(measureBlock(text, proposal: proposal, context: context).height == 160)
     #expect(PipelineMetrics.snapshot.textLayouts == 2)
     context.textScale = 2
-    #expect(BlockEngine.measure(text, proposal: proposal, context: context).height == 640)
+    #expect(measureBlock(text, proposal: proposal, context: context).height == 640)
     #expect(PipelineMetrics.snapshot.textLayouts == 3)
   }
 
   @Test func replacingTheRootReleasesCachedText() {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
-    runtime.content = Text("old")
+    runtime.setContent(Text("old"))
     _ = runtime.render(viewport: Size(width: 200, height: 100), input: InputState(), onChange: {})
     #expect(runtime.interaction.textLayouts.count == 1)
     weak let old = runtime.interaction.textLayouts.resolve("old", columns: nil)
-    runtime.content = Text("new")
+    runtime.setContent(Text("new"))
     #expect(runtime.interaction.textLayouts.count == 0)
     #expect(old == nil)
   }
@@ -154,10 +154,11 @@ struct TextLayoutCacheTests {
     defer { runtime.reset() }
     let focus = FocusTarget()
     let state = EditorState()
-    runtime.content = DeferredBlock {
-      let captured = state.version
-      return TextEditor(text: { "same" }, onChange: { _ in state.changes.append(captured) }).focusTarget(focus)
-    }
+    runtime.setContent(
+      DeferredBlock {
+        let captured = state.version
+        return TextEditor(text: { "same" }, onChange: { _ in state.changes.append(captured) }).focusTarget(focus)
+      })
     _ = runtime.render(viewport: Size(width: 200, height: 100), input: InputState(), onChange: {})
     focus.focus(editing: true)
     PipelineMetrics.isEnabled = true

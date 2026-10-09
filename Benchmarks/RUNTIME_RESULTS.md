@@ -1,4 +1,6 @@
-# CPU/headless runtime measurements
+# CPU/headless runtime measurements: first storage pass
+
+These results describe commit `35fe291677ce8613a4d696c1115d1014ab88394d`, before the subsequent construction/interaction simplification. They do not establish the performance of the current rewrite; its comparison is pending.
 
 Measured 2026-10-09 on a shared x86_64 Linux container (AMD EPYC 9V74).
 These are CPU/runtime measurements, not native dispatch, backend/GPU, or display measurements.
@@ -7,7 +9,7 @@ These are CPU/runtime measurements, not native dispatch, backend/GPU, or display
 
 - Baseline: `4429069d6097b476078a208968d8ae0beac8be7c`, with only the same headless manifest separation applied locally.
 - Candidate source snapshot SHA-256: `1f28f5e041f42aa5ffa7a84df67ade84577a3fd094ace8e3ae407ac2ec92f04d`.
-- Snapshot hash is SHA-256 of the sorted `sha256sum` inventory for `Sources` and `Benchmarks/Sources`; manifests, tests and docs are excluded. Final runtime/benchmark sources match the measured snapshot byte-for-byte.
+- Snapshot hash is SHA-256 of the sorted `sha256sum` inventory for `Sources` and `Benchmarks/Sources`; manifests, tests and docs are excluded. That first-pass runtime/benchmark source snapshot matched byte-for-byte.
 - Swift 6.4 release, identical pinned dependencies, two build jobs, separate source/build directories. No native display libraries installed.
 - Measured benchmark and StressFixtures sources match baseline byte-for-byte. No pending PRs were stacked onto the baseline.
 

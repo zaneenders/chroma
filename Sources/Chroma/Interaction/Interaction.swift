@@ -30,7 +30,7 @@ package final class Interaction {
   @ObservationIgnored package var frameRate: Double = 0
 
   package internal(set) var selection: [Int]?
-  @ObservationIgnored var navigation: NavigationNode?
+  @ObservationIgnored var navigation: InteractionNode?
   @ObservationIgnored var navigationPath: [Int] = []
   @ObservationIgnored var rememberedNavigation: [WidgetID: WidgetID] = [:]
   struct LogicalSelectionRegistration {
@@ -45,7 +45,9 @@ package final class Interaction {
 
   @ObservationIgnored var viewport: Rect = .zero
 
-  @ObservationIgnored var tree: FocusNode?
+  @ObservationIgnored var tree: InteractionNode?
+  @ObservationIgnored private var committedTree = InteractionTree()
+  @ObservationIgnored private var buildingTree = InteractionTree()
 
   package internal(set) var editingLeaf: WidgetID?
   package private(set) var editingSessionGeneration: Int = 0
@@ -233,7 +235,7 @@ package final class Interaction {
     if let selected = navigation?.node(at: navigationPath), selected.isGroup {
       if navigationPath.isEmpty, let first = selected.children.first {
         var common = first.renderPath
-        for child in selected.children.dropFirst() {
+        for (index, child) in selected.children.enumerated() where index > 0 {
           while !isPrefix(common, of: child.renderPath) { common.removeLast() }
         }
         return common
@@ -269,8 +271,8 @@ package final class Interaction {
     set { leafState.hovered = newValue }
   }
 
-  @ObservationIgnored var builderRoot: FocusNode?
-  @ObservationIgnored var builderStack: [FocusNode] = []
+  @ObservationIgnored var builderRoot: InteractionNode?
+  @ObservationIgnored var builderStack: [InteractionNode] = []
   @ObservationIgnored var builderPath: [Int] = []
 
   @ObservationIgnored var activatedLeaf: WidgetID?
@@ -317,6 +319,10 @@ package final class Interaction {
     scrollStates = [:]
     tree = nil
     navigation = nil
+    builderRoot = nil
+    builderStack.removeAll(keepingCapacity: true)
+    committedTree.clear()
+    buildingTree.clear()
     navigationPath = []
     rememberedNavigation = [:]
     logicalSelections = [:]
@@ -384,10 +390,11 @@ package final class Interaction {
     buildingLogicalSelections = [:]
 
     if processingInput { processInput(input, notifyingObservers: input != InputState()) } else { self.input = input }
-    let root = FocusNode(kind: .group, rect: .zero)
-    builderRoot = root
-    builderStack = [root]
-    builderPath = []
+    buildingTree.reset()
+    builderRoot = buildingTree.root
+    builderStack.removeAll(keepingCapacity: true)
+    builderStack.append(buildingTree.root)
+    builderPath.removeAll(keepingCapacity: true)
     clipStack = []
     textSelection.layoutRegistry.clear()
   }
@@ -513,8 +520,9 @@ package final class Interaction {
     pruneScrollRows()
     registrations = building
     logicalSelections = buildingLogicalSelections
+    swap(&committedTree, &buildingTree)
     builderRoot = nil
-    builderStack = []
+    builderStack.removeAll(keepingCapacity: true)
     activatedLeaf = nil
     activatePending = false
     enterTextPending = false
@@ -527,7 +535,7 @@ package final class Interaction {
 extension Interaction {
   func beginGroup(
     rect: Rect,
-    axis: FocusNode.Axis? = nil,
+    axis: FocusGroupAxis? = nil,
     scrollID: WidgetID? = nil,
     navigationID: WidgetID? = nil,
     navigationName: String? = nil
@@ -535,11 +543,10 @@ extension Interaction {
     guard let parent = builderStack.last else {
       preconditionFailure("beginGroup outside of a frame; call beginFrame first")
     }
-    let node = FocusNode(
-      kind: .group, rect: rect, hitRect: clippedRect(rect), axis: axis, scrollID: scrollID,
+    let node = buildingTree.append(
+      kind: .group, rect: rect, hitRect: clippedRect(rect), parent: parent, scrollID: scrollID,
       navigationID: navigationID, navigationName: navigationName,
-      canBeRevealed: scrollID != nil || (builderStack.last?.canBeRevealed ?? false))
-    parent.children.append(node)
+      canBeRevealed: scrollID != nil || parent.canBeRevealed)
     builderPath.append(parent.children.count - 1)
     builderStack.append(node)
   }
@@ -551,7 +558,7 @@ extension Interaction {
     }
     builderPath.removeLast()
     if node.children.isEmpty {
-      builderStack.last?.children.removeLast()
+      buildingTree.removeEmptyGroup(node)
       return false
     }
     return true
@@ -575,7 +582,7 @@ extension Interaction {
     }
   }
 
-  func reveal(_ path: [Int], in tree: FocusNode) {
+  func reveal(_ path: [Int], in tree: InteractionNode) {
     guard let target = tree.node(at: path)?.rect else { return }
     for depth in 0...path.count {
       let ancestorPath = Array(path.prefix(depth))
@@ -588,7 +595,7 @@ extension Interaction {
     prefix.count <= path.count && Array(path.prefix(prefix.count)) == prefix
   }
 
-  private func isDescendant(_ path: [Int], of scrollID: WidgetID, in tree: FocusNode) -> Bool {
+  private func isDescendant(_ path: [Int], of scrollID: WidgetID, in tree: InteractionNode) -> Bool {
     path.indices.contains { depth in
       tree.node(at: Array(path.prefix(depth)))?.scrollID == scrollID
     }
@@ -728,13 +735,7 @@ extension Interaction {
     id: WidgetID, rect: Rect, role: ActionRole = .normal,
     action: (@MainActor () -> Void)? = nil, navigationIgnored: Bool = false
   ) -> ButtonState {
-    guard let parent = builderStack.last else {
-      preconditionFailure("interactiveBehavior outside of a frame; call beginFrame first")
-    }
-    parent.children.append(
-      FocusNode(
-        kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), role: role,
-        canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
+    registerLeaf(id: id, rect: rect, navigationIgnored: navigationIgnored)
     if role != .normal, let action {
       building.actionRoles.append(ScopedActionRole(path: builderPath, role: role, action: action))
     }
@@ -744,6 +745,33 @@ extension Interaction {
     let held = pressedLeaf == id && input.pointerDown
     if let action { building.buttonActions[id] = action }
     return ButtonState(hovered: hovered, focused: focused, held: held, clicked: activatedLeaf == id)
+  }
+
+  func registerLeaf(id: WidgetID, rect: Rect, navigationIgnored: Bool = false) {
+    guard let parent = builderStack.last else {
+      preconditionFailure("registerLeaf outside of a frame; call beginFrame first")
+    }
+    buildingTree.append(
+      kind: .leaf(id), rect: rect, hitRect: clippedRect(rect), parent: parent,
+      canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored)
+  }
+
+  func recordScrollRows(
+    in group: InteractionNode, fromChild: Int, offset: Float, scrollID: WidgetID, rowKey: StructuralKey
+  ) {
+    func record(_ node: InteractionNode) {
+      if let leafID = node.leafID {
+        recordScrollRow(
+          id: scrollID, leafID: leafID, rowKey: rowKey,
+          rect: Rect(
+            x: node.rect.minX, y: node.rect.minY + offset,
+            width: node.rect.size.width, height: node.rect.size.height))
+      } else {
+        for child in node.children { record(child) }
+      }
+    }
+    var children = group.children.makeIterator(startingAt: fromChild)
+    while let child = children.next() { record(child) }
   }
 
   func clippedRect(_ rect: Rect) -> Rect {

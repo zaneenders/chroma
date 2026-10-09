@@ -505,7 +505,7 @@ extension Interaction {
     pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
-    builderStack.last?.children.append(FocusNode(kind: .leaf(id), rect: rect))
+    registerLeaf(id: id, rect: rect)
     if activatedLeaf == id { activatePending = true }
     return updateTextInput(
       id: id, rect: rect, text: text, onChange: onChange, onSubmit: onSubmit,

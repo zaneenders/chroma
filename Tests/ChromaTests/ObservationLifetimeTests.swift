@@ -40,7 +40,8 @@ struct ObservationLifetimeTests {
   ) {
     let probe = SubscriptionLifetimeProbe(counter)
     _ = producer.render(
-      content: DeferredBlock { model.color }, viewport: Size(width: 20, height: 20),
+      build: { buffer, context in buffer.emit(DeferredBlock { model.color }, context: context) },
+      viewport: Size(width: 20, height: 20),
       input: InputState(), context: BlockContext(interaction: Interaction()),
       onChange: { probe.recordRedraw() })
   }

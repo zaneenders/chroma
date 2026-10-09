@@ -109,7 +109,7 @@ struct TextSelectionPaintingTests {
       defer { host.close() }
       let target = FocusTarget()
       let text = Array(repeating: String(repeating: "a", count: 80), count: lineCount).joined(separator: "\n")
-      host.content = Text(text).selectable().focusTarget(target)
+      host.setContent(Text(text).selectable().focusTarget(target))
       let before = host.render()
       target.focus()
       host.render()
@@ -136,7 +136,8 @@ struct TextSelectionPaintingTests {
     }
     func render() -> DrawList {
       producer.render(
-        content: content, viewport: Size(width: 400, height: 300), input: InputState(),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 400, height: 300),
+        input: InputState(),
         context: context, onChange: {})
     }
     let before = render()

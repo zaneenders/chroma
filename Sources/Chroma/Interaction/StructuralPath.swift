@@ -10,13 +10,6 @@ struct StructuralPath: Hashable, Sendable {
   var segments: [Segment] = []
 }
 
-struct ScopedBlock: Block {
-  let content: any Block
-  let path: [StructuralPath.Segment]
-
-  var body: Never { fatalError("ScopedBlock is resolved by BlockEngine") }
-}
-
 struct StructuralKey: Hashable, Sendable {
   let value: any Hashable & Sendable
 
@@ -33,12 +26,18 @@ struct StructuralKey: Hashable, Sendable {
   }
 }
 
-protocol KeyedBlockCollection: Block {
-  var keyedContent: TupleBlock { get }
+struct KeyedBlock: Block {
+  let content: any Block
+  let key: StructuralKey
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    var context = context
+    if case .slot = context.structuralPath.segments.last { context.structuralPath.segments.removeLast() }
+    return buffer.emit(content, context: context.scoped([.key(key)]))
+  }
 }
 
 extension Block {
   public func id(_ key: some Hashable & Sendable) -> some Block {
-    ScopedBlock(content: self, path: [.key(StructuralKey(key))])
+    KeyedBlock(content: self, key: StructuralKey(key))
   }
 }

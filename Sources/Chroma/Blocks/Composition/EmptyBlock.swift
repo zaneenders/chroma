@@ -1,8 +1,6 @@
-public struct EmptyBlock: PaintableBlock {
+public struct EmptyBlock: Block {
   public init() {}
-  public var focusRule: FocusRule { .decorative }
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { .zero }
-  public func register(in rect: Rect, context: BlockContext) {}
-
-  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.empty(context: context)
+  }
 }

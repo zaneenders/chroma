@@ -1,4 +1,8 @@
-public struct Text: PaintableBlock {
+public struct Text: Block {
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.text(self, context: context)
+  }
+
   public var content: String
   public var color: Color
   public var scale: Float
@@ -6,7 +10,7 @@ public struct Text: PaintableBlock {
   public var wraps = false
   var selectionID: WidgetID?
 
-  public var focusRule: FocusRule { .container }
+  var focusRule: FocusRule { .container }
 
   public init(_ content: String) {
     self.content = content
@@ -49,7 +53,7 @@ public struct Text: PaintableBlock {
     return Int(min(Float(Int32.max), max(1, width / cell)))
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     sizeThatFits(proposal, context: context, preparation: context.interaction.textLayouts)
   }
 
@@ -65,7 +69,7 @@ public struct Text: PaintableBlock {
       height: Float(layout.lines.count) * context.fontMetrics.lineAdvance * scale * context.textScale)
   }
 
-  @MainActor public func register(in rect: Rect, context: BlockContext) {
+  @MainActor func register(in rect: Rect, context: BlockContext) {
     if isSelectable {
       registerSelection(
         prepareText(in: rect, context: context, preparation: context.interaction.textLayouts), context: context)
@@ -115,9 +119,9 @@ public struct Text: PaintableBlock {
     return (range, caret)
   }
 
-  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     if isSelectable, !context.focusLeafClaimed, !context.navigationIgnored {
-      BlockEngine.drawHighlight(for: selectionID ?? context.widgetID, into: &drawList, in: rect, context: context)
+      context.paintFocusHighlight(for: selectionID ?? context.widgetID, in: rect, into: &drawList)
     }
     if !wraps, !isSelectable {
       drawText(
@@ -129,7 +133,7 @@ public struct Text: PaintableBlock {
         into: &drawList, in: rect, context: context)
     }
     if !isSelectable, !context.focusLeafClaimed, !context.navigationIgnored {
-      BlockEngine.drawHighlight(for: selectionID ?? context.widgetID, into: &drawList, in: rect, context: context)
+      context.paintFocusHighlight(for: selectionID ?? context.widgetID, in: rect, into: &drawList)
     }
   }
 

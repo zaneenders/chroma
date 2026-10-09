@@ -33,7 +33,7 @@ struct TextSelectionTests {
     }
     func render(_ input: InputState = InputState()) {
       _ = producer.render(
-        content: content, viewport: Size(width: 300, height: 150),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 300, height: 150),
         input: input, context: context, onChange: {})
     }
     render()

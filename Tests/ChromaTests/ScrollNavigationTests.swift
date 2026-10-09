@@ -9,7 +9,7 @@ struct ScrollNavigationTests {
     let producer = FrameProducer()
     func render(_ content: any Block, _ commands: [NavigationCommand] = []) {
       _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
         input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
     }
   }
@@ -135,7 +135,8 @@ struct ScrollNavigationTests {
     let expectedFocus = Interaction.PendingFocus(leaf: WidgetID("row-15"), scrollID: scrollID)
     interaction.pendingFocus = expectedFocus
     _ = h.producer.render(
-      content: content, viewport: Size(width: 150, height: 100), input: InputState(),
+      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 150, height: 100),
+      input: InputState(),
       context: h.context, onChange: {})
     #expect(controller.offset > 0)
     #expect(interaction.pendingFocus == expectedFocus)
@@ -149,7 +150,7 @@ struct ScrollNavigationTests {
     }
     h.render(content(1))
     _ = h.producer.render(
-      content: content(1), viewport: Size(width: 200, height: 100),
+      build: { buffer, context in buffer.emit(content(1), context: context) }, viewport: Size(width: 200, height: 100),
       input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: -25, y: -60)),
       context: h.context, onChange: {})
     #expect(controller.offset == 60)

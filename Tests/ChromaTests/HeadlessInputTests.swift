@@ -13,7 +13,7 @@ struct HeadlessInputTests {
     let model = Model()
     let host = HeadlessHost()
     defer { host.close() }
-    host.content = DeferredBlock { Text(model.text) }
+    host.setContent(DeferredBlock { Text(model.text) })
     #expect(host.renderIfNeeded() != nil)
     await drainObservationChanges()
     #expect(host.renderIfNeeded() == nil)
@@ -34,7 +34,7 @@ struct HeadlessInputTests {
     let host = HeadlessHost()
     let target = FocusTarget()
     defer { host.close() }
-    host.content = Button("Action") {}.focusTarget(target)
+    host.setContent(Button("Action") {}.focusTarget(target))
     #expect(host.renderIfNeeded() != nil)
     await drainObservationChanges()
     #expect(host.renderIfNeeded() == nil)
@@ -51,7 +51,7 @@ struct HeadlessInputTests {
   @Test func explicitRenderConsumesThePendingRequest() async {
     let host = HeadlessHost()
     defer { host.close() }
-    host.content = Text("Static")
+    host.setContent(Text("Static"))
     let frame = host.render()
     #expect(host.lastFrame == frame)
     await drainObservationChanges()

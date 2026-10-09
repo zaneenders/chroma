@@ -1,4 +1,4 @@
-struct LayoutModifier: LayoutPreparingBlock, CollectionDistributingBlock {
+struct LayoutModifier: Block {
   enum Operation {
     case padding(EdgeInsets)
     case sizing(x: Sizing, y: Sizing)
@@ -6,8 +6,6 @@ struct LayoutModifier: LayoutPreparingBlock, CollectionDistributingBlock {
 
   var content: any Block
   var operation: Operation
-
-  var preservesContentIdentity: Bool { true }
 
   @MainActor func sizeThatFits(
     _ proposal: Size, context: BlockContext, measure: (Size) -> Size
@@ -36,7 +34,7 @@ struct LayoutModifier: LayoutPreparingBlock, CollectionDistributingBlock {
     }
   }
 
-  func placedContent(in rect: Rect) -> Rect {
+  static func placed(_ operation: Operation, in rect: Rect) -> Rect {
     switch operation {
     case .padding(let insets):
       Rect(

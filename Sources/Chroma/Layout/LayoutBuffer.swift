@@ -1,39 +1,61 @@
 import BasicContainers
 
-/// An operation-local integer handle, not a widget's persistent identity.
-/// Resetting its buffer invalidates it, even when the same slot is reused.
+/// A checked operation-local index. Persistent interaction state uses logical keys instead.
 public struct LayoutNode: Hashable, Sendable {
   fileprivate let owner: UInt64
   fileprivate let generation: UInt64
   fileprivate let index: Int
 }
 
-/// The single execution path for direct construction and Block builders.
-/// Storage capacity is reused; callbacks and measurements never survive reset.
-/// Noncopyable ownership prevents callbacks from capturing their own buffer.
+public enum FocusRule: Sendable { case standard, control, container, decorative }
+
+/// One reusable owner for direct construction, layout, registration and ordered drawing.
 @MainActor
 public struct LayoutBuffer: ~Copyable {
+  enum Content {
+    case text(Text)
+    case image(Image)
+    case color(Color)
+    case marquee(MarqueeText)
+    case progress(ProgressIndicator)
+    case button(Button)
+    case editor(TextEditorNode)
+    case interactive(InteractiveNode)
+    case empty, spacer
+    case stack(Stack)
+    case overlay(Range<Int>, Bool)
+    case fragment(Range<Int>)
+    case layout(LayoutNode, LayoutModifier.Operation)
+    case decoration(LayoutNode, Decoration)
+    case group(LayoutNode, String?)
+    case command(LayoutNode, CommandScope.Operation)
+    case focus(LayoutNode, FocusTarget)
+    case animation(LayoutNode, ScalarAnimation)
+    case trailing(LayoutNode, LayoutNode, Float)
+    case scroll(ScrollView, ScrollView.PreparedScroll?)
+    case custom(CustomLeaf)
+  }
+  enum Decoration {
+    case background(LayoutNode)
+    case rounded(Color, CornerRadii)
+    case border(Color, CornerRadii, Float)
+    case clip
+  }
   struct Record {
-    enum Kind {
-      case primitive(Int)
-      case custom(Int)
-      case stack(Int)
-    }
-    let kind: Kind
+    var content: Content
+    let context: BlockContext
     var horizontal: Bool?
     var vertical: Bool?
     var measurements = -1
+    var registeredRect: Rect?
   }
-  struct Primitive {
-    let block: any PaintableBlock
-    let context: BlockContext
-  }
-  struct Callbacks {
-    let expandHorizontal: (inout LayoutBuffer) -> Bool
-    let expandVertical: (inout LayoutBuffer) -> Bool
-    let measure: (inout LayoutBuffer, Size) -> Size
-    let register: (inout LayoutBuffer, Rect) -> Void
-    let paint: (inout LayoutBuffer, inout DrawList, Rect) -> Void
+  struct CustomLeaf {
+    let focusRule: FocusRule
+    let horizontal: Bool
+    let vertical: Bool
+    let measure: (Size) -> Size
+    let register: (Rect) -> Void
+    let paint: (inout DrawList, Rect) -> Void
   }
   struct Measurement {
     let proposal: Size
@@ -47,7 +69,6 @@ public struct LayoutBuffer: ~Copyable {
     let reversed: Bool
     let bottomAligned: Bool
     let children: Range<Int>
-    let context: BlockContext
   }
   struct Child {
     let node: LayoutNode
@@ -59,148 +80,178 @@ public struct LayoutBuffer: ~Copyable {
   private var generation: UInt64 = 0
   private var nodes = BasicContainers.UniqueArray<Record>()
   private var measurements = BasicContainers.UniqueArray<Measurement>()
-  private var primitives = BasicContainers.UniqueArray<Primitive>()
-  private var callbacks = BasicContainers.UniqueArray<Callbacks>()
-  private var stacks = BasicContainers.UniqueArray<Stack>()
   private var children = BasicContainers.UniqueArray<Child>()
   private var placements = BasicContainers.UniqueArray<Rect>()
+  private var paintingDepth = 0
 
   public init() {
     Self.nextOwner += 1
     owner = Self.nextOwner
   }
-
   public var count: Int { nodes.count }
-  public var customNodeCount: Int { callbacks.count }
   public var capacity: Int { nodes.capacity }
 
-  /// Releases every captured application value while keeping allocated storage.
   public mutating func reset(releasingCapacity: Bool = false) {
     generation += 1
     nodes.removeAll()
     measurements.removeAll()
-    primitives.removeAll()
-    callbacks.removeAll()
-    stacks.removeAll()
     children.removeAll()
     placements.removeAll()
     if releasingCapacity {
       nodes = .init()
       measurements = .init()
-      primitives = .init()
-      callbacks = .init()
-      stacks = .init()
       children = .init()
       placements = .init()
     }
   }
-
   public func contains(_ node: LayoutNode) -> Bool {
     node.owner == owner && node.generation == generation && nodes.indices.contains(node.index)
   }
-
-  public mutating func append(
-    expandsHorizontally: @escaping (inout LayoutBuffer) -> Bool = { _ in false },
-    expandsVertically: @escaping (inout LayoutBuffer) -> Bool = { _ in false },
-    measure: @escaping (inout LayoutBuffer, Size) -> Size,
-    register: @escaping (inout LayoutBuffer, Rect) -> Void,
-    paint: @escaping (inout LayoutBuffer, inout DrawList, Rect) -> Void
-  ) -> LayoutNode {
+  public mutating func emit(_ block: any Block, context: BlockContext) -> LayoutNode {
+    block.emit(into: &self, context: context)
+  }
+  mutating func node(_ content: Content, context: BlockContext) -> LayoutNode {
     let node = LayoutNode(owner: owner, generation: generation, index: nodes.count)
     if nodes.count == nodes.capacity { PipelineMetrics.record(.bufferGrowth) }
     PipelineMetrics.record(.layoutNode)
-    nodes.append(Record(kind: .custom(callbacks.count)))
-    if callbacks.count == callbacks.capacity { PipelineMetrics.record(.bufferGrowth) }
-    callbacks.append(
-      Callbacks(
-        expandHorizontal: expandsHorizontally, expandVertical: expandsVertically,
-        measure: measure, register: register, paint: paint))
+    nodes.append(Record(content: content, context: context))
     return node
   }
-
-  public mutating func append(
-    child: LayoutNode,
-    register: @escaping (inout LayoutBuffer, Rect) -> Void,
-    paint: @escaping (inout LayoutBuffer, inout DrawList, Rect) -> Void
-  ) -> LayoutNode {
-    append(
-      expandsHorizontally: { $0.expandsHorizontally(child) },
-      expandsVertically: { $0.expandsVertically(child) },
-      measure: { $0.sizeThatFits(child, $1) }, register: register, paint: paint)
+  public mutating func text(_ text: Text, context: BlockContext) -> LayoutNode {
+    node(.text(text), context: context.component(Text.self))
   }
+  public mutating func image(_ image: Image, context: BlockContext) -> LayoutNode {
+    node(.image(image), context: context.component(Image.self))
+  }
+  public mutating func color(_ color: Color, context: BlockContext) -> LayoutNode {
+    node(.color(color), context: context.component(Color.self))
+  }
+  public mutating func marqueeText(_ text: MarqueeText, context: BlockContext) -> LayoutNode {
+    node(.marquee(text), context: context.component(MarqueeText.self))
+  }
+  public mutating func progressIndicator(_ progress: ProgressIndicator, context: BlockContext) -> LayoutNode {
+    node(.progress(progress), context: context.component(ProgressIndicator.self))
+  }
+  public mutating func button(_ button: Button, context: BlockContext) -> LayoutNode {
+    node(.button(button), context: context.component(Button.self))
+  }
+  public mutating func textEditor(_ editor: TextEditor, context: BlockContext) -> LayoutNode {
+    let context = context.component(TextEditor.self)
+    return node(.editor(TextEditorNode(editor, context: context)), context: context)
+  }
+  public mutating func interactive(
+    action: @escaping @MainActor () -> Void,
+    content: @escaping @MainActor (InteractionPhase) -> any Block, context: BlockContext
+  ) -> LayoutNode {
+    interactive(id: nil, action: action, content: content, context: context)
+  }
+  mutating func interactive(
+    id: WidgetID?, action: @escaping @MainActor () -> Void,
+    content: @escaping @MainActor (InteractionPhase) -> any Block, context: BlockContext
+  ) -> LayoutNode {
+    let context = context.component(InteractiveNode.self)
+    return node(
+      .interactive(InteractiveNode(id: id, action: action, content: content, context: context)), context: context)
+  }
+  public mutating func scrollView(_ scroll: ScrollView, context: BlockContext) -> LayoutNode {
+    node(.scroll(scroll, nil), context: context.component(ScrollView.self))
+  }
+  public mutating func spacer(context: BlockContext) -> LayoutNode { node(.spacer, context: context) }
+  public mutating func empty(context: BlockContext) -> LayoutNode { node(.empty, context: context) }
 
-  public mutating func prepare(_ block: any Block, context: BlockContext) -> LayoutNode {
-    if let scoped = block as? ScopedBlock {
-      return prepare(scoped.content, context: context.scoped(scoped.path))
-    }
-    if let container = block as? any LayoutPreparingBlock {
-      let context =
-        container.preservesContentIdentity
-        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
-      return container.prepareLayout(context: context, in: &self)
-    }
-    if let primitive = block as? any PaintableBlock {
-      let context =
-        primitive.preservesContentIdentity
-        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
-      let node = LayoutNode(owner: owner, generation: generation, index: nodes.count)
-      if nodes.count == nodes.capacity { PipelineMetrics.record(.bufferGrowth) }
-      PipelineMetrics.record(.layoutNode)
-      nodes.append(Record(kind: .primitive(primitives.count)))
-      if primitives.count == primitives.capacity { PipelineMetrics.record(.bufferGrowth) }
-      primitives.append(Primitive(block: primitive, context: context))
-      return node
-    }
-    PipelineMetrics.record(.bodyEvaluation)
-    return prepare(block.body, context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))
+  /// Narrow extension for an externally defined leaf. Built-in nodes use typed records.
+  public mutating func customLeaf(
+    context: BlockContext, focusRule: FocusRule = .standard,
+    expandsHorizontally: Bool = false, expandsVertically: Bool = false,
+    measure: @escaping (Size) -> Size, register: @escaping (Rect) -> Void,
+    paint: @escaping (inout DrawList, Rect) -> Void
+  ) -> LayoutNode {
+    node(
+      .custom(
+        CustomLeaf(
+          focusRule: focusRule, horizontal: expandsHorizontally, vertical: expandsVertically,
+          measure: measure, register: register, paint: paint)), context: context)
   }
 
   public mutating func expandsHorizontally(_ node: LayoutNode) -> Bool { expands(node, horizontally: true) }
   public mutating func expandsVertically(_ node: LayoutNode) -> Bool { expands(node, horizontally: false) }
-
   private mutating func expands(_ node: LayoutNode, horizontally: Bool) -> Bool {
-    precondition(contains(node), "LayoutNode belongs to another operation")
-    if let value = horizontally ? nodes[node.index].horizontal : nodes[node.index].vertical { return value }
+    precondition(contains(node), "Stale layout handle")
+    if let cached = horizontally ? nodes[node.index].horizontal : nodes[node.index].vertical { return cached }
     let value: Bool
-    switch nodes[node.index].kind {
-    case .primitive(let index):
-      let block = primitives[index].block
-      value = horizontally ? block.expandsHorizontally : block.expandsVertically
-    case .stack(let index): value = stackExpands(stacks[index], horizontally: horizontally)
-    case .custom(let index):
-      let callback = horizontally ? callbacks[index].expandHorizontal : callbacks[index].expandVertical
-      value = callback(&self)
+    switch nodes[node.index].content {
+    case .color, .spacer, .scroll: value = true
+    case .editor, .trailing, .marquee: value = horizontally
+    case .layout(_, .sizing(let x, let y)): value = (horizontally ? x : y) == .grow
+    case .layout(let child, _), .decoration(let child, _), .group(let child, _), .command(let child, _),
+      .focus(let child, _), .animation(let child, _):
+      value = expands(child, horizontally: horizontally)
+    case .stack(let stack): value = stackExpands(stack, horizontally: horizontally)
+    case .overlay(let range, _), .fragment(let range):
+      value = range.contains { expands(children[$0].node, horizontally: horizontally) }
+    case .interactive(var state):
+      value = horizontally ? state.expandsHorizontally(in: &self) : state.expandsVertically(in: &self)
+      nodes[node.index].content = .interactive(state)
+    case .custom(let leaf): value = horizontally ? leaf.horizontal : leaf.vertical
+    default: value = false
     }
-    precondition(contains(node), "Cannot reset LayoutBuffer from a callback")
     if horizontally { nodes[node.index].horizontal = value } else { nodes[node.index].vertical = value }
     return value
   }
 
   public mutating func sizeThatFits(_ node: LayoutNode, _ proposal: Size) -> Size {
-    precondition(contains(node), "LayoutNode belongs to another operation")
+    precondition(contains(node), "Stale layout handle")
     PipelineMetrics.record(.measurement)
-    var index = nodes[node.index].measurements
-    while index >= 0 {
-      let entry = measurements[index]
+    var cached = nodes[node.index].measurements
+    while cached >= 0 {
+      let entry = measurements[cached]
       if entry.proposal == proposal {
         PipelineMetrics.record(.measurementCacheHit)
         return entry.size
       }
-      index = entry.next
+      cached = entry.next
     }
-    // Release the storage borrow before recursion, which can append more nodes.
+    let context = nodes[node.index].context
     let size: Size
     var layout: Range<Int>?
-    switch nodes[node.index].kind {
-    case .primitive(let index):
-      let primitive = primitives[index]
-      size = primitive.block.sizeThatFits(proposal, context: primitive.context)
-    case .stack(let index): (size, layout) = placeStack(stacks[index], proposal: proposal)
-    case .custom(let index):
-      let callback = callbacks[index].measure
-      size = callback(&self, proposal)
+    switch nodes[node.index].content {
+    case .text(let value): size = value.sizeThatFits(proposal, context: context)
+    case .image(let value): size = value.sizeThatFits(proposal, context: context)
+    case .marquee(let value): size = value.sizeThatFits(proposal, context: context)
+    case .progress(let value): size = value.sizeThatFits(proposal, context: context)
+    case .button(let value): size = value.sizeThatFits(proposal, context: context)
+    case .editor(let value): size = value.sizeThatFits(proposal)
+    case .color, .spacer, .scroll: size = proposal
+    case .empty: size = .zero
+    case .custom(let leaf): size = leaf.measure(proposal)
+    case .interactive(var state):
+      size = state.sizeThatFits(proposal, in: &self)
+      nodes[node.index].content = .interactive(state)
+    case .layout(let child, let operation):
+      size = LayoutModifier(content: EmptyBlock(), operation: operation).sizeThatFits(proposal, context: context) {
+        sizeThatFits(child, $0)
+      }
+    case .decoration(let child, _), .group(let child, _), .command(let child, _), .focus(let child, _),
+      .animation(let child, _):
+      size = sizeThatFits(child, proposal)
+    case .stack(let stack): (size, layout) = placeStack(stack, proposal: proposal)
+    case .overlay(let range, _), .fragment(let range):
+      size = range.reduce(.zero) { result, index in
+        let child = sizeThatFits(children[index].node, proposal)
+        return Size(width: max(result.width, child.width), height: max(result.height, child.height))
+      }
+    case .trailing(let input, let controls, let spacing):
+      let controlsSize = sizeThatFits(controls, proposal)
+      let width = max(0, proposal.width - controlsSize.width - spacing)
+      let inputSize = sizeThatFits(input, Size(width: width, height: proposal.height))
+      size = Size(width: proposal.width, height: max(inputSize.height, controlsSize.height))
+      layout = appendPlacements([
+        Rect(x: 0, y: proposal.height - inputSize.height, width: width, height: inputSize.height),
+        Rect(
+          x: proposal.width - controlsSize.width, y: proposal.height - controlsSize.height,
+          width: controlsSize.width, height: controlsSize.height),
+      ])
     }
-    precondition(contains(node), "Cannot reset LayoutBuffer from a callback")
     let next = nodes[node.index].measurements
     nodes[node.index].measurements = measurements.count
     if measurements.count == measurements.capacity { PipelineMetrics.record(.bufferGrowth) }
@@ -209,103 +260,237 @@ public struct LayoutBuffer: ~Copyable {
   }
 
   public mutating func register(_ node: LayoutNode, in rect: Rect) {
-    precondition(contains(node), "LayoutNode belongs to another operation")
+    precondition(contains(node), "Stale layout handle")
     PipelineMetrics.record(.placement)
     PipelineMetrics.record(.registration)
-    switch nodes[node.index].kind {
-    case .primitive(let index):
-      let primitive = primitives[index]
-      BlockEngine.registerResolved(primitive.block, in: rect, context: primitive.context)
-    case .stack(let index):
-      let stack = stacks[index]
+    let context = nodes[node.index].context
+    let parent = context.interaction.builderStack.last
+    let before = parent?.children.count
+    var rule = FocusRule.container
+    switch nodes[node.index].content {
+    case .text(let value):
+      value.register(in: rect, context: context)
+      rule = value.focusRule
+    case .image(let value):
+      value.register(in: rect, context: context)
+      rule = value.focusRule
+    case .marquee(let value):
+      value.register(in: rect, context: context)
+      rule = value.focusRule
+    case .progress(let value):
+      value.register(in: rect, context: context)
+      rule = value.focusRule
+    case .color: rule = .standard
+    case .button(let value):
+      value.register(in: rect, context: context)
+      rule = .control
+    case .editor(var state):
+      state.register(in: rect)
+      nodes[node.index].content = .editor(state)
+    case .interactive(var state):
+      state.register(in: rect, buffer: &self)
+      nodes[node.index].content = .interactive(state)
+    case .custom(let leaf):
+      leaf.register(rect)
+      rule = leaf.focusRule
+    case .layout(let child, let operation): register(child, in: LayoutModifier.placed(operation, in: rect))
+    case .decoration(let child, let decoration):
+      switch decoration {
+      case .background(let background):
+        register(background, in: rect)
+        register(child, in: rect)
+      case .clip: context.withInteractionClip(rect) { register(child, in: rect) }
+      default: register(child, in: rect)
+      }
+    case .stack(let stack):
       let range = stackPlacements(node, proposal: rect.size)
-      stack.context.withFocusGroup(in: rect, axis: stack.axis) {
+      context.withFocusGroup(in: rect, axis: stack.axis) {
         for (childIndex, placementIndex) in zip(stack.children, range) {
-          let child = children[childIndex].node
-          let placement = placed(placements[placementIndex], in: rect)
-          register(child, in: placement)
+          register(children[childIndex].node, in: placed(placements[placementIndex], in: rect))
         }
       }
-    case .custom(let index):
-      let callback = callbacks[index].register
-      callback(&self, rect)
+    case .overlay(let range, let group):
+      if group { context.interaction.beginGroup(rect: rect) }
+      for index in range {
+        let child = children[index].node
+        register(child, in: Rect(origin: rect.origin, size: group ? sizeThatFits(child, rect.size) : rect.size))
+      }
+      if group { context.interaction.endGroup() }
+    case .fragment(let range): for index in range { register(children[index].node, in: rect) }
+    case .group(let child, let name):
+      context.interaction.beginGroup(rect: rect, navigationID: context.widgetID, navigationName: name)
+      register(child, in: rect)
+      context.interaction.endGroup()
+    case .command(let child, let operation):
+      CommandScope.withRegistration(operation, in: rect, context: context) { register(child, in: rect) }
+    case .focus(let child, let target):
+      _ = target.pendingEditing
+      register(child, in: rect)
+    case .animation(let child, let state):
+      context.interaction.animationKeys.insert(context.widgetID)
+      context.interaction.animations[context.widgetID] = state
+      register(child, in: rect)
+    case .trailing(let input, let controls, _):
+      let range = stackPlacements(node, proposal: rect.size)
+      context.withFocusGroup(in: rect) {
+        register(input, in: placed(placements[range.lowerBound], in: rect))
+        register(controls, in: placed(placements[range.lowerBound + 1], in: rect))
+      }
+    case .scroll(let scroll, _):
+      let prepared = scroll.registerContent(in: rect, context: context, buffer: &self)
+      nodes[node.index].content = .scroll(scroll, prepared)
+    case .empty, .spacer: break
     }
-    precondition(contains(node), "Cannot reset LayoutBuffer from a callback")
+    if let parent, parent.children.count == before {
+      if rule == .control { preconditionFailure("Control registered no focus leaf") }
+      if rule == .standard, !context.focusLeafClaimed, !context.navigationIgnored {
+        context.registerFocusable(in: rect)
+      }
+    }
+    nodes[node.index].registeredRect = rect
   }
 
   public mutating func paint(_ node: LayoutNode, into list: inout DrawList, in rect: Rect) {
-    precondition(contains(node), "LayoutNode belongs to another operation")
+    precondition(contains(node), "Stale layout handle")
+    precondition(nodes[node.index].registeredRect == rect, "Drawing requires the committed layout rectangle")
     PipelineMetrics.record(.paint)
-    BlockEngine.countDrawingCommands(into: &list) { list in
-      switch nodes[node.index].kind {
-      case .primitive(let index):
-        let primitive = primitives[index]
-        BlockEngine.paintResolved(primitive.block, into: &list, in: rect, context: primitive.context)
-      case .stack(let index):
-        let stack = stacks[index]
-        let range = stackPlacements(node, proposal: rect.size)
-        for (childIndex, placementIndex) in zip(stack.children, range) {
-          let child = children[childIndex].node
-          let placement = placed(placements[placementIndex], in: rect)
-          paint(child, into: &list, in: placement)
+    let outermost = paintingDepth == 0
+    let before = list.commands.count
+    paintingDepth += 1
+    defer {
+      paintingDepth -= 1
+      if outermost { PipelineMetrics.record(.drawingCommands, count: list.commands.count - before) }
+    }
+    let context = nodes[node.index].context
+    var highlight = false
+    switch nodes[node.index].content {
+    case .text(let value):
+      value.paint(into: &list, in: rect, context: context)
+      highlight = value.focusRule == .standard
+    case .image(let value):
+      value.paint(into: &list, in: rect, context: context)
+      highlight = value.focusRule == .standard
+    case .marquee(let value):
+      value.paint(into: &list, in: rect, context: context)
+      highlight = value.focusRule == .standard
+    case .progress(let value):
+      value.paint(into: &list, in: rect, context: context)
+      highlight = value.focusRule == .standard
+    case .color(let color):
+      list.fillRect(rect, color: color)
+      highlight = true
+    case .button(let value): value.paint(into: &list, in: rect, context: context)
+    case .editor(let state): state.paint(into: &list, in: rect)
+    case .interactive(let state): state.paint(into: &list, in: rect, buffer: &self)
+    case .custom(let leaf):
+      leaf.paint(&list, rect)
+      highlight = leaf.focusRule == .standard
+    case .layout(let child, let operation): paint(child, into: &list, in: LayoutModifier.placed(operation, in: rect))
+    case .decoration(let child, let decoration):
+      switch decoration {
+      case .background(let background):
+        paint(background, into: &list, in: rect)
+        paint(child, into: &list, in: rect)
+      case .rounded(let color, let radii):
+        list.fillRoundedRect(rect, radii: radii, color: color)
+        paint(child, into: &list, in: rect)
+      case .border(let color, let radii, let width):
+        paint(child, into: &list, in: rect)
+        if radii == .zero {
+          list.strokeRect(rect, width: width, color: color)
+        } else {
+          list.strokeRoundedRect(rect, radii: radii, width: width, color: color)
         }
-      case .custom(let index):
-        let callback = callbacks[index].paint
-        callback(&self, &list, rect)
+      case .clip:
+        list.pushClip(rect)
+        paint(child, into: &list, in: rect)
+        list.popClip()
+      }
+    case .stack(let stack):
+      let range = stackPlacements(node, proposal: rect.size)
+      for (childIndex, placementIndex) in zip(stack.children, range) {
+        paint(children[childIndex].node, into: &list, in: placed(placements[placementIndex], in: rect))
+      }
+    case .overlay(let range, _), .fragment(let range):
+      for index in range {
+        let child = children[index].node
+        paint(child, into: &list, in: nodes[child.index].registeredRect!)
+      }
+    case .group(let child, _), .command(let child, _), .focus(let child, _), .animation(let child, _):
+      paint(child, into: &list, in: rect)
+    case .trailing(let input, let controls, _):
+      paint(input, into: &list, in: nodes[input.index].registeredRect!)
+      paint(controls, into: &list, in: nodes[controls.index].registeredRect!)
+    case .scroll(let scroll, let prepared): scroll.paint(prepared!, into: &list, context: context, buffer: &self)
+    case .empty, .spacer: break
+    }
+    if highlight, !context.focusLeafClaimed, !context.navigationIgnored {
+      context.paintFocusHighlight(in: rect, into: &list)
+    }
+  }
+
+  private mutating func appendChildren(_ childNodes: [LayoutNode], flatten: Bool) -> Range<Int> {
+    var expanded: [LayoutNode] = []
+    func collect(_ node: LayoutNode) {
+      precondition(contains(node), "Stale layout handle")
+      if flatten, case .fragment(let range) = nodes[node.index].content {
+        for index in range { collect(children[index].node) }
+      } else {
+        expanded.append(node)
       }
     }
-    precondition(contains(node), "Cannot reset LayoutBuffer from a callback")
-  }
-
-  mutating func prepareStack(
-    _ originals: [any Block], axis: FocusGroupAxis, spacing: Float, reversed: Bool,
-    bottomAligned: Bool = false, context: BlockContext
-  ) -> LayoutNode {
-    let children = originals.enumerated().map { index, child in
-      prepare(child, context: context.childContext(for: child, at: index))
+    for child in childNodes { collect(child) }
+    let start = children.count
+    for child in expanded {
+      if children.count == children.capacity { PipelineMetrics.record(.bufferGrowth) }
+      let spacer: Bool
+      if case .spacer = nodes[child.index].content { spacer = true } else { spacer = false }
+      children.append(Child(node: child, spacer: spacer))
     }
-    return stack(
-      children, spacers: originals.map(BlockEngine.isSpacer), axis: axis, spacing: spacing,
-      reversed: reversed, bottomAligned: bottomAligned, context: context)
+    return start..<children.count
   }
-
-  /// Direct stack construction. Builders emit these exact same records.
-  /// Give each child its own keyed or positional context when preparing it.
+  mutating func mapChildren(
+    _ node: LayoutNode, context: BlockContext,
+    transform: (inout LayoutBuffer, LayoutNode, BlockContext) -> LayoutNode
+  ) -> LayoutNode {
+    if case .fragment(let range) = nodes[node.index].content {
+      var result: [LayoutNode] = []
+      for index in range {
+        let child = children[index].node
+        let childContext = nodes[child.index].context
+        result.append(transform(&self, child, childContext))
+      }
+      return fragment(result, context: context)
+    }
+    return transform(&self, node, context)
+  }
+  mutating func fragment(_ childNodes: [LayoutNode], context: BlockContext) -> LayoutNode {
+    let range = appendChildren(childNodes, flatten: true)
+    return node(.fragment(range), context: context)
+  }
+  public mutating func overlay(_ childNodes: [LayoutNode], group: Bool = true, context: BlockContext) -> LayoutNode {
+    let range = appendChildren(childNodes, flatten: true)
+    return node(.overlay(range, group), context: context)
+  }
   public mutating func stack(
     _ childNodes: [LayoutNode], axis: FocusGroupAxis, spacing: Float = 0,
     reversed: Bool = false, bottomAligned: Bool = false, context: BlockContext
   ) -> LayoutNode {
-    stack(
-      childNodes,
-      spacers: childNodes.map { node in
-        precondition(contains(node), "LayoutNode belongs to another operation")
-        if case .primitive(let index) = nodes[node.index].kind { return primitives[index].block is Spacer }
-        return false
-      }, axis: axis, spacing: spacing, reversed: reversed, bottomAligned: bottomAligned, context: context)
+    let range = appendChildren(childNodes, flatten: true)
+    return node(
+      .stack(
+        Stack(
+          axis: axis, spacing: spacing, reversed: reversed,
+          bottomAligned: bottomAligned, children: range)), context: context)
   }
-
-  mutating func stack(
-    _ childNodes: [LayoutNode], spacers: [Bool], axis: FocusGroupAxis, spacing: Float,
-    reversed: Bool, bottomAligned: Bool, context: BlockContext
-  ) -> LayoutNode {
-    let first = children.count
-    for (child, spacer) in zip(childNodes, spacers) {
-      precondition(contains(child), "LayoutNode belongs to another operation")
-      if children.count == children.capacity { PipelineMetrics.record(.bufferGrowth) }
-      children.append(Child(node: child, spacer: spacer))
+  private mutating func appendPlacements(_ rects: [Rect]) -> Range<Int> {
+    let start = placements.count
+    for rect in rects {
+      if placements.count == placements.capacity { PipelineMetrics.record(.bufferGrowth) }
+      placements.append(rect)
     }
-    let node = LayoutNode(owner: owner, generation: generation, index: nodes.count)
-    if nodes.count == nodes.capacity { PipelineMetrics.record(.bufferGrowth) }
-    PipelineMetrics.record(.layoutNode)
-    nodes.append(Record(kind: .stack(stacks.count)))
-    if stacks.count == stacks.capacity { PipelineMetrics.record(.bufferGrowth) }
-    stacks.append(
-      Stack(
-        axis: axis, spacing: spacing, reversed: reversed, bottomAligned: bottomAligned,
-        children: first..<children.count, context: context))
-    return node
+    return start..<placements.count
   }
-
   private mutating func stackExpands(_ stack: Stack, horizontally: Bool) -> Bool {
     for index in stack.children {
       let child = children[index]
@@ -388,23 +573,4 @@ public struct LayoutBuffer: ~Copyable {
       width: placement.size.width, height: placement.size.height)
   }
 
-}
-
-/// Standalone operation ownership. Windows reuse a LayoutBuffer instead.
-@MainActor
-public struct PreparedLayout: ~Copyable {
-  private var buffer: LayoutBuffer
-  private let root: LayoutNode
-
-  init(buffer: consuming LayoutBuffer, root: LayoutNode) {
-    self.buffer = buffer
-    self.root = root
-  }
-
-  public var nodeCount: Int { buffer.count }
-  public var expandsHorizontally: Bool { mutating get { buffer.expandsHorizontally(root) } }
-  public var expandsVertically: Bool { mutating get { buffer.expandsVertically(root) } }
-  public mutating func sizeThatFits(_ proposal: Size) -> Size { buffer.sizeThatFits(root, proposal) }
-  public mutating func register(in rect: Rect) { buffer.register(root, in: rect) }
-  public mutating func paint(into list: inout DrawList, in rect: Rect) { buffer.paint(root, into: &list, in: rect) }
 }

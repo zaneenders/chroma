@@ -32,7 +32,7 @@ extension App {
     host.runtime.scheduler.setRefreshRates(minimum: minimumRefreshRate, maximum: maximumRefreshRate)
     host.runtime.keyBindings = keyBindings
     host.frameObserver = frameObserver
-    host.content = DeferredBlock { self.body }
+    host.runtime.build = { buffer, context in buffer.emit(self.body, context: context) }
     try host.run(title: "\(title) — \(host.name)")
   }
 }

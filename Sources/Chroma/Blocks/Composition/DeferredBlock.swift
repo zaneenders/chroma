@@ -5,5 +5,8 @@ public struct DeferredBlock<Content: Block>: Block {
     self.content = content
   }
 
-  @MainActor public var body: Content { content() }
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    PipelineMetrics.record(.bodyEvaluation)
+    return buffer.emit(content(), context: context.component(Self.self))
+  }
 }

@@ -34,7 +34,9 @@ struct TextInputPaintingTests {
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
     let size = Size(width: 200, height: 40)
     func render() -> DrawList {
-      producer.render(content: content, viewport: size, input: InputState(), context: context, onChange: {})
+      producer.render(
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: size, input: InputState(),
+        context: context, onChange: {})
     }
     _ = render()
     let tree = try #require(context.interaction.tree)
@@ -85,9 +87,10 @@ struct TextInputPaintingTests {
     context.interaction.textDragViewportRow = 0
     #expect(context.interaction.isDragging)
     var list = DrawList()
-    var resolved = BlockEngine.prepare(editor, context: context)
-    resolved.register(in: Rect(x: 0, y: 0, width: 200, height: 100))
-    resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.emit(editor, context: context)
+    resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 200, height: 100))
+    resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
     #expect(context.interaction.textDragViewportRow == 0)
   }
 
@@ -101,7 +104,8 @@ struct TextInputPaintingTests {
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
     func render() -> DrawList {
       producer.render(
-        content: content, viewport: Size(width: 200, height: 100), input: InputState(),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+        input: InputState(),
         context: context, onChange: {})
     }
     _ = render()

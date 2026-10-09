@@ -11,7 +11,17 @@ struct RegistrationRefreshTests {
     var inputs: [InputState] = []
   }
 
-  struct InputProbe: PaintableBlock {
+  @MainActor struct InputProbe: Block {
+
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     func register(in rect: Rect, context: BlockContext) {
       _ = context.buttonState(id: WidgetID("probe"), in: rect) { capture.clicks += 1 }
       context.registerInputHandler { capture.inputs.append($0) }
@@ -32,7 +42,7 @@ struct RegistrationRefreshTests {
     let capture = InputCapture()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = InputProbe(capture: capture)
+    renderer.setContent(InputProbe(capture: capture))
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     #expect(capture.clicks == 1)
@@ -52,7 +62,7 @@ struct RegistrationRefreshTests {
     let capture = InputCapture()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = InputProbe(capture: capture)
+    renderer.setContent(InputProbe(capture: capture))
     renderer.render()
     renderer.render(
       input: InputState(

@@ -14,12 +14,11 @@ public struct HeadlessFrame: Equatable, Sendable {
 public final class HeadlessHost: Host {
   public let name = "Headless"
 
-  public var content: (any Block)? {
-    get { runtime.content }
-    set {
-      runtime.content = newValue
-    }
+  public var build: LayoutBuilder? {
+    get { runtime.build }
+    set { runtime.build = newValue }
   }
+  public func setContent(_ content: (any Block)?) { runtime.setContent(content) }
   public var frameObserver: FrameObserver? {
     get { runtime.frameObserver }
     set { runtime.frameObserver = newValue }

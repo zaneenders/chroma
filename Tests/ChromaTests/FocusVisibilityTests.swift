@@ -12,9 +12,10 @@ struct FocusVisibilityTests {
     context.interaction.beginFrame(input: input)
     var drawList = DrawList()
     do {
-      var resolved = BlockEngine.prepare(content, context: context)
-      resolved.register(in: Rect(origin: .zero, size: viewport))
-      resolved.paint(into: &drawList, in: Rect(origin: .zero, size: viewport))
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(content, context: context)
+      resolvedBuffer.register(resolved, in: Rect(origin: .zero, size: viewport))
+      resolvedBuffer.paint(resolved, into: &drawList, in: Rect(origin: .zero, size: viewport))
     }
     context.interaction.endFrame()
     if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
@@ -93,28 +94,17 @@ struct FocusVisibilityTests {
   }
 }
 
-private struct ClippedColumn: LayoutPreparingBlock {
+private struct ClippedColumn: Block {
 
-  var focusRule: FocusRule { .container }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-  @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-    let child = buffer.prepare(
-      VStack(spacing: 0) {
-        Button("Row 1") {}
-        Button("Row 2") {}
-        Button("Row 3") {}
-        Button("Row 4") {}
-      }, context: context)
-    return buffer.append(
-      measure: { _, proposal in proposal },
-      register: { buffer, rect in
-        context.withInteractionClip(Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 60)) {
-          buffer.register(child, in: Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 120))
-        }
-      },
-      paint: { buffer, list, rect in
-        buffer.paint(child, into: &list, in: Rect(x: rect.minX, y: rect.minY, width: rect.size.width, height: 120))
-      })
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.emit(
+      ZStack {
+        VStack(spacing: 0) {
+          Button("Row 1") {}
+          Button("Row 2") {}
+          Button("Row 3") {}
+          Button("Row 4") {}
+        }.padding(EdgeInsets(bottom: -60)).sizing(y: .fixed(60)).clipped()
+      }, context: context.component(Self.self))
   }
 }

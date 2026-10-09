@@ -15,7 +15,17 @@ struct ScrollRegistrationTests {
     var paints = 0
   }
 
-  struct Probe: PaintableBlock {
+  @MainActor struct Probe: Block {
+
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     let index: Int
     let height: Float
     let capture: Capture
@@ -41,9 +51,12 @@ struct ScrollRegistrationTests {
     }
   }
 
-  struct Composite: Block {
+  @MainActor struct Composite: Block {
     let capture: Capture
-    var body: some Block {
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      buffer.emit(content(), context: context.component(Self.self))
+    }
+    func content() -> some Block {
       capture.bodies += 1
       return Probe(index: 0, height: 100, capture: capture)
     }
@@ -53,7 +66,17 @@ struct ScrollRegistrationTests {
     var height: Float = 10
   }
 
-  struct ObservableRow: PaintableBlock {
+  @MainActor struct ObservableRow: Block {
+
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     let model: HeightModel
     let capture: Capture
     var focusRule: FocusRule { .standard }
@@ -79,7 +102,9 @@ struct ScrollRegistrationTests {
 
     func register(_ content: any Block, commands: [Command] = []) {
       context.interaction.viewport = Rect(origin: .zero, size: viewport)
-      producer.refreshRegistrations(content, viewport: viewport, context: context, commands: commands)
+      producer.refreshRegistrations(
+        { buffer, context in buffer.emit(content, context: context) }, viewport: viewport, context: context,
+        commands: commands)
     }
 
     func send(_ input: InputState, to content: any Block) {
@@ -95,7 +120,7 @@ struct ScrollRegistrationTests {
       context.interaction.finishInput()
     }
 
-    func leaf(at point: Point) -> FocusNode? {
+    func leaf(at point: Point) -> InteractionNode? {
       let tree = context.interaction.tree
       guard let path = tree?.hitTest(point) else { return nil }
       return tree?.node(at: path)

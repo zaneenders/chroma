@@ -135,15 +135,16 @@ struct MarkdownTests {
     let context = BlockContext()
     let cell = context.fontMetrics.cellAdvance
     let height = context.fontMetrics.lineAdvance
-    #expect(block.sizeThatFits(Size(width: cell * 2, height: 1000), context: context).height == height * 5)
+    var buffer = LayoutBuffer()
+    let root = buffer.emit(block, context: context)
+    #expect(buffer.sizeThatFits(root, Size(width: cell * 2, height: 1000)).height == height * 5)
     let scaled = BlockContext(textScale: 2)
-    #expect(block.sizeThatFits(Size(width: cell * 2, height: 1000), context: scaled).height == height * 20)
-    #expect(
-      MarkdownLeaf(block: .paragraph(""), scale: 1, lineSpacing: 0).sizeThatFits(
-        Size(width: 100, height: 100), context: context
-      ).height == 0)
+    let scaledRoot = buffer.emit(block, context: scaled)
+    #expect(buffer.sizeThatFits(scaledRoot, Size(width: cell * 2, height: 1000)).height == height * 20)
+    let empty = buffer.emit(MarkdownLeaf(block: .paragraph(""), scale: 1, lineSpacing: 0), context: context)
+    #expect(buffer.sizeThatFits(empty, Size(width: 100, height: 100)).height == 0)
     var drawList = DrawList()
-    block.paint(into: &drawList, in: Rect(x: 0, y: 0, width: 100, height: 100), context: context)
+    buffer.paint(root, into: &drawList, in: Rect(x: 0, y: 0, width: 100, height: 100))
   }
 }
 
@@ -156,25 +157,26 @@ struct MarkdownNavigationTests {
     func render(_ commands: [Command] = []) {
       context.interaction.beginFrame(input: InputState(commands: commands))
       var buffer = LayoutBuffer()
-      let resolved = buffer.prepare(content, context: context)
+      let resolved = buffer.emit(content, context: context)
       buffer.register(resolved, in: rect)
       var list = DrawList()
       buffer.paint(resolved, into: &list, in: rect)
       context.interaction.endFrame()
     }
-    func leaves(_ node: FocusNode) -> [FocusNode] {
+    func leaves(_ node: InteractionNode) -> [InteractionNode] {
       node.isLeaf ? [node] : node.children.flatMap(leaves)
     }
     render()
     let initial = leaves(context.interaction.tree!)
     #expect(initial.count == 5)
+    let initialRects = initial.map(\.rect)
     context.interaction.focus(initial[0].leafID!)
     let first = context.interaction.selectedLeafID
     render([.navigation(.down)])
     #expect(context.interaction.selectedLeafID != first)
     render([.navigation(.up)])
     #expect(context.interaction.selectedLeafID == first)
-    #expect(leaves(context.interaction.tree!).map(\.rect) == initial.map(\.rect))
+    #expect(leaves(context.interaction.tree!).map(\.rect) == initialRects)
   }
 
   @Test func keyboardNavigationScrollsLaterBlocksIntoView() {

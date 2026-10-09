@@ -1,4 +1,8 @@
-public struct Image: PaintableBlock {
+public struct Image: Block {
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.image(self, context: context)
+  }
+
   public var resource: ImageResource
   public var scaling: ImageScaling
   public var alignment: ImageAlignment
@@ -13,18 +17,18 @@ public struct Image: PaintableBlock {
     self.alignment = alignment
   }
 
-  public var focusRule: FocusRule { .standard }
+  var focusRule: FocusRule { .standard }
 
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
     resource.size
   }
 
-  public var expandsHorizontally: Bool { false }
-  public var expandsVertically: Bool { false }
+  var expandsHorizontally: Bool { false }
+  var expandsVertically: Bool { false }
 
-  public func register(in rect: Rect, context: BlockContext) {}
+  func register(in rect: Rect, context: BlockContext) {}
 
-  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.image(resource, in: rect, scaling: scaling, alignment: alignment)
   }
 }

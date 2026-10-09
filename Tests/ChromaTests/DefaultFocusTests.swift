@@ -22,9 +22,10 @@ struct DefaultFocusTests {
     context.interaction.beginFrame(input: input)
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(content, context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var buffer = LayoutBuffer()
+      let root = buffer.emit(content, context: context)
+      buffer.register(root, in: viewport)
+      buffer.paint(root, into: &list, in: viewport)
     }
     context.interaction.endFrame()
     if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
@@ -33,11 +34,11 @@ struct DefaultFocusTests {
 
   private func leafRects() -> [Rect] {
     var rects: [Rect] = []
-    func visit(_ node: FocusNode) {
+    func visit(_ node: InteractionNode) {
       if node.isLeaf { rects.append(node.rect) }
       node.children.forEach(visit)
     }
-    visit(context.interaction.tree ?? FocusNode(kind: .group, rect: .zero))
+    if let tree = context.interaction.tree { visit(tree) }
     return rects
   }
 
@@ -176,7 +177,16 @@ struct DefaultFocusTests {
     #expect(context.interaction.tree?.firstLeafPath() != nil)
   }
 
-  private struct CellGrid: PaintableBlock {
+  @MainActor private struct CellGrid: Block {
+
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
 
     let action: (@MainActor () -> Void)?
 

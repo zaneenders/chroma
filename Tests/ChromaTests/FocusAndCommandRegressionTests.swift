@@ -11,7 +11,7 @@ struct FocusAndCommandRegressionTests {
     func render(_ content: any Block, input: InputState = InputState()) {
       let isInitialFrame = context.interaction.tree == nil
       _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
         input: input, context: context, onChange: {})
       if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     }
@@ -502,7 +502,16 @@ struct FocusAndCommandRegressionTests {
   }
 }
 
-private struct GridProbe: PaintableBlock {
+@MainActor private struct GridProbe: Block {
+
+  func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      measure: { self.sizeThatFits($0, context: context) },
+      register: { self.register(in: $0, context: context) },
+      paint: { self.paint(into: &$0, in: $1, context: context) })
+  }
 
   let rows: Int
   let columns: Int

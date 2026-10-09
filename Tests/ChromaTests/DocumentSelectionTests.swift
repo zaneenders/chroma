@@ -15,7 +15,7 @@ struct DocumentSelectionTests {
     }
     func render(_ events: [TextEditEvent] = [], commands: [Command] = []) {
       _ = producer.render(
-        content: content, viewport: Size(width: 500, height: 500),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
         input: InputState(commands: commands, textEvents: events), context: context, onChange: {})
     }
     render()
@@ -47,7 +47,7 @@ struct DocumentSelectionTests {
     }
     func render(_ commands: [Command] = []) {
       _ = producer.render(
-        content: content, viewport: Size(width: 500, height: 500),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
         input: InputState(commands: commands), context: context, onChange: {})
     }
     render()
@@ -80,11 +80,11 @@ struct VirtualizedTextSelectionTests {
         .init(id: "answer", content: Text("Answer").selectable()),
       ])
     _ = producer.render(
-      content: content, viewport: Size(width: 500, height: 500),
+      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
       input: InputState(), context: context, onChange: {})
     target.focus()
     _ = producer.render(
-      content: content, viewport: Size(width: 500, height: 500),
+      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
       input: InputState(), context: context, onChange: {})
     #expect(target.isFocused)
     context.interaction.navigationPath = []

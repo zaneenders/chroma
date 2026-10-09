@@ -18,9 +18,10 @@ struct CommandConsumptionTests {
         return .handled
       }
       do {
-        var resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: BlockContext(interaction: interaction))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
       interaction.endFrame()
     }
@@ -43,9 +44,10 @@ struct CommandConsumptionTests {
         consumes ? .handled : .ignored
       }
       do {
-        var resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: BlockContext(interaction: interaction))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
       interaction.endFrame()
     }

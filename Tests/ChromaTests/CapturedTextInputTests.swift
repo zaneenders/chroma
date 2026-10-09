@@ -15,7 +15,16 @@ struct CapturedTextInputTests {
     var range: Range<Int>?
   }
 
-  struct Editor: PaintableBlock {
+  @MainActor struct Editor: Block {
+
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
 
     let text: String
     let model: Model
@@ -39,7 +48,7 @@ struct CapturedTextInputTests {
     let model = Model()
     let capture = Capture()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
+    renderer.setContent(DeferredBlock { Editor(text: model.text, model: model, capture: capture) })
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     renderer.render(input: InputState(textEvents: [.selectAll]))
@@ -53,7 +62,7 @@ struct CapturedTextInputTests {
     let model = Model()
     let capture = Capture()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock { Editor(text: model.text, model: model, capture: capture) }
+    renderer.setContent(DeferredBlock { Editor(text: model.text, model: model, capture: capture) })
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     model.text = "a"
@@ -68,7 +77,7 @@ struct CapturedTextInputTests {
     func field(_ text: String) -> TextEditor {
       TextEditor(singleLine: true, text: { text }, onChange: { model.text = $0 })
     }
-    renderer.content = DeferredBlock { field(model.text) }
+    renderer.setContent(DeferredBlock { field(model.text) })
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     renderer.render(input: InputState(textEvents: [.selectAll]))

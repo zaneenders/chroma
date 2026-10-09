@@ -64,12 +64,12 @@ struct InputBacklogBenchmark {
     let host = HeadlessHost(size: StressConfiguration.viewport)
     defer { host.close() }
     if let scene {
-      host.content = DeferredBlock { scene.content }
+      host.setContent(DeferredBlock { scene.content })
     } else {
       let source = (0..<options.sections).map {
         "Paragraph \($0) with **bold**, `code`, and enough text to wrap across several lines."
       }.joined(separator: "\n\n")
-      host.content = ScrollView { MarkdownText(source) }
+      host.setContent(ScrollView { MarkdownText(source) })
     }
     _ = host.render()
     // Warm fonts and the fixture; each measured trial still owns a fresh host.

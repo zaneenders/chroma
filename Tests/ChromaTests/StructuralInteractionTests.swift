@@ -13,7 +13,7 @@ struct StructuralInteractionTests {
     func render(_ content: any Block, input: InputState = InputState()) {
       let isInitialFrame = context.interaction.tree == nil
       _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
         input: input, context: context, onChange: {})
       if isInitialFrame, context.interaction.selection == nil { context.interaction.focusFirstControlForTest() }
     }
@@ -277,8 +277,12 @@ struct StructuralInteractionTests {
   private struct Item: Identifiable { let id: Int }
 
   private struct ItemButton: Block {
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      buffer.emit(body, context: context.component(Self.self))
+    }
+
     let item: Item
-    var body: some Block { Button(String(item.id)) {} }
+    @MainActor var body: some Block { Button(String(item.id)) {} }
   }
 
   @Test func keyedComponentInstancesKeepIndependentFocus() {
@@ -427,7 +431,7 @@ struct StructuralInteractionTests {
     let target = FocusTarget()
     target.focus()
     let context = BlockContext()
-    _ = BlockEngine.measure(
+    _ = measureBlock(
       Button("Button") {}.focusTarget(target),
       proposal: Size(width: 100, height: 100), context: context)
     #expect(target.interaction == nil)

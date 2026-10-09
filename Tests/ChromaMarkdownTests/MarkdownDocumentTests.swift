@@ -9,7 +9,11 @@ import Testing
 struct MarkdownDocumentTests {
   @Test func unchangedSourceAndBodyEvaluationsKeepTheRevision() {
     let document = MarkdownDocument("# Heading\n\n**first**")
-    for _ in 0..<10 { _ = MarkdownText(document).body }
+    var buffer = LayoutBuffer()
+    for _ in 0..<10 {
+      buffer.reset()
+      _ = buffer.emit(MarkdownText(document), context: BlockContext())
+    }
     document.markdown = "# Heading\n\n**first**"
     #expect(document.revision == 0)
     #expect(document.blocks.map(\.block) == [.heading(level: 1, text: "Heading"), .paragraph("**first**")])
@@ -44,7 +48,8 @@ struct MarkdownDocumentTests {
     let document = MarkdownDocument("first")
     let changed = Mutex(false)
     withObservationTracking {
-      _ = MarkdownText(document).body
+      var buffer = LayoutBuffer()
+      _ = buffer.emit(MarkdownText(document), context: BlockContext())
     } onChange: {
       changed.withLock { $0 = true }
     }
@@ -92,7 +97,7 @@ struct MarkdownDocumentTests {
     let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
     var buffer = LayoutBuffer()
-    let original = buffer.prepare(content, context: context)
+    let original = buffer.emit(content, context: context)
     document.markdown = "**second**"
     context.interaction.beginFrame(input: InputState())
     buffer.register(original, in: rect)
@@ -101,7 +106,7 @@ struct MarkdownDocumentTests {
     #expect(context.interaction.copyText() == "first")
 
     buffer.reset()
-    let updated = buffer.prepare(content, context: context)
+    let updated = buffer.emit(content, context: context)
     context.interaction.beginFrame(input: InputState())
     buffer.register(updated, in: rect)
     context.interaction.endFrame()

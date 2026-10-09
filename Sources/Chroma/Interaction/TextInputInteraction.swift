@@ -212,13 +212,7 @@ extension Interaction {
     verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
     navigationIgnored: Bool = false, readOnly: Bool = false, submitInsertsNewline: Bool = false
   ) -> TextInputState {
-    guard let parent = builderStack.last else {
-      preconditionFailure("registerTextInput outside of a frame")
-    }
-    parent.children.append(
-      FocusNode(
-        kind: .leaf(id), rect: rect, hitRect: clippedRect(rect),
-        canBeRevealed: parent.canBeRevealed, navigationIgnored: navigationIgnored))
+    registerLeaf(id: id, rect: rect, navigationIgnored: navigationIgnored)
     if readOnly { building.readOnlyTexts[id] = text }
     building.inputHandlers[id] = { [weak self] in
       guard let self else { return }

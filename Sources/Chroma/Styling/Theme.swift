@@ -186,7 +186,7 @@ public struct ChromaTheme: Equatable, Sendable {
   )
 }
 
-public struct ThemeReader<Content: Block>: LayoutPreparingBlock {
+public struct ThemeReader<Content: Block>: Block {
   public var content: (ChromaTheme) -> Content
 
   public init(@BlockBuilder content: @escaping (ChromaTheme) -> Content) {
@@ -195,7 +195,7 @@ public struct ThemeReader<Content: Block>: LayoutPreparingBlock {
 
 }
 
-public struct ThemeBlock: LayoutPreparingBlock {
+public struct ThemeBlock: Block {
   public var content: any Block
   public var theme: ChromaTheme
 

@@ -2,31 +2,38 @@ import Testing
 
 @testable import Chroma
 
-private struct FixedContent: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct FixedContent: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: BlockContext) {}
 
   var size: Size
   var focusRule: FocusRule { .standard }
   @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: .white)
   }
 }
 
-private struct ClippedScrollContent: LayoutPreparingBlock {
+private struct ClippedScrollContent: Block {
 
   let content: any Block
 
-  var focusRule: FocusRule { .container }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-  @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-    let child = buffer.prepare(content, context: context)
-    return buffer.append(
-      measure: { _, proposal in proposal },
-      register: { buffer, rect in
-        context.withInteractionClip(Rect(x: 0, y: 0, width: 20, height: 20)) { buffer.register(child, in: rect) }
-      }, paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.emit(
+      ZStack {
+        content.padding(EdgeInsets(bottom: -80, trailing: -80))
+          .sizing(x: .fixed(20), y: .fixed(20)).clipped()
+      }, context: context.component(Self.self))
   }
 }
 
@@ -39,8 +46,19 @@ private final class PhaseLog {
   var phases: [Int: InteractionPhase] = [:]
 }
 
-private struct CountedRow: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct CountedRow: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: BlockContext) {}
 
   let index: Int
   let height: Float
@@ -53,13 +71,24 @@ private struct CountedRow: PaintableBlock {
     return Size(width: proposal.width, height: height)
   }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     counter.drawn.append(index)
   }
 }
 
-private struct RowContent: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct RowContent: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: BlockContext) {}
 
   let height: Float
   let color: Color
@@ -70,7 +99,7 @@ private struct RowContent: PaintableBlock {
     Size(width: proposal.width, height: height)
   }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: color)
   }
 }
@@ -97,9 +126,10 @@ struct ScrollViewTests {
       FixedContent(size: Size(width: 100, height: 100))
     }.id(scrollID)
     do {
-      var resolved = BlockEngine.prepare(view, context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(view, context: context)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
     return list
@@ -129,9 +159,10 @@ struct ScrollViewTests {
         FixedContent(size: Size(width: 200, height: 20))
       }.id(scrollID)
       do {
-        var resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: context)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
       return list
@@ -163,16 +194,18 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView { FixedContent(size: Size(width: 100, height: 100)) }.id(firstID), context: context)
-        resolved.register(in: firstViewport)
-        resolved.paint(into: &list, in: firstViewport)
+        resolvedBuffer.register(resolved, in: firstViewport)
+        resolvedBuffer.paint(resolved, into: &list, in: firstViewport)
       }
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView { FixedContent(size: Size(width: 100, height: 100)) }.id(secondID), context: context)
-        resolved.register(in: secondViewport)
-        resolved.paint(into: &list, in: secondViewport)
+        resolvedBuffer.register(resolved, in: secondViewport)
+        resolvedBuffer.paint(resolved, into: &list, in: secondViewport)
       }
       interaction.endFrame()
     }
@@ -195,7 +228,8 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(showsIndicator: false) {
             for _ in 0..<4 {
               Interactive(action: {}) { _ in
@@ -204,8 +238,8 @@ struct ScrollViewTests {
               .sizing(y: .fixed(10))
             }
           }.id(scrollID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -228,14 +262,15 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(data: 0..<5, rowHeight: 10, spacing: 10, showsIndicator: false, controller: controller) { index in
             Interactive(id: WidgetID("row-\(index)"), action: {}) { _ in
               RowContent(height: 10, color: .white)
             }
           }.id(scrollID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -261,15 +296,16 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(data: 0..<4, rowHeight: 10, showsIndicator: false, controller: controller) { index in
             Interactive(id: WidgetID("row-\(index)"), action: {}) { phase in
               log.phases[index] = phase
               return RowContent(height: 10, color: .white)
             }
           }.id(scrollID), context: context)
-        resolved.register(in: listRect)
-        resolved.paint(into: &list, in: listRect)
+        resolvedBuffer.register(resolved, in: listRect)
+        resolvedBuffer.paint(resolved, into: &list, in: listRect)
       }
       interaction.endFrame()
     }
@@ -305,9 +341,10 @@ struct ScrollViewTests {
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: context)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       context.interaction.endFrame()
     }
@@ -340,11 +377,12 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(spacing: 7, showsIndicator: false, controller: controller, rows: rows).id(scrollID),
           context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -374,7 +412,9 @@ struct ScrollViewTests {
     }.id(scrollID)
 
     func frame(_ input: InputState = InputState()) {
-      _ = producer.render(content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+      _ = producer.render(
+        build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size, input: input,
+        context: context, onChange: {})
     }
 
     frame()
@@ -395,7 +435,8 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(showsIndicator: false) {
             ScrollView(showsIndicator: false) {
               for index in 0..<4 {
@@ -407,8 +448,8 @@ struct ScrollViewTests {
             }.id(innerID)
               .sizing(y: .fixed(20))
           }.id(outerID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -431,14 +472,15 @@ struct ScrollViewTests {
       interaction.beginFrame(input: input)
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(data: 0..<10, rowHeight: 10, showsIndicator: false, controller: controller) { _ in
             Interactive(action: {}) { _ in
               RowContent(height: 10, color: .white)
             }
           }.id(scrollID), context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -471,9 +513,10 @@ struct ScrollViewTests {
         FixedContent(size: Size(width: 200, height: 20))
       }.id(scrollID)
       do {
-        var resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: context)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -496,9 +539,10 @@ struct ScrollViewTests {
         FixedContent(size: Size(width: 100, height: 100))
       }.id(scrollID)
       do {
-        var resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: context)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -528,7 +572,8 @@ struct ScrollViewTests {
       }.id(scrollID)
     func frame(_ input: InputState = InputState()) {
       _ = producer.render(
-        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+        build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size, input: input,
+        context: context, onChange: {})
     }
 
     if frameState != "first" { frame() }
@@ -562,7 +607,8 @@ struct ScrollViewTests {
       }.id(scrollID)
     func frame(_ input: InputState = InputState()) {
       _ = producer.render(
-        content: view, viewport: viewport.size, input: input, context: context, onChange: {})
+        build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size, input: input,
+        context: context, onChange: {})
     }
 
     if frameState != "first" { frame() }
@@ -583,7 +629,7 @@ struct ScrollViewTests {
     }.id(scrollID)
     controller.scrollToVisible(Rect(x: 0, y: 500, width: 10, height: 10))
     _ = producer.render(
-      content: view, viewport: viewport.size,
+      build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size,
       input: InputState(
         pointerPosition: delta.y != 0 ? Point(x: 200, y: 200) : Point(x: 10, y: 10),
         scrollDelta: delta),
@@ -611,7 +657,8 @@ struct ScrollViewTests {
           }.id(scrollID)
         func frame(_ input: InputState = InputState()) {
           _ = producer.render(
-            content: ClippedScrollContent(content: scroll), viewport: Size(width: 100, height: 100),
+            build: { buffer, context in buffer.emit(ClippedScrollContent(content: scroll), context: context) },
+            viewport: Size(width: 100, height: 100),
             input: input, context: context, onChange: {})
         }
         if frameState != "first" { frame() }
@@ -643,9 +690,10 @@ struct ScrollViewTests {
         FixedContent(size: Size(width: 200, height: 20))
       }.id(scrollID)
       do {
-        var resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: context)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -696,9 +744,10 @@ struct ScrollViewTests {
       }
     }.id(scrollID)
     do {
-      var resolved = BlockEngine.prepare(view, context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(view, context: context)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
 
@@ -726,9 +775,10 @@ struct ScrollViewTests {
       var list = DrawList()
       let view = ScrollView(controller: controller, rows: rows).id(scrollID)
       do {
-        var resolved = BlockEngine.prepare(view, context: context)
-        resolved.register(in: viewport)
-        resolved.paint(into: &list, in: viewport)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(view, context: context)
+        resolvedBuffer.register(resolved, in: viewport)
+        resolvedBuffer.paint(resolved, into: &list, in: viewport)
       }
       interaction.endFrame()
     }
@@ -777,9 +827,10 @@ struct ScrollViewTests {
       ) { index in row(index) }.id(scrollID)
       #expect(built.isEmpty)
       do {
-        var resolved = BlockEngine.prepare(stack, context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: width, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: width, height: 20))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(stack, context: BlockContext(interaction: interaction))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: width, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: width, height: 20))
       }
       interaction.endFrame()
       #expect(counter.measured.isEmpty)
@@ -826,10 +877,11 @@ struct ScrollViewTests {
       var list = DrawList()
       let rows = indices.map { retainedRows[$0] }
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(controller: controller, rows: rows).id(scrollID), context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: width, height: 100))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: width, height: 100))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: width, height: 100))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: width, height: 100))
       }
       interaction.endFrame()
     }
@@ -868,9 +920,10 @@ struct ScrollViewTests {
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(ScrollView(controller: controller, rows: rows), context: context)
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 100))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(ScrollView(controller: controller, rows: rows), context: context)
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 100))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
       }
       context.interaction.endFrame()
     }

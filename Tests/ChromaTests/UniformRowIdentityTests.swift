@@ -227,25 +227,29 @@ struct UniformRowIdentityTests {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
     let controller = ScrollViewController()
-    var value = 1
-    var label = "old"
-    var actions: [String] = []
-    runtime.content = DeferredBlock {
-      let capturedLabel = label
-      return ScrollView(
-        data: [Item(id: 1, value: value)], rowHeight: 40,
-        controller: controller, identityRevision: 1
-      ) { item in
-        Button(capturedLabel) { actions.append("\(item.value):\(capturedLabel)") }
-      }
+    @MainActor final class Model {
+      var value = 1
+      var label = "old"
+      var actions: [String] = []
     }
+    let model = Model()
+    runtime.setContent(
+      DeferredBlock {
+        let capturedLabel = model.label
+        return ScrollView(
+          data: [Item(id: 1, value: model.value)], rowHeight: 40,
+          controller: controller, identityRevision: 1
+        ) { item in
+          Button(capturedLabel) { model.actions.append("\(item.value):\(capturedLabel)") }
+        }
+      })
     _ = runtime.render(viewport: Size(width: 200, height: 100), input: InputState(), onChange: {})
     runtime.interaction.focusFirstControlForTest()
     let identity = controller.uniformRowIdentity
-    value = 10
-    label = "new"
+    model.value = 10
+    model.label = "new"
     runtime.handleInput(InputState(commands: [.action(.activate)]))
-    #expect(actions == ["10:new"])
+    #expect(model.actions == ["10:new"])
     #expect(controller.uniformRowIdentity === identity)
   }
 }

@@ -1,10 +1,7 @@
-public struct VStack: LayoutPreparingBlock {
+public struct VStack: Block {
   public var spacing: Float
-  var scopedChildren: [any Block]
-
-  public var children: [any Block] {
-    scopedChildren.map { ($0 as? ScopedBlock)?.content ?? $0 }
-  }
+  var content: TupleBlock
+  public var children: [any Block] { content.children }
   public var isLayoutReversed = false
 
   public init(
@@ -12,7 +9,7 @@ public struct VStack: LayoutPreparingBlock {
     @BlockBuilder content: () -> TupleBlock
   ) {
     self.spacing = spacing
-    self.scopedChildren = BlockBuilder.flattenedChildren(content().scopedChildren)
+    self.content = content()
   }
 
   public func reverseLayout() -> VStack {
@@ -21,4 +18,8 @@ public struct VStack: LayoutPreparingBlock {
     return copy
   }
 
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let children = content.emitChildren(into: &buffer, context: context)
+    return buffer.stack(children, axis: .vertical, spacing: spacing, reversed: isLayoutReversed, context: context)
+  }
 }

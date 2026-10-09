@@ -9,7 +9,7 @@ struct HierarchicalNavigationTests {
     let producer = FrameProducer()
     func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = []) {
       _ = producer.render(
-        content: content, viewport: Size(width: 800, height: 600),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 800, height: 600),
         input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
     }
   }
@@ -207,7 +207,7 @@ extension HierarchicalNavigationTests {
     let tree = h.context.interaction.tree!
     let rect = tree.node(at: tree.findLeaf(second.boundID!)!)!.rect
     _ = h.producer.render(
-      content: content, viewport: Size(width: 800, height: 600),
+      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 800, height: 600),
       input: InputState(pointerPosition: Point(x: rect.minX + 2, y: rect.minY + 2)),
       context: h.context, onChange: {})
     #expect(first.isFocused)

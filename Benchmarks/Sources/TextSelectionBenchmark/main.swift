@@ -11,7 +11,7 @@ struct TextSelectionBenchmark {
       let host = HeadlessHost(size: Size(width: 800, height: 600))
       let target = FocusTarget()
       let text = Array(repeating: String(repeating: "a", count: 80), count: lineCount).joined(separator: "\n")
-      host.content = Text(text).selectable().focusTarget(target)
+      host.setContent(Text(text).selectable().focusTarget(target))
       let before = host.render().commands.count
       target.focus()
       host.render()

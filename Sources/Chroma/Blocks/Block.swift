@@ -1,15 +1,13 @@
+/// Optional authoring syntax. Direct construction uses the same buffer methods.
 public protocol Block {
-  associatedtype Body: Block
-
-  /// Describes the current UI. Evaluation must not perform application actions;
-  /// layout may reuse the result within a traversal or evaluate it again for input registration.
-  @MainActor var body: Body { get }
-}
-
-extension Never: Block {
-  public var body: Never { fatalError("Never") }
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode
 }
 
 extension String: Block {
-  public var body: Text { Text(self) }
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.text(Text(self), context: context)
+  }
 }
+
+/// A root construction function; no Block value or result builder is required.
+public typealias LayoutBuilder = @MainActor (inout LayoutBuffer, BlockContext) -> LayoutNode

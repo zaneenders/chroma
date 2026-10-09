@@ -9,7 +9,16 @@ struct CustomTextSelectionTests {
     var state: TextInputState?
   }
 
-  private struct ReadOnlyText: PaintableBlock {
+  @MainActor private struct ReadOnlyText: Block {
+
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
 
     let renderer: Renderer
     var focusRule: FocusRule { .standard }
@@ -42,7 +51,7 @@ struct CustomTextSelectionTests {
     let content = Group("Response") { ReadOnlyText(renderer: renderer).focusTarget(target) }
     func render(_ commands: [Command] = [], text: [TextEditEvent] = []) {
       _ = producer.render(
-        content: content, viewport: Size(width: 600, height: 400),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 600, height: 400),
         input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
     }
     render()
@@ -83,7 +92,7 @@ struct CustomTextSelectionTests {
     let content = ReadOnlyText(renderer: renderer)
     func render(_ input: InputState = InputState()) {
       _ = producer.render(
-        content: content, viewport: Size(width: 600, height: 400),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 600, height: 400),
         input: input, context: context, onChange: {})
     }
     render()

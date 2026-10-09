@@ -1,12 +1,16 @@
-public struct TupleBlock: LayoutPreparingBlock {
-  var scopedChildren: [any Block]
+public struct TupleBlock: Block {
+  public private(set) var children: [any Block]
+  var branch: Int?
+  public init(children: [any Block]) { self.children = children }
 
-  public var children: [any Block] {
-    scopedChildren.map { ($0 as? ScopedBlock)?.content ?? $0 }
+  @MainActor func emitChildren(into buffer: inout LayoutBuffer, context: BlockContext) -> [LayoutNode] {
+    let context = branch.map { context.scoped([.branch($0)]) } ?? context
+    return children.enumerated().map { index, child in
+      buffer.emit(child, context: context.childScope(index))
+    }
   }
-
-  public init(children: [any Block]) {
-    self.scopedChildren = children
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let children = emitChildren(into: &buffer, context: context)
+    return buffer.fragment(children, context: context)
   }
-
 }

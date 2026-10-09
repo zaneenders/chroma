@@ -2,15 +2,19 @@ import Chroma
 import ChromaTesting
 import Foundation
 
-@MainActor private final class Counter { var bodies = 0 }
+@MainActor private final class Counter { var emissions = 0 }
 
 private struct Row: Block {
   let index: Int
   let counter: Counter
 
-  var body: some Block {
-    counter.bodies += 1
-    return HStack(spacing: 4) {
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    counter.emissions += 1
+    return buffer.emit(content(), context: context.component(Self.self))
+  }
+
+  @MainActor private func content() -> some Block {
+    HStack(spacing: 4) {
       Text("Session \(index)")
       Spacer()
       Text("Ready")
@@ -19,12 +23,16 @@ private struct Row: Block {
 }
 
 private struct Layer: Block {
-  let content: any Block
+  let child: any Block
 
-  var body: some Block {
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.emit(content(), context: context.component(Self.self))
+  }
+
+  @MainActor private func content() -> some Block {
     Group {
       HStack {
-        VStack { content }.padding(2).sizing(x: .grow)
+        VStack { child }.padding(2).sizing(x: .grow)
       }
     }
   }
@@ -58,15 +66,15 @@ private struct Result: Encodable {
             let child = content
             content = Interactive(action: {}, content: { _ in TupleBlock(children: [child]) })
           }
-          content = Layer(content: content)
+          content = Layer(child: content)
         }
         let host = HeadlessHost(size: Size(width: 400, height: 300))
-        host.content = ScrollView { content }
+        host.setContent(ScrollView { content })
         let input = InputState(
           pointerPosition: Point(x: 10, y: 10),
           scrollDelta: scrolling ? Point(x: 0, y: -1) : .zero)
         for _ in 0..<3 { host.render(input: input) }
-        counter.bodies = 0
+        counter.emissions = 0
         var timings: [Double] = []
         var commands = 0
         for _ in 0..<frames {
@@ -78,7 +86,7 @@ private struct Result: Encodable {
         results.append(
           Result(
             interactive: interactive, depth: depth, input: scrolling ? "scroll" : "none", rows: 20, frames: frames,
-            commands: commands, bodiesPerFrame: Double(counter.bodies) / Double(frames),
+            commands: commands, bodiesPerFrame: Double(counter.emissions) / Double(frames),
             p50MS: timings[(frames - 1) / 2], p95MS: timings[Int(ceil(Double(frames) * 0.95)) - 1]))
         host.close()
       }

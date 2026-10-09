@@ -1,4 +1,4 @@
-public struct Group: LayoutPreparingBlock {
+public struct Group: Block {
   public var name: String?
   public var content: any Block
 

@@ -2,14 +2,11 @@ public enum HStackAlignment: Sendable {
   case top, bottom
 }
 
-public struct HStack: LayoutPreparingBlock {
+public struct HStack: Block {
   public var spacing: Float
   public var alignment: HStackAlignment
-  var scopedChildren: [any Block]
-
-  public var children: [any Block] {
-    scopedChildren.map { ($0 as? ScopedBlock)?.content ?? $0 }
-  }
+  var content: TupleBlock
+  public var children: [any Block] { content.children }
   public var isLayoutReversed = false
 
   public init(
@@ -19,7 +16,7 @@ public struct HStack: LayoutPreparingBlock {
   ) {
     self.spacing = spacing
     self.alignment = alignment
-    self.scopedChildren = BlockBuilder.flattenedChildren(content().scopedChildren)
+    self.content = content()
   }
 
   public func reverseLayout() -> HStack {
@@ -28,4 +25,10 @@ public struct HStack: LayoutPreparingBlock {
     return copy
   }
 
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let children = content.emitChildren(into: &buffer, context: context)
+    return buffer.stack(
+      children, axis: .horizontal, spacing: spacing, reversed: isLayoutReversed, bottomAligned: alignment == .bottom,
+      context: context)
+  }
 }

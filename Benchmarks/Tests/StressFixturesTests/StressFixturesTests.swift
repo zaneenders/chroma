@@ -19,7 +19,7 @@ struct StressFixturesTests {
     defer { PipelineMetrics.isEnabled = false }
     let scene = StressScene(configuration: StressConfiguration(rows: 10_000, panes: 3, depth: 4, events: 12))
     let host = HeadlessHost(size: StressConfiguration.viewport)
-    host.content = DeferredBlock { scene.content }
+    host.setContent(DeferredBlock { scene.content })
     #expect(!host.render().commands.isEmpty)
     host.sendInput(InputState(commands: [.navigation(.nextFocus)]))
     let rowsBefore = scene.rowConstructions

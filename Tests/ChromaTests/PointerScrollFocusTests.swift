@@ -14,7 +14,8 @@ struct PointerScrollFocusTests {
     }
     func render(_ input: InputState = InputState()) {
       _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100), input: input,
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+        input: input,
         context: context, onChange: {})
     }
     render()
@@ -48,7 +49,7 @@ struct PointerScrollFocusTests {
       rows: [ScrollView.Row(id: "message", content: row)])
     func render(_ input: InputState = InputState()) {
       _ = producer.render(
-        content: content, viewport: Size(width: 400, height: 200),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 400, height: 200),
         input: input, context: context, onChange: {})
     }
     render()
@@ -91,7 +92,7 @@ struct PointerScrollFocusTests {
     }
     func render(_ input: InputState = InputState()) {
       _ = producer.render(
-        content: content, viewport: Size(width: 400, height: 200),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 400, height: 200),
         input: input, context: context, onChange: {})
     }
     render()

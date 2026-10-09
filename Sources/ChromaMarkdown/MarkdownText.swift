@@ -19,15 +19,19 @@ public struct MarkdownText: Block {
     self.lineSpacing = lineSpacing
   }
 
-  @MainActor public var body: some Block {
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
     let blocks = document.blocks
-    return VStack(spacing: 0) {
+    let revision = document.revision
+    let preparation = document.layoutPreparation
+    let content = VStack(spacing: 0) {
       ForEach(Array(blocks.indices), id: \.self) { index in
         MarkdownLeaf(
           block: blocks[index].block, scale: scale, lineSpacing: lineSpacing,
-          hasLeadingGap: hasGap(before: index, in: blocks), parsedRuns: blocks[index].runs)
+          hasLeadingGap: hasGap(before: index, in: blocks), parsedRuns: blocks[index].runs,
+          preparation: preparation, source: (revision, index))
       }
     }
+    return buffer.emit(content, context: context.component(Self.self))
   }
 
   private func hasGap(before index: Int, in blocks: [ParsedMarkdownBlock]) -> Bool {
@@ -37,53 +41,35 @@ public struct MarkdownText: Block {
   }
 }
 
-struct MarkdownLeaf: LayoutPreparingBlock {
+struct MarkdownLeaf: Block {
   let block: MarkdownBlock
   let scale: Float
   let lineSpacing: Float
   var hasLeadingGap = false
   var parsedRuns: [MarkdownRun]?
+  var preparation: MarkdownLayoutPreparation?
+  var source: (revision: UInt64, index: Int)?
 
-  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    PreparedMarkdownLeaf(leaf: self, preparation: MarkdownLayoutPreparation())
-      .paint(into: &drawList, in: rect, context: context)
-  }
-
-  @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-    prepareLayout(context: context, preparation: MarkdownLayoutPreparation(), in: &buffer)
-  }
-
-  @MainActor func prepareLayout(
-    context: BlockContext, preparation: MarkdownLayoutPreparation, in buffer: inout LayoutBuffer
-  ) -> LayoutNode {
-    // Retain the ordinary primitive focus/identity behavior while sharing preparation
-    // across this operation's measurement, registration, and paint closures.
-    buffer.prepare(
-      PreparedMarkdownLeaf(leaf: self, preparation: preparation), context: context)
-  }
-}
-
-private struct PreparedMarkdownLeaf: PaintableBlock {
-  var preservesContentIdentity: Bool { true }
-  var focusRule: FocusRule { .standard }
-  let leaf: MarkdownLeaf
-  let preparation: MarkdownLayoutPreparation
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    let layout = preparation.resolve(leaf, in: Rect(origin: .zero, size: proposal), context: context)
-    return Size(width: proposal.width, height: Float(layout.lines.count) * layout.lineHeight)
-  }
-
-  @MainActor func register(in rect: Rect, context: BlockContext) {
-    let layout = preparation.resolve(leaf, in: rect, context: context)
-    _ = context.textSelectionState(
-      in: rect, text: { layout.text },
-      pointerOffset: { point, _ in layout.hitTest(point) },
-      verticalOffset: { layout.verticalOffset($0, direction: $1) })
-  }
-
-  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    preparation.resolve(leaf, in: rect, context: context).draw(
-      into: &drawList, theme: context.theme, selection: context.textInputVisualState())
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    let preparation = preparation ?? MarkdownLayoutPreparation()
+    return buffer.customLeaf(
+      context: context, focusRule: .standard,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { proposal in
+        let layout = preparation.resolve(self, in: Rect(origin: .zero, size: proposal), context: context)
+        return Size(width: proposal.width, height: Float(layout.lines.count) * layout.lineHeight)
+      },
+      register: { rect in
+        let layout = preparation.resolve(self, in: rect, context: context)
+        _ = context.textSelectionState(
+          in: rect, text: { layout.text },
+          pointerOffset: { point, _ in layout.hitTest(point) },
+          verticalOffset: { layout.verticalOffset($0, direction: $1) })
+      },
+      paint: { list, rect in
+        preparation.resolve(self, in: rect, context: context).draw(
+          into: &list, theme: context.theme, selection: context.textInputVisualState())
+      })
   }
 }

@@ -15,13 +15,11 @@ extension MacOSApp {
 @MainActor
 public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDelegate {
   public let name = "Metal"
-  public var content: (any Block)? {
-    get { runtime.content }
-    set {
-      runtime.content = newValue
-      runtime.scheduler.requestContent()
-    }
+  public var build: LayoutBuilder? {
+    get { runtime.build }
+    set { runtime.build = newValue }
   }
+  public func setContent(_ content: (any Block)?) { runtime.setContent(content) }
   public var frameObserver: FrameObserver? {
     get { runtime.frameObserver }
     set { runtime.frameObserver = newValue }

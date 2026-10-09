@@ -114,10 +114,10 @@ struct ImageRenderingTests {
     let proposal = Size(width: 300, height: 200)
     let context = BlockContext()
 
-    #expect(BlockEngine.measure(image, proposal: proposal, context: context) == image.resource.size)
-    #expect(BlockEngine.measure(image.sizing(), proposal: proposal, context: context) == image.resource.size)
-    #expect(!BlockEngine.expandsHorizontally(image))
-    #expect(!BlockEngine.expandsVertically(image))
+    #expect(measureBlock(image, proposal: proposal, context: context) == image.resource.size)
+    #expect(measureBlock(image.sizing(), proposal: proposal, context: context) == image.resource.size)
+    #expect(!blockExpandsHorizontally(image))
+    #expect(!blockExpandsVertically(image))
   }
 
   @Test func imageCanOptIntoExpansionIndependentlyOnEachAxis() throws {
@@ -127,12 +127,12 @@ struct ImageRenderingTests {
     let horizontal = image.sizing(x: .grow)
     let vertical = image.sizing(y: .grow)
 
-    #expect(BlockEngine.measure(horizontal, proposal: proposal, context: context) == Size(width: 300, height: 40))
-    #expect(BlockEngine.expandsHorizontally(horizontal))
-    #expect(!BlockEngine.expandsVertically(horizontal))
-    #expect(BlockEngine.measure(vertical, proposal: proposal, context: context) == Size(width: 80, height: 200))
-    #expect(!BlockEngine.expandsHorizontally(vertical))
-    #expect(BlockEngine.expandsVertically(vertical))
+    #expect(measureBlock(horizontal, proposal: proposal, context: context) == Size(width: 300, height: 40))
+    #expect(blockExpandsHorizontally(horizontal))
+    #expect(!blockExpandsVertically(horizontal))
+    #expect(measureBlock(vertical, proposal: proposal, context: context) == Size(width: 80, height: 200))
+    #expect(!blockExpandsHorizontally(vertical))
+    #expect(blockExpandsVertically(vertical))
   }
 
   @Test func imageInStackKeepsIntrinsicSize() throws {
@@ -144,7 +144,7 @@ struct ImageRenderingTests {
     let context = BlockContext()
 
     #expect(
-      BlockEngine.measure(
+      measureBlock(
         stack, proposal: Size(width: 300, height: 200), context: context)
         == Size(width: 165, height: 40))
   }
@@ -159,9 +159,10 @@ struct ImageRenderingTests {
         x: .fixed(frame.size.width), y: .fixed(frame.size.height))
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(image, context: context)
-        resolved.register(in: frame)
-        resolved.paint(into: &list, in: frame)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(image, context: context)
+        resolvedBuffer.register(resolved, in: frame)
+        resolvedBuffer.paint(resolved, into: &list, in: frame)
       }
 
       #expect(
@@ -180,12 +181,13 @@ struct ImageRenderingTests {
     var list = DrawList()
 
     do {
-      var resolved = BlockEngine.prepare(
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(
         ScrollView(showsIndicator: false) {
           Image(resource)
         }.id(WidgetID("image-scroll")), context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
 
@@ -204,8 +206,9 @@ struct ImageRenderingTests {
   @Test func imageBlockEmitsDeterministicHeadlessCommand() throws {
     let image = try resource()
     let renderer = HeadlessHost(size: Size(width: 120, height: 80))
-    renderer.content = Image(image, scaling: .cover, alignment: .top)
-      .sizing(x: .grow, y: .grow)
+    renderer.setContent(
+      Image(image, scaling: .cover, alignment: .top)
+        .sizing(x: .grow, y: .grow))
 
     let first = renderer.render()
     let second = renderer.render()

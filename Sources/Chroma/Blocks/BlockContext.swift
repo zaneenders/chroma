@@ -16,6 +16,10 @@ public struct BlockContext {
   }
 
   /// A stable child identity for direct layout construction. Use unique sibling keys.
+  public func component(_ type: Any.Type) -> BlockContext {
+    scoped([.component(ObjectIdentifier(type))])
+  }
+
   public func keyed(_ key: some Hashable & Sendable) -> BlockContext {
     scoped([.key(StructuralKey(key))])
   }
@@ -41,7 +45,7 @@ public struct BlockContext {
   }
 
   func childContext(for child: any Block, at index: Int) -> BlockContext {
-    child is ScopedBlock ? self : scoped([.slot(index)])
+    scoped([.slot(index)])
   }
 
   package var interaction: Interaction
@@ -168,7 +172,7 @@ public struct BlockContext {
   /// Paints the current focus/hover indication without registering a focus leaf.
   public func paintFocusHighlight(in rect: Rect, into drawList: inout DrawList) {
     guard !navigationIgnored else { return }
-    BlockEngine.drawHighlight(for: widgetID, into: &drawList, in: rect, context: self)
+    paintFocusHighlight(for: widgetID, in: rect, into: &drawList)
   }
 
   /// Registers a focus leaf and current behavior without emitting a visual highlight.
@@ -193,7 +197,7 @@ public struct BlockContext {
     }
     let id = widgetID
     let state = buttonState(in: rect, role: role, action: action)
-    BlockEngine.drawHighlight(for: id, into: &drawList, in: rect, context: self)
+    paintFocusHighlight(for: id, in: rect, into: &drawList)
     return state
   }
 
@@ -292,5 +296,26 @@ extension BlockContext {
   /// before release/drag cleanup; presentation never invokes it.
   public func registerInputHandler(_ handler: @escaping @MainActor (InputState) -> Void) {
     interaction.building.inputObservers.append(handler)
+  }
+}
+
+extension BlockContext {
+  func paintFocusHighlight(for id: WidgetID, in rect: Rect, into drawList: inout DrawList) {
+    let leafState = interaction.untrackedLeafState
+    let pressed = leafState.pressed == id && interaction.input.pointerDown
+    guard leafState.selected == id || leafState.hovered == id || pressed else { return }
+    if hoverStyle == HoverStyle.none { return }
+    if leafState.selected == id && !pressed && hoverStyle == nil {
+      drawList.strokeRect(rect, width: 2, color: theme.focus.ring)
+      return
+    }
+    switch hoverStyle ?? .standard {
+    case .none:
+      return
+    case .tint(let color):
+      drawList.fillRect(rect, color: color)
+    case .standard:
+      drawList.fillRect(rect, color: HoverStyle.standardTint(in: theme, pressed: pressed))
+    }
   }
 }

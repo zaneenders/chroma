@@ -56,7 +56,7 @@ package final class FrameProducer {
   }
 
   private func resetTracking() {
-    generation &+= 1
+    generation += 1
     subscription?.cancel()
     subscription = nil
   }
@@ -65,13 +65,29 @@ package final class FrameProducer {
     subscription?.cancel()
   }
 
+  /// Input refresh and presentation share this commit path and this buffer owner.
+  private func commit(
+    _ build: LayoutBuilder?, viewport: Size, context: BlockContext,
+    input: InputState, processingInput: Bool, refreshing: Bool, drawing: Bool
+  ) {
+    let interaction = context.interaction
+    interaction.animationTime = clock()
+    interaction.refreshingRegistrations = refreshing
+    interaction.beginFrame(input: input, processingInput: processingInput)
+    defer { interaction.refreshingRegistrations = false }
+    layout.reset()
+    defer { layout.reset() }
+    let root: LayoutNode?
+    if let build { root = build(&layout, context) } else { root = nil }
+    let rect = Rect(origin: .zero, size: viewport)
+    if let root { layout.register(root, in: rect) }
+    interaction.endFrame()
+    if drawing, let root { layout.paint(root, into: &drawBuffer, in: rect) }
+  }
+
   package func render(
-    content: (any Block)?,
-    viewport: Size,
-    input: InputState,
-    context: BlockContext,
-    processingInput: Bool = true,
-    onChange: @escaping @MainActor @Sendable () -> Void
+    build: LayoutBuilder?, viewport: Size, input: InputState, context: BlockContext,
+    processingInput: Bool = true, onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     resetTracking()
     self.interaction = context.interaction
@@ -83,20 +99,19 @@ package final class FrameProducer {
       let wasEditing = interaction.isTextEditing
       let caret = interaction.caretOffset
       let selection = interaction.textSelectionRange
-      refreshRegistrations(content, viewport: viewport, context: context)
+      refreshRegistrations(build, viewport: viewport, context: context)
       if let editingLeaf, interaction.tree?.findLeaf(editingLeaf) != nil {
         interaction.beginEditing(editingLeaf, caretOffset: caret)
         interaction.textSelectionRange = selection
         if !wasEditing { interaction.stopInput() }
       }
     }
-    if !input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed || input.pointerReleased
-      || input.scrollDelta != .zero
+    if processingInput
+      && (!input.textEvents.isEmpty || !input.commands.isEmpty || input.pointerPressed
+        || input.pointerReleased || input.scrollDelta != .zero)
     {
-      refreshRegistrations(content, viewport: viewport, context: context, commands: input.commands)
+      refreshRegistrations(build, viewport: viewport, context: context, commands: input.commands)
     }
-    interaction.animationTime = clock()
-    interaction.beginFrame(input: input, processingInput: processingInput)
     let subscription = FrameTrackingSubscription(
       onChange, metricsLifetime: PipelineMetrics.trackObservationLifetime())
     self.subscription = subscription
@@ -104,15 +119,9 @@ package final class FrameProducer {
     withObservationTracking(options: .didSet) {
       subscription.trackCancellation()
       drawBuffer.removeAll()
-
-      if let content {
-        layout.reset()
-        defer { layout.reset() }
-        let resolved = layout.prepare(content, context: context)
-        let rect = Rect(origin: .zero, size: viewport)
-        layout.register(resolved, in: rect)
-        layout.paint(resolved, into: &drawBuffer, in: rect)
-      }
+      commit(
+        build, viewport: viewport, context: context, input: input,
+        processingInput: processingInput, refreshing: false, drawing: true)
     } onChange: { [weak self, weak subscription] event in
       event.cancel()
       guard let onChange = subscription?.takeCallback() else { return }
@@ -121,33 +130,20 @@ package final class FrameProducer {
         onChange()
       }
     }
-    interaction.endFrame()
-    BlockEngine.countDrawingCommands(into: &drawBuffer) { list in
-      interaction.paintNavigation(into: &list, theme: context.theme)
-    }
+    let commands = drawBuffer.commands.count
+    interaction.paintNavigation(into: &drawBuffer, theme: context.theme)
+    PipelineMetrics.record(.drawingCommands, count: drawBuffer.commands.count - commands)
     return drawBuffer
   }
 
   package func refreshRegistrations(
-    _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = [],
+    _ build: LayoutBuilder?, viewport: Size, context: BlockContext, commands: [Command] = [],
     keyboardNavigationOverscan: Bool = false
   ) {
     var context = context
     context.keyboardNavigationOverscan = keyboardNavigationOverscan
-
-    let interaction = context.interaction
-    interaction.refreshingRegistrations = interaction.tree != nil
-    interaction.animationTime = clock()
-    interaction.beginFrame(input: InputState(commands: commands))
-    interaction.refreshingRegistrations = true
-    defer { interaction.refreshingRegistrations = false }
-    if let content {
-      layout.reset()
-      defer { layout.reset() }
-      let root = layout.prepare(content, context: context)
-      layout.register(root, in: Rect(origin: .zero, size: viewport))
-    }
-    interaction.endFrame()
+    commit(
+      build, viewport: viewport, context: context, input: InputState(commands: commands),
+      processingInput: false, refreshing: true, drawing: false)
   }
-
 }

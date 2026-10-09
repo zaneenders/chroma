@@ -9,8 +9,19 @@ struct StructuralPathTests {
     var drawn: [String: StructuralPath] = [:]
   }
 
-  private struct Probe: PaintableBlock {
-    func register(in rect: Rect, context: BlockContext) {}
+  private struct Probe: Block {
+
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        expandsHorizontally: false, expandsVertically: false,
+        measure: { sizeThatFits($0, context: context) },
+        register: { register(in: $0, context: context) },
+        paint: { paint(into: &$0, in: $1, context: context) })
+    }
+
+    @MainActor func register(in rect: Rect, context: BlockContext) {}
 
     let name: String
     let recorder: Recorder
@@ -22,15 +33,19 @@ struct StructuralPathTests {
       return Size(width: 10, height: 10)
     }
 
-    func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       recorder.drawn[name] = context.structuralPath
     }
   }
 
   private struct Component: Block {
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      buffer.emit(body, context: context.component(Self.self))
+    }
+
     let name: String
     let recorder: Recorder
-    var body: some Block { Probe(name: name, recorder: recorder) }
+    @MainActor var body: some Block { Probe(name: name, recorder: recorder) }
   }
 
   private func render(_ block: any Block, recorder: Recorder) -> [String: StructuralPath] {
@@ -38,13 +53,14 @@ struct StructuralPathTests {
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
     recorder.measured = [:]
     recorder.drawn = [:]
-    _ = BlockEngine.measure(block, proposal: rect.size, context: context)
+    _ = measureBlock(block, proposal: rect.size, context: context)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(block, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &list, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(block, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &list, in: rect)
     }
     context.interaction.endFrame()
     #expect(recorder.measured == recorder.drawn)
@@ -67,7 +83,7 @@ struct StructuralPathTests {
     #expect(first["row1"] != changed["row1"])
     #expect(first["row1"] != first["row2"])
     #expect(first["row1"] != first["sibling"])
-    let size = BlockEngine.measure(
+    let size = measureBlock(
       content(1), proposal: Size(width: 100, height: 100), context: BlockContext())
     #expect(size.height == 30)
   }
@@ -130,34 +146,15 @@ struct StructuralPathTests {
     expectReadOnly(\TupleBlock.children)
   }
 
-  private struct Pair: LayoutPreparingBlock {
+  private struct Pair: Block {
 
     let recorder: Recorder
 
-    var focusRule: FocusRule { .container }
-
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      _ = BlockEngine.measure(
-        Probe(name: "first", recorder: recorder), proposal: proposal, context: context.childScope(0))
-      return BlockEngine.measure(
-        Probe(name: "second", recorder: recorder), proposal: proposal, context: context.childScope(1))
-    }
-    @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-      let first = buffer.prepare(Probe(name: "first", recorder: recorder), context: context.childScope(0))
-      let second = buffer.prepare(Probe(name: "second", recorder: recorder), context: context.childScope(1))
-      return buffer.append(
-        measure: { buffer, proposal in
-          _ = buffer.sizeThatFits(first, proposal)
-          return buffer.sizeThatFits(second, proposal)
-        },
-        register: { buffer, rect in
-          buffer.register(first, in: rect)
-          buffer.register(second, in: rect)
-        },
-        paint: { buffer, list, rect in
-          buffer.paint(second, into: &list, in: rect)
-          buffer.paint(first, into: &list, in: rect)
-        })
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      let first = buffer.emit(Probe(name: "first", recorder: recorder), context: context.childScope(0))
+      let second = buffer.emit(Probe(name: "second", recorder: recorder), context: context.childScope(1))
+      return buffer.overlay([second, first], group: false, context: context)
     }
   }
 
@@ -194,9 +191,10 @@ struct StructuralPathTests {
       recorder.drawn = [:]
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(layered, context: context)
-        resolved.register(in: rect)
-        resolved.paint(into: &list, in: rect)
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(layered, context: context)
+        resolvedBuffer.register(resolved, in: rect)
+        resolvedBuffer.paint(resolved, into: &list, in: rect)
       }
       return recorder.drawn
     }
@@ -205,21 +203,17 @@ struct StructuralPathTests {
     #expect(Set(paths.values).count == 3)
     #expect(draw() == paths)
     recorder.measured = [:]
-    _ = BlockEngine.measure(layered, proposal: rect.size, context: context)
+    _ = measureBlock(layered, proposal: rect.size, context: context)
     #expect(recorder.measured["content"] == expected)
   }
 
-  private struct TransparentScope: LayoutPreparingBlock {
+  private struct TransparentScope: Block {
 
-    var preservesContentIdentity: Bool { true }
     var content: any Block
-    var focusRule: FocusRule { .container }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      BlockEngine.measure(content, proposal: proposal, context: context)
-    }
-    @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-      return buffer.prepare(content, context: context)
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let child = buffer.emit(content, context: context)
+      return buffer.overlay([child], group: false, context: context)
     }
   }
 
@@ -231,7 +225,7 @@ struct StructuralPathTests {
     let grouped = VStack { TransparentScope(content: collection) }
     let distributed = VStack { collection.padding(0) }
     #expect(grouped.children.count == 1)
-    #expect(distributed.children.count == 2)
+    #expect(measureBlock(distributed, proposal: Size(width: 100, height: 100), context: BlockContext()).height == 20)
     let paths = render(grouped, recorder: recorder)
     #expect(paths["1"] != paths["2"])
     let reordered = VStack {
@@ -245,16 +239,12 @@ struct StructuralPathTests {
     #expect(render(TransparentScope(content: probe), recorder: recorder) == render(probe, recorder: recorder))
   }
 
-  private struct DistributingScope: LayoutPreparingBlock, CollectionDistributingBlock {
+  private struct DistributingScope: Block {
 
     var content: any Block
-    var focusRule: FocusRule { .container }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      BlockEngine.measure(content, proposal: proposal, context: context)
-    }
-    @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-      return buffer.prepare(content, context: context)
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      buffer.emit(content, context: context.component(Self.self))
     }
   }
 
@@ -267,7 +257,7 @@ struct StructuralPathTests {
         })
     }
     let stack = VStack { content([1, 2]) }
-    #expect(stack.children.count == 2)
+    #expect(measureBlock(stack, proposal: Size(width: 100, height: 100), context: BlockContext()).height == 20)
     let paths = render(stack, recorder: recorder)
     #expect(paths["1"] != paths["2"])
     #expect(render(VStack { content([2, 1]) }, recorder: recorder) == paths)
@@ -305,7 +295,7 @@ struct StructuralPathTests {
     #expect(Set(after.values).count == 4)
     #expect(render(content([]), recorder: recorder)["sibling"] == before["sibling"])
     #expect(
-      BlockEngine.measure(
+      measureBlock(
         content([1, 2]), proposal: Size(width: 100, height: 100),
         context: BlockContext()) == Size(width: 10, height: 36))
   }
@@ -346,8 +336,8 @@ struct StructuralPathTests {
     let paths = render(plain, recorder: recorder)
     #expect(render(styled, recorder: recorder) == paths)
     #expect(
-      BlockEngine.measure(plain, proposal: proposal, context: BlockContext())
-        == BlockEngine.measure(styled, proposal: proposal, context: BlockContext()))
+      measureBlock(plain, proposal: proposal, context: BlockContext())
+        == measureBlock(styled, proposal: proposal, context: BlockContext()))
     let reordered = render(content(true, ids: [2, 3, 1]), recorder: recorder)
     for (name, path) in paths { #expect(reordered[name] == path) }
     #expect(render(content(true, ids: []), recorder: recorder)["sibling"] == paths["sibling"])
@@ -361,7 +351,7 @@ struct StructuralPathTests {
       }.padding(2)
     }
     #expect(
-      BlockEngine.measure(block, proposal: Size(width: 100, height: 100), context: BlockContext())
+      measureBlock(block, proposal: Size(width: 100, height: 100), context: BlockContext())
         == Size(width: 14, height: 31))
   }
 
@@ -402,9 +392,10 @@ struct StructuralPathTests {
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(stack, context: context)
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 100))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(stack, context: context)
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 100))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
       }
       context.interaction.endFrame()
       if !uniform { #expect(recorder.measured == recorder.drawn) }

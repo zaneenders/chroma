@@ -68,7 +68,11 @@ private struct StressRow: Block {
   let revision: Int
   let depth: Int
 
-  var body: some Block {
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.emit(content(), context: context.component(Self.self))
+  }
+
+  @MainActor private func content() -> some Block {
     var content: any Block = VStack(spacing: 2) {
       HStack {
         Text("Pane \(pane) / Session \(index)")

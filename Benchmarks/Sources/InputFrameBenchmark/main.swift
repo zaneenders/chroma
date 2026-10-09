@@ -16,11 +16,11 @@ func benchmark(count: Int, identified: Bool, rebuildContent: Bool) {
     }
     return ScrollView(data: data, rowHeight: 20, controller: controller) { _ in Color.white }
   }
-  // App.run keeps a deferred root alive and reevaluates its body during traversal.
-  if rebuildContent { host.content = DeferredBlock { makeView() } }
+  // App.run keeps a root factory alive and emits its current content for each update.
+  if rebuildContent { host.setContent(DeferredBlock { makeView() }) }
   for iteration in 0..<6 {
     let start = ProcessInfo.processInfo.systemUptime
-    if !rebuildContent { host.content = makeView() }
+    if !rebuildContent { host.setContent(makeView()) }
     let renderStart = ProcessInfo.processInfo.systemUptime
     let list = host.render(
       input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -1)))

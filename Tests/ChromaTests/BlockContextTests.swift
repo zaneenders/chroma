@@ -64,12 +64,13 @@ struct BlockContextTests {
     let recorder = ContextRecorder()
     let block = ContextRecordingBlock(recorder: recorder)
 
-    _ = BlockEngine.measure(block, proposal: Size(width: 20, height: 10), context: context)
+    _ = measureBlock(block, proposal: Size(width: 20, height: 10), context: context)
     var drawList = DrawList()
     do {
-      var resolved = BlockEngine.prepare(block, context: context)
-      resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 10))
-      resolved.paint(into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(block, context: context)
+      resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 20, height: 10))
+      resolvedBuffer.paint(resolved, into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
     }
 
     #expect(recorder.measuredInteraction === interaction)
@@ -104,8 +105,19 @@ private final class ContextRecorder {
   var drawnInteraction: Interaction?
 }
 
-private struct ContextRecordingBlock: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct ContextRecordingBlock: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: BlockContext) {}
 
   let recorder: ContextRecorder
 
@@ -116,7 +128,7 @@ private struct ContextRecordingBlock: PaintableBlock {
     return proposal
   }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     recorder.drawnInteraction = context.interaction
   }
 }

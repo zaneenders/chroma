@@ -21,7 +21,7 @@ struct ScrollMetadataTests {
     }
     func render(_ commands: [NavigationCommand] = []) {
       _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
         input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
     }
     render()
@@ -52,12 +52,16 @@ struct ScrollMetadataTests {
     let controller = ScrollViewController()
     let content = ScrollView(data: 0..<10_000, rowHeight: 20, controller: controller) { _ in Color.white }
     context.interaction.viewport = Rect(x: 0, y: 0, width: 200, height: 100)
-    producer.refreshRegistrations(content, viewport: Size(width: 200, height: 100), context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+      context: context)
     for _ in 1...1_000 {
       context.interaction.processInput(
         InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -180)))
       context.interaction.finishInput()
-      producer.refreshRegistrations(content, viewport: Size(width: 200, height: 100), context: context)
+      producer.refreshRegistrations(
+        { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+        context: context)
     }
     #expect(controller.offset == 180_000)
     let state = context.interaction.scrollStates.values.first!
@@ -65,7 +69,9 @@ struct ScrollMetadataTests {
     #expect(state.rowKeys.count == 7)
     #expect(context.interaction.registrations.scrollRows.isEmpty)
     #expect(context.interaction.building.scrollRows.isEmpty)
-    producer.refreshRegistrations(EmptyBlock(), viewport: Size(width: 200, height: 100), context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.emit(EmptyBlock(), context: context) }, viewport: Size(width: 200, height: 100),
+      context: context)
     #expect(context.interaction.scrollStates.isEmpty)
   }
 
@@ -74,7 +80,7 @@ struct ScrollMetadataTests {
     let scrollID = WidgetID("scroll")
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
 
-    func register(_ leaves: [(WidgetID, Int)], count: Int = 100) {
+    @MainActor func register(_ leaves: [(WidgetID, Int)], count: Int = 100) {
       interaction.beginFrame(input: InputState(), processingInput: false)
       interaction.registerScrollInput(id: scrollID, rect: rect)
       interaction.updateScrollLayout(
@@ -147,7 +153,7 @@ struct ScrollMetadataTests {
     }
     func render(_ commands: [NavigationCommand] = []) {
       _ = producer.render(
-        content: content, viewport: Size(width: 200, height: 100),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
         input: InputState(commands: commands.map { .navigation($0) }), context: context, onChange: {})
     }
     render()

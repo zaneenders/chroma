@@ -23,12 +23,13 @@ struct ObservationTests {
     let model = Model()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = DeferredBlock {
-      HStack {
-        if model.primary { ScrollView { Text("First") } }
-        ScrollView { Text("Second") }
-      }
-    }
+    renderer.setContent(
+      DeferredBlock {
+        HStack {
+          if model.primary { ScrollView { Text("First") } }
+          ScrollView { Text("Second") }
+        }
+      })
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -41,7 +42,7 @@ struct ObservationTests {
   @Test func tracksOnlyReadPropertiesAndRearmsAfterRendering() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock { model.first }
+    renderer.setContent(DeferredBlock { model.first })
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     let initial = renderer.render()
@@ -66,9 +67,10 @@ struct ObservationTests {
   @Test func conditionalDependenciesAreReplaced() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock {
-      if model.primary { model.first } else { model.second }
-    }
+    renderer.setContent(
+      DeferredBlock {
+        if model.primary { model.first } else { model.second }
+      })
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -91,9 +93,10 @@ struct ObservationTests {
       var primary = true
     }
     let condition = Condition()
-    renderer.content = DeferredBlock {
-      if condition.primary { model.first } else { model.second }
-    }
+    renderer.setContent(
+      DeferredBlock {
+        if condition.primary { model.first } else { model.second }
+      })
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -113,7 +116,7 @@ struct ObservationTests {
   @Test func newerFrameAndContentReplacementDiscardQueuedCallbacks() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock { model.first }
+    renderer.setContent(DeferredBlock { model.first })
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -122,7 +125,7 @@ struct ObservationTests {
     await drainChanges()
     #expect(redraws == 0)
     model.first = .black
-    renderer.content = Color.white
+    renderer.setContent(Color.white)
     await drainChanges()
     #expect(redraws == 0)
   }
@@ -130,7 +133,7 @@ struct ObservationTests {
   @Test func closeDiscardsQueuedCallbacks() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock { model.first }
+    renderer.setContent(DeferredBlock { model.first })
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -143,7 +146,7 @@ struct ObservationTests {
   @Test func observerReadsAreNotDependenciesAndWritesInvalidateAfterFrame() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock { model.first }
+    renderer.setContent(DeferredBlock { model.first })
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.frameObserver = { _ in
@@ -162,13 +165,23 @@ struct ObservationTests {
 
   @Test func explicitRedrawSurvivesMutationDuringFirstDraw() {
     let model = Model()
-    struct MutatingBlock: PaintableBlock {
-      func register(in rect: Rect, context: BlockContext) {}
+    struct MutatingBlock: Block {
+      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+        let context = context.component(Self.self)
+        return buffer.customLeaf(
+          context: context, focusRule: focusRule,
+          expandsHorizontally: false, expandsVertically: false,
+          measure: { sizeThatFits($0, context: context) },
+          register: { register(in: $0, context: context) },
+          paint: { paint(into: &$0, in: $1, context: context) })
+      }
+
+      @MainActor func register(in rect: Rect, context: BlockContext) {}
 
       let model: Model
       var focusRule: FocusRule { .standard }
       @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+      @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
         drawList.fillRect(rect, color: model.first)
         model.first = .yellow
         context.requestRedraw()
@@ -179,7 +192,8 @@ struct ObservationTests {
     var requests = 0
     interaction.onRedrawRequested = { requests += 1 }
     _ = producer.render(
-      content: MutatingBlock(model: model), viewport: Size(width: 20, height: 20),
+      build: { buffer, context in buffer.emit(MutatingBlock(model: model), context: context) },
+      viewport: Size(width: 20, height: 20),
       input: InputState(), context: BlockContext(interaction: interaction), onChange: {})
     #expect(requests == 1)
     #expect(interaction.consumeRedrawRequest())
@@ -192,7 +206,7 @@ struct ObservationTests {
     do {
       let renderer = HeadlessHost()
       releasedRenderer = renderer
-      renderer.content = DeferredBlock { model.first }
+      renderer.setContent(DeferredBlock { model.first })
       renderer.render()
     }
     #expect(releasedRenderer == nil)
@@ -206,7 +220,7 @@ struct ObservationTests {
       let model: Model
       init() { model = Model() }
       init(model: Model) { self.model = model }
-      var body: some Block { model.first }
+      @MainActor var body: some Block { model.first }
     }
     let renderer = HeadlessHost()
     var redraws = 0

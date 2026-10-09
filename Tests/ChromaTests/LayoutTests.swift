@@ -14,6 +14,11 @@ struct LayoutTests {
   }
 
   private struct Host: Block {
+
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      buffer.emit(body, context: context.component(Self.self))
+    }
+
     var showQueue: Bool
 
     @MainActor var body: some Block {
@@ -61,6 +66,11 @@ struct LayoutTests {
     }
 
     private struct BottomChromeHost: Block {
+
+      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+        buffer.emit(body, context: context.component(Self.self))
+      }
+
       var showQueue: Bool
 
       @MainActor var body: some Block {
@@ -76,6 +86,11 @@ struct LayoutTests {
     }
 
     private struct QueuedTrayHost: Block {
+
+      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+        buffer.emit(body, context: context.component(Self.self))
+      }
+
       @MainActor var body: some Block {
         Text("QUEUED (1)")
           .sizing(x: .grow)
@@ -85,6 +100,11 @@ struct LayoutTests {
     }
 
     private struct ComposerHost: Block {
+
+      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+        buffer.emit(body, context: context.component(Self.self))
+      }
+
       @MainActor var body: some Block {
         Text("COMPOSER")
           .sizing(x: .grow)
@@ -94,6 +114,11 @@ struct LayoutTests {
     }
 
     private struct StatusHost: Block {
+
+      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+        buffer.emit(body, context: context.component(Self.self))
+      }
+
       @MainActor var body: some Block {
         Text("STATUS")
           .sizing(x: .grow)
@@ -109,9 +134,10 @@ struct LayoutTests {
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(Host(showQueue: true), context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(Host(showQueue: true), context: context)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
 
@@ -138,9 +164,10 @@ struct LayoutTests {
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(ComputedPropertyHost(showQueue: true), context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(ComputedPropertyHost(showQueue: true), context: context)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
 
@@ -165,20 +192,20 @@ struct LayoutTests {
     let horizontalGrow = Text("grow").sizing(x: .grow)
     let verticalGrow = Text("grow").sizing(y: .grow)
 
-    let fittedTextSize = BlockEngine.measure(Text("fit"), proposal: proposal, context: context)
-    #expect(BlockEngine.measure(fitted, proposal: proposal, context: context) == fittedTextSize)
-    #expect(BlockEngine.measure(fixed, proposal: proposal, context: context) == Size(width: 120, height: 48))
-    #expect(BlockEngine.measure(horizontalGrow, proposal: proposal, context: context).width == 400)
-    #expect(BlockEngine.measure(verticalGrow, proposal: proposal, context: context).height == 300)
+    let fittedTextSize = measureBlock(Text("fit"), proposal: proposal, context: context)
+    #expect(measureBlock(fitted, proposal: proposal, context: context) == fittedTextSize)
+    #expect(measureBlock(fixed, proposal: proposal, context: context) == Size(width: 120, height: 48))
+    #expect(measureBlock(horizontalGrow, proposal: proposal, context: context).width == 400)
+    #expect(measureBlock(verticalGrow, proposal: proposal, context: context).height == 300)
 
-    #expect(!BlockEngine.expandsHorizontally(fitted))
-    #expect(!BlockEngine.expandsVertically(fitted))
-    #expect(!BlockEngine.expandsHorizontally(fixed))
-    #expect(!BlockEngine.expandsVertically(fixed))
-    #expect(BlockEngine.expandsHorizontally(horizontalGrow))
-    #expect(!BlockEngine.expandsVertically(horizontalGrow))
-    #expect(!BlockEngine.expandsHorizontally(verticalGrow))
-    #expect(BlockEngine.expandsVertically(verticalGrow))
+    #expect(!blockExpandsHorizontally(fitted))
+    #expect(!blockExpandsVertically(fitted))
+    #expect(!blockExpandsHorizontally(fixed))
+    #expect(!blockExpandsVertically(fixed))
+    #expect(blockExpandsHorizontally(horizontalGrow))
+    #expect(!blockExpandsVertically(horizontalGrow))
+    #expect(!blockExpandsHorizontally(verticalGrow))
+    #expect(blockExpandsVertically(verticalGrow))
   }
 
   @Test func reverseLayoutFlipsStackChildOrder() {
@@ -189,26 +216,28 @@ struct LayoutTests {
 
     var horizontalList = DrawList()
     do {
-      var resolved = BlockEngine.prepare(
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(
         HStack {
           Text("first")
           Text("second")
         }.reverseLayout(), context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &horizontalList, in: rect)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &horizontalList, in: rect)
     }
     interaction.endFrame()
     interaction.beginFrame(input: InputState())
 
     var verticalList = DrawList()
     do {
-      var resolved = BlockEngine.prepare(
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(
         VStack {
           Text("first")
           Text("second")
         }.reverseLayout(), context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &verticalList, in: rect)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &verticalList, in: rect)
     }
     interaction.endFrame()
 
@@ -241,17 +270,22 @@ struct LayoutTests {
     let proposal = Size(width: 400, height: 300)
     let context = BlockContext()
 
-    #expect(BlockEngine.expandsHorizontally(horizontal))
-    #expect(!BlockEngine.expandsVertically(horizontal))
-    #expect(BlockEngine.measure(horizontal, proposal: proposal, context: context).height < proposal.height)
+    #expect(blockExpandsHorizontally(horizontal))
+    #expect(!blockExpandsVertically(horizontal))
+    #expect(measureBlock(horizontal, proposal: proposal, context: context).height < proposal.height)
 
-    #expect(!BlockEngine.expandsHorizontally(vertical))
-    #expect(BlockEngine.expandsVertically(vertical))
-    #expect(BlockEngine.measure(vertical, proposal: proposal, context: context).width < proposal.width)
+    #expect(!blockExpandsHorizontally(vertical))
+    #expect(blockExpandsVertically(vertical))
+    #expect(measureBlock(vertical, proposal: proposal, context: context).width < proposal.width)
   }
 }
 
 private struct ComputedPropertyHost: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.emit(body, context: context.component(Self.self))
+  }
+
   var showQueue: Bool
 
   @MainActor var body: some Block {

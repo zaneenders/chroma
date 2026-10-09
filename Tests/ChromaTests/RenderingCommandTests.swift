@@ -2,8 +2,19 @@ import Testing
 
 @testable import Chroma
 
-private struct CommandProbe: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct CommandProbe: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: BlockContext) {}
 
   var name: String
   var size = Size(width: 10, height: 10)
@@ -13,12 +24,17 @@ private struct CommandProbe: PaintableBlock {
 
   @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { size }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.text(name, at: rect.origin, color: color)
   }
 }
 
 private struct CompositeButton: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.emit(body, context: context.component(Self.self))
+  }
+
   var id: WidgetID
 
   @MainActor var body: some Block {
@@ -37,9 +53,10 @@ struct RenderingCommandTests {
     context.interaction.beginFrame(input: input)
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(block, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &list, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(block, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &list, in: rect)
     }
     context.interaction.endFrame()
     return list
@@ -149,7 +166,7 @@ struct RenderingCommandTests {
     let rect = Rect(x: 4, y: 5, width: 36, height: 16)
 
     #expect(
-      BlockEngine.measure(text, proposal: rect.size, context: context).width
+      measureBlock(text, proposal: rect.size, context: context).width
         == 3 * metrics.cellAdvance)
 
     let press = Point(x: 11, y: 6)
@@ -275,10 +292,10 @@ struct RenderingCommandTests {
     let content = CommandProbe(name: "layout").sizing(x: .grow)
     let border = content.roundedBorder(.yellow, radii: radii, width: 3)
     #expect(
-      BlockEngine.measure(border, proposal: proposal, context: context)
-        == BlockEngine.measure(content, proposal: proposal, context: context))
-    #expect(BlockEngine.expandsHorizontally(border))
-    #expect(!BlockEngine.expandsVertically(border))
+      measureBlock(border, proposal: proposal, context: context)
+        == measureBlock(content, proposal: proposal, context: context))
+    #expect(blockExpandsHorizontally(border))
+    #expect(!blockExpandsVertically(border))
   }
 
   @Test func cornerRadiiNormalizeWithoutOverlapping() {

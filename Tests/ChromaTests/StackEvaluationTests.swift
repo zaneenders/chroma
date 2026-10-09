@@ -10,8 +10,12 @@ struct StackEvaluationTests {
   }
 
   private struct Composite: Block {
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      buffer.emit(body, context: context.component(Self.self))
+    }
+
     let counter: Counter
-    var body: some Block {
+    @MainActor var body: some Block {
       counter.bodies += 1
       return Text(counter.text).sizing(x: .grow, y: .grow)
     }
@@ -22,17 +26,18 @@ struct StackEvaluationTests {
     let block = Composite(counter: counter)
     let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 40)
-    #expect(BlockEngine.expandsHorizontally(block))
+    #expect(blockExpandsHorizontally(block))
     #expect(counter.bodies == 1)
-    #expect(BlockEngine.expandsVertically(block))
+    #expect(blockExpandsVertically(block))
     #expect(counter.bodies == 2)
-    #expect(BlockEngine.measure(block, proposal: rect.size, context: context) == rect.size)
+    #expect(measureBlock(block, proposal: rect.size, context: context) == rect.size)
     #expect(counter.bodies == 3)
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(block, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &list, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(block, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &list, in: rect)
     }
     #expect(counter.bodies == 4)
     #expect(
@@ -54,14 +59,15 @@ struct StackEvaluationTests {
     let rect = Rect(x: 0, y: 0, width: 200, height: 80)
 
     counter.bodies = 0
-    _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
+    _ = measureBlock(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(stack, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &list, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(stack, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &list, in: rect)
     }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
@@ -78,14 +84,15 @@ struct StackEvaluationTests {
     let context = BlockContext(interaction: Interaction())
     let rect = Rect(x: 0, y: 0, width: 120, height: 60)
     counter.bodies = 0
-    _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
+    _ = measureBlock(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(stack, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &list, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(stack, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &list, in: rect)
     }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)
@@ -108,15 +115,16 @@ struct StackEvaluationTests {
     }
     let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
-    _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
+    _ = measureBlock(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)
     counter.bodies = 0
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(stack, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &list, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(stack, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &list, in: rect)
     }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
@@ -129,9 +137,10 @@ struct StackEvaluationTests {
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
     do {
-      var resolved = BlockEngine.prepare(block, context: context)
-      resolved.register(in: Rect(x: 0, y: 0, width: 200, height: 100))
-      resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(block, context: context)
+      resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 200, height: 100))
+      resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
     }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
@@ -142,8 +151,19 @@ struct StackEvaluationTests {
     var height: Float = 12
   }
 
-  private struct MeasuredLeaf: PaintableBlock {
-    func register(in rect: Rect, context: BlockContext) {}
+  private struct MeasuredLeaf: Block {
+
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        expandsHorizontally: expandsHorizontally, expandsVertically: false,
+        measure: { sizeThatFits($0, context: context) },
+        register: { register(in: $0, context: context) },
+        paint: { paint(into: &$0, in: $1, context: context) })
+    }
+
+    @MainActor func register(in rect: Rect, context: BlockContext) {}
 
     let measurements: Measurements
     var focusRule: FocusRule { .decorative }
@@ -154,7 +174,7 @@ struct StackEvaluationTests {
       return Size(width: proposal.width, height: measurements.height)
     }
 
-    func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
       drawList.fillRect(rect, color: .black)
     }
   }
@@ -167,22 +187,23 @@ struct StackEvaluationTests {
     }
     let context = BlockContext()
     let proposal = Size(width: 200, height: 100)
-    var resolved = BlockEngine.prepare(block, context: context)
-    #expect(resolved.sizeThatFits(proposal) == Size(width: 200, height: 12))
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.emit(block, context: context)
+    #expect(resolvedBuffer.sizeThatFits(resolved, proposal) == Size(width: 200, height: 12))
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
-    resolved.register(in: Rect(origin: .zero, size: proposal))
-    resolved.paint(into: &list, in: Rect(origin: .zero, size: proposal))
+    resolvedBuffer.register(resolved, in: Rect(origin: .zero, size: proposal))
+    resolvedBuffer.paint(resolved, into: &list, in: Rect(origin: .zero, size: proposal))
     context.interaction.endFrame()
     #expect(measurements.proposals == [proposal, Size(width: 100, height: 100)])
 
     let narrower = Size(width: 120, height: 100)
-    #expect(resolved.sizeThatFits(narrower) == Size(width: 120, height: 12))
+    #expect(resolvedBuffer.sizeThatFits(resolved, narrower) == Size(width: 120, height: 12))
     #expect(measurements.proposals.suffix(2) == [narrower, Size(width: 60, height: 100)])
 
     measurements.height = 30
     measurements.proposals = []
-    #expect(BlockEngine.measure(block, proposal: proposal, context: context) == Size(width: 200, height: 30))
+    #expect(measureBlock(block, proposal: proposal, context: context) == Size(width: 200, height: 30))
     #expect(measurements.proposals == [proposal, Size(width: 100, height: 100)])
   }
 
@@ -191,7 +212,7 @@ struct StackEvaluationTests {
     let block = VStack {
       Interactive(action: {}) { _ in Composite(counter: counter).padding(3) }
     }
-    _ = BlockEngine.measure(block, proposal: Size(width: 200, height: 100), context: BlockContext())
+    _ = measureBlock(block, proposal: Size(width: 200, height: 100), context: BlockContext())
     #expect(counter.bodies == 1)
   }
 
@@ -207,19 +228,20 @@ struct StackEvaluationTests {
     let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
     do {
-      var resolved = BlockEngine.prepare(block, context: context)
-      #expect(resolved.nodeCount == 1)
-      _ = resolved.expandsHorizontally
-      _ = resolved.expandsVertically
-      _ = resolved.sizeThatFits(rect.size)
-      #expect(resolved.nodeCount == 2 * depth + 1)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(block, context: context)
+      #expect(resolvedBuffer.count == 1)
+      _ = resolvedBuffer.expandsHorizontally(resolved)
+      _ = resolvedBuffer.expandsVertically(resolved)
+      _ = resolvedBuffer.sizeThatFits(resolved, rect.size)
+      #expect(resolvedBuffer.count == 2 * depth + 1)
       context.interaction.beginFrame(input: InputState())
-      resolved.register(in: rect)
-      let registered = resolved.nodeCount
+      resolvedBuffer.register(resolved, in: rect)
+      let registered = resolvedBuffer.count
       #expect(registered == 4 * depth + 1)
       var list = DrawList()
-      resolved.paint(into: &list, in: rect)
-      #expect(resolved.nodeCount == registered)
+      resolvedBuffer.paint(resolved, into: &list, in: rect)
+      #expect(resolvedBuffer.count == registered)
       #expect(
         list.paintSnapshot.contains {
           if case .text(_, "leaf", _, _) = $0 { return true }
@@ -242,7 +264,8 @@ struct StackEvaluationTests {
     let context = BlockContext()
     func render(_ input: InputState) -> [String] {
       producer.render(
-        content: block, viewport: Size(width: 200, height: 100), input: input,
+        build: { buffer, context in buffer.emit(block, context: context) }, viewport: Size(width: 200, height: 100),
+        input: input,
         context: context, onChange: {}
       ).paintSnapshot.compactMap {
         if case .text(_, let text, _, _) = $0 { return text }
@@ -264,15 +287,16 @@ struct StackEvaluationTests {
     let stack: any Block = horizontal ? HStack { child } : VStack { child }
     let context = BlockContext(interaction: Interaction())
     let rect = Rect(x: 0, y: 0, width: 400, height: 300)
-    _ = BlockEngine.measure(stack, proposal: rect.size, context: context)
+    _ = measureBlock(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)
     counter.bodies = 0
     var first = DrawList()
     context.interaction.beginFrame(input: InputState())
     do {
-      var resolved = BlockEngine.prepare(stack, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &first, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(stack, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &first, in: rect)
     }
     context.interaction.endFrame()
     #expect(counter.bodies == 1)
@@ -281,9 +305,10 @@ struct StackEvaluationTests {
     var second = DrawList()
     context.interaction.beginFrame(input: InputState())
     do {
-      var resolved = BlockEngine.prepare(stack, context: context)
-      resolved.register(in: rect)
-      resolved.paint(into: &second, in: rect)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(stack, context: context)
+      resolvedBuffer.register(resolved, in: rect)
+      resolvedBuffer.paint(resolved, into: &second, in: rect)
     }
     context.interaction.endFrame()
     #expect(counter.bodies == 2)

@@ -19,7 +19,7 @@ package final class WindowRuntime {
   private let producer: FrameProducer
   package let scheduler: FrameScheduler
 
-  package var content: (any Block)? {
+  package var build: LayoutBuilder? {
     didSet {
       producer.reset()
       preparedKeyboardInput = false
@@ -28,6 +28,14 @@ package final class WindowRuntime {
       scheduler.requestContent()
     }
   }
+  package func setContent(_ content: (any Block)?) {
+    guard let content else {
+      build = nil
+      return
+    }
+    build = { (buffer: inout LayoutBuffer, context: BlockContext) in buffer.emit(content, context: context) }
+  }
+
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
   package var context: BlockContext { BlockContext(interaction: interaction) }
@@ -36,7 +44,7 @@ package final class WindowRuntime {
     if interaction.tree != nil {
       let previousInput = interaction.input
       producer.refreshRegistrations(
-        content, viewport: interaction.viewport.size, context: context,
+        build, viewport: interaction.viewport.size, context: context,
         keyboardNavigationOverscan: true)
       // Clipboard translation may consult the last pointer position before the
       // resolved event is dispatched; the registration-only input is synthetic.
@@ -118,7 +126,7 @@ package final class WindowRuntime {
         || !input.commands.isEmpty || !input.textEvents.isEmpty)
     {
       producer.refreshRegistrations(
-        content, viewport: interaction.viewport.size, context: context, commands: input.commands)
+        build, viewport: interaction.viewport.size, context: context, commands: input.commands)
     }
     interaction.processInput(input)
     interaction.finishInput()
@@ -162,7 +170,7 @@ package final class WindowRuntime {
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     let list = producer.render(
-      content: content, viewport: viewport, input: input, context: context,
+      build: build, viewport: viewport, input: input, context: context,
       processingInput: processingInput, onChange: onChange)
     scheduler.animationsActive = interaction.animationsActive
     return list

@@ -25,11 +25,9 @@ public final class FocusTarget {
   }
 }
 
-public struct FocusTargetBlock: LayoutPreparingBlock, CollectionDistributingBlock {
+public struct FocusTargetBlock: Block {
   var content: any Block
   let target: FocusTarget
-
-  public var preservesContentIdentity: Bool { true }
 
 }
 

@@ -1,4 +1,4 @@
-struct PaintModifier: LayoutPreparingBlock, CollectionDistributingBlock {
+struct PaintModifier: Block {
   enum Operation {
     case background(any Block)
     case roundedBackground(Color, CornerRadii)
@@ -8,7 +8,5 @@ struct PaintModifier: LayoutPreparingBlock, CollectionDistributingBlock {
 
   var content: any Block
   var operation: Operation
-
-  var preservesContentIdentity: Bool { true }
 
 }

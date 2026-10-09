@@ -20,13 +20,14 @@ struct AnimatedValueTests {
   @Test func sampledGeometryIsSharedAndRetargetingIsContinuous() throws {
     let model = Model()
     let runtime = WindowRuntime(clock: { model.now })
-    runtime.content = DeferredBlock {
-      VStack {
-        AnimatedValue(model.target, duration: 1) { value in
-          Color.white.sizing(x: .fixed(value), y: .fixed(10))
-        }.id("animated")
-      }
-    }
+    runtime.setContent(
+      DeferredBlock {
+        VStack {
+          AnimatedValue(model.target, duration: 1) { value in
+            Color.white.sizing(x: .fixed(value), y: .fixed(10))
+          }.id("animated")
+        }
+      })
     func width(_ list: DrawList) throws -> Float {
       try #require(list.commands.compactMap { if case .quad(let q) = $0 { q.rect.size.width } else { nil } }.first)
     }
@@ -53,17 +54,18 @@ struct AnimatedValueTests {
   @Test func keyedReorderPreservesProgressAndRemovalCancelsIt() {
     let model = Model()
     let runtime = WindowRuntime(clock: { model.now })
-    runtime.content = DeferredBlock {
-      VStack {
-        if model.visible {
-          ForEach(model.reversed ? [2, 1] : [1, 2], id: \.self) { id in
-            AnimatedValue(model.target + Float(id), duration: 1) { value in
-              Color.white.sizing(x: .fixed(value), y: .fixed(10))
+    runtime.setContent(
+      DeferredBlock {
+        VStack {
+          if model.visible {
+            ForEach(model.reversed ? [2, 1] : [1, 2], id: \.self) { id in
+              AnimatedValue(model.target + Float(id), duration: 1) { value in
+                Color.white.sizing(x: .fixed(value), y: .fixed(10))
+              }
             }
           }
         }
-      }
-    }
+      })
     _ = render(runtime)
     model.target = 110
     _ = render(runtime)
@@ -89,7 +91,7 @@ struct AnimatedValueTests {
     let context = BlockContext()
     var buffer = LayoutBuffer()
     context.interaction.animationTime = 1
-    let root = buffer.prepare(AnimatedValue(20, duration: 0) { _ in Color.white }, context: context)
+    let root = buffer.emit(AnimatedValue(20, duration: 0) { _ in Color.white }, context: context)
     _ = buffer.sizeThatFits(root, Size(width: 20, height: 20))
     #expect(context.interaction.animations.isEmpty)
     context.interaction.beginFrame(input: InputState())
@@ -108,13 +110,14 @@ struct AnimatedValueTests {
   @Test func idleMeasurementCannotRetargetTheRegisteredInteractivePhase() {
     let model = Model()
     let runtime = WindowRuntime(clock: { model.now })
-    runtime.content = Interactive(
-      action: {},
-      content: { phase in
-        AnimatedValue(phase == .idle ? 10 : 100, duration: 1) { value in
-          Color.white.sizing(x: .fixed(value), y: .fixed(10))
-        }
-      })
+    runtime.setContent(
+      Interactive(
+        action: {},
+        content: { phase in
+          AnimatedValue(phase == .idle ? 10 : 100, duration: 1) { value in
+            Color.white.sizing(x: .fixed(value), y: .fixed(10))
+          }
+        }))
     _ = render(runtime)
     runtime.handleInput(InputState(pointerPosition: Point(x: 5, y: 5)))
     _ = render(runtime)

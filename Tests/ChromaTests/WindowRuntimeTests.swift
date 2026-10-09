@@ -45,10 +45,11 @@ struct WindowRuntimeTests {
     let editor = FocusTarget()
     let button = FocusTarget()
     let viewport = Size(width: 300, height: 200)
-    runtime.content = VStack {
-      TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 }).focusTarget(editor)
-      Button("Action") { model.actions += 1 }.focusTarget(button)
-    }
+    runtime.setContent(
+      VStack {
+        TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 }).focusTarget(editor)
+        Button("Action") { model.actions += 1 }.focusTarget(button)
+      })
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.context.focus(try #require(editor.boundID), editing: true)
     for event: TextEditEvent in [.insert("a"), .insert("b"), .backspace, .insert("c")] {
@@ -88,10 +89,11 @@ struct WindowRuntimeTests {
     defer { runtime.reset() }
     let model = InputModel()
     let viewport = Size(width: 200, height: 200)
-    runtime.content = DeferredBlock {
-      let count = model.actions
-      return Button("Increment") { model.actions = count + 1 }
-    }
+    runtime.setContent(
+      DeferredBlock {
+        let count = model.actions
+        return Button("Increment") { model.actions = count + 1 }
+      })
     if !beforeInitialFrame {
       _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     }
@@ -110,7 +112,7 @@ struct WindowRuntimeTests {
     model.text = "a"
     let editor = FocusTarget()
     let viewport = Size(width: 200, height: 200)
-    runtime.content = TextEditor(text: { model.text }, onChange: { model.text = $0 }).focusTarget(editor)
+    runtime.setContent(TextEditor(text: { model.text }, onChange: { model.text = $0 }).focusTarget(editor))
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.context.focus(try #require(editor.boundID), editing: true)
     runtime.handleInput(InputState(textEvents: [.insert("\nb")]))
@@ -125,7 +127,7 @@ struct WindowRuntimeTests {
     let runtime = WindowRuntime()
     let model = InputModel()
     let viewport = Size(width: 100, height: 100)
-    runtime.content = DeferredBlock { Text(model.text) }
+    runtime.setContent(DeferredBlock { Text(model.text) })
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.dispatchInput {
       model.text += "a"
@@ -145,7 +147,16 @@ struct WindowRuntimeTests {
 
   @Test func hoverEventsShareTheLastFrameUntilPresentation() {
     final class Counter { var draws = 0 }
-    struct Probe: PaintableBlock {
+    @MainActor struct Probe: Block {
+      func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+        let context = context.component(Self.self)
+        return buffer.customLeaf(
+          context: context, focusRule: focusRule,
+          measure: { self.sizeThatFits($0, context: context) },
+          register: { self.register(in: $0, context: context) },
+          paint: { self.paint(into: &$0, in: $1, context: context) })
+      }
+
       func register(in rect: Rect, context: BlockContext) {}
 
       let counter: Counter
@@ -160,7 +171,7 @@ struct WindowRuntimeTests {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
     let viewport = Size(width: 200, height: 200)
-    runtime.content = Probe(counter: counter)
+    runtime.setContent(Probe(counter: counter))
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     counter.draws = 0
     for x in 1...100 {
@@ -178,11 +189,12 @@ struct WindowRuntimeTests {
     let clock = FrameSchedulerTests.Clock()
     let runtime = WindowRuntime(clock: { clock.now })
     let target = FocusTarget()
-    runtime.content = VStack {
-      ProgressIndicator()
-      MarqueeText("Overflowing text that stays still")
-      TextEditor(text: { "draft" }, onChange: { _ in }).focusTarget(target)
-    }
+    runtime.setContent(
+      VStack {
+        ProgressIndicator()
+        MarqueeText("Overflowing text that stays still")
+        TextEditor(text: { "draft" }, onChange: { _ in }).focusTarget(target)
+      })
     let viewport = Size(width: 100, height: 100)
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     runtime.context.focus(try #require(target.boundID), editing: true)
@@ -202,11 +214,12 @@ struct WindowRuntimeTests {
     defer { runtime.reset() }
     let controller = ScrollViewController()
     let viewport = Size(width: 200, height: 200)
-    runtime.content = DeferredBlock {
-      ScrollView(data: 0..<1_000, rowHeight: 20, controller: controller) { index in
-        Text("Row \(index)")
-      }
-    }
+    runtime.setContent(
+      DeferredBlock {
+        ScrollView(data: 0..<1_000, rowHeight: 20, controller: controller) { index in
+          Text("Row \(index)")
+        }
+      })
     let onChange: @MainActor @Sendable () -> Void = { runtime.scheduler.requestContent() }
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: onChange)
     await drainObservationChanges()
@@ -226,7 +239,7 @@ struct WindowRuntimeTests {
   @Test func eventsBeforeInitialFrameAreReplayedInOrder() {
     let runtime = WindowRuntime()
     let model = InputModel()
-    runtime.content = Button("Action") { model.actions += 1 }
+    runtime.setContent(Button("Action") { model.actions += 1 })
     runtime.handleInput(InputState(commands: [.navigation(.nextFocus)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
@@ -241,7 +254,7 @@ struct WindowRuntimeTests {
     let runtime = WindowRuntime(clock: { clock.now })
     let model = InputModel()
     let viewport = Size(width: 100, height: 100)
-    runtime.content = DeferredBlock { Text(model.text) }
+    runtime.setContent(DeferredBlock { Text(model.text) })
     #expect(runtime.scheduler.takeFrame() == .content)
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: { runtime.scheduler.requestContent() })
     model.text = "one"
@@ -258,7 +271,7 @@ struct WindowRuntimeTests {
         return false
       })
     #expect(runtime.scheduler.nextFrame == nil)
-    runtime.content = ProgressIndicator()
+    runtime.setContent(ProgressIndicator())
     #expect(runtime.scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
     #expect(runtime.scheduler.takeFrame() == nil)
     runtime.reset()

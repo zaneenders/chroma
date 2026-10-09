@@ -16,8 +16,19 @@ struct LazyLayoutCacheTests {
     var drawnHeight: Float = 0
   }
 
-  struct Row: PaintableBlock {
-    func register(in rect: Rect, context: BlockContext) {}
+  struct Row: Block {
+
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        expandsHorizontally: false, expandsVertically: false,
+        measure: { sizeThatFits($0, context: context) },
+        register: { register(in: $0, context: context) },
+        paint: { paint(into: &$0, in: $1, context: context) })
+    }
+
+    @MainActor func register(in rect: Rect, context: BlockContext) {}
 
     let model: Model
     let capture: Capture
@@ -29,7 +40,7 @@ struct LazyLayoutCacheTests {
       return Size(width: proposal.width, height: model.height)
     }
 
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
       capture.drawnHeight = rect.size.height
       list.fillRect(rect, color: .white)
     }
@@ -40,10 +51,11 @@ struct LazyLayoutCacheTests {
     let capture = Capture()
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
-    renderer.content = ScrollView(
-      controller: controller,
-      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-    ).id(WidgetID("stack"))
+    renderer.setContent(
+      ScrollView(
+        controller: controller,
+        rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+      ).id(WidgetID("stack")))
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -68,10 +80,11 @@ struct LazyLayoutCacheTests {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = ScrollView(
-      controller: controller,
-      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-    ).id(WidgetID("stack"))
+    renderer.setContent(
+      ScrollView(
+        controller: controller,
+        rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+      ).id(WidgetID("stack")))
     renderer.render()
     for height: Float in [50, 80, 30] {
       model.height = height
@@ -90,13 +103,14 @@ struct LazyLayoutCacheTests {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.content = ScrollView(
-      controller: controller,
-      rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-    ).id(WidgetID("stack")).onCommand(.application("resize")) {
-      model.height = 80
-      return .handled
-    }
+    renderer.setContent(
+      ScrollView(
+        controller: controller,
+        rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
+      ).id(WidgetID("stack")).onCommand(.application("resize")) {
+        model.height = 80
+        return .handled
+      })
     renderer.render()
     renderer.render(input: InputState(commands: [.application("resize")]))
     #expect(capture.drawnHeight == 80)
@@ -117,9 +131,10 @@ struct LazyLayoutCacheTests {
         ]
       ).id(id)
       do {
-        var resolved = BlockEngine.prepare(stack, context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(stack, context: BlockContext(interaction: interaction))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
       interaction.endFrame()
     }
@@ -139,10 +154,11 @@ struct LazyLayoutCacheTests {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(controller: controller, rows: [row]).id(id), context: BlockContext(interaction: interaction))
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
       interaction.endFrame()
     }
@@ -161,11 +177,12 @@ struct LazyLayoutCacheTests {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        var resolved = BlockEngine.prepare(
+        var resolvedBuffer = LayoutBuffer()
+        let resolved = resolvedBuffer.emit(
           ScrollView(controller: controller, rows: rows).id(id),
           context: BlockContext(interaction: interaction, textScale: scale))
-        resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
-        resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
+        resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
       interaction.endFrame()
     }

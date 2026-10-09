@@ -29,7 +29,7 @@ public final class NavigationTestHost {
   ) {
     host = HeadlessHost(size: size)
     host.keyBindings = keyBindings
-    host.content = content
+    host.setContent(content)
     host.render()
   }
 

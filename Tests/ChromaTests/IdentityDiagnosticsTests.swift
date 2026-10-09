@@ -11,9 +11,10 @@ struct IdentityDiagnosticsTests {
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(block, context: context)
-      resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 100))
-      resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(block, context: context)
+      resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 100))
+      resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
     }
     context.interaction.endFrame()
   }

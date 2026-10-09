@@ -1,4 +1,4 @@
-struct ContextModifier: LayoutPreparingBlock, CollectionDistributingBlock {
+struct ContextModifier: Block {
   enum Operation {
     case hover(HoverStyle)
     case navigationIgnored
@@ -6,7 +6,5 @@ struct ContextModifier: LayoutPreparingBlock, CollectionDistributingBlock {
 
   var content: any Block
   var operation: Operation
-
-  var preservesContentIdentity: Bool { true }
 
 }

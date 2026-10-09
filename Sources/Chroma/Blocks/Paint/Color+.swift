@@ -1,13 +1,17 @@
-extension Color: PaintableBlock {
-  public var focusRule: FocusRule { .standard }
-  public var expandsHorizontally: Bool { true }
-  public var expandsVertically: Bool { true }
+extension Color: Block {
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.color(self, context: context)
+  }
 
-  public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+  var focusRule: FocusRule { .standard }
+  var expandsHorizontally: Bool { true }
+  var expandsVertically: Bool { true }
 
-  public func register(in rect: Rect, context: BlockContext) {}
+  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
 
-  public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func register(in rect: Rect, context: BlockContext) {}
+
+  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.fillRect(rect, color: self)
   }
 }

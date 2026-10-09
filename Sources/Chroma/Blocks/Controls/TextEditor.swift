@@ -1,4 +1,8 @@
-public struct TextEditor: LayoutPreparingBlock {
+public struct TextEditor: Block {
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.textEditor(self, context: context)
+  }
+
   public var placeholder: String
   public var fontScale: Float
   public var lineLimits: ClosedRange<Int>
@@ -34,9 +38,6 @@ public struct TextEditor: LayoutPreparingBlock {
     self.onTextEvent = onTextEvent
   }
 
-  public var focusRule: FocusRule { .control }
-  public var expandsHorizontally: Bool { true }
-
   private func columns(width: Float, cellWidth: Float) -> Int? {
     let columns =
       cellWidth.isFinite && cellWidth > 0 && width.isFinite
@@ -44,19 +45,13 @@ public struct TextEditor: LayoutPreparingBlock {
     return columns
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    sizeThatFits(proposal, context: context, preparation: context.interaction.textLayouts)
-  }
-
-  @MainActor private func sizeThatFits(
-    _ proposal: Size, context: BlockContext, preparation: TextLayoutPreparation
-  ) -> Size {
+  @MainActor fileprivate func sizeThatFits(_ proposal: Size, text: String, context: BlockContext) -> Size {
     let scale = fontScale * context.textScale
     if singleLine {
       return Size(width: proposal.width, height: context.fontMetrics.glyphHeight * scale + 2 * padding + 2)
     }
-    let layout = preparation.resolve(
-      getText(), columns: columns(width: proposal.width, cellWidth: context.fontMetrics.cellAdvance * scale)
+    let layout = context.interaction.textLayouts.resolve(
+      text, columns: columns(width: proposal.width, cellWidth: context.fontMetrics.cellAdvance * scale)
     ).layout
     let count = min(lineLimits.upperBound, max(lineLimits.lowerBound, layout.lines.count))
     return Size(width: proposal.width, height: Float(count) * context.fontMetrics.lineAdvance * scale + 2 * padding)
@@ -64,7 +59,7 @@ public struct TextEditor: LayoutPreparingBlock {
 
   /// Immutable geometry for the current operation. Its text shaping is shared with
   /// measurement and painting; installed handlers retain this exact update snapshot.
-  private struct PreparedText {
+  fileprivate struct PreparedText {
     let text: String
     let scale: Float
     let cellWidth: Float
@@ -86,15 +81,12 @@ public struct TextEditor: LayoutPreparingBlock {
     }
   }
 
-  @MainActor private func prepareText(
-    in rect: Rect, context: BlockContext, preparation: TextLayoutPreparation
-  ) -> PreparedText? {
-    let text = getText()
+  @MainActor fileprivate func prepareText(_ text: String, in rect: Rect, context: BlockContext) -> PreparedText? {
     let scale = fontScale * context.textScale
     let cellWidth = context.fontMetrics.cellAdvance * scale
     let lineHeight = context.fontMetrics.lineAdvance * scale
     guard cellWidth.isFinite, cellWidth > 0, lineHeight.isFinite, lineHeight > 0 else { return nil }
-    let snapshot = preparation.resolve(
+    let snapshot = context.interaction.textLayouts.resolve(
       text, columns: columns(width: singleLine ? .infinity : rect.size.width, cellWidth: cellWidth))
     let inner = Rect(
       x: rect.minX + padding, y: rect.minY + padding + (singleLine ? 1 : 0),
@@ -106,7 +98,7 @@ public struct TextEditor: LayoutPreparingBlock {
       snapshot: snapshot, inner: inner, visibleCount: visibleCount, singleLine: singleLine)
   }
 
-  @MainActor private func register(
+  @MainActor fileprivate func register(
     _ prepared: PreparedText, in rect: Rect, context: BlockContext
   ) {
     let interaction = context.interaction
@@ -124,7 +116,7 @@ public struct TextEditor: LayoutPreparingBlock {
       }
     }
     _ = context.textInputState(
-      in: rect, text: getText, onChange: onChange, onSubmit: onSubmit,
+      in: rect, text: { prepared.text }, onChange: onChange, onSubmit: onSubmit,
       onEndEditing: onEndEditing,
       onTextEvent: onTextEvent,
       pointerOffset: { [weak interaction] point, caret in
@@ -144,28 +136,12 @@ public struct TextEditor: LayoutPreparingBlock {
       submitInsertsNewline: !singleLine && onSubmit == nil)
   }
 
-  @MainActor public func register(in rect: Rect, context: BlockContext) {
-    guard
-      let prepared = prepareText(
-        in: rect, context: context, preparation: context.interaction.textLayouts)
-    else { return }
-    register(prepared, in: rect, context: context)
-  }
-
-  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    guard
-      let prepared = prepareText(
-        in: rect, context: context, preparation: context.interaction.textLayouts)
-    else { return }
-    paint(prepared, into: &drawList, in: rect, context: context)
-  }
-
-  @MainActor private func paint(
+  @MainActor fileprivate func paint(
     _ prepared: PreparedText, into drawList: inout DrawList, in rect: Rect, context: BlockContext
   ) {
     var state = context.textInputVisualState()
-    // Direct paint may follow a binding mutation without an update. Keep visual offsets
-    // safe locally; only registration is allowed to reconcile the actual editing state.
+    // Clamp only this visual snapshot. Registration owns reconciliation of
+    // editing state; drawing must not mutate the committed input state.
     if let caret = state.caretOffset {
       state.caretOffset = max(0, min(prepared.layout.characterCount, caret))
     }
@@ -230,29 +206,33 @@ public struct TextEditor: LayoutPreparingBlock {
   }
 }
 
-extension TextEditor {
-  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-    let preparation = context.interaction.textLayouts
-    // Registration commits this operation's text and geometry. Its matching paint
-    // does not read the application binding again, so editing and pixels cannot use
-    // different versions. A later input/update resolves a fresh operation.
-    var registered: (rect: Rect, text: PreparedText)?
-    return buffer.append(
-      expandsHorizontally: { _ in true },
-      measure: { buffer, proposal in sizeThatFits(proposal, context: context, preparation: preparation) },
-      register: { buffer, rect in
-        registered = nil
-        guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
-        registered = (rect, prepared)
-        register(prepared, in: rect, context: context)
-      },
-      paint: { buffer, list, rect in
-        if let registered, registered.rect == rect {
-          paint(registered.text, into: &list, in: rect, context: context)
-          return
-        }
-        guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
-        paint(prepared, into: &list, in: rect, context: context)
-      })
+/// One binding snapshot and one set of placed text geometry for this operation.
+/// Input callbacks and drawing use the same grapheme offsets as measurement.
+@MainActor
+struct TextEditorNode {
+  let editor: TextEditor
+  let text: String
+  let context: BlockContext
+  private var prepared: TextEditor.PreparedText?
+
+  init(_ editor: TextEditor, context: BlockContext) {
+    self.editor = editor
+    self.text = editor.getText()
+    self.context = context
+  }
+
+  func sizeThatFits(_ proposal: Size) -> Size {
+    editor.sizeThatFits(proposal, text: text, context: context)
+  }
+
+  mutating func register(in rect: Rect) {
+    prepared = editor.prepareText(text, in: rect, context: context)
+    guard let prepared else { return }
+    editor.register(prepared, in: rect, context: context)
+  }
+
+  func paint(into list: inout DrawList, in rect: Rect) {
+    guard let prepared else { return }
+    editor.paint(prepared, into: &list, in: rect, context: context)
   }
 }

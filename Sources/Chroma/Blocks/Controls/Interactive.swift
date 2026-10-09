@@ -1,4 +1,4 @@
-public struct Interactive<Content: Block>: LayoutPreparingBlock {
+public struct Interactive<Content: Block>: Block {
   var id: WidgetID?
   public var action: @MainActor () -> Void
   public var content: @MainActor (InteractionPhase) -> Content
@@ -31,52 +31,78 @@ public struct Interactive<Content: Block>: LayoutPreparingBlock {
 }
 
 extension Interactive {
-  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-    // Layout queries intentionally use the idle tree. The current-phase tree belongs
-    // to this operation and is shared by registration and painting, never a later event.
-    var idle: LayoutNode?
-    func measurementTree(_ buffer: inout LayoutBuffer) -> LayoutNode {
-      if let idle { return idle }
-      let resolved = buffer.prepare(content(.idle), context: context)
-      idle = resolved
-      return resolved
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.interactive(id: id, action: action, content: { content($0) }, context: context)
+  }
+}
+
+/// Each visual phase is lowered once within the current buffer operation. The
+/// idle child used for measurement is also the child registered in the idle phase.
+@MainActor
+struct InteractiveNode {
+  let id: WidgetID
+  let action: @MainActor () -> Void
+  let content: @MainActor (InteractionPhase) -> any Block
+  let context: BlockContext
+  private var idle: LayoutNode?
+  private var hovered: LayoutNode?
+  private var pressed: LayoutNode?
+  private var active: LayoutNode?
+
+  init(
+    id: WidgetID?, action: @escaping @MainActor () -> Void,
+    content: @escaping @MainActor (InteractionPhase) -> any Block, context: BlockContext
+  ) {
+    self.id = id ?? context.widgetID
+    self.action = action
+    self.content = content
+    self.context = context
+  }
+
+  mutating func child(for phase: InteractionPhase, in buffer: inout LayoutBuffer) -> LayoutNode {
+    let existing: LayoutNode?
+    switch phase {
+    case .idle: existing = idle
+    case .hovered: existing = hovered
+    case .pressed: existing = pressed
     }
+    if let existing { return existing }
     var childContext = context
     childContext.focusTargets = []
     childContext.focusLeafClaimed = true
-    var active: LayoutNode?
-    var activePhase: InteractionPhase?
-    func current(_ phase: InteractionPhase, buffer: inout LayoutBuffer) -> LayoutNode {
-      if let active, activePhase == phase { return active }
-      let resolved = buffer.prepare(content(phase), context: childContext)
-      active = resolved
-      activePhase = phase
-      return resolved
+    let child = buffer.emit(content(phase), context: childContext)
+    switch phase {
+    case .idle: idle = child
+    case .hovered: hovered = child
+    case .pressed: pressed = child
     }
-    let id = id ?? context.widgetID
-    return buffer.append(
-      expandsHorizontally: { buffer in
-        let child = measurementTree(&buffer)
-        return buffer.expandsHorizontally(child)
-      },
-      expandsVertically: { buffer in
-        let child = measurementTree(&buffer)
-        return buffer.expandsVertically(child)
-      },
-      measure: { buffer, proposal in
-        let child = measurementTree(&buffer)
-        return buffer.sizeThatFits(child, proposal)
-      },
-      register: { buffer, rect in
-        let state = context.buttonState(id: id, in: rect, action: action)
-        let child = current(state.phase, buffer: &buffer)
-        buffer.register(child, in: rect)
-      },
-      paint: { buffer, list, rect in
-        // Canonical update has prepared this exact phase; direct standalone paint may
-        // prepare a fresh visual tree, but never installs its handlers or focus leaves.
-        let child = active ?? current(context.buttonVisualState(id: id).phase, buffer: &buffer)
-        buffer.paint(child, into: &list, in: rect)
-      })
+    return child
+  }
+
+  mutating func expandsHorizontally(in buffer: inout LayoutBuffer) -> Bool {
+    let child = child(for: .idle, in: &buffer)
+    return buffer.expandsHorizontally(child)
+  }
+
+  mutating func expandsVertically(in buffer: inout LayoutBuffer) -> Bool {
+    let child = child(for: .idle, in: &buffer)
+    return buffer.expandsVertically(child)
+  }
+
+  mutating func sizeThatFits(_ proposal: Size, in buffer: inout LayoutBuffer) -> Size {
+    let child = child(for: .idle, in: &buffer)
+    return buffer.sizeThatFits(child, proposal)
+  }
+
+  mutating func register(in rect: Rect, buffer: inout LayoutBuffer) {
+    let state = context.buttonState(id: id, in: rect, action: action)
+    let child = child(for: state.phase, in: &buffer)
+    active = child
+    buffer.register(child, in: rect)
+  }
+
+  func paint(into list: inout DrawList, in rect: Rect, buffer: inout LayoutBuffer) {
+    guard let active else { preconditionFailure("Interactive painting requires preceding registration") }
+    buffer.paint(active, into: &list, in: rect)
   }
 }

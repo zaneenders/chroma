@@ -14,8 +14,11 @@ struct AppTests {
     #expect(renderer.title == "App \(app.identifier) — Test")
     #expect(renderer.runtime.scheduler.minimumRefreshRate == 24)
     #expect(renderer.runtime.scheduler.maximumRefreshRate == 48)
-    let root = renderer.content as? DeferredBlock<TupleBlock>
-    #expect((root?.body.children.first as? AppContent)?.identifier == app.identifier)
+    #expect(
+      renderer.frame.paintSnapshot.contains {
+        if case .text(_, let text, _, _) = $0 { return text == app.identifier.uuidString }
+        return false
+      })
   }
 
   @Test func runPropagatesBackendErrors() {
@@ -40,8 +43,19 @@ private struct StatefulApp: App {
   }
 }
 
-private struct AppContent: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct AppContent: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: BlockContext) {}
 
   let identifier: UUID
 
@@ -51,13 +65,15 @@ private struct AppContent: PaintableBlock {
     proposal
   }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {}
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    drawList.text(identifier.uuidString, at: rect.origin, color: .white)
+  }
 }
 
 @MainActor
 private final class FailingAppRenderer: Chroma.Host {
   let name = "Test"
-  var content: (any Block)?
+  var build: LayoutBuilder?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
@@ -75,13 +91,20 @@ private final class FailingAppRenderer: Chroma.Host {
 @MainActor
 private final class AppRenderer: Chroma.Host {
   let name = "Test"
-  var content: (any Block)?
+  var build: LayoutBuilder?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
   var title: String?
+  var frame = DrawList()
 
   func run(title: String) {
     self.title = title
+    guard let build else { return }
+    var buffer = LayoutBuffer()
+    let node = build(&buffer, BlockContext())
+    let rect = Rect(x: 0, y: 0, width: 400, height: 40)
+    buffer.register(node, in: rect)
+    buffer.paint(node, into: &frame, in: rect)
   }
 }

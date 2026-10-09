@@ -11,7 +11,7 @@ struct NavigationContractTests {
       -> DrawList
     {
       producer.render(
-        content: content, viewport: Size(width: 600, height: 400),
+        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 600, height: 400),
         input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
     }
   }

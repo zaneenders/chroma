@@ -19,23 +19,34 @@ struct OperationLocalLayoutTests {
     var height: Float = 12
   }
 
-  struct Leaf: PaintableBlock {
+  struct Leaf: Block {
+
+    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        expandsHorizontally: false, expandsVertically: false,
+        measure: { sizeThatFits($0, context: context) },
+        register: { register(in: $0, context: context) },
+        paint: { paint(into: &$0, in: $1, context: context) })
+    }
+
     let capture: Capture
     let height: @MainActor () -> Float
     var action: (@MainActor () -> Void)? = nil
     var usesHoverStyle = false
     var focusRule: FocusRule { action == nil ? .standard : .control }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       capture.measurements += 1
       let hoverHeight: Float = usesHoverStyle && context.hoverStyle != nil ? 10 : 0
       return Size(width: min(30, proposal.width), height: height() * context.textScale + hoverHeight)
     }
-    func register(in rect: Rect, context: BlockContext) {
+    @MainActor func register(in rect: Rect, context: BlockContext) {
       capture.rects.append(rect)
       if let action { _ = context.buttonState(in: rect, action: action) }
     }
 
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
+    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
   }
 
   @discardableResult
@@ -44,9 +55,10 @@ struct OperationLocalLayoutTests {
     size: Size = Size(width: 100, height: 100), origin: Point = .zero
   ) -> Size {
     context.interaction.beginFrame(input: InputState())
-    var resolved = BlockEngine.prepare(content, context: context)
-    let measured = resolved.sizeThatFits(size)
-    resolved.register(in: Rect(origin: origin, size: size))
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.emit(content, context: context)
+    let measured = resolvedBuffer.sizeThatFits(resolved, size)
+    resolvedBuffer.register(resolved, in: Rect(origin: origin, size: size))
     context.interaction.endFrame()
     return measured
   }
@@ -60,15 +72,16 @@ struct OperationLocalLayoutTests {
     }
     let context = BlockContext()
     let proposal = Size(width: 100, height: 100)
-    var resolved = BlockEngine.prepare(block, context: context)
-    #expect(resolved.sizeThatFits(proposal).height == 12)
+    var resolvedBuffer = LayoutBuffer()
+    let resolved = resolvedBuffer.emit(block, context: context)
+    #expect(resolvedBuffer.sizeThatFits(resolved, proposal).height == 12)
     let measured = capture.measurements
-    #expect(resolved.sizeThatFits(proposal).height == 12)
+    #expect(resolvedBuffer.sizeThatFits(resolved, proposal).height == 12)
     context.interaction.beginFrame(input: InputState())
-    resolved.register(in: Rect(origin: .zero, size: proposal))
+    resolvedBuffer.register(resolved, in: Rect(origin: .zero, size: proposal))
     context.interaction.endFrame()
     var list = DrawList()
-    resolved.paint(into: &list, in: Rect(origin: .zero, size: proposal))
+    resolvedBuffer.paint(resolved, into: &list, in: Rect(origin: .zero, size: proposal))
     #expect(builds == 1)
     #expect(capture.measurements == measured)
 
@@ -118,12 +131,13 @@ struct OperationLocalLayoutTests {
     let capture = Capture()
     let host = HeadlessHost(size: Size(width: 100, height: 100))
     defer { host.close() }
-    host.content = DeferredBlock {
-      let current = capture.actions
-      return VStack {
-        Leaf(capture: capture, height: { capture.height }, action: { capture.actions = current + 1 })
-      }
-    }
+    host.setContent(
+      DeferredBlock {
+        let current = capture.actions
+        return VStack {
+          Leaf(capture: capture, height: { capture.height }, action: { capture.actions = current + 1 })
+        }
+      })
     host.render()
     host.sendInput(InputState(commands: [.navigation(.down)]))
     host.sendInput(InputState(commands: [.action(.activate)]))
@@ -183,7 +197,10 @@ struct OperationLocalLayoutTests {
     }
     var redraws = 0
     _ = producer.render(
-      content: oldRoot, viewport: Size(width: 100, height: 100), input: InputState(),
+      build: oldRoot.map { root in
+        { (buffer: inout LayoutBuffer, context: BlockContext) in buffer.emit(root, context: context) }
+      },
+      viewport: Size(width: 100, height: 100), input: InputState(),
       context: context, onChange: { redraws += 1 })
     model?.height = 22
     producer.reset()
@@ -204,24 +221,29 @@ struct OperationLocalLayoutTests {
     let viewport = Size(width: 100, height: 20)
     context.interaction.viewport = Rect(origin: .zero, size: viewport)
     let block = ScrollView(controller: controller) { Leaf(capture: capture, height: { model.height }) }
-    producer.refreshRegistrations(block, viewport: viewport, context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.emit(block, context: context) }, viewport: viewport, context: context)
     context.interaction.processInput(
       InputState(pointerPosition: Point(x: 5, y: 5), scrollDelta: Point(x: 0, y: -30)))
     context.interaction.finishInput()
-    producer.refreshRegistrations(block, viewport: viewport, context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.emit(block, context: context) }, viewport: viewport, context: context)
     #expect(capture.rects.last?.minY == -30)
     #expect(context.interaction.tree?.hitTest(Point(x: 5, y: 5)) != nil)
     #expect(context.interaction.tree?.hitTest(Point(x: 5, y: 25)) == nil)
     model.height = 140
-    producer.refreshRegistrations(block, viewport: viewport, context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.emit(block, context: context) }, viewport: viewport, context: context)
     #expect(capture.rects.last?.size.height == 140)
 
     let rowController = ScrollViewController()
     let rows = [ScrollView.Row(id: 0, content: Leaf(capture: capture, height: { model.height }))]
     let rowBlock = ScrollView(controller: rowController, rows: rows)
-    producer.refreshRegistrations(rowBlock, viewport: viewport, context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.emit(rowBlock, context: context) }, viewport: viewport, context: context)
     model.height = 160
-    producer.refreshRegistrations(rowBlock, viewport: viewport, context: context)
+    producer.refreshRegistrations(
+      { buffer, context in buffer.emit(rowBlock, context: context) }, viewport: viewport, context: context)
     #expect(rowController.lazyStackCache.rowSizes.map(\.height) == [160])
   }
 }

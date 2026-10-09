@@ -2,8 +2,19 @@ import Testing
 
 @testable import Chroma
 
-private struct NamedBlock: PaintableBlock {
-  func register(in rect: Rect, context: BlockContext) {}
+private struct NamedBlock: Block {
+
+  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
+    return buffer.customLeaf(
+      context: context, focusRule: focusRule,
+      expandsHorizontally: false, expandsVertically: false,
+      measure: { sizeThatFits($0, context: context) },
+      register: { register(in: $0, context: context) },
+      paint: { paint(into: &$0, in: $1, context: context) })
+  }
+
+  @MainActor func register(in rect: Rect, context: BlockContext) {}
 
   let name: String
 
@@ -13,7 +24,7 @@ private struct NamedBlock: PaintableBlock {
     Size(width: 10, height: 10)
   }
 
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     drawList.text(name, at: rect.origin, color: .white)
   }
 }
@@ -60,9 +71,10 @@ struct BoundaryTests {
 
     var outerBackground = DrawList()
     do {
-      var resolved = BlockEngine.prepare(NamedBlock(name: "content").padding(5).background(red), context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &outerBackground, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(NamedBlock(name: "content").padding(5).background(red), context: context)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &outerBackground, in: viewport)
     }
     #expect(
       outerBackground.paintSnapshot == [
@@ -72,9 +84,10 @@ struct BoundaryTests {
 
     var innerBackground = DrawList()
     do {
-      var resolved = BlockEngine.prepare(NamedBlock(name: "content").background(blue).padding(5), context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &innerBackground, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(NamedBlock(name: "content").background(blue).padding(5), context: context)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &innerBackground, in: viewport)
     }
     #expect(
       innerBackground.paintSnapshot == [
@@ -90,9 +103,10 @@ struct BoundaryTests {
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      var resolved = BlockEngine.prepare(NamedBlock(name: "x").clipped().clipped(), context: context)
-      resolved.register(in: viewport)
-      resolved.paint(into: &list, in: viewport)
+      var resolvedBuffer = LayoutBuffer()
+      let resolved = resolvedBuffer.emit(NamedBlock(name: "x").clipped().clipped(), context: context)
+      resolvedBuffer.register(resolved, in: viewport)
+      resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
 
@@ -120,12 +134,12 @@ struct BoundaryTests {
       Size(width: -100, height: -50),
     ]
     for proposal in proposals {
-      let padded = BlockEngine.measure(
+      let padded = measureBlock(
         NamedBlock(name: "x").padding(8), proposal: proposal, context: context)
       #expect(padded.width.isFinite && padded.height.isFinite)
       #expect(padded.width >= 0 && padded.height >= 0)
 
-      let emptyStack = BlockEngine.measure(VStack {}, proposal: proposal, context: context)
+      let emptyStack = measureBlock(VStack {}, proposal: proposal, context: context)
       #expect(emptyStack == .zero)
     }
   }

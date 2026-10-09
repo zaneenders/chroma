@@ -14,15 +14,16 @@ struct FrameUpdateTests {
   @Test func actionUpdatesEarlierSiblingInTheSameFrame() {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock {
-      VStack {
-        Text(model.text)
-        Button("Change", id: WidgetID("button")) {
-          model.actions += 1
-          model.text = "after"
+    renderer.setContent(
+      DeferredBlock {
+        VStack {
+          Text(model.text)
+          Button("Change", id: WidgetID("button")) {
+            model.actions += 1
+            model.text = "after"
+          }
         }
-      }
-    }
+      })
     renderer.render()
     let frame = renderer.render(
       input: InputState(commands: [.navigation(.down), .navigation(.down), .action(.activate)]))
@@ -39,12 +40,13 @@ struct FrameUpdateTests {
   @Test func textEditingUpdatesEarlierSiblingBeforeDrawing() {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.content = DeferredBlock {
-      VStack {
-        Text(model.text)
-        TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 })
-      }
-    }
+    renderer.setContent(
+      DeferredBlock {
+        VStack {
+          Text(model.text)
+          TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 })
+        }
+      })
     renderer.render()
     renderer.render(
       input: InputState(commands: [.navigation(.down), .navigation(.down), .action(.activate)]))
@@ -62,9 +64,10 @@ struct FrameUpdateTests {
   func externalScrollRequestInvalidatesObservedFrame() async {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
-    renderer.content = ScrollView(controller: controller) {
-      Text("hello")
-    }.id(WidgetID("scroll"))
+    renderer.setContent(
+      ScrollView(controller: controller) {
+        Text("hello")
+      }.id(WidgetID("scroll")))
     var requests = 0
     renderer.onRedrawRequested = { requests += 1 }
     renderer.render()

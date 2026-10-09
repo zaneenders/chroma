@@ -1,5 +1,5 @@
-public struct ForEach<Data: RandomAccessCollection>: Block, KeyedBlockCollection {
-  let keyedContent: TupleBlock
+public struct ForEach<Data: RandomAccessCollection>: Block {
+  let children: [(StructuralKey, TupleBlock)]
 
   @MainActor public init(
     _ data: Data,
@@ -13,13 +13,17 @@ public struct ForEach<Data: RandomAccessCollection>: Block, KeyedBlockCollection
     @BlockBuilder content: (Data.Element) -> TupleBlock
   ) {
     var keys = Set<ID>()
-    keyedContent = TupleBlock(
-      children: data.map { element in
-        let key = element[keyPath: id]
-        precondition(keys.insert(key).inserted, "Duplicate collection element ID: \(key)")
-        return ScopedBlock(content: content(element), path: [.key(StructuralKey(key))])
-      })
+    children = data.map { element in
+      let key = element[keyPath: id]
+      precondition(keys.insert(key).inserted, "Duplicate collection element ID: \(key)")
+      return (StructuralKey(key), content(element))
+    }
   }
 
-  public var body: TupleBlock { keyedContent }
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let nodes = children.map { key, child in
+      buffer.emit(child, context: context.scoped([.key(key)]))
+    }
+    return buffer.fragment(nodes, context: context)
+  }
 }

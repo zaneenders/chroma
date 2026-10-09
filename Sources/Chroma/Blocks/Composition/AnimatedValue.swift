@@ -1,7 +1,7 @@
 /// A keyed scalar transition whose sampled value is shared by layout, input and drawing.
 /// Keep its structural identity stable to preserve progress across reordering.
 /// Removing or virtualizing the block cancels its transition.
-public struct AnimatedValue<Content: Block>: LayoutPreparingBlock {
+public struct AnimatedValue<Content: Block>: Block {
   public let target: Float
   public let duration: Double
   private let content: @MainActor (Float) -> Content
@@ -16,16 +16,10 @@ public struct AnimatedValue<Content: Block>: LayoutPreparingBlock {
     self.content = content
   }
 
-  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let context = context.component(Self.self)
     let state = context.interaction.animation(context.widgetID, target: target, duration: duration)
-    let child = buffer.prepare(content(state.value(at: context.interaction.animationTime)), context: context)
-    return buffer.append(
-      child: child,
-      register: { buffer, rect in
-        context.interaction.animationKeys.insert(context.widgetID)
-        context.interaction.animations[context.widgetID] = state
-        buffer.register(child, in: rect)
-      },
-      paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
+    let child = buffer.emit(content(state.value(at: context.interaction.animationTime)), context: context)
+    return buffer.node(.animation(child, state), context: context)
   }
 }

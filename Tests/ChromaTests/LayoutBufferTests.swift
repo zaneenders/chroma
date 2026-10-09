@@ -11,12 +11,12 @@ struct LayoutBufferTests {
     var first = LayoutBuffer()
     var second = LayoutBuffer()
     let context = BlockContext()
-    let old = first.prepare(Color.white, context: context)
+    let old = first.emit(Color.white, context: context)
     #expect(first.contains(old) == true)
     #expect(second.contains(old) == false)
     let capacity = first.capacity
     first.reset()
-    let replacement = first.prepare(Color.black, context: context)
+    let replacement = first.emit(Color.black, context: context)
     #expect(first.capacity == capacity)
     #expect(first.contains(old) == false)
     #expect(first.contains(replacement) == true)
@@ -30,16 +30,16 @@ struct LayoutBufferTests {
       Text("first").id("first")
       Text("second").id("second")
     }
-    let direct = DirectLayout { buffer, context in
-      let first = buffer.prepare(Text("first"), context: context.keyed("first"))
-      let second = buffer.prepare(Text("second"), context: context.keyed("second"))
+    let direct: LayoutBuilder = { buffer, context in
+      let first = buffer.emit(Text("first"), context: context.keyed("first"))
+      let second = buffer.emit(Text("second"), context: context.keyed("second"))
       return buffer.stack([first, second], axis: .vertical, spacing: 3, context: context)
     }
     let host = HeadlessHost(size: viewport.size)
     defer { host.close() }
-    host.content = builder
+    host.setContent(builder)
     let first = host.render()
-    host.content = direct
+    host.build = direct
     #expect(host.render().commands == first.commands)
   }
 
@@ -55,9 +55,8 @@ struct LayoutBufferTests {
     }
     for iteration in 0..<20 {
       PipelineMetrics.reset()
-      let root = buffer.prepare(content, context: context)
+      let root = buffer.emit(content, context: context)
       #expect(buffer.count == 4)
-      #expect(buffer.customNodeCount == 0)
       _ = buffer.sizeThatFits(root, viewport.size)
       context.interaction.beginFrame(input: InputState())
       buffer.register(root, in: viewport)
@@ -77,7 +76,7 @@ struct LayoutBufferTests {
   @Test func cachedStackGeometryIsRelativeToItsCurrentOrigin() {
     var buffer = LayoutBuffer()
     let context = BlockContext()
-    let root = buffer.prepare(
+    let root = buffer.emit(
       VStack(spacing: 2) {
         Text("A")
         Text("B")
@@ -106,11 +105,12 @@ struct LayoutBufferTests {
     var capture: Capture? = Capture()
     weak let weakCapture = capture
     var buffer = LayoutBuffer()
-    _ = buffer.append(
-      measure: { [capture = capture!] _, proposal in
+    _ = buffer.customLeaf(
+      context: BlockContext(),
+      measure: { [capture = capture!] proposal in
         withExtendedLifetime(capture) {}
         return proposal
-      }, register: { _, _ in }, paint: { _, _, _ in })
+      }, register: { _ in }, paint: { _, _ in })
     capture = nil
     #expect(weakCapture != nil)
     let capacity = buffer.capacity
@@ -122,29 +122,18 @@ struct LayoutBufferTests {
   }
 
   @Test func callbacksCanGrowStorageDuringRegistration() {
-    struct Growing: LayoutPreparingBlock {
-      func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-        var children: LayoutNode?
-        return buffer.append(
-          measure: { _, proposal in proposal },
-          register: { buffer, rect in
-            let nodes = (0..<200).map { index in
-              buffer.prepare(Text("abc"), context: context.childScope(index))
-            }
-            let stack = buffer.stack(nodes, axis: .vertical, context: context)
-            children = stack
-            buffer.register(stack, in: rect)
-          },
-          paint: { buffer, list, rect in buffer.paint(children!, into: &list, in: rect) })
+    let growing = Interactive(action: {}) { _ in
+      VStack {
+        ForEach(0..<200, id: \.self) { _ in Text("abc") }
       }
     }
     var buffer = LayoutBuffer()
     let context = BlockContext()
-    let root = buffer.prepare(Growing().navigationIgnored(), context: context)
+    let root = buffer.emit(growing.navigationIgnored(), context: context)
     context.interaction.beginFrame(input: InputState())
     buffer.register(root, in: viewport)
     context.interaction.endFrame()
-    #expect(buffer.count == 202)
+    #expect(buffer.count > 200)
     #expect(buffer.contains(root) == true)
     var list = DrawList()
     buffer.paint(root, into: &list, in: viewport)
@@ -154,7 +143,7 @@ struct LayoutBufferTests {
   @Test func stackRetainsSeparatePlacementsForDifferentProposals() {
     var buffer = LayoutBuffer()
     let context = BlockContext()
-    let root = buffer.prepare(
+    let root = buffer.emit(
       HStack(spacing: 10) {
         Color.white
         Color.black

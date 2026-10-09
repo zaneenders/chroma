@@ -1,4 +1,4 @@
-struct CommandScope: LayoutPreparingBlock, CollectionDistributingBlock {
+struct CommandScope: Block {
   enum Operation {
     case keyBindings(KeyBindings)
     case handler(Command, @MainActor () -> CommandResult)
@@ -7,9 +7,9 @@ struct CommandScope: LayoutPreparingBlock, CollectionDistributingBlock {
   var content: any Block
   var operation: Operation
 
-  var preservesContentIdentity: Bool { true }
-
-  @MainActor func withRegistration(in rect: Rect, context: BlockContext, content: () -> Void) {
+  @MainActor static func withRegistration(
+    _ operation: Operation, in rect: Rect, context: BlockContext, content: () -> Void
+  ) {
     let interaction = context.interaction
     switch operation {
     case .keyBindings(let bindings):

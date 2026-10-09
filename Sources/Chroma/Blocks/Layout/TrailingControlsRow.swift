@@ -1,4 +1,4 @@
-public struct TrailingControlsRow<Input: Block, Controls: Block>: LayoutPreparingBlock {
+public struct TrailingControlsRow<Input: Block, Controls: Block>: Block {
   let spacing: Float
   let input: Input
   let controls: Controls
@@ -13,18 +13,9 @@ public struct TrailingControlsRow<Input: Block, Controls: Block>: LayoutPreparin
     self.controls = controls()
   }
 
-  @MainActor private func measuredSizes(
-    for proposal: Size, context: BlockContext
-  ) -> (input: Size, controls: Size) {
-    let controlsSize = BlockEngine.measure(controls, proposal: proposal, context: context.childScope(1))
-    let inputWidth = max(0, proposal.width - controlsSize.width - spacing)
-    let inputSize = BlockEngine.measure(
-      input,
-      proposal: Size(width: inputWidth, height: proposal.height),
-      context: context.childScope(0))
-    return (
-      input: Size(width: inputWidth, height: inputSize.height),
-      controls: controlsSize
-    )
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    let input = buffer.emit(input, context: context.childScope(0))
+    let controls = buffer.emit(controls, context: context.childScope(1))
+    return buffer.node(.trailing(input, controls, spacing), context: context)
   }
 }

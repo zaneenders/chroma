@@ -1,4 +1,4 @@
-public struct ScrollView: LayoutPreparingBlock {
+public struct ScrollView: Block {
   public struct Row: Identifiable {
     public let id: AnyHashable
     public var content: any Block {
@@ -159,7 +159,7 @@ public struct ScrollView: LayoutPreparingBlock {
         }, controller))
   }
 
-  private struct ScrollGeometry {
+  struct ScrollGeometry {
     let id: WidgetID
     let contentSize: Size
     let horizontal: Bool
@@ -168,7 +168,7 @@ public struct ScrollView: LayoutPreparingBlock {
   }
 
   /// Placement events are shared by registration and presentation. No event requires painting.
-  private enum Placement {
+  enum Placement {
     case content(LayoutNode, Rect)
     case rowFocus(BlockContext, Rect)
   }
@@ -176,25 +176,17 @@ public struct ScrollView: LayoutPreparingBlock {
   /// The resolved operation owns this snapshot. It is never stored on the controller or
   /// reused by a later update, so painting keeps the exact visible rows and geometry that
   /// registration prepared without measuring, rebuilding rows, or changing scroll state.
-  private struct PreparedScroll {
+  struct PreparedScroll {
     let rect: Rect
     let geometry: ScrollGeometry
     let placements: [Placement]
   }
 
-  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
-    var prepared: PreparedScroll?
-    return buffer.append(
-      expandsHorizontally: { _ in true }, expandsVertically: { _ in true },
-      measure: { _, proposal in proposal },
-      register: { buffer, rect in prepared = registerContent(in: rect, context: context, buffer: &buffer) },
-      paint: { buffer, list, rect in
-        precondition(prepared?.rect == rect, "ScrollView painting requires registration in the same operation")
-        paint(prepared!, into: &list, context: context, buffer: &buffer)
-      })
+  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    buffer.scrollView(self, context: context)
   }
 
-  @MainActor private func registerContent(in rect: Rect, context: BlockContext, buffer: inout LayoutBuffer)
+  @MainActor func registerContent(in rect: Rect, context: BlockContext, buffer: inout LayoutBuffer)
     -> PreparedScroll
   {
     let geometry = prepareScroll(in: rect, context: context, buffer: &buffer)
@@ -209,7 +201,7 @@ public struct ScrollView: LayoutPreparingBlock {
     return PreparedScroll(rect: rect, geometry: geometry, placements: placements)
   }
 
-  @MainActor private func paint(
+  @MainActor func paint(
     _ prepared: PreparedScroll, into drawList: inout DrawList, context: BlockContext, buffer: inout LayoutBuffer
   ) {
     drawList.pushClip(prepared.rect)
@@ -250,12 +242,12 @@ public struct ScrollView: LayoutPreparingBlock {
     switch content {
     case .block(let block, _):
       horizontal = true
-      let resolved = buffer.prepare(block, context: context)
+      let resolved = buffer.emit(block, context: context)
       resolvedContent = resolved
       contentSize = buffer.sizeThatFits(resolved, Size(width: rect.size.width, height: .greatestFiniteMagnitude))
     case .rows(let rows, let controller):
       horizontal = false
-      updateCache(rows: rows, controller: controller, width: rect.size.width, context: context)
+      updateCache(rows: rows, controller: controller, width: rect.size.width, context: context, buffer: &buffer)
       var cache = controller.lazyStackCache
       if cache.layout?.spacing != spacing || cache.layout?.width != rect.size.width {
         let heights = cache.measurements.map { $0.size.height }
@@ -408,33 +400,14 @@ public struct ScrollView: LayoutPreparingBlock {
     let children = group.children.count
     var rowContext = rowContext
     rowContext.focusLeafClaimed = true
-    let node = buffer.prepare(content, context: rowContext)
+    let node = buffer.emit(content, context: rowContext)
     visit(&buffer, .content(node, rect))
     if group.children.count == children {
       visit(&buffer, .rowFocus(rowContext, rect))
     }
-    recordScrollRows(
-      in: group.children[children...], offset: offset, scrollID: scrollID,
-      rowKey: rowKey, interaction: interaction)
-  }
-
-  @MainActor private func recordScrollRows(
-    in nodes: ArraySlice<FocusNode>, offset: Float, scrollID: WidgetID,
-    rowKey: StructuralKey, interaction: Interaction
-  ) {
-    for node in nodes {
-      guard case .leaf(let leafID) = node.kind else {
-        recordScrollRows(
-          in: node.children[...], offset: offset, scrollID: scrollID,
-          rowKey: rowKey, interaction: interaction)
-        continue
-      }
-      interaction.recordScrollRow(
-        id: scrollID, leafID: leafID, rowKey: rowKey,
-        rect: Rect(
-          x: node.rect.minX, y: node.rect.minY + offset,
-          width: node.rect.size.width, height: node.rect.size.height))
-    }
+    interaction.recordScrollRows(
+      in: group, fromChild: children, offset: offset, scrollID: scrollID,
+      rowKey: rowKey)
   }
 
   @MainActor private func focusBuffer(
@@ -459,7 +432,7 @@ public struct ScrollView: LayoutPreparingBlock {
   }
 
   @MainActor private func updateCache(
-    rows: [Row], controller: ScrollViewController, width: Float, context: BlockContext
+    rows: [Row], controller: ScrollViewController, width: Float, context: BlockContext, buffer: inout LayoutBuffer
   ) {
     precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
     let cache = controller.lazyStackCache
@@ -491,10 +464,8 @@ public struct ScrollView: LayoutPreparingBlock {
       } else {
         sizes.append(
           LazyRowMeasurement {
-            BlockEngine.measure(
-              row.content,
-              proposal: Size(width: width, height: Float.greatestFiniteMagnitude),
-              context: context.scoped([.key(row.key)]))
+            let node = buffer.emit(row.content, context: context.scoped([.key(row.key)]))
+            return buffer.sizeThatFits(node, Size(width: width, height: Float.greatestFiniteMagnitude))
           })
       }
     }

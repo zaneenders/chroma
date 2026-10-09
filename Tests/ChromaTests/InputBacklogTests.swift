@@ -13,7 +13,17 @@ struct InputBacklogTests {
     var frames = 0
   }
 
-  struct Probe: PaintableBlock {
+  @MainActor struct Probe: Block {
+
+    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+      let context = context.component(Self.self)
+      return buffer.customLeaf(
+        context: context, focusRule: focusRule,
+        measure: { self.sizeThatFits($0, context: context) },
+        register: { self.register(in: $0, context: context) },
+        paint: { self.paint(into: &$0, in: $1, context: context) })
+    }
+
     let state: State
     var focusRule: FocusRule { .decorative }
     func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
@@ -43,7 +53,7 @@ struct InputBacklogTests {
       runtime.reset()
     }
     let state = State()
-    runtime.content = Probe(state: state)
+    runtime.setContent(Probe(state: state))
     let viewport = Size(width: 100, height: 100)
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     runtime.scheduler.recordProducedFrame()
@@ -131,7 +141,7 @@ struct InputBacklogTests {
       runtime.reset()
     }
     let state = State()
-    runtime.content = Probe(state: state)
+    runtime.setContent(Probe(state: state))
     let viewport = Size(width: 100, height: 100)
     if !beforeInitialFrame {
       _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})

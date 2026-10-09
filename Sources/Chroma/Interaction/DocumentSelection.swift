@@ -5,7 +5,7 @@ extension Interaction {
     var offset: Int
   }
 
-  func textLeafIDs(in node: FocusNode?) -> [WidgetID] {
+  func textLeafIDs(in node: InteractionNode?) -> [WidgetID] {
     guard let node else { return [] }
     if let id = node.leafID { return registrations.readOnlyTexts[id] == nil ? [] : [id] }
     return node.children.flatMap { textLeafIDs(in: $0) }

@@ -16,13 +16,11 @@ import Glibc
 @MainActor
 public final class WaylandHost: Chroma.Host {
   public let name = "Wayland"
-  public var content: (any Block)? {
-    get { runtime.content }
-    set {
-      runtime.content = newValue
-      requestFrame()
-    }
+  public var build: LayoutBuilder? {
+    get { runtime.build }
+    set { runtime.build = newValue }
   }
+  public func setContent(_ content: (any Block)?) { runtime.setContent(content) }
   public var frameObserver: FrameObserver? {
     get { runtime.frameObserver }
     set { runtime.frameObserver = newValue }
