@@ -77,6 +77,7 @@ final class ChromaInputView: MTKView {
   }
 
   override func scrollWheel(with event: NSEvent) {
+    updatePointer(with: event)
     scroll.x += Float(event.scrollingDeltaX)
     scroll.y += Float(event.scrollingDeltaY)
     scheduleRedraw()
