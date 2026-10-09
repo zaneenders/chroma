@@ -290,7 +290,7 @@ public struct LayoutBuffer: ~Copyable {
     return size
   }
 
-  public mutating func register(_ node: LayoutNode, in rect: Rect) {
+  mutating func register(_ node: LayoutNode, in rect: Rect) {
     precondition(contains(node), "Stale layout handle")
     PipelineMetrics.record(.placement)
     PipelineMetrics.record(.registration)
@@ -373,7 +373,7 @@ public struct LayoutBuffer: ~Copyable {
     nodes[node.index].registeredRect = rect
   }
 
-  public mutating func paint(_ node: LayoutNode, into list: inout DrawList, in rect: Rect) {
+  mutating func paint(_ node: LayoutNode, into list: inout DrawList, in rect: Rect) {
     precondition(contains(node), "Stale layout handle")
     precondition(nodes[node.index].registeredRect == rect, "Drawing requires the committed layout rectangle")
     PipelineMetrics.record(.paint)

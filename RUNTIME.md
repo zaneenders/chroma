@@ -23,11 +23,13 @@ Duplicate interaction leaf IDs fail early instead of silently sharing callbacks.
 
 `WindowRuntime` alone dispatches input. Every actionable event first commits current
 callbacks and geometry; raw key resolution and delivery share that preparation.
-Input is applied once. The producer then commits and draws the current root, so an
+Input is applied once. `HeadlessHost.render()` takes a snapshot; supplying its
+optional input argument explicitly dispatches one event first. The producer then
+commits and draws the current root, so an
 action may replace it synchronously. Hover may use last-presented geometry.
 
-Low-level code emits and measures nodes, registers them, then paints at the same
-rectangle. Drawing does not build nodes or replay input. `LayoutNode` is a checked
+Within the internal runtime/test lifecycle, construction and measurement precede
+registration, then painting at the same rectangle. Hosts own that lifecycle. Drawing does not build nodes or replay input. `LayoutNode` is a checked
 owner/generation/index handle, never persistent identity. Reset destroys captures
 and retains capacity. Committed interaction rows survive temporary layout storage;
 render and navigation views link the same rows. Keys preserve focus/editing across

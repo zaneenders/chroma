@@ -10,9 +10,8 @@ struct BoundaryTests {
       paint: { list, rect in list.text(name, at: rect.origin, color: .white) })
   }
 
-  @Test func directConditionalsAndLoopsKeepExplicitSourceOrder() {
-    let includeOptional = true
-    let chooseFirst = false
+  @Test(arguments: [false, true], [false, true])
+  func directConditionalsAndLoopsKeepExplicitSourceOrder(includeOptional: Bool, chooseFirst: Bool) {
     let rows = ["loop-0", "loop-1"]
     let context = LayoutContext()
     var buffer = LayoutBuffer()
@@ -26,16 +25,24 @@ struct BoundaryTests {
     }
     let root = buffer.stack(children, axis: .vertical, context: context)
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(root, in: rect)
     var list = DrawList()
     buffer.paint(root, into: &list, in: rect)
+    context.interaction.endFrame()
     let names = list.paintSnapshot.compactMap { if case .text(_, let text, _, _) = $0 { text } else { nil } }
-    #expect(names == ["start", "optional", "second", "loop-0", "loop-1", "nested-0", "nested-1"])
+    var expected = ["start"]
+    if includeOptional { expected.append("optional") }
+    expected.append(chooseFirst ? "first" : "second")
+    expected += ["loop-0", "loop-1", "nested-0", "nested-1"]
+    #expect(names == expected)
     let empty = buffer.stack([], axis: .vertical, context: context.keyed("empty"))
     #expect(buffer.sizeThatFits(empty, rect.size) == .zero)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(empty, in: rect)
     var emptyList = DrawList()
     buffer.paint(empty, into: &emptyList, in: rect)
+    context.interaction.endFrame()
     #expect(emptyList.commands.isEmpty)
   }
 
@@ -54,8 +61,10 @@ struct BoundaryTests {
           let content = named("content", into: &buffer, context: context)
           return buffer.padding(content, 5, context: context)
         }, background: { $0.color(red, context: $1) })
+      context.interaction.beginFrame(input: InputState())
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &outerBackground, in: viewport)
+      context.interaction.endFrame()
     }
     #expect(
       outerBackground.paintSnapshot == [
@@ -70,8 +79,10 @@ struct BoundaryTests {
         context: context, content: { named("content", into: &$0, context: $1) },
         background: { $0.color(blue, context: $1) })
       let resolved = resolvedBuffer.padding(background, 5, context: context)
+      context.interaction.beginFrame(input: InputState())
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &innerBackground, in: viewport)
+      context.interaction.endFrame()
     }
     #expect(
       innerBackground.paintSnapshot == [

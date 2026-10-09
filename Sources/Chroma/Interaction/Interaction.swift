@@ -437,7 +437,11 @@ package final class Interaction {
       }
       lastPointerPosition = input.pointerPosition
       documentMovementHandled = false
-      for handler in registrations.inputHandlers.values { handler() }
+      // Hover and presentation-only snapshots may use the previous committed geometry.
+      // Their handlers also carry that update's text; only actionable input may invoke them.
+      if input.isActionable {
+        for handler in registrations.inputHandlers.values { handler() }
+      }
       if activatePending, let id = selectedLeafID {
         activatePending = false
         activatedLeaf = id

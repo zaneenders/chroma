@@ -121,7 +121,7 @@ struct RawKeyboardFreshnessTests {
     let focus = FocusTarget()
     var text = ""
     var replacements = 0
-    runtime.build = { buffer, context in
+    runtime.build = { [weak runtime] buffer, context in
       let node332 = buffer.text(Text("Old root"), context: context)
       let node333 = buffer.onCommand(
         node332, .application("replace"), context: context,

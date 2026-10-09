@@ -75,6 +75,7 @@ struct LayoutContextTests {
     }
 
     _ = measureLayout(build, proposal: Size(width: 20, height: 10), context: context)
+    context.interaction.beginFrame(input: InputState())
     var drawList = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -83,6 +84,7 @@ struct LayoutContextTests {
       resolvedBuffer.paint(resolved, into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
     }
 
+    context.interaction.endFrame()
     #expect(recorder.measuredInteraction === interaction)
     #expect(recorder.drawnInteraction === interaction)
   }

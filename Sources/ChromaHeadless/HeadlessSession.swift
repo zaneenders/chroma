@@ -94,8 +94,7 @@ public final class HeadlessSession {
       }
       // Explicit snapshots are deterministic request boundaries, not a promise that all
       // background app work has finished. Never replay transient events while painting.
-      let frame = host.render(
-        input: InputState(pointerPosition: pointer, pointerPressPosition: press, pointerDown: pointerDown))
+      let frame = host.render()
       return HeadlessResponse(
         id: id, status: .frame, viewport: frame.viewport,
         commands: frame.commands,

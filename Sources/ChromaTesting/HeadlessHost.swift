@@ -45,12 +45,13 @@ public final class HeadlessHost: Host {
     _ = render()
   }
 
+  /// A snapshot unless an explicit input event is supplied. Rendering never replays prior edges.
   @discardableResult
-  public func render(input: InputState = InputState()) -> HeadlessFrame {
+  public func render(input: InputState? = nil) -> HeadlessFrame {
     runtime.scheduler.recordProducedFrame()
     runtime.scheduler.consumeContentRequest()
     let drawList = runtime.render(
-      viewport: viewport, input: input,
+      viewport: viewport, input: input ?? interaction.input.settled, processingInput: input != nil,
       onChange: { [weak self] in self?.requestRedraw() })
     _ = interaction.consumeRedrawRequest()
     runtime.observe(drawList, viewport: viewport)

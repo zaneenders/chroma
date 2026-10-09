@@ -26,6 +26,7 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 2)
     #expect(measureLayout(block, proposal: rect.size, context: context) == rect.size)
     #expect(counter.bodies == 3)
+    context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -33,6 +34,7 @@ struct StackEvaluationTests {
       resolvedBuffer.register(resolved, in: rect)
       resolvedBuffer.paint(resolved, into: &list, in: rect)
     }
+    context.interaction.endFrame()
     #expect(counter.bodies == 4)
     #expect(
       list.paintSnapshot.contains {

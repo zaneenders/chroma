@@ -42,16 +42,16 @@ struct DirectScrollTests {
             return buffer.sizing(fill, x: .fixed(300), y: .fixed(600), context: context)
           }), context: context)
     }
+    let retainedScroll = ScrollView(
+      controller: retainedController,
+      build: { buffer, context in
+        let child = buffer.sizing(
+          buffer.color(.white, context: context.childScope(0)), x: .fixed(300), y: .fixed(600),
+          context: context.childScope(0))
+        return buffer.stack([child], axis: .vertical, context: context)
+      })
     let retainedBuild: LayoutBuilder = { buffer, context in
-      buffer.scrollView(
-        ScrollView(
-          controller: retainedController,
-          build: { buffer, context in
-            let child = buffer.sizing(
-              buffer.color(.white, context: context.childScope(0)), x: .fixed(300), y: .fixed(600),
-              context: context.childScope(0))
-            return buffer.stack([child], axis: .vertical, context: context)
-          }), context: context)
+      buffer.scrollView(retainedScroll, context: context)
     }
     #expect(direct.render(directBuild) == retained.render(retainedBuild))
     directController.scroll(to: 150)
@@ -61,36 +61,49 @@ struct DirectScrollTests {
     #expect(directController.offset == retainedController.offset)
   }
 
-  @Test func identifiedDirectScrollMatchesRetainedConfiguration() {
-    let direct = Harness()
-    let retained = Harness()
-    let directController = ScrollViewController()
-    let retainedController = ScrollViewController()
-    let items = (0..<100).map { Item(id: $0) }
-    let directBuild: LayoutBuilder = { buffer, context in
-      buffer.scrollView(
-        ScrollView(
-          data: items, rowHeight: 20, controller: directController,
-          build: {
-            buffer, context, item in
-            buffer.text(Text("Row \(item.id)"), context: context)
-          }), context: context)
+  @Test func identifiedRowsUseKeyedPlacementAndExactScrollOffsets() {
+    @MainActor final class PlacedRows {
+      var built: [Int] = []
+      var rects: [Int: Rect] = [:]
     }
-    let retainedBuild: LayoutBuilder = { buffer, context in
-      buffer.scrollView(
-        ScrollView(
-          data: items, rowHeight: 20, controller: retainedController,
-          build: { buffer, context, element in
-            return buffer.text(Text("Row \(element.id)"), context: context)
-          }), context: context)
-    }
-    #expect(direct.render(directBuild) == retained.render(retainedBuild))
-    #expect(directController.uniformRowIdentity?.keys == retainedController.uniformRowIdentity?.keys)
-    directController.scrollToRow(50)
-    retainedController.scrollToRow(50)
-    #expect(direct.render(directBuild) == retained.render(retainedBuild))
-    #expect(directController.offset == retainedController.offset)
-    #expect(directController.offset > 0)
+    let placed = PlacedRows()
+    let h = Harness()
+    let controller = ScrollViewController()
+    let scroll = ScrollView(
+      data: (0..<100).map { Item(id: $0) }, rowHeight: 20, controller: controller,
+      build: { buffer, context, item in
+        placed.built.append(item.id)
+        return buffer.customLeaf(
+          context: context, focusRule: .standard,
+          measure: { Size(width: $0.width, height: 20) },
+          register: { placed.rects[item.id] = $0 },
+          paint: { list, rect in list.fillRect(rect, color: .white) })
+      })
+    let build: LayoutBuilder = { buffer, context in buffer.scrollView(scroll, context: context) }
+    h.render(build)
+    #expect(placed.built == [0, 1, 2, 3])
+    #expect(
+      placed.rects == [
+        0: Rect(x: 0, y: 0, width: 120, height: 20),
+        1: Rect(x: 0, y: 20, width: 120, height: 20),
+        2: Rect(x: 0, y: 40, width: 120, height: 20),
+        3: Rect(x: 0, y: 60, width: 120, height: 20),
+      ])
+    #expect(controller.uniformRowIdentity?.indices[StructuralKey(50)] == 50)
+    placed.built = []
+    placed.rects = [:]
+    controller.scrollToRow(50)
+    h.render(build)
+    #expect(controller.offset == 1000)
+    #expect(placed.built == [49, 50, 51, 52, 53])
+    #expect(
+      placed.rects == [
+        49: Rect(x: 0, y: -20, width: 120, height: 20),
+        50: Rect(x: 0, y: 0, width: 120, height: 20),
+        51: Rect(x: 0, y: 20, width: 120, height: 20),
+        52: Rect(x: 0, y: 40, width: 120, height: 20),
+        53: Rect(x: 0, y: 60, width: 120, height: 20),
+      ])
   }
 
   @Test func identifiedConstructorWinsWithoutAnExplicitRevision() {

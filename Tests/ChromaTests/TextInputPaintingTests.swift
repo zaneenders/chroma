@@ -143,4 +143,52 @@ struct TextInputPaintingTests {
     }
     #expect(depth == 0)
   }
+
+  @Test func neutralRenderingAndHoverDoNotReplayStaleEditorSnapshots() {
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let focus = FocusTarget()
+    var text = ""
+    var changes = 0
+    runtime.build = { buffer, context in
+      buffer.focus(focus, context: context) { buffer, context in
+        buffer.textEditor(
+          TextEditor(
+            singleLine: true, text: { text },
+            onChange: {
+              text = $0
+              changes += 1
+            }), context: context)
+      }
+    }
+    let viewport = Size(width: 200, height: 40)
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    focus.focus(editing: true)
+    runtime.handleInput(InputState(textEvents: [.insert("Alpha")]))
+    #expect(text == "Alpha")
+    #expect(runtime.interaction.caretOffset == 5)
+    runtime.interaction.textSelectionRange = 2..<5
+
+    // Hover is delivered before presentation has replaced the old empty-text handlers.
+    runtime.handleInput(InputState(pointerPosition: Point(x: 10, y: 10)))
+    #expect(runtime.interaction.caretOffset == 5)
+    #expect(runtime.interaction.textSelectionRange == 2..<5)
+    #expect(changes == 1)
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    #expect(runtime.interaction.caretOffset == 5)
+    #expect(runtime.interaction.textSelectionRange == 2..<5)
+    #expect(runtime.interaction.copyText() == "pha")
+    #expect(changes == 1)
+
+    runtime.handleInput(InputState(textEvents: [.insert("!")]))
+    #expect(text == "Al!")
+    #expect(runtime.interaction.caretOffset == 3)
+    #expect(runtime.interaction.textSelectionRange == nil)
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    runtime.handleInput(InputState(pointerPosition: Point(x: 20, y: 10)))
+    #expect(runtime.interaction.caretOffset == 3)
+    #expect(runtime.interaction.textSelectionRange == nil)
+    #expect(changes == 2)
+  }
+
 }

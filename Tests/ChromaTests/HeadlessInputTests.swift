@@ -50,6 +50,28 @@ struct HeadlessInputTests {
     #expect(host.renderIfNeeded() == nil)
   }
 
+  @Test func snapshotRenderingDoesNotRedispatchHeldPointerInput() {
+    let host = HeadlessHost()
+    defer { host.close() }
+    var received: [InputState] = []
+    host.build = { buffer, context in
+      buffer.customLeaf(
+        context: context, focusRule: .decorative, measure: { $0 },
+        register: { _ in context.interaction.building.inputObservers.append { received.append($0) } },
+        paint: { _, _ in })
+    }
+    _ = host.render()
+    let press = InputState(pointerPosition: Point(x: 10, y: 10), pointerDown: true, pointerPressed: true)
+    host.sendInput(press)
+    _ = host.render()
+    _ = host.render()
+    #expect(received == [press])
+    let release = InputState(pointerPosition: Point(x: 10, y: 10), pointerReleased: true)
+    _ = host.render(input: release)
+    _ = host.render()
+    #expect(received == [press, release])
+  }
+
   @Test func explicitRenderConsumesThePendingRequest() async {
     let host = HeadlessHost()
     defer { host.close() }

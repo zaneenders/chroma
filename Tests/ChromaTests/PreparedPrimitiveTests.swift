@@ -1,6 +1,7 @@
-import Chroma
 import ChromaTesting
 import Testing
+
+@testable import Chroma
 
 @MainActor
 struct PreparedPrimitiveTests {
@@ -38,13 +39,16 @@ struct PreparedPrimitiveTests {
 
   @Test func defaultCombinedDrawingUsesTheSameLocalChildren() {
     let counts = Counts()
+    let context = LayoutContext()
+    context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = pair(counts, into: &resolvedBuffer, context: LayoutContext())
+      let resolved = pair(counts, into: &resolvedBuffer, context: context)
       resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 20, height: 20))
       resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 20, height: 20))
     }
+    context.interaction.endFrame()
     #expect(counts.built == 1)
     #expect(counts.registered == 2)
     #expect(counts.painted == ["last", "first"])
