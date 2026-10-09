@@ -19,6 +19,9 @@ let package = Package(
     .package(name: "chroma", path: "..")
   ],
   targets: [
+    .executableTarget(
+      name: "MissingGlyphBenchmark",
+      dependencies: [.product(name: "ChromaFont", package: "chroma")]),
     .target(name: "StressFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
     .executableTarget(
       name: "StressBenchmark",

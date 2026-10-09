@@ -1,0 +1,150 @@
+{
+  "trials": [
+    {
+      "scenario": "repeated",
+      "lookups": 200000,
+      "lookup_seconds": 0.342321219,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.377898,
+      "stderr_lines": 200000,
+      "stderr_bytes": 11000000,
+      "version": "baseline",
+      "trial": 1
+    },
+    {
+      "scenario": "repeated",
+      "lookups": 200000,
+      "lookup_seconds": 0.04511359,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.08874699999999996,
+      "stderr_lines": 1,
+      "stderr_bytes": 55,
+      "version": "bounded",
+      "trial": 1
+    },
+    {
+      "scenario": "repeated",
+      "lookups": 200000,
+      "lookup_seconds": 0.051947388,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.07769300000000001,
+      "stderr_lines": 1,
+      "stderr_bytes": 55,
+      "version": "bounded",
+      "trial": 2
+    },
+    {
+      "scenario": "repeated",
+      "lookups": 200000,
+      "lookup_seconds": 0.330171739,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.355557,
+      "stderr_lines": 200000,
+      "stderr_bytes": 11000000,
+      "version": "baseline",
+      "trial": 2
+    },
+    {
+      "scenario": "repeated",
+      "lookups": 200000,
+      "lookup_seconds": 0.405616172,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.440519,
+      "stderr_lines": 200000,
+      "stderr_bytes": 11000000,
+      "version": "baseline",
+      "trial": 3
+    },
+    {
+      "scenario": "repeated",
+      "lookups": 200000,
+      "lookup_seconds": 0.062535773,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.0892599999999999,
+      "stderr_lines": 1,
+      "stderr_bytes": 55,
+      "version": "bounded",
+      "trial": 3
+    },
+    {
+      "scenario": "distinct-256",
+      "lookups": 200000,
+      "lookup_seconds": 0.441710382,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.476043,
+      "stderr_lines": 200000,
+      "stderr_bytes": 11000000,
+      "version": "baseline",
+      "trial": 1
+    },
+    {
+      "scenario": "distinct-256",
+      "lookups": 200000,
+      "lookup_seconds": 0.035687771,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.06559899999999996,
+      "stderr_lines": 65,
+      "stderr_bytes": 3596,
+      "version": "bounded",
+      "trial": 1
+    },
+    {
+      "scenario": "distinct-256",
+      "lookups": 200000,
+      "lookup_seconds": 0.040100462,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.09726900000000027,
+      "stderr_lines": 65,
+      "stderr_bytes": 3596,
+      "version": "bounded",
+      "trial": 2
+    },
+    {
+      "scenario": "distinct-256",
+      "lookups": 200000,
+      "lookup_seconds": 0.417079922,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.44108599999999987,
+      "stderr_lines": 200000,
+      "stderr_bytes": 11000000,
+      "version": "baseline",
+      "trial": 2
+    },
+    {
+      "scenario": "distinct-256",
+      "lookups": 200000,
+      "lookup_seconds": 0.302203892,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.32311599999999974,
+      "stderr_lines": 200000,
+      "stderr_bytes": 11000000,
+      "version": "baseline",
+      "trial": 3
+    },
+    {
+      "scenario": "distinct-256",
+      "lookups": 200000,
+      "lookup_seconds": 0.03298331,
+      "checksum": 711576.7,
+      "process_cpu_seconds": 0.05869800000000058,
+      "stderr_lines": 65,
+      "stderr_bytes": 3596,
+      "version": "bounded",
+      "trial": 3
+    }
+  ],
+  "blocked_pipe": {
+    "baseline": {
+      "completed_without_stderr_reader": false,
+      "exit_code": -9,
+      "stdout": "",
+      "stderr_bytes": 65120
+    },
+    "bounded": {
+      "completed_without_stderr_reader": true,
+      "exit_code": 0,
+      "stdout": "scenario=repeated lookups=200000 seconds=0.036417458 checksum=711576.7",
+      "stderr_bytes": 55
+    }
+  }
+}
