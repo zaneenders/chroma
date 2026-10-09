@@ -19,6 +19,9 @@ let package = Package(
     .package(name: "chroma", path: "..")
   ],
   targets: [
+    .executableTarget(
+      name: "MissingGlyphBenchmark",
+      dependencies: [.product(name: "ChromaFont", package: "chroma")]),
     .target(name: "StressFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
     .executableTarget(
       name: "StressBenchmark",
@@ -45,6 +48,21 @@ let package = Package(
       ]),
     .executableTarget(
       name: "InputFrameBenchmark",
+      dependencies: [
+        .product(name: "Chroma", package: "chroma"),
+        .product(name: "ChromaTesting", package: "chroma"),
+      ]),
+    .executableTarget(
+      name: "InputBacklogBenchmark",
+      dependencies: [
+        "StressFixtures",
+        .product(name: "Chroma", package: "chroma"),
+        .product(name: "ChromaMarkdown", package: "chroma"),
+        .product(name: "ChromaTesting", package: "chroma"),
+      ]),
+    .testTarget(name: "InputBacklogBenchmarkTests", dependencies: ["InputBacklogBenchmark"]),
+    .executableTarget(
+      name: "TextSelectionBenchmark",
       dependencies: [
         .product(name: "Chroma", package: "chroma"),
         .product(name: "ChromaTesting", package: "chroma"),

@@ -29,3 +29,11 @@ Headless CLI startup requires `--viewport WIDTHxHEIGHT`, for example:
 ```sh
 swift run --package-path HeadlessModeTests ChromaHeadlessDemo --viewport 800x600
 ```
+
+Session watchdogs default to 10 seconds. The 256-response stdout-draining test uses
+30 seconds because it verifies pipe draining and ordering, not a rendering-throughput
+budget; full-frame debug JSON encoding/decoding can take more than 10 seconds on a
+shared host. The burst size, response assertions and EOF checks remain unchanged.
+The guard is still finite, and a separate one-second session-timeout test verifies
+that an override cancels the blocked read and reaps the child. Transport timing is
+measured separately by `Benchmarks/Scripts/jsonl-input.sh`.

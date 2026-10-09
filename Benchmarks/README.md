@@ -56,6 +56,32 @@ Measures the headless rendering path through `ChromaTesting.HeadlessHost` for sc
 
 These timings exclude native input dispatch, scheduler waits, Metal encoding, and GPU execution. They are not consumed by `CompareBenchmarks`.
 
+## Sustained input backlog investigation
+
+See [the deterministic backlog experiment](INPUT_BACKLOG.md) for runtime recovery
+regressions and a configurable queueing model. It separates CPU saturation,
+completed dispatch opportunities and compositor readiness without claiming native
+latency measurements or changing input scheduling. The same guide documents
+`InputBacklogBenchmark`, a real-runtime scheduled headless replay with an
+independent ordered source, measured input cost, draw-completion coverage and idle
+recovery. Its measurements are separate from the deterministic model and native
+Wayland/physical-display validation.
+
+## Multiline text selection
+
+```sh
+swift run --package-path Benchmarks -c release TextSelectionBenchmark
+```
+
+Replays keyboard Select All on 10, 50, and 100 explicit lines of 80 characters in
+an 800×600 `HeadlessHost`. Reports unselected and selected command counts separately
+from selected-render p50/p95 milliseconds (5 warmups, 20 samples, lower median and
+nearest-rank p95). Selection input is applied before timing. Run on idle hardware;
+these samples exclude native dispatch, backend encoding, and GPU execution and do
+not establish native FPS. The command-count regression is deterministic and lives
+in `TextSelectionPaintingTests`, alongside partial-range, wrap, Unicode, document
+selection, caret, and paint-isolation coverage.
+
 ## Markdown preparation
 
 ```sh
