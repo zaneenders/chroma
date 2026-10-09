@@ -1,8 +1,4 @@
-public struct Button: Block {
-  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.button(self, context: context)
-  }
-
+public struct Button {
   public var label: String
   var id: WidgetID?
   public let action: @MainActor () -> Void
@@ -10,8 +6,6 @@ public struct Button: Block {
   public var fontScale: Float
   public var style: ButtonStyle?
   public var padding: EdgeInsets
-
-  var focusRule: FocusRule { .control }
 
   init(
     _ label: String,
@@ -42,18 +36,18 @@ public struct Button: Block {
     self.init(label, id: nil, role: role, fontScale: fontScale, style: style, padding: padding, action: action)
   }
 
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
     let textSize = context.fontMetrics.measure(label, scale: fontScale * context.textScale)
     return Size(
       width: textSize.width + padding.leading + padding.trailing,
       height: textSize.height + padding.top + padding.bottom)
   }
 
-  @MainActor func register(in rect: Rect, context: BlockContext) {
+  @MainActor func register(in rect: Rect, context: LayoutContext) {
     _ = context.buttonState(id: id ?? context.widgetID, in: rect, role: role, action: action)
   }
 
-  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: LayoutContext) {
     let style = style ?? context.theme.button
     let state = context.buttonVisualState(id: id ?? context.widgetID)
 

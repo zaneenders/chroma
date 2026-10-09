@@ -1,8 +1,4 @@
-public struct TextEditor: Block {
-  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.textEditor(self, context: context)
-  }
-
+public struct TextEditor {
   public var placeholder: String
   public var fontScale: Float
   public var lineLimits: ClosedRange<Int>
@@ -45,7 +41,7 @@ public struct TextEditor: Block {
     return columns
   }
 
-  @MainActor fileprivate func sizeThatFits(_ proposal: Size, text: String, context: BlockContext) -> Size {
+  @MainActor fileprivate func sizeThatFits(_ proposal: Size, text: String, context: LayoutContext) -> Size {
     let scale = fontScale * context.textScale
     if singleLine {
       return Size(width: proposal.width, height: context.fontMetrics.glyphHeight * scale + 2 * padding + 2)
@@ -81,7 +77,7 @@ public struct TextEditor: Block {
     }
   }
 
-  @MainActor fileprivate func prepareText(_ text: String, in rect: Rect, context: BlockContext) -> PreparedText? {
+  @MainActor fileprivate func prepareText(_ text: String, in rect: Rect, context: LayoutContext) -> PreparedText? {
     let scale = fontScale * context.textScale
     let cellWidth = context.fontMetrics.cellAdvance * scale
     let lineHeight = context.fontMetrics.lineAdvance * scale
@@ -99,7 +95,7 @@ public struct TextEditor: Block {
   }
 
   @MainActor fileprivate func register(
-    _ prepared: PreparedText, in rect: Rect, context: BlockContext
+    _ prepared: PreparedText, in rect: Rect, context: LayoutContext
   ) {
     let interaction = context.interaction
     let viewportRow =
@@ -137,7 +133,7 @@ public struct TextEditor: Block {
   }
 
   @MainActor fileprivate func paint(
-    _ prepared: PreparedText, into drawList: inout DrawList, in rect: Rect, context: BlockContext
+    _ prepared: PreparedText, into drawList: inout DrawList, in rect: Rect, context: LayoutContext
   ) {
     var state = context.textInputVisualState()
     // Clamp only this visual snapshot. Registration owns reconciliation of
@@ -212,10 +208,10 @@ public struct TextEditor: Block {
 struct TextEditorNode {
   let editor: TextEditor
   let text: String
-  let context: BlockContext
+  let context: LayoutContext
   private var prepared: TextEditor.PreparedText?
 
-  init(_ editor: TextEditor, context: BlockContext) {
+  init(_ editor: TextEditor, context: LayoutContext) {
     self.editor = editor
     self.text = editor.getText()
     self.context = context

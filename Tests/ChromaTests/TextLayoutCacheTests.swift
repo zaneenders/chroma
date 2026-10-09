@@ -99,14 +99,15 @@ struct TextLayoutCacheTests {
   func freshFramesReuseImmutableShaping(kind: String) {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
-    let content: any Block =
+    runtime.build = { buffer, context in
       switch kind {
-      case "wrapped": Text("unchanged text").wrapping()
-      case "selectable": Text("unchanged text").selectable()
-      case "editor": TextEditor(text: { "unchanged text" }, onChange: { _ in })
-      default: Text("unchanged text")
+      case "wrapped": return buffer.text(Text("unchanged text").wrapping(), context: context)
+      case "selectable": return buffer.text(Text("unchanged text").selectable(), context: context)
+      case "editor":
+        return buffer.textEditor(TextEditor(text: { "unchanged text" }, onChange: { _ in }), context: context)
+      default: return buffer.text(Text("unchanged text"), context: context)
       }
-    runtime.setContent(content)
+    }
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     for _ in 0..<4 {
@@ -116,31 +117,36 @@ struct TextLayoutCacheTests {
   }
 
   @Test func metricChangesRefreshGeometryAndOnlyReshapeWhenColumnsChange() {
-    var context = BlockContext()
+    var context = LayoutContext()
     let text = Text("abcdefghijklmnop").wrapping()
     let proposal = Size(width: 96, height: 100)
+    func measure() -> Size {
+      var buffer = LayoutBuffer()
+      let node = buffer.text(text, context: context)
+      return buffer.sizeThatFits(node, proposal)
+    }
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    #expect(measureBlock(text, proposal: proposal, context: context).height == 64)
+    #expect(measure().height == 64)
     context.fontMetrics.lineAdvance = 40
-    #expect(measureBlock(text, proposal: proposal, context: context).height == 80)
+    #expect(measure().height == 80)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
     context.fontMetrics.cellAdvance = 24
-    #expect(measureBlock(text, proposal: proposal, context: context).height == 160)
+    #expect(measure().height == 160)
     #expect(PipelineMetrics.snapshot.textLayouts == 2)
     context.textScale = 2
-    #expect(measureBlock(text, proposal: proposal, context: context).height == 640)
+    #expect(measure().height == 640)
     #expect(PipelineMetrics.snapshot.textLayouts == 3)
   }
 
   @Test func replacingTheRootReleasesCachedText() {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
-    runtime.setContent(Text("old"))
+    runtime.build = { buffer, context in buffer.text(Text("old"), context: context) }
     _ = runtime.render(viewport: Size(width: 200, height: 100), input: InputState(), onChange: {})
     #expect(runtime.interaction.textLayouts.count == 1)
     weak let old = runtime.interaction.textLayouts.resolve("old", columns: nil)
-    runtime.setContent(Text("new"))
+    runtime.build = { buffer, context in buffer.text(Text("new"), context: context) }
     #expect(runtime.interaction.textLayouts.count == 0)
     #expect(old == nil)
   }
@@ -155,11 +161,13 @@ struct TextLayoutCacheTests {
     defer { runtime.reset() }
     let focus = FocusTarget()
     let state = EditorState()
-    runtime.setContent(
-      DeferredBlock {
-        let captured = state.version
-        return TextEditor(text: { "same" }, onChange: { _ in state.changes.append(captured) }).focusTarget(focus)
-      })
+    runtime.build = { buffer, context in
+      let captured = state.version
+      return buffer.focus(focus, context: context) { buffer, context in
+        buffer.textEditor(
+          TextEditor(text: { "same" }, onChange: { _ in state.changes.append(captured) }), context: context)
+      }
+    }
     _ = runtime.render(viewport: Size(width: 200, height: 100), input: InputState(), onChange: {})
     focus.focus(editing: true)
     PipelineMetrics.isEnabled = true

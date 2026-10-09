@@ -4,7 +4,7 @@ private final class ThemeStorage {
 }
 
 @MainActor
-public struct BlockContext {
+public struct LayoutContext {
   var keyboardNavigationOverscan = false
   var structuralPath = StructuralPath()
   var widgetID: WidgetID { WidgetID(path: structuralPath) }
@@ -17,33 +17,33 @@ public struct BlockContext {
 
   public var hoverStyle: HoverStyle?
 
-  public func childScope(_ slot: Int) -> BlockContext {
+  public func childScope(_ slot: Int) -> LayoutContext {
     scoped([.slot(slot)])
   }
 
   /// A stable child identity for direct layout construction. Use unique sibling keys.
-  public func component(_ type: Any.Type) -> BlockContext {
+  public func component(_ type: Any.Type) -> LayoutContext {
     scoped([.component(ObjectIdentifier(type))])
   }
 
-  public func keyed(_ key: some Hashable & Sendable) -> BlockContext {
+  public func keyed(_ key: some Hashable & Sendable) -> LayoutContext {
     scoped([.key(StructuralKey(key))])
   }
 
-  var backgroundContentContext: BlockContext {
+  var backgroundContentContext: LayoutContext {
     var copy = self
     copy.backgroundDepth += 1
     return copy
   }
 
-  var backgroundContext: BlockContext {
+  var backgroundContext: LayoutContext {
     var copy = scoped([.background(backgroundDepth)])
     copy.focusTargets = []
     copy.focusLeafClaimed = true
     return copy
   }
 
-  func scoped(_ segments: [StructuralPath.Segment]) -> BlockContext {
+  func scoped(_ segments: [StructuralPath.Segment]) -> LayoutContext {
     var copy = self
     copy.structuralPath.segments += segments
     copy.backgroundDepth = 0
@@ -121,7 +121,7 @@ public struct BlockContext {
     self.textScale = textScale
   }
 
-  public func withTheme(_ theme: ChromaTheme) -> BlockContext {
+  public func withTheme(_ theme: ChromaTheme) -> LayoutContext {
     var copy = self
     copy.theme = theme
     return copy
@@ -279,10 +279,10 @@ public struct BlockContext {
 }
 
 extension Host {
-  package var context: BlockContext { runtime.context }
+  package var context: LayoutContext { runtime.context }
 }
 
-extension BlockContext {
+extension LayoutContext {
   /// Registers an ordered event observer. It runs once after core input dispatch,
   /// before release/drag cleanup; presentation never invokes it.
   public func registerInputHandler(_ handler: @escaping @MainActor (InputState) -> Void) {
@@ -290,7 +290,7 @@ extension BlockContext {
   }
 }
 
-extension BlockContext {
+extension LayoutContext {
   func paintFocusHighlight(for id: WidgetID, in rect: Rect, into drawList: inout DrawList) {
     let leafState = interaction.untrackedLeafState
     let pressed = leafState.pressed == id && interaction.input.pointerDown

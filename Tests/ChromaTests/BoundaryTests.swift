@@ -2,69 +2,45 @@ import Testing
 
 @testable import Chroma
 
-private struct NamedBlock: Block {
-
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    let context = context.component(Self.self)
-    return buffer.customLeaf(
-      context: context, focusRule: focusRule,
-      expandsHorizontally: false, expandsVertically: false,
-      measure: { sizeThatFits($0, context: context) },
-      register: { register(in: $0, context: context) },
-      paint: { paint(into: &$0, in: $1, context: context) })
-  }
-
-  @MainActor func register(in rect: Rect, context: BlockContext) {}
-
-  let name: String
-
-  var focusRule: FocusRule { .standard }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    Size(width: 10, height: 10)
-  }
-
-  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    drawList.text(name, at: rect.origin, color: .white)
-  }
-}
-
 @MainActor
 struct BoundaryTests {
-  private func names(in tuple: TupleBlock) -> [String] {
-    tuple.children.compactMap { ($0 as? NamedBlock)?.name }
+  private func named(_ name: String, into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.customLeaf(
+      context: context, measure: { _ in Size(width: 10, height: 10) }, register: { _ in },
+      paint: { list, rect in list.text(name, at: rect.origin, color: .white) })
   }
 
-  @Test func builderFlattensConditionalsLoopsAndNestedTuplesInSourceOrder() {
-    let flags = [true, false]
-    let includeOptional = flags[0]
-    let chooseFirst = flags[1]
+  @Test func directConditionalsAndLoopsKeepExplicitSourceOrder() {
+    let includeOptional = true
+    let chooseFirst = false
     let rows = ["loop-0", "loop-1"]
-    let nested = TupleBlock(children: [
-      NamedBlock(name: "nested-0"),
-      TupleBlock(children: [NamedBlock(name: "nested-1")]),
-    ])
-
-    let result = BlockBuilder.buildBlock(
-      NamedBlock(name: "start"),
-      BlockBuilder.buildOptional(includeOptional ? BlockBuilder.buildBlock(NamedBlock(name: "optional")) : nil),
-      chooseFirst
-        ? BlockBuilder.buildEither(first: BlockBuilder.buildBlock(NamedBlock(name: "first")))
-        : BlockBuilder.buildEither(second: BlockBuilder.buildBlock(NamedBlock(name: "second"))),
-      BlockBuilder.buildArray(rows.map { BlockBuilder.buildBlock(NamedBlock(name: $0)) }),
-      nested
-    )
-
-    #expect(
-      names(in: result) == [
-        "start", "optional", "second", "loop-0", "loop-1", "nested-0", "nested-1",
-      ])
-    #expect(names(in: BlockBuilder.buildOptional(nil)).isEmpty)
-    #expect(names(in: BlockBuilder.buildArray([])).isEmpty)
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    var children = [named("start", into: &buffer, context: context.keyed("start"))]
+    if includeOptional { children.append(named("optional", into: &buffer, context: context.keyed("optional"))) }
+    let branch = chooseFirst ? "first" : "second"
+    children.append(named(branch, into: &buffer, context: context.keyed(branch)))
+    for row in rows { children.append(named(row, into: &buffer, context: context.keyed(row))) }
+    for name in ["nested-0", "nested-1"] {
+      children.append(named(name, into: &buffer, context: context.keyed(name)))
+    }
+    let root = buffer.stack(children, axis: .vertical, context: context)
+    let rect = Rect(x: 0, y: 0, width: 100, height: 100)
+    buffer.register(root, in: rect)
+    var list = DrawList()
+    buffer.paint(root, into: &list, in: rect)
+    let names = list.paintSnapshot.compactMap { if case .text(_, let text, _, _) = $0 { text } else { nil } }
+    #expect(names == ["start", "optional", "second", "loop-0", "loop-1", "nested-0", "nested-1"])
+    let empty = buffer.stack([], axis: .vertical, context: context.keyed("empty"))
+    #expect(buffer.sizeThatFits(empty, rect.size) == .zero)
+    buffer.register(empty, in: rect)
+    var emptyList = DrawList()
+    buffer.paint(empty, into: &emptyList, in: rect)
+    #expect(emptyList.commands.isEmpty)
   }
 
   @Test func modifierOrderChangesBackgroundGeometryAndCommandOrder() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let viewport = Rect(x: 0, y: 0, width: 40, height: 40)
     let red = Color(r: 1, g: 0, b: 0, a: 1)
     let blue = Color(r: 0, g: 0, b: 1, a: 1)
@@ -72,7 +48,12 @@ struct BoundaryTests {
     var outerBackground = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(NamedBlock(name: "content").padding(5).background(red), context: context)
+      let resolved = resolvedBuffer.background(
+        context: context,
+        content: { buffer, context in
+          let content = named("content", into: &buffer, context: context)
+          return buffer.padding(content, 5, context: context)
+        }, background: { $0.color(red, context: $1) })
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &outerBackground, in: viewport)
     }
@@ -85,7 +66,10 @@ struct BoundaryTests {
     var innerBackground = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(NamedBlock(name: "content").background(blue).padding(5), context: context)
+      let background = resolvedBuffer.background(
+        context: context, content: { named("content", into: &$0, context: $1) },
+        background: { $0.color(blue, context: $1) })
+      let resolved = resolvedBuffer.padding(background, 5, context: context)
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &innerBackground, in: viewport)
     }
@@ -98,13 +82,15 @@ struct BoundaryTests {
 
   @Test func nestedClipModifiersProduceBalancedProperlyNestedCommands() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let viewport = Rect(x: 0, y: 0, width: 20, height: 20)
     beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(NamedBlock(name: "x").clipped().clipped(), context: context)
+      let content = named("x", into: &resolvedBuffer, context: context)
+      let inner = resolvedBuffer.clip(content, context: context)
+      let resolved = resolvedBuffer.clip(inner, context: context)
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
@@ -128,18 +114,22 @@ struct BoundaryTests {
   }
 
   @Test func zeroAndNegativeProposalsStayFinite() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let proposals = [
       Size.zero,
       Size(width: -100, height: -50),
     ]
     for proposal in proposals {
-      let padded = measureBlock(
-        NamedBlock(name: "x").padding(8), proposal: proposal, context: context)
+      let padded = measureLayout(
+        { buffer, context in
+          let content = named("x", into: &buffer, context: context)
+          return buffer.padding(content, 8, context: context)
+        }, proposal: proposal, context: context)
       #expect(padded.width.isFinite && padded.height.isFinite)
       #expect(padded.width >= 0 && padded.height >= 0)
 
-      let emptyStack = measureBlock(VStack {}, proposal: proposal, context: context)
+      let emptyStack = measureLayout(
+        { $0.stack([], axis: .vertical, context: $1) }, proposal: proposal, context: context)
       #expect(emptyStack == .zero)
     }
   }

@@ -13,9 +13,9 @@ struct InputBacklogTests {
     var frames = 0
   }
 
-  @MainActor struct Probe: Block {
+  @MainActor struct Probe {
 
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
       let context = context.component(Self.self)
       return buffer.customLeaf(
         context: context, focusRule: focusRule,
@@ -26,8 +26,8 @@ struct InputBacklogTests {
 
     let state: State
     var focusRule: FocusRule { .decorative }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func register(in rect: Rect, context: BlockContext) {
+    func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
+    func register(in rect: Rect, context: LayoutContext) {
       let revision = state.applied.count
       context.registerInputHandler { input in
         // Ignore registration-only synthetic input and initial/idle input.
@@ -39,7 +39,7 @@ struct InputBacklogTests {
         state.applied.append(input)
       }
     }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       state.paints += 1
     }
   }
@@ -53,7 +53,9 @@ struct InputBacklogTests {
       runtime.reset()
     }
     let state = State()
-    runtime.setContent(Probe(state: state))
+    runtime.build = { buffer, context in
+      return Probe(state: state).build(into: &buffer, context: context)
+    }
     let viewport = Size(width: 100, height: 100)
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     runtime.scheduler.recordProducedFrame()
@@ -141,7 +143,9 @@ struct InputBacklogTests {
       runtime.reset()
     }
     let state = State()
-    runtime.setContent(Probe(state: state))
+    runtime.build = { buffer, context in
+      return Probe(state: state).build(into: &buffer, context: context)
+    }
     let viewport = Size(width: 100, height: 100)
     if !beforeInitialFrame {
       _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})

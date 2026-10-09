@@ -1,16 +1,10 @@
-public struct Text: Block {
-  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.text(self, context: context)
-  }
-
+public struct Text {
   public var content: String
   public var color: Color
   public var scale: Float
   public var isSelectable: Bool = false
   public var wraps = false
   var selectionID: WidgetID?
-
-  var focusRule: FocusRule { .container }
 
   public init(_ content: String) {
     self.content = content
@@ -47,18 +41,18 @@ public struct Text: Block {
     return copy
   }
 
-  @MainActor private func columns(width: Float, context: BlockContext) -> Int? {
+  @MainActor private func columns(width: Float, context: LayoutContext) -> Int? {
     let cell = context.fontMetrics.cellAdvance * scale * context.textScale
     guard wraps, width.isFinite, cell.isFinite, cell > 0 else { return nil }
     return Int(min(Float(Int32.max), max(1, width / cell)))
   }
 
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
     sizeThatFits(proposal, context: context, preparation: context.interaction.textLayouts)
   }
 
   @MainActor private func sizeThatFits(
-    _ proposal: Size, context: BlockContext, preparation: TextLayoutPreparation
+    _ proposal: Size, context: LayoutContext, preparation: TextLayoutPreparation
   ) -> Size {
     guard wraps else {
       return context.fontMetrics.measure(content, scale: scale * context.textScale)
@@ -69,7 +63,7 @@ public struct Text: Block {
       height: Float(layout.lines.count) * context.fontMetrics.lineAdvance * scale * context.textScale)
   }
 
-  @MainActor func register(in rect: Rect, context: BlockContext) {
+  @MainActor func register(in rect: Rect, context: LayoutContext) {
     if isSelectable {
       registerSelection(
         prepareText(in: rect, context: context, preparation: context.interaction.textLayouts), context: context)
@@ -79,7 +73,7 @@ public struct Text: Block {
   }
 
   @MainActor private func prepareText(
-    in rect: Rect, context: BlockContext, preparation: TextLayoutPreparation
+    in rect: Rect, context: LayoutContext, preparation: TextLayoutPreparation
   ) -> PlainTextLayout {
     let effectiveScale = scale * context.textScale
     let metrics = context.fontMetrics
@@ -90,7 +84,7 @@ public struct Text: Block {
       snapshot: preparation.resolve(content, columns: columns))
   }
 
-  @MainActor private func registerSelection(_ layout: PlainTextLayout, context: BlockContext) {
+  @MainActor private func registerSelection(_ layout: PlainTextLayout, context: LayoutContext) {
     let id = selectionID ?? context.widgetID
     let interaction = context.interaction
     interaction.textSelection.layoutRegistry.register(id, layout: layout)
@@ -103,7 +97,7 @@ public struct Text: Block {
     }
   }
 
-  @MainActor private func selectionVisualState(context: BlockContext) -> (range: Range<Int>?, caret: Int?) {
+  @MainActor private func selectionVisualState(context: LayoutContext) -> (range: Range<Int>?, caret: Int?) {
     let id = selectionID ?? context.widgetID
     var range: Range<Int>?
     var caret: Int?
@@ -119,7 +113,7 @@ public struct Text: Block {
     return (range, caret)
   }
 
-  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: LayoutContext) {
     if isSelectable, !context.focusLeafClaimed, !context.navigationIgnored {
       context.paintFocusHighlight(for: selectionID ?? context.widgetID, in: rect, into: &drawList)
     }
@@ -138,7 +132,7 @@ public struct Text: Block {
   }
 
   @MainActor private func paint(
-    _ layout: PlainTextLayout, into drawList: inout DrawList, in rect: Rect, context: BlockContext
+    _ layout: PlainTextLayout, into drawList: inout DrawList, in rect: Rect, context: LayoutContext
   ) {
     let effectiveScale = scale * context.textScale
     if isSelectable {
@@ -178,7 +172,7 @@ public struct Text: Block {
       into: &drawList, in: rect, color: color, scale: effectiveScale, context: context, layout: layout.layout)
   }
   @MainActor private func drawText(
-    into drawList: inout DrawList, in rect: Rect, color: Color, scale: Float, context: BlockContext,
+    into drawList: inout DrawList, in rect: Rect, color: Color, scale: Float, context: LayoutContext,
     layout: TextLayout
   ) {
     for (row, line) in layout.lines.enumerated() {

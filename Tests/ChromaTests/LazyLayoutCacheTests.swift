@@ -16,34 +16,19 @@ struct LazyLayoutCacheTests {
     var drawnHeight: Float = 0
   }
 
-  struct Row: Block {
-
-    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      let context = context.component(Self.self)
-      return buffer.customLeaf(
-        context: context, focusRule: focusRule,
-        expandsHorizontally: false, expandsVertically: false,
-        measure: { sizeThatFits($0, context: context) },
-        register: { register(in: $0, context: context) },
-        paint: { paint(into: &$0, in: $1, context: context) })
-    }
-
-    @MainActor func register(in rect: Rect, context: BlockContext) {}
-
-    let model: Model
-    let capture: Capture
-
-    var focusRule: FocusRule { .standard }
-
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      capture.measurements += 1
-      return Size(width: proposal.width, height: model.height)
-    }
-
-    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      capture.drawnHeight = rect.size.height
-      list.fillRect(rect, color: .white)
-    }
+  static func row(
+    model: Model, capture: Capture, into buffer: inout LayoutBuffer, context: LayoutContext
+  ) -> LayoutNode {
+    buffer.customLeaf(
+      context: context, focusRule: .standard,
+      measure: { proposal in
+        capture.measurements += 1
+        return Size(width: proposal.width, height: model.height)
+      }, register: { _ in },
+      paint: { list, rect in
+        capture.drawnHeight = rect.size.height
+        list.fillRect(rect, color: .white)
+      })
   }
 
   @Test func lazyMeasurementsInvalidateAndResubscribe() async {
@@ -51,11 +36,15 @@ struct LazyLayoutCacheTests {
     let capture = Capture()
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
-    renderer.setContent(
-      ScrollView(
-        controller: controller,
-        rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-      ).id(WidgetID("stack")))
+    let scroll = ScrollView(
+      controller: controller,
+      rows: [
+        .init(
+          id: WidgetID("row"),
+          build: { buffer, context in Self.row(model: model, capture: capture, into: &buffer, context: context) })
+      ]
+    )
+    renderer.build = { buffer, context in buffer.scrollView(scroll, context: context.keyed(WidgetID("stack"))) }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -80,11 +69,15 @@ struct LazyLayoutCacheTests {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.setContent(
-      ScrollView(
-        controller: controller,
-        rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-      ).id(WidgetID("stack")))
+    let scroll = ScrollView(
+      controller: controller,
+      rows: [
+        .init(
+          id: WidgetID("row"),
+          build: { buffer, context in Self.row(model: model, capture: capture, into: &buffer, context: context) })
+      ]
+    )
+    renderer.build = { buffer, context in buffer.scrollView(scroll, context: context.keyed(WidgetID("stack"))) }
     renderer.render()
     for height: Float in [50, 80, 30] {
       model.height = height
@@ -103,14 +96,22 @@ struct LazyLayoutCacheTests {
     let controller = ScrollViewController()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.setContent(
-      ScrollView(
-        controller: controller,
-        rows: [.init(id: WidgetID("row"), content: Row(model: model, capture: capture))]
-      ).id(WidgetID("stack")).onCommand(.application("resize")) {
-        model.height = 80
-        return .handled
-      })
+    let scroll = ScrollView(
+      controller: controller,
+      rows: [
+        .init(
+          id: WidgetID("row"),
+          build: { buffer, context in Self.row(model: model, capture: capture, into: &buffer, context: context) })
+      ]
+    )
+    renderer.build = { buffer, context in
+      buffer.onCommand(
+        buffer.scrollView(scroll, context: context.keyed(WidgetID("stack"))), .application("resize"), context: context,
+        action: {
+          model.height = 80
+          return .handled
+        })
+    }
     renderer.render()
     renderer.render(input: InputState(commands: [.application("resize")]))
     #expect(capture.drawnHeight == 80)
@@ -127,12 +128,17 @@ struct LazyLayoutCacheTests {
       let stack = ScrollView(
         controller: controller,
         rows: [
-          .init(id: WidgetID("stable-row"), content: Color.white.sizing(y: .fixed(height)))
+          .init(
+            id: WidgetID("stable-row"),
+            build: { buffer, context in
+              buffer.sizing(buffer.color(.white, context: context), y: .fixed(height), context: context)
+            }
+          )
         ]
-      ).id(id)
+      )
       do {
         var resolvedBuffer = LayoutBuffer()
-        let resolved = resolvedBuffer.emit(stack, context: BlockContext(interaction: interaction))
+        let resolved = resolvedBuffer.scrollView(stack, context: LayoutContext(interaction: interaction).keyed(id))
         resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
@@ -149,21 +155,25 @@ struct LazyLayoutCacheTests {
     let controller = ScrollViewController()
     let id = WidgetID("scroll")
     var row = ScrollView.Row(
-      id: WidgetID("row"), content: Color.white.sizing(y: .fixed(40)))
+      id: WidgetID("row"),
+      build: { buffer, context in buffer.sizing(buffer.color(.white, context: context), y: .fixed(40), context: context)
+      })
     func frame() {
       beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
-        let resolved = resolvedBuffer.emit(
-          ScrollView(controller: controller, rows: [row]).id(id), context: BlockContext(interaction: interaction))
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(controller: controller, rows: [row]), context: LayoutContext(interaction: interaction).keyed(id))
         resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
       interaction.endFrame()
     }
     frame()
-    row.setContent(Color.white.sizing(y: .fixed(100)))
+    row.build = { buffer, context in
+      buffer.sizing(buffer.color(.white, context: context), y: .fixed(100), context: context)
+    }
     frame()
     #expect(interaction.scrollState(for: id).limit.y == 80)
   }
@@ -172,15 +182,17 @@ struct LazyLayoutCacheTests {
     let interaction = Interaction()
     let controller = ScrollViewController()
     let id = WidgetID("scroll")
-    let rows = [ScrollView.Row(id: WidgetID("row"), content: Text("row"))]
+    let rows = [
+      ScrollView.Row(id: WidgetID("row"), build: { buffer, context in buffer.text(Text("row"), context: context) })
+    ]
     func frame(scale: Float) {
       beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
-        let resolved = resolvedBuffer.emit(
-          ScrollView(controller: controller, rows: rows).id(id),
-          context: BlockContext(interaction: interaction, textScale: scale))
+        let resolved = resolvedBuffer.scrollView(
+          ScrollView(controller: controller, rows: rows),
+          context: LayoutContext(interaction: interaction, textScale: scale).keyed(id))
         resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }

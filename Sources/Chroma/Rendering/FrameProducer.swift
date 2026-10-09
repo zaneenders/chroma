@@ -67,7 +67,7 @@ package final class FrameProducer {
 
   /// Input refresh and presentation share this commit path and this buffer owner.
   private func commit(
-    _ build: LayoutBuilder?, viewport: Size, context: BlockContext,
+    _ build: LayoutBuilder?, viewport: Size, context: LayoutContext,
     input: InputState, refreshing: Bool, drawing: Bool
   ) {
     let interaction = context.interaction
@@ -87,7 +87,7 @@ package final class FrameProducer {
   }
 
   package func render(
-    build: LayoutBuilder?, viewport: Size, input: InputState, context: BlockContext,
+    build: LayoutBuilder?, viewport: Size, input: InputState, context: LayoutContext,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     resetTracking()
@@ -119,7 +119,7 @@ package final class FrameProducer {
   }
 
   package func refreshRegistrations(
-    _ build: LayoutBuilder?, viewport: Size, context: BlockContext, commands: [Command] = [],
+    _ build: LayoutBuilder?, viewport: Size, context: LayoutContext, commands: [Command] = [],
     keyboardNavigationOverscan: Bool = false
   ) {
     var context = context

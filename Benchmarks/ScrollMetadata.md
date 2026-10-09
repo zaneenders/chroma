@@ -11,7 +11,7 @@ Swift 6.4 / Linux x86_64, debug test build. Baseline:
 The `ScrollMetadataTests` fixture uses 10,000 uniform rows, a 20-point row height,
 and a 200 × 100 viewport. It selects a control, steps out, then makes 1,000
 180-point scroll jumps. The final offset is 180,000 points. The two-control
-variant nests a button inside a `VStack` alongside a second button in an `HStack`.
+variant nests a button inside a vertical stack alongside a second button in a horizontal stack.
 After scrolling, step-in restores the exact remembered leaf.
 
 | Fixture | Baseline rectangles / keys | Fixed rectangles / keys |

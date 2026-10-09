@@ -102,18 +102,30 @@ struct NavigationTreeTests {
 @MainActor
 struct GroupRegistrationTests {
   @Test func rootStartsUnselectedAndGroupsRequireEntry() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let first = FocusTarget()
     let inside = FocusTarget()
-    let content = VStack {
-      Button("First") {}.focusTarget(first)
-      Group { Button("Inside") {}.focusTarget(inside) }
+    let content: LayoutBuilder = { buffer, context in
+      let node301 = buffer.focus(
+        first, context: context.childScope(0),
+        content: { buffer, context in
+          return buffer.button(Button("First") {}, context: context)
+        })
+      let node304 = buffer.group(context: context.childScope(1)) { buffer, context in
+        let node303 = buffer.focus(
+          inside, context: context.childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("Inside") {}, context: context)
+          })
+        return node303
+      }
+      return buffer.stack([node301, node304], axis: .vertical, context: context)
     }
 
     func render(_ commands: [Command] = []) {
       _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+        build: content, viewport: Size(width: 200, height: 100),
         input: InputState(commands: commands), context: context, onChange: {})
     }
     render()
@@ -133,22 +145,30 @@ struct GroupRegistrationTests {
   }
 
   @Test func clickingInsideAGroupEntersItsAncestorChain() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let target = FocusTarget()
-    let content = HStack {
-      Group { Button("Target") {}.focusTarget(target) }
-      Button("Outside") {}
+    let content: LayoutBuilder = { buffer, context in
+      let node308 = buffer.group(context: context.childScope(0)) { buffer, context in
+        let node307 = buffer.focus(
+          target, context: context.childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("Target") {}, context: context)
+          })
+        return node307
+      }
+      let node309 = buffer.button(Button("Outside") {}, context: context.childScope(1))
+      return buffer.stack([node308, node309], axis: .horizontal, context: context)
     }
 
     _ = producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+      build: content, viewport: Size(width: 200, height: 100),
       input: InputState(),
       context: context, onChange: {})
     let path = context.interaction.tree!.findLeaf(target.boundID!)!
     let rect = context.interaction.tree!.node(at: path)!.rect
     _ = producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+      build: content, viewport: Size(width: 200, height: 100),
       input: InputState(
         pointerPosition: Point(x: rect.minX + 1, y: rect.minY + 1), pointerDown: true,
         pointerPressed: true), context: context, onChange: {})
@@ -158,17 +178,18 @@ struct GroupRegistrationTests {
   }
 
   @Test func groupRegistersOneBoundaryWithoutChangingLeafPaths() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
-    let content = VStack {
-      Button("Before") {}
-      Group {
-        Button("Inside") {}
+    let content: LayoutBuilder = { buffer, context in
+      let node311 = buffer.button(Button("Before") {}, context: context.childScope(0))
+      let node313 = buffer.group(context: context.childScope(1)) { buffer, context in
+        return buffer.button(Button("Inside") {}, context: context.childScope(0))
       }
+      return buffer.stack([node311, node313], axis: .vertical, context: context)
     }
 
     _ = producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+      build: content, viewport: Size(width: 200, height: 100),
       input: InputState(), context: context, onChange: {})
 
     let navigation = context.interaction.navigation!

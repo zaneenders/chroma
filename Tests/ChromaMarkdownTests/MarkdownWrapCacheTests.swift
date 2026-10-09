@@ -17,7 +17,7 @@ struct MarkdownWrapCacheTests {
   @Test func emissionAddsOnlyBlockLeavesAndOneStack() {
     let document = MarkdownDocument("# Heading\n\nParagraph\n\n- first\n- second")
     var buffer = LayoutBuffer()
-    _ = buffer.emit(MarkdownText(document), context: BlockContext())
+    _ = MarkdownText(document).build(into: &buffer, context: LayoutContext())
     #expect(document.blocks.count == 4)
     #expect(buffer.count == document.blocks.count + 1)
   }
@@ -25,11 +25,11 @@ struct MarkdownWrapCacheTests {
   @Test func repeatedOperationsReuseEveryDocumentBlock() {
     let document = MarkdownDocument("**first paragraph**\n\nsecond paragraph")
     let content = MarkdownText(document)
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
     for _ in 0..<5 {
       buffer.reset()
-      let node = buffer.emit(content, context: context)
+      let node = content.build(into: &buffer, context: context)
       _ = buffer.sizeThatFits(node, bounds.size)
       context.interaction.beginFrame(input: InputState())
       buffer.register(node, in: bounds)
@@ -44,7 +44,7 @@ struct MarkdownWrapCacheTests {
 
   @Test func twoWidthSlotsAreReusedAndOldestSlotIsEvicted() {
     let document = MarkdownDocument("first paragraph\n\nsecond paragraph")
-    let context = BlockContext()
+    let context = LayoutContext()
     let cache = document.layoutPreparation
     func resolve(_ width: Float) {
       for index in document.blocks.indices {
@@ -69,7 +69,7 @@ struct MarkdownWrapCacheTests {
 
   @Test func sameCountStreamingReplacesPlansAndPreservesOldOperations() {
     let document = MarkdownDocument("**first**")
-    let context = BlockContext()
+    let context = LayoutContext()
     let original = leaf(document)
     let oldCache = document.layoutPreparation
     #expect(oldCache.resolve(original, in: bounds, context: context).text == "first")
@@ -89,7 +89,7 @@ struct MarkdownWrapCacheTests {
   @Test func revisionParticipatesInWrapPlanLookup() {
     let document = MarkdownDocument("first")
     let cache = document.layoutPreparation
-    let context = BlockContext()
+    let context = LayoutContext()
     _ = cache.resolve(leaf(document), in: bounds, context: context)
     let updated = MarkdownLeaf(
       block: .paragraph("second"), scale: 1, lineSpacing: 4,
@@ -102,7 +102,7 @@ struct MarkdownWrapCacheTests {
     let document = MarkdownDocument("**café** abcdefghij")
     let cache = document.layoutPreparation
     var current = leaf(document)
-    var context = BlockContext()
+    var context = LayoutContext()
     _ = cache.resolve(current, in: bounds, context: context)
     context.theme.foreground = .black
     let recolored = cache.resolve(current, in: bounds, context: context)
@@ -127,7 +127,7 @@ struct MarkdownWrapCacheTests {
     let document = MarkdownDocument("abcdefghij")
     let cache = document.layoutPreparation
     let current = leaf(document)
-    let context = BlockContext()
+    let context = LayoutContext()
     let first = cache.resolve(current, in: bounds, context: context)
     let moved = Rect(x: 140, y: 230, width: 73, height: 500)
     let second = cache.resolve(current, in: moved, context: context)
@@ -139,14 +139,14 @@ struct MarkdownWrapCacheTests {
   }
 
   @Test func droppingDocumentAndOperationReleasesPlansButKeepsRegisteredTextSnapshot() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
     weak var cache: MarkdownLayoutPreparation?
     context.interaction.beginFrame(input: InputState())
     do {
       let document = MarkdownDocument("**retained text**")
       cache = document.layoutPreparation
-      let node = buffer.emit(MarkdownText(document), context: context)
+      let node = MarkdownText(document).build(into: &buffer, context: context)
       buffer.register(node, in: bounds)
     }
     #expect(cache != nil)

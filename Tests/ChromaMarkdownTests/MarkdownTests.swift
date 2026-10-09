@@ -132,16 +132,16 @@ struct MarkdownTests {
 
   @Test @MainActor func measurementUsesWidthAndContextScale() {
     let block = MarkdownLeaf(block: .paragraph("abcdefghij"), scale: 1, lineSpacing: 0)
-    let context = BlockContext()
+    let context = LayoutContext()
     let cell = context.fontMetrics.cellAdvance
     let height = context.fontMetrics.lineAdvance
     var buffer = LayoutBuffer()
-    let root = buffer.emit(block, context: context)
+    let root = block.build(into: &buffer, context: context)
     #expect(buffer.sizeThatFits(root, Size(width: cell * 2, height: 1000)).height == height * 5)
-    let scaled = BlockContext(textScale: 2)
-    let scaledRoot = buffer.emit(block, context: scaled)
+    let scaled = LayoutContext(textScale: 2)
+    let scaledRoot = block.build(into: &buffer, context: scaled)
     #expect(buffer.sizeThatFits(scaledRoot, Size(width: cell * 2, height: 1000)).height == height * 20)
-    let empty = buffer.emit(MarkdownLeaf(block: .paragraph(""), scale: 1, lineSpacing: 0), context: context)
+    let empty = MarkdownLeaf(block: .paragraph(""), scale: 1, lineSpacing: 0).build(into: &buffer, context: context)
     #expect(buffer.sizeThatFits(empty, Size(width: 100, height: 100)).height == 0)
     var drawList = DrawList()
     buffer.paint(root, into: &drawList, in: Rect(x: 0, y: 0, width: 100, height: 100))
@@ -155,7 +155,7 @@ struct MarkdownNavigationTests {
     defer { runtime.reset() }
     let context = runtime.context
     let content = MarkdownText("# Heading\n\nParagraph\n\n- first\n- second\n\n```swift\nlet x = 1\n```")
-    runtime.setContent(content)
+    runtime.build = { buffer, context in content.build(into: &buffer, context: context) }
     func render(_ commands: [Command] = []) {
       _ = runtime.render(
         viewport: Size(width: 500, height: 600), input: InputState(commands: commands), onChange: {})
@@ -178,9 +178,15 @@ struct MarkdownNavigationTests {
 
   @Test func keyboardNavigationScrollsLaterBlocksIntoView() {
     let controller = ScrollViewController()
+    let document = MarkdownText((0..<30).map { "Paragraph \($0)" }.joined(separator: "\n\n"))
     let ui = NavigationTestHost(
-      content: ScrollView(controller: controller) {
-        MarkdownText((0..<30).map { "Paragraph \($0)" }.joined(separator: "\n\n"))
+      build: { buffer, context in
+        buffer.scrollView(
+          ScrollView(
+            controller: controller,
+            build: { buffer, context in
+              document.build(into: &buffer, context: context)
+            }), context: context)
       }, size: Size(width: 300, height: 100))
     ui.press("j", "l")
     for _ in 0..<20 { ui.press("j") }
@@ -198,8 +204,9 @@ struct MarkdownSelectionTests {
     let context = runtime.context
     let target = FocusTarget()
     let content = MarkdownLeaf(block: .paragraph("**café** `👨‍👩‍👧‍👦` tea"), scale: 1, lineSpacing: 0)
-      .focusTarget(target)
-    runtime.setContent(content)
+    runtime.build = { buffer, context in
+      buffer.focus(target, context: context) { buffer, context in content.build(into: &buffer, context: context) }
+    }
     func render(_ commands: [Command] = [], text: [TextEditEvent] = []) {
       _ = runtime.render(
         viewport: Size(width: 40, height: 300),
@@ -239,15 +246,19 @@ struct MarkdownSelectionTests {
 @MainActor
 struct MarkdownDocumentSelectionTests {
   @Test func parentScopeCopiesMarkdownAndPlainTextInTreeOrder() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
-    let content = Group("Session") {
-      Text("Header").selectable()
-      MarkdownText("**café**\n\n`code`")
-      Text("Footer").selectable()
+    let document = MarkdownText("**café**\n\n`code`")
+    let content: LayoutBuilder = { buffer, context in
+      buffer.group("Session", context: context) { buffer, context in
+        let header = buffer.text(Text("Header").selectable(), context: context.childScope(0))
+        let markdown = document.build(into: &buffer, context: context.childScope(1))
+        let footer = buffer.text(Text("Footer").selectable(), context: context.childScope(2))
+        return buffer.stack([header, markdown, footer], axis: .vertical, context: context)
+      }
     }
     _ = producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) },
+      build: content,
       viewport: Size(width: 500, height: 500),
       input: InputState(), context: context, onChange: {})
     context.interaction.navigationPath = []

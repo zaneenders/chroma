@@ -8,10 +8,10 @@ struct PlainTextFastPathTests {
 
   @Test(arguments: ["", "label", "first\nsecond\n", "a\r\nb", "é 👩🏽‍💻\n世界"])
   func plainTextPreservesCommandsAndMeasurement(content: String) {
-    let context = BlockContext(textScale: 1.5)
+    let context = LayoutContext(textScale: 1.5)
     let text = Text(content).fontScale(2).foregroundColor(.black)
     var resolvedBuffer = LayoutBuffer()
-    let resolved = resolvedBuffer.emit(text, context: context)
+    let resolved = resolvedBuffer.text(text, context: context)
     #expect(resolvedBuffer.sizeThatFits(resolved, rect.size) == context.fontMetrics.measure(content, scale: 3))
     var expected = DrawList()
     for (row, line) in TextLayout(content).lines.enumerated() {
@@ -39,11 +39,11 @@ struct PlainTextFastPathTests {
 
   @Test(arguments: [false, true], [false, true])
   func plainTextPreservesFocusAndPaintIsolation(claimed: Bool, ignored: Bool) {
-    var context = BlockContext()
+    var context = LayoutContext()
     context.focusLeafClaimed = claimed
     context.navigationIgnored = ignored
     var resolvedBuffer = LayoutBuffer()
-    let resolved = resolvedBuffer.emit(Text("label"), context: context)
+    let resolved = resolvedBuffer.text(Text("label"), context: context)
     beginTestFrame(context.interaction, input: InputState())
     resolvedBuffer.register(resolved, in: rect)
     let leaves = context.interaction.builderRoot?.children.count
@@ -65,12 +65,12 @@ struct PlainTextFastPathTests {
   }
 
   @Test func plainTextShapesOnlyWhenPaintedAndReusesEachLayout() {
-    let context = BlockContext()
+    let context = LayoutContext()
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     PipelineMetrics.reset()
     var resolvedBuffer = LayoutBuffer()
-    let resolved = resolvedBuffer.emit(Text("plain"), context: context)
+    let resolved = resolvedBuffer.text(Text("plain"), context: context)
     _ = resolvedBuffer.sizeThatFits(resolved, rect.size)
     beginTestFrame(context.interaction, input: InputState())
     resolvedBuffer.register(resolved, in: rect)

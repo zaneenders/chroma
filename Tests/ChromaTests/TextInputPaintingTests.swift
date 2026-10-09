@@ -28,12 +28,12 @@ struct TextInputPaintingTests {
   func focusedTextInputHasBorderWithoutFocusFill(multiline: Bool) throws {
     let runtime = WindowRuntime()
     let context = runtime.context
-    let content: any Block =
+    let content: TextEditor =
       multiline
       ? TextEditor(text: { "abcd" }, onChange: { _ in })
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
     let size = Size(width: 200, height: 40)
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    runtime.build = { buffer, context in buffer.textEditor(content, context: context) }
     func render() -> DrawList {
       runtime.render(
         viewport: size, input: InputState(),
@@ -79,7 +79,7 @@ struct TextInputPaintingTests {
   }
 
   @Test func draggingBelowShortEditorKeepsViewportAtFirstRow() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let editor = TextEditor(text: { "short" }, onChange: { _ in })
     beginTestFrame(
       context.interaction,
@@ -90,7 +90,7 @@ struct TextInputPaintingTests {
     #expect(context.interaction.isDragging)
     var list = DrawList()
     var resolvedBuffer = LayoutBuffer()
-    let resolved = resolvedBuffer.emit(editor, context: context)
+    let resolved = resolvedBuffer.textEditor(editor, context: context)
     resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 200, height: 100))
     resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
     #expect(context.interaction.textDragViewportRow == 0)
@@ -100,11 +100,11 @@ struct TextInputPaintingTests {
   func selectionSuppressesCaretAndPreservesBalancedClips(multiline: Bool) throws {
     let runtime = WindowRuntime()
     let context = runtime.context
-    let content: any Block =
+    let content: TextEditor =
       multiline
       ? TextEditor(text: { "ab\ncd" }, onChange: { _ in })
       : TextEditor(singleLine: true, text: { "abcd" }, onChange: { _ in })
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    runtime.build = { buffer, context in buffer.textEditor(content, context: context) }
     func render() -> DrawList {
       runtime.render(
         viewport: Size(width: 200, height: 100),

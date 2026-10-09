@@ -13,80 +13,52 @@ struct PreparedPublicContractTests {
     var actions: [Int] = []
   }
 
-  struct Wrapper<Content: Block>: Block {
-    let content: Content
-    let counts: Counts
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      counts.builds += 1
-      return buffer.emit(content, context: context.component(Self.self))
-    }
+  private func preparedLeaf(_ counts: Counts, into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    counts.builds += 1
+    return buffer.customLeaf(
+      context: context, focusRule: .container,
+      measure: { proposal in
+        counts.measurements += 1
+        return proposal
+      },
+      register: { rect in
+        counts.registrations += 1
+        context.registerFocusable(in: rect)
+      },
+      paint: { list, rect in
+        counts.paints += 1
+        list.fillRect(rect, color: .white)
+        context.paintFocusHighlight(in: rect, into: &list)
+      })
   }
 
-  struct PreparedLeaf: Block {
-    let counts: Counts
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      counts.builds += 1
-      let context = context.component(Self.self)
-      return buffer.customLeaf(
-        context: context, focusRule: .container,
-        measure: { proposal in
-          counts.measurements += 1
-          return proposal
-        },
-        register: { rect in
-          counts.registrations += 1
-          context.registerFocusable(in: rect)
-        },
-        paint: { list, rect in
-          counts.paints += 1
-          list.fillRect(rect, color: .white)
-          context.paintFocusHighlight(in: rect, into: &list)
-        })
-    }
+  private func wrappedLeaf(_ counts: Counts, into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    counts.builds += 1
+    return preparedLeaf(counts, into: &buffer, context: context.childScope(0))
   }
 
-  struct OrdinaryLeaf: Block {
-
-    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      let context = context.component(Self.self)
-      return buffer.customLeaf(
-        context: context, focusRule: focusRule,
-        expandsHorizontally: false, expandsVertically: false,
-        measure: { sizeThatFits($0, context: context) },
-        register: { register(in: $0, context: context) },
-        paint: { paint(into: &$0, in: $1, context: context) })
-    }
-
-    var focusRule: FocusRule { .standard }
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    @MainActor func register(in rect: Rect, context: BlockContext) {}
-    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      list.fillRect(rect, color: .white)
-    }
-
+  private func ordinaryLeaf(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.customLeaf(
+      context: context, measure: { $0 }, register: { _ in },
+      paint: { $0.fillRect($1, color: .white) })
   }
 
-  struct TwoControls: Block {
-    let counts: Counts
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      let context = context.component(Self.self)
-      let second = buffer.emit(
-        Button("second") { counts.actions.append(1) }.sizing(x: .grow, y: .grow),
-        context: context.childScope(1))
-      let first = buffer.emit(
-        Button("first") { counts.actions.append(0) }.sizing(x: .grow, y: .grow),
-        context: context.childScope(0))
-      return buffer.stack([first, second], axis: .horizontal, context: context)
-    }
+  private func twoControls(_ counts: Counts, into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    let secondContext = context.childScope(1)
+    let second = buffer.button(Button("second") { counts.actions.append(1) }, context: secondContext)
+    let secondSized = buffer.sizing(second, x: .grow, y: .grow, context: secondContext)
+    let firstContext = context.childScope(0)
+    let first = buffer.button(Button("first") { counts.actions.append(0) }, context: firstContext)
+    let firstSized = buffer.sizing(first, x: .grow, y: .grow, context: firstContext)
+    return buffer.stack([firstSized, secondSized], axis: .horizontal, context: context)
   }
 
   @Test func publicPreparationRegistersAndPaintsOneChildWithoutReplayingEffects() {
     let counts = Counts()
-    let context = BlockContext()
+    let context = LayoutContext()
     let rect = Rect(x: 0, y: 0, width: 20, height: 20)
     var preparedBuffer = LayoutBuffer()
-    let prepared = preparedBuffer.emit(
-      Wrapper(content: PreparedLeaf(counts: counts), counts: counts), context: context)
+    let prepared = wrappedLeaf(counts, into: &preparedBuffer, context: context)
     beginTestFrame(context.interaction, input: InputState())
     preparedBuffer.register(prepared, in: rect)
     var list = DrawList()
@@ -101,9 +73,9 @@ struct PreparedPublicContractTests {
 
   @Test func measurementDoesNotRunRegistrationOrPainting() {
     let counts = Counts()
-    let context = BlockContext()
+    let context = LayoutContext()
     var preparedBuffer = LayoutBuffer()
-    let prepared = preparedBuffer.emit(PreparedLeaf(counts: counts), context: context)
+    let prepared = preparedLeaf(counts, into: &preparedBuffer, context: context)
     let proposal = Size(width: 20, height: 20)
     #expect(preparedBuffer.sizeThatFits(prepared, proposal) == proposal)
     #expect(preparedBuffer.sizeThatFits(prepared, proposal) == proposal)
@@ -117,7 +89,7 @@ struct PreparedPublicContractTests {
     let counts = Counts()
     let host = HeadlessHost(size: Size(width: 100, height: 30))
     defer { host.close() }
-    host.setContent(TwoControls(counts: counts))
+    host.build = { buffer, context in twoControls(counts, into: &buffer, context: context) }
     host.render()
     for x: Float in [10, 70, 10] {
       let point = Point(x: x, y: 10)
@@ -132,7 +104,11 @@ struct PreparedPublicContractTests {
     let target = FocusTarget()
     let host = HeadlessHost(size: Size(width: 20, height: 20))
     defer { host.close() }
-    host.setContent(OrdinaryLeaf().focusTarget(target))
+    host.build = { buffer, context in
+      buffer.focus(target, context: context) { buffer, context in
+        ordinaryLeaf(into: &buffer, context: context)
+      }
+    }
     target.focus()
     host.render()
     #expect(target.isFocused)
@@ -143,7 +119,11 @@ struct PreparedPublicContractTests {
     let target = FocusTarget()
     let host = HeadlessHost(size: Size(width: 20, height: 20))
     defer { host.close() }
-    host.setContent(PreparedLeaf(counts: counts).focusTarget(target))
+    host.build = { buffer, context in
+      buffer.focus(target, context: context) { buffer, context in
+        preparedLeaf(counts, into: &buffer, context: context)
+      }
+    }
     target.focus()
     host.render()
     #expect(target.isFocused)

@@ -37,7 +37,6 @@ public enum PipelineMetrics {
   }
 
   public struct Snapshot: Equatable, Sendable, Codable {
-    public internal(set) var bodyEvaluations = 0
     /// Records emitted into typed buffers, including custom extension records.
     public internal(set) var layoutNodes = 0
     /// Buffer capacity growth events; this is not a process allocation count.
@@ -64,7 +63,6 @@ public enum PipelineMetrics {
   enum Event {
     case layoutNode
     case bufferGrowth
-    case bodyEvaluation
     case measurement
     case measurementCacheHit
     case textLayout
@@ -79,7 +77,6 @@ public enum PipelineMetrics {
     switch event {
     case .layoutNode: counters.layoutNodes += count
     case .bufferGrowth: counters.bufferGrowths += count
-    case .bodyEvaluation: counters.bodyEvaluations += count
     case .measurement: counters.measurements += count
     case .measurementCacheHit: counters.measurementCacheHits += count
     case .textLayout: counters.textLayouts += count

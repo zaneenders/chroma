@@ -38,42 +38,14 @@ private struct StatefulApp: App {
   var maximumRefreshRate: Double { 48 }
   var title: String { "App \(identifier)" }
 
-  @MainActor var body: some Block {
-    AppContent(identifier: identifier)
-  }
-}
-
-private struct AppContent: Block {
-
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    let context = context.component(Self.self)
-    return buffer.customLeaf(
-      context: context, focusRule: focusRule,
-      expandsHorizontally: false, expandsVertically: false,
-      measure: { sizeThatFits($0, context: context) },
-      register: { register(in: $0, context: context) },
-      paint: { paint(into: &$0, in: $1, context: context) })
-  }
-
-  @MainActor func register(in rect: Rect, context: BlockContext) {}
-
-  let identifier: UUID
-
-  var focusRule: FocusRule { .standard }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    proposal
-  }
-
-  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    drawList.text(identifier.uuidString, at: rect.origin, color: .white)
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.text(Text(identifier.uuidString), context: context)
   }
 }
 
 @MainActor
 private final class FailingAppRenderer: Chroma.Host {
   let name = "Test"
-  var build: LayoutBuilder?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
@@ -91,7 +63,6 @@ private final class FailingAppRenderer: Chroma.Host {
 @MainActor
 private final class AppRenderer: Chroma.Host {
   let name = "Test"
-  var build: LayoutBuilder?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()
@@ -100,11 +71,6 @@ private final class AppRenderer: Chroma.Host {
 
   func run(title: String) {
     self.title = title
-    guard let build else { return }
-    var buffer = LayoutBuffer()
-    let node = build(&buffer, BlockContext())
-    let rect = Rect(x: 0, y: 0, width: 400, height: 40)
-    buffer.register(node, in: rect)
-    buffer.paint(node, into: &frame, in: rect)
+    frame = runtime.render(viewport: Size(width: 400, height: 40), input: InputState(), onChange: {})
   }
 }

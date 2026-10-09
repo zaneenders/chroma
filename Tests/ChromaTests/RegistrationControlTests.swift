@@ -11,49 +11,24 @@ struct RegistrationControlTests {
     var paints = 0
   }
 
-  private struct PhaseProbe: Block {
-
-    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      let context = context.component(Self.self)
-      return buffer.customLeaf(
-        context: context, focusRule: focusRule,
-        expandsHorizontally: false, expandsVertically: false,
-        measure: { sizeThatFits($0, context: context) },
-        register: { register(in: $0, context: context) },
-        paint: { paint(into: &$0, in: $1, context: context) })
-    }
-
-    let phase: InteractionPhase
-    let capture: PhaseCapture
-
-    var focusRule: FocusRule { .standard }
-
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-
-    @MainActor func register(in rect: Rect, context: BlockContext) {
-      capture.registered.append(phase)
-    }
-
-    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      capture.paints += 1
-      list.fillRect(rect, color: .white)
-    }
-  }
-
   @Test func builtInControlsRegisterWithoutPainting() {
-    let blocks: [any Block] = [
-      Button("Action", action: {}),
-      TextEditor(text: { "first\nsecond" }, onChange: { _ in }),
-      TextEditor(singleLine: true, text: { "draft" }, onChange: { _ in }),
-      Interactive(action: {}, content: { _ in Text("Content") }),
+    let builds: [LayoutBuilder] = [
+      { $0.button(Button("Action", action: {}), context: $1) },
+      { $0.textEditor(TextEditor(text: { "first\nsecond" }, onChange: { _ in }), context: $1) },
+      { $0.textEditor(TextEditor(singleLine: true, text: { "draft" }, onChange: { _ in }), context: $1) },
+      { buffer, context in
+        buffer.interactive(
+          action: {}, content: { buffer, context, _ in buffer.text(Text("Content"), context: context) },
+          context: context)
+      },
     ]
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    for block in blocks {
+    for build in builds {
       PipelineMetrics.reset()
-      let context = BlockContext()
+      let context = LayoutContext()
       FrameProducer().refreshRegistrations(
-        { buffer, context in buffer.emit(block, context: context) }, viewport: rect.size, context: context)
+        build, viewport: rect.size, context: context)
       let metrics = PipelineMetrics.snapshot
       #expect(metrics.registrations > 0)
       #expect(metrics.paints == 0)
@@ -65,12 +40,23 @@ struct RegistrationControlTests {
 
   @Test func interactiveRegistrationUsesCurrentPhaseAndClaimsChildFocus() {
     let capture = PhaseCapture()
-    let context = BlockContext()
-    let block = Interactive(action: {}, content: { phase in PhaseProbe(phase: phase, capture: capture) })
+    let context = LayoutContext()
+    let build: LayoutBuilder = { buffer, context in
+      buffer.interactive(
+        action: {},
+        content: { buffer, context, phase in
+          buffer.customLeaf(
+            context: context, measure: { $0 }, register: { _ in capture.registered.append(phase) },
+            paint: { list, rect in
+              capture.paints += 1
+              list.fillRect(rect, color: .white)
+            })
+        }, context: context)
+    }
     @MainActor func register(_ input: InputState) {
       beginTestFrame(context.interaction, input: input)
       var buffer = LayoutBuffer()
-      let node = buffer.emit(block, context: context)
+      let node = build(&buffer, context)
       buffer.register(node, in: rect)
       context.interaction.endFrame()
       #expect(context.interaction.tree?.children.count == 1)
@@ -84,13 +70,13 @@ struct RegistrationControlTests {
   }
 
   @Test func buttonReleaseUsesFreshRegisteredActionWithoutPresentation() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     var actions: [String] = []
     func refresh(_ label: String) {
       producer.refreshRegistrations(
         { buffer, context in
-          buffer.emit(Button(label, id: WidgetID("action"), action: { actions.append(label) }), context: context)
+          buffer.button(Button(label, id: WidgetID("action"), action: { actions.append(label) }), context: context)
         },
         viewport: rect.size, context: context)
     }
@@ -107,13 +93,13 @@ struct RegistrationControlTests {
   }
 
   @Test func textRegistrationRefreshesVerticalLayoutBeforeNextEditingEvent() throws {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     var text = "a"
     let editor = TextEditor(text: { text }, onChange: { text = $0 })
     func refresh() {
       producer.refreshRegistrations(
-        { buffer, context in buffer.emit(editor, context: context) }, viewport: rect.size, context: context)
+        { buffer, context in buffer.textEditor(editor, context: context) }, viewport: rect.size, context: context)
     }
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
@@ -132,24 +118,24 @@ struct RegistrationControlTests {
 
   @Test(arguments: [false, true])
   func textRegistrationKeepsSubmitBehavior(singleLine: Bool) throws {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     var text = "draft"
     let editor = TextEditor(singleLine: singleLine, text: { text }, onChange: { text = $0 })
     producer.refreshRegistrations(
-      { buffer, context in buffer.emit(editor, context: context) }, viewport: rect.size, context: context)
+      { buffer, context in buffer.textEditor(editor, context: context) }, viewport: rect.size, context: context)
     let id = try #require(context.interaction.tree?.children.first?.leafID)
     context.focus(id, editing: true)
     producer.refreshRegistrations(
-      { buffer, context in buffer.emit(editor, context: context) }, viewport: rect.size, context: context)
+      { buffer, context in buffer.textEditor(editor, context: context) }, viewport: rect.size, context: context)
     context.interaction.processInput(InputState(textEvents: [.submit]))
     #expect(text == (singleLine ? "draft" : "draft\n"))
     #expect(context.interaction.isTextEditing == !singleLine)
   }
 
   @Test func registrationAndPaintingUseSameDragViewportAndPointerOffsets() {
-    let registration = BlockContext()
-    let presentation = BlockContext()
+    let registration = LayoutContext()
+    let presentation = LayoutContext()
     let editor = TextEditor(text: { "ab\ncd\nef\ngh\nij" }, onChange: { _ in })
     func frame(_ input: InputState) {
       beginTestFrame(registration.interaction, input: input)
@@ -160,7 +146,7 @@ struct RegistrationControlTests {
       beginTestFrame(presentation.interaction, input: input)
       var list = DrawList()
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(editor, context: presentation)
+      let resolved = resolvedBuffer.textEditor(editor, context: presentation)
       resolvedBuffer.register(resolved, in: rect)
       resolvedBuffer.paint(resolved, into: &list, in: rect)
       presentation.interaction.endFrame()
@@ -185,12 +171,12 @@ struct RegistrationControlTests {
   }
 
   @Test func refreshingActiveTextDragDoesNotAdvanceViewportOrReplaySelection() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let editor = TextEditor(text: { "ab\ncd\nef\ngh\nij" }, onChange: { _ in })
     func frame(_ input: InputState) {
       beginTestFrame(context.interaction, input: input)
       var buffer = LayoutBuffer()
-      let node = buffer.emit(editor, context: context)
+      let node = buffer.textEditor(editor, context: context)
       buffer.register(node, in: rect)
       context.interaction.endFrame()
     }
@@ -207,7 +193,7 @@ struct RegistrationControlTests {
     let producer = FrameProducer()
     for _ in 0..<2 {
       producer.refreshRegistrations(
-        { buffer, context in buffer.emit(editor, context: context) }, viewport: rect.size, context: context)
+        { buffer, context in buffer.textEditor(editor, context: context) }, viewport: rect.size, context: context)
       #expect(context.interaction.textDragViewportRow == 1)
       #expect(context.interaction.textSelectionRange == 1..<7)
       #expect(context.interaction.caretOffset == 7)

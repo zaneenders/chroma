@@ -24,9 +24,9 @@ struct ScrollPaintTests {
     var value: Float = 10
   }
 
-  @MainActor private struct Row: Block {
+  @MainActor private struct Row {
 
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
       let context = context.component(Self.self)
       return buffer.customLeaf(
         context: context, focusRule: focusRule,
@@ -41,44 +41,39 @@ struct ScrollPaintTests {
     var lifetime: Lifetime? = nil
     var focusRule: FocusRule { .standard }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
       capture.measured.append(index)
       return Size(width: proposal.width, height: height?.value ?? 10)
     }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       capture.registered.append(index)
     }
 
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       capture.painted.append((index, rect))
       list.fillRect(rect, color: .white)
     }
 
   }
 
-  private struct Wrapper: Block {
-    let content: any Block
-    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      buffer.emit(content, context: context.component(Self.self))
-    }
-  }
-
-  @Test func frameProducerReusesScrollPreparedThroughCustomWrapper() {
-    let context = BlockContext()
+  @Test func frameProducerReusesScrollPreparedByFactory() {
+    let context = LayoutContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
     let capture = Capture()
-    let view = Wrapper(
-      content: ScrollView(data: 0..<10_000, rowHeight: 10, controller: controller) { index in
+    let view = ScrollView(
+      data: 0..<10_000, rowHeight: 10, controller: controller,
+      build: { buffer, context, index in
         capture.built.append(index)
         let lifetime = Lifetime()
         capture.lastRowLifetime = lifetime
-        return Row(index: index, capture: capture, lifetime: lifetime)
+        return Row(index: index, capture: capture, lifetime: lifetime).build(into: &buffer, context: context)
       })
     func render() {
       _ = producer.render(
-        build: { buffer, context in buffer.emit(view, context: context) }, viewport: viewport.size, input: InputState(),
+        build: { buffer, context in buffer.scrollView(view, context: context.keyed(scrollID)) },
+        viewport: viewport.size, input: InputState(),
         context: context, onChange: {})
     }
     render()
@@ -95,16 +90,18 @@ struct ScrollPaintTests {
   }
 
   @Test func uniformPaintUsesPreparedRowsWithoutChangingInteractionOrController() throws {
-    let context = BlockContext()
+    let context = LayoutContext()
     let interaction = context.interaction
     let controller = ScrollViewController()
     let capture = Capture()
-    let view = ScrollView(data: 0..<10_000, rowHeight: 10, controller: controller) { index in
-      capture.built.append(index)
-      return Row(index: index, capture: capture)
-    }.id(scrollID)
+    let view = ScrollView(
+      data: 0..<10_000, rowHeight: 10, controller: controller,
+      build: { buffer, context, index in
+        capture.built.append(index)
+        return Row(index: index, capture: capture).build(into: &buffer, context: context)
+      })
     var buffer = LayoutBuffer()
-    let root = buffer.emit(view, context: context)
+    let root = buffer.scrollView(view, context: context.keyed(scrollID))
     beginTestFrame(interaction, input: InputState(pointerPosition: Point(x: -10, y: -10)))
     buffer.register(root, in: viewport)
     interaction.endFrame()
@@ -156,20 +153,25 @@ struct ScrollPaintTests {
   }
 
   @Test func variablePaintDoesNotRefreshInvalidatedMeasurementsOrPlacements() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let controller = ScrollViewController()
     let capture = Capture()
     let height = Height()
     let view = ScrollView(
       showsIndicator: false, controller: controller,
       rows: [
-        .init(id: 0, content: Row(index: 0, capture: capture, height: height)),
-        .init(id: 1, content: Row(index: 1, capture: capture)),
+        .init(
+          id: 0,
+          build: { buffer, context in
+            Row(index: 0, capture: capture, height: height).build(into: &buffer, context: context)
+          }),
+        .init(
+          id: 1, build: { buffer, context in Row(index: 1, capture: capture).build(into: &buffer, context: context) }),
       ]
-    ).id(scrollID)
+    )
 
     func register(in buffer: inout LayoutBuffer) -> LayoutNode {
-      let root = buffer.emit(view, context: context)
+      let root = buffer.scrollView(view, context: context.keyed(scrollID))
       beginTestFrame(context.interaction, input: InputState())
       buffer.register(root, in: viewport)
       context.interaction.endFrame()
@@ -204,24 +206,22 @@ struct ScrollPaintTests {
   }
 
   @Test func ordinaryPaintReusesEmittedContentAndReleasesItAfterOperation() {
-    @MainActor struct Content: Block {
-      let capture: Capture
-      func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-        buffer.emit(content(), context: context.component(Self.self))
-      }
-      func content() -> some Block {
+    let context = LayoutContext()
+    let capture = Capture()
+    let view = ScrollView(
+      showsIndicator: false,
+      build: { buffer, context in
         capture.built.append(0)
         let lifetime = Lifetime()
         capture.lastRowLifetime = lifetime
-        return Row(index: 0, capture: capture, lifetime: lifetime).sizing(y: .fixed(100))
-      }
-    }
-    let context = BlockContext()
-    let capture = Capture()
-    let view = ScrollView(showsIndicator: false) { Content(capture: capture) }
+        let row = Row(index: 0, capture: capture, lifetime: lifetime).build(
+          into: &buffer, context: context.childScope(0))
+        let sized = buffer.sizing(row, y: .fixed(100), context: context.childScope(0))
+        return buffer.stack([sized], axis: .vertical, context: context)
+      })
     do {
       var buffer = LayoutBuffer()
-      let root = buffer.emit(view, context: context)
+      let root = buffer.scrollView(view, context: context.keyed(scrollID))
       beginTestFrame(context.interaction, input: InputState())
       buffer.register(root, in: viewport)
       context.interaction.endFrame()

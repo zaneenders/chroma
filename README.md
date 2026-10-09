@@ -12,11 +12,24 @@ UI Library in swift
 
 ## Examples
 
-The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma-examples) repository.
+Runnable CPU examples live in `HeadlessModeTests/Sources`. The separate
+[chroma-examples](https://github.com/zaneenders/chroma-examples) repository needs
+migration when adopting this breaking direct-construction API.
+
+```swift
+import Chroma
+import ChromaHeadless
+
+@main struct Demo: HeadlessApp {
+  func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.text(Text("Hello"), context: context.keyed("greeting"))
+  }
+}
+```
 
 ## Runtime and CPU-only development
 
-Blocks and the direct API share one reusable, integer-handle layout buffer.
+Direct construction writes typed nodes into one reusable, integer-handle layout buffer.
 See [runtime and migration](RUNTIME.md) for the small public API and freshness rules.
 
 Run CPU-side tests without Metal/Wayland development dependencies:

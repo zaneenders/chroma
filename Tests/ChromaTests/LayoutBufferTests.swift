@@ -9,19 +9,19 @@ struct LayoutBufferTests {
 
   @Test func commonRecordsDoNotInlineRareControlPayloads() {
     #expect(MemoryLayout<LayoutBuffer.Record>.stride <= 128)
-    #expect(MemoryLayout<BlockContext>.stride <= 96)
+    #expect(MemoryLayout<LayoutContext>.stride <= 96)
   }
 
   @Test func resetAndDifferentOwnersRejectRecycledHandles() {
     var first = LayoutBuffer()
     var second = LayoutBuffer()
-    let context = BlockContext()
-    let old = first.emit(Color.white, context: context)
+    let context = LayoutContext()
+    let old = first.color(.white, context: context)
     #expect(first.contains(old) == true)
     #expect(second.contains(old) == false)
     let capacity = first.capacity
     first.reset()
-    let replacement = first.emit(Color.black, context: context)
+    let replacement = first.color(.black, context: context)
     #expect(first.capacity == capacity)
     #expect(first.contains(old) == false)
     #expect(first.contains(replacement) == true)
@@ -30,37 +30,37 @@ struct LayoutBufferTests {
     #expect(second.contains(replacement) == false)
   }
 
-  @Test func directAndBuilderStacksEmitTheSameOrderedCommands() {
-    let builder = VStack(spacing: 3) {
-      Text("first").id("first")
-      Text("second").id("second")
-    }
-    let direct: LayoutBuilder = { buffer, context in
-      let first = buffer.emit(Text("first"), context: context.keyed("first"))
-      let second = buffer.emit(Text("second"), context: context.keyed("second"))
+  @Test func directRootKeepsOrderedCommandsAcrossFreshOperations() {
+    let build: LayoutBuilder = { buffer, context in
+      let first = buffer.text(Text("first"), context: context.keyed("first"))
+      let second = buffer.text(Text("second"), context: context.keyed("second"))
       return buffer.stack([first, second], axis: .vertical, spacing: 3, context: context)
     }
     let host = HeadlessHost(size: viewport.size)
     defer { host.close() }
-    host.setContent(builder)
+    host.build = build
     let first = host.render()
-    host.build = direct
     #expect(host.render().commands == first.commands)
+    #expect(
+      first.paintSnapshot.compactMap { if case .text(_, let text, _, _) = $0 { text } else { nil } } == [
+        "first", "second",
+      ])
   }
 
   @Test func warmedTypedStorageGrowsOnlyWhenWorkloadGrows() {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     var buffer = LayoutBuffer()
-    let context = BlockContext()
-    let content = VStack {
-      Text("first")
-      Text("second")
-      Spacer()
+    let context = LayoutContext()
+    let build: LayoutBuilder = { buffer, context in
+      let first = buffer.text(Text("first"), context: context.childScope(0))
+      let second = buffer.text(Text("second"), context: context.childScope(1))
+      let spacer = buffer.spacer(context: context.childScope(2))
+      return buffer.stack([first, second, spacer], axis: .vertical, context: context)
     }
     for iteration in 0..<20 {
       PipelineMetrics.reset()
-      let root = buffer.emit(content, context: context)
+      let root = build(&buffer, context)
       #expect(buffer.count == 4)
       _ = buffer.sizeThatFits(root, viewport.size)
       beginTestFrame(context.interaction, input: InputState())
@@ -80,12 +80,12 @@ struct LayoutBufferTests {
 
   @Test func cachedStackGeometryIsRelativeToItsCurrentOrigin() {
     var buffer = LayoutBuffer()
-    let context = BlockContext()
-    let root = buffer.emit(
-      VStack(spacing: 2) {
-        Text("A")
-        Text("B")
-      }.navigationIgnored(), context: context)
+    let context = LayoutContext()
+    var ignored = context
+    ignored.navigationIgnored = true
+    let firstText = buffer.text(Text("A"), context: ignored.childScope(0))
+    let secondText = buffer.text(Text("B"), context: ignored.childScope(1))
+    let root = buffer.stack([firstText, secondText], axis: .vertical, spacing: 2, context: ignored)
     beginTestFrame(context.interaction, input: InputState())
     buffer.register(root, in: viewport)
     var first = DrawList()
@@ -111,7 +111,7 @@ struct LayoutBufferTests {
     weak let weakCapture = capture
     var buffer = LayoutBuffer()
     _ = buffer.customLeaf(
-      context: BlockContext(),
+      context: LayoutContext(),
       measure: { [capture = capture!] proposal in
         withExtendedLifetime(capture) {}
         return proposal
@@ -127,14 +127,15 @@ struct LayoutBufferTests {
   }
 
   @Test func callbacksCanGrowStorageDuringRegistration() {
-    let growing = Interactive(action: {}) { _ in
-      VStack {
-        ForEach(0..<200, id: \.self) { _ in Text("abc") }
-      }
-    }
     var buffer = LayoutBuffer()
-    let context = BlockContext()
-    let root = buffer.emit(growing.navigationIgnored(), context: context)
+    var context = LayoutContext()
+    context.navigationIgnored = true
+    let root = buffer.interactive(
+      action: {},
+      content: { buffer, context, _ in
+        let rows = (0..<200).map { buffer.text(Text("abc"), context: context.keyed($0)) }
+        return buffer.stack(rows, axis: .vertical, context: context)
+      }, context: context)
     beginTestFrame(context.interaction, input: InputState())
     buffer.register(root, in: viewport)
     context.interaction.endFrame()
@@ -147,12 +148,12 @@ struct LayoutBufferTests {
 
   @Test func stackRetainsSeparatePlacementsForDifferentProposals() {
     var buffer = LayoutBuffer()
-    let context = BlockContext()
-    let root = buffer.emit(
-      HStack(spacing: 10) {
-        Color.white
-        Color.black
-      }.navigationIgnored(), context: context)
+    let context = LayoutContext()
+    var ignored = context
+    ignored.navigationIgnored = true
+    let first = buffer.color(.white, context: ignored.childScope(0))
+    let second = buffer.color(.black, context: ignored.childScope(1))
+    let root = buffer.stack([first, second], axis: .horizontal, spacing: 10, context: ignored)
     _ = buffer.sizeThatFits(root, Size(width: 110, height: 20))
     _ = buffer.sizeThatFits(root, Size(width: 210, height: 20))
     for width: Float in [110, 210, 110] {

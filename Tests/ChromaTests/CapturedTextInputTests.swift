@@ -15,9 +15,9 @@ struct CapturedTextInputTests {
     var range: Range<Int>?
   }
 
-  @MainActor struct Editor: Block {
+  @MainActor struct Editor {
 
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
       let context = context.component(Self.self)
       return buffer.customLeaf(
         context: context, focusRule: focusRule,
@@ -32,14 +32,14 @@ struct CapturedTextInputTests {
 
     var focusRule: FocusRule { .control }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       let state = context.textInputState(
         id: WidgetID("editor"), in: rect, text: { text }, onChange: { model.text = $0 })
       capture.range = state.selectionRange
     }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       capture.range = context.textInputVisualState(id: WidgetID("editor")).selectionRange
     }
   }
@@ -48,7 +48,9 @@ struct CapturedTextInputTests {
     let model = Model()
     let capture = Capture()
     let renderer = HeadlessHost()
-    renderer.setContent(DeferredBlock { Editor(text: model.text, model: model, capture: capture) })
+    renderer.build = { buffer, context in
+      return Editor(text: model.text, model: model, capture: capture).build(into: &buffer, context: context)
+    }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     renderer.render(input: InputState(textEvents: [.selectAll]))
@@ -62,7 +64,9 @@ struct CapturedTextInputTests {
     let model = Model()
     let capture = Capture()
     let renderer = HeadlessHost()
-    renderer.setContent(DeferredBlock { Editor(text: model.text, model: model, capture: capture) })
+    renderer.build = { buffer, context in
+      return Editor(text: model.text, model: model, capture: capture).build(into: &buffer, context: context)
+    }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     model.text = "a"
@@ -77,7 +81,9 @@ struct CapturedTextInputTests {
     func field(_ text: String) -> TextEditor {
       TextEditor(singleLine: true, text: { text }, onChange: { model.text = $0 })
     }
-    renderer.setContent(DeferredBlock { field(model.text) })
+    renderer.build = { buffer, context in
+      buffer.textEditor(field(model.text), context: context)
+    }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     renderer.render(input: InputState(textEvents: [.selectAll]))

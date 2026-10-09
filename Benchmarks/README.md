@@ -65,7 +65,7 @@ swift run --package-path Benchmarks -c release InputFrameBenchmark
 Measures the headless rendering path through `ChromaTesting.HeadlessHost` for scrolling lists with 1,000, 100,000, and 1,000,000 items, with and without explicit identity. Prints one cold and five warm frame timings per case:
 
 - `replace-root` constructs and replaces the root before every render. `setup` includes construction and replacement; `render` includes registration and drawing. Even warm iterations reset the interaction tree.
-- `deferred-root` keeps a `DeferredBlock` installed, as an app does, and constructs its list during traversal. Warm iterations keep the interaction tree. List construction is included in `render` and can occur more than once per input frame.
+- `deferred-root` keeps a root construction closure installed, as an app does, and constructs its list during each update. Warm iterations keep the interaction tree. List construction is included in `render` and can occur more than once per input frame.
 
 These timings exclude native input dispatch, scheduler waits, Metal encoding, and GPU execution. They are not consumed by `CompareBenchmarks`.
 
@@ -129,13 +129,13 @@ swift run --package-path Benchmarks -c release LayoutBenchmark
 swift run --package-path Benchmarks -c release LayoutBenchmark --interactive
 ```
 
-Measures 20 session-style rows in a scroll view under one, three, or five layers of groups and stacks. Each case warms up for three frames and reports 20 frames as JSON: p50/p95 time, row emissions per frame, and draw-command count. The existing `bodiesPerFrame` field now counts calls to the row emitter, preserving the report schema and the same row-content construction point previously counted through a body getter. `none` explicitly renders without input; it does not measure application idle CPU. `scroll` includes input registration and the resulting frame. These reports are not consumed by `CompareBenchmarks`.
+Measures 20 session-style rows in a scroll view under one, three, or five layers of groups and stacks. Each case warms up for three frames and reports 20 frames as JSON: p50/p95 time, row emissions per frame, and draw-command count. The existing `bodiesPerFrame` field now counts calls to the row build function, preserving the report schema and the same row-content construction point previously counted through a body getter. `none` explicitly renders without input; it does not measure application idle CPU. `scroll` includes input registration and the resulting frame. These reports are not consumed by `CompareBenchmarks`.
 
 `--interactive` wraps each layer in a control. Within an update, each requested phase is emitted once with the control's child focus context. Idle measurement and idle registration use the same nodes; a distinct current phase has its own nodes. Painting consumes the registered phase without emitting more content.
 
 Increasing container depth must not multiply row emissions. A single `LayoutBuffer` owns typed nodes and shares children across expansion checks, measurement, registration, and drawing. Node measurements are memoized by proposal for that operation only. A new update emits current state and reinstalls observation tracking. Built-in controls use typed payloads; external leaves can supply their own measure, register, and paint operations through `customLeaf`.
 
-`StackEvaluationTests` covers nested body counts, repeated and changed proposals, fresh state between traversals, and scroll-content reuse without relying on timing thresholds:
+`StackEvaluationTests` covers nested build counts, repeated and changed proposals, fresh state between traversals, and scroll-content reuse without relying on timing thresholds:
 
 ```sh
 swift test --filter StackEvaluationTests
@@ -149,9 +149,9 @@ swift test --filter StackEvaluationTests
 4. `FrameProducer` reconciles current blocks, measures/places, registers behavior, then paints those prepared snapshots while tracking observable properties. Painting performs no registration or lifecycle work. A change to a tracked property requests another frame.
 5. The backend culls and encodes the draw commands, then submits them to the GPU.
 
-Registration refresh traverses blocks without painting. Custom primitives implement explicit registration and painting phases. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
+Registration refresh builds typed nodes without painting. Custom leaves supply explicit registration and painting operations. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
 
-Content, callbacks, and geometry are rebuilt for each operation; stable identity alone never establishes validity. Custom blocks implement the optional `Block.emit(into:context:)` authoring method and use the same typed buffer constructors as direct construction. There is no separate primitive or preparation protocol. Identified collections can opt into bounded identity-index reuse with an explicit `identityRevision`; current row values and actions are still rebuilt.
+Content, callbacks, and geometry are rebuilt for each operation; stable identity alone never establishes validity. Ordinary construction functions call typed buffer constructors. There is no Block/result-builder authoring layer or separate primitive/preparation protocol. Identified collections can opt into bounded identity-index reuse with an explicit `identityRevision`; current row values and actions are still rebuilt.
 
 The scheduler and hover regressions are covered without wall-clock performance thresholds:
 

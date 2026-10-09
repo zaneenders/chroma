@@ -11,15 +11,23 @@ struct CommandConsumptionTests {
     func frame(_ input: InputState = InputState()) {
       beginTestFrame(interaction, input: input)
       var list = DrawList()
-      let view = ScrollView {
-        Color.white.sizing(y: .fixed(100))
-      }.id(id).onCommand(.application("resize")) {
-        handled += 1
-        return .handled
+      let view: LayoutBuilder = { buffer, context in
+        let node5 = buffer.scrollView(
+          ScrollView(build: { buffer, context in
+            let node3 = buffer.color(Color.white, context: context)
+            return buffer.sizing(node3, y: .fixed(100), context: context)
+          }), context: context.keyed(id))
+        let node6 = buffer.onCommand(
+          node5, .application("resize"), context: context,
+          action: {
+            handled += 1
+            return .handled
+          })
+        return node6
       }
       do {
         var resolvedBuffer = LayoutBuffer()
-        let resolved = resolvedBuffer.emit(view, context: BlockContext(interaction: interaction))
+        let resolved = view(&resolvedBuffer, LayoutContext(interaction: interaction))
         resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
@@ -38,14 +46,22 @@ struct CommandConsumptionTests {
     func frame(_ input: InputState = InputState()) {
       beginTestFrame(interaction, input: input)
       var list = DrawList()
-      let view = ScrollView {
-        Color.white.sizing(y: .fixed(100))
-      }.id(id).onCommand(.application("resize")) {
-        consumes ? .handled : .ignored
+      let view: LayoutBuilder = { buffer, context in
+        let node9 = buffer.scrollView(
+          ScrollView(build: { buffer, context in
+            let node7 = buffer.color(Color.white, context: context)
+            return buffer.sizing(node7, y: .fixed(100), context: context)
+          }), context: context.keyed(id))
+        let node10 = buffer.onCommand(
+          node9, .application("resize"), context: context,
+          action: {
+            consumes ? .handled : .ignored
+          })
+        return node10
       }
       do {
         var resolvedBuffer = LayoutBuffer()
-        let resolved = resolvedBuffer.emit(view, context: BlockContext(interaction: interaction))
+        let resolved = view(&resolvedBuffer, LayoutContext(interaction: interaction))
         resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }

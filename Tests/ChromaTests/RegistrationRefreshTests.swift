@@ -11,9 +11,9 @@ struct RegistrationRefreshTests {
     var inputs: [InputState] = []
   }
 
-  @MainActor struct InputProbe: Block {
+  @MainActor struct InputProbe {
 
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
       let context = context.component(Self.self)
       return buffer.customLeaf(
         context: context, focusRule: focusRule,
@@ -22,7 +22,7 @@ struct RegistrationRefreshTests {
         paint: { self.paint(into: &$0, in: $1, context: context) })
     }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       _ = context.buttonState(id: WidgetID("probe"), in: rect) { capture.clicks += 1 }
       context.registerInputHandler { capture.inputs.append($0) }
     }
@@ -31,9 +31,9 @@ struct RegistrationRefreshTests {
 
     var focusRule: FocusRule { .control }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
 
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
 
     }
   }
@@ -42,7 +42,9 @@ struct RegistrationRefreshTests {
     let capture = InputCapture()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.setContent(InputProbe(capture: capture))
+    renderer.build = { buffer, context in
+      return InputProbe(capture: capture).build(into: &buffer, context: context)
+    }
     renderer.render()
     renderer.render(input: InputState(commands: [.navigation(.down), .action(.activate)]))
     #expect(capture.clicks == 1)
@@ -62,7 +64,9 @@ struct RegistrationRefreshTests {
     let capture = InputCapture()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.setContent(InputProbe(capture: capture))
+    renderer.build = { buffer, context in
+      return InputProbe(capture: capture).build(into: &buffer, context: context)
+    }
     renderer.render()
     renderer.render(
       input: InputState(

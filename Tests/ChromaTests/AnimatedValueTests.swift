@@ -20,14 +20,14 @@ struct AnimatedValueTests {
   @Test func sampledGeometryIsSharedAndRetargetingIsContinuous() throws {
     let model = Model()
     let runtime = WindowRuntime(clock: { model.now })
-    runtime.setContent(
-      DeferredBlock {
-        VStack {
-          AnimatedValue(model.target, duration: 1) { value in
-            Color.white.sizing(x: .fixed(value), y: .fixed(10))
-          }.id("animated")
-        }
-      })
+    runtime.build = { buffer, context in
+      let animated = buffer.animatedValue(model.target, duration: 1, context: context.keyed("animated")) {
+        buffer, context, value in
+        let color = buffer.color(.white, context: context)
+        return buffer.sizing(color, x: .fixed(value), y: .fixed(10), context: context)
+      }
+      return buffer.stack([animated], axis: .vertical, context: context)
+    }
     func width(_ list: DrawList) throws -> Float {
       try #require(list.commands.compactMap { if case .quad(let q) = $0 { q.rect.size.width } else { nil } }.first)
     }
@@ -54,18 +54,20 @@ struct AnimatedValueTests {
   @Test func keyedReorderPreservesProgressAndRemovalCancelsIt() {
     let model = Model()
     let runtime = WindowRuntime(clock: { model.now })
-    runtime.setContent(
-      DeferredBlock {
-        VStack {
-          if model.visible {
-            ForEach(model.reversed ? [2, 1] : [1, 2], id: \.self) { id in
-              AnimatedValue(model.target + Float(id), duration: 1) { value in
-                Color.white.sizing(x: .fixed(value), y: .fixed(10))
-              }
-            }
-          }
+    runtime.build = { buffer, context in
+      var children: [LayoutNode] = []
+      if model.visible {
+        for id in model.reversed ? [2, 1] : [1, 2] {
+          children.append(
+            buffer.animatedValue(model.target + Float(id), duration: 1, context: context.keyed(id)) {
+              buffer, context, value in
+              let color = buffer.color(.white, context: context)
+              return buffer.sizing(color, x: .fixed(value), y: .fixed(10), context: context)
+            })
         }
-      })
+      }
+      return buffer.stack(children, axis: .vertical, context: context)
+    }
     _ = render(runtime)
     model.target = 110
     _ = render(runtime)
@@ -88,10 +90,12 @@ struct AnimatedValueTests {
   }
 
   @Test func zeroDurationSnapsAndPaintDoesNotAdvanceState() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
     context.interaction.animationTime = 1
-    let root = buffer.emit(AnimatedValue(20, duration: 0) { _ in Color.white }, context: context)
+    let root = buffer.animatedValue(20, duration: 0, context: context) { buffer, context, _ in
+      buffer.color(.white, context: context)
+    }
     _ = buffer.sizeThatFits(root, Size(width: 20, height: 20))
     #expect(context.interaction.animations.isEmpty)
     beginTestFrame(context.interaction, input: InputState())
@@ -110,14 +114,16 @@ struct AnimatedValueTests {
   @Test func idleMeasurementCannotRetargetTheRegisteredInteractivePhase() {
     let model = Model()
     let runtime = WindowRuntime(clock: { model.now })
-    runtime.setContent(
-      Interactive(
+    runtime.build = { buffer, context in
+      buffer.interactive(
         action: {},
-        content: { phase in
-          AnimatedValue(phase == .idle ? 10 : 100, duration: 1) { value in
-            Color.white.sizing(x: .fixed(value), y: .fixed(10))
+        content: { buffer, context, phase in
+          buffer.animatedValue(phase == .idle ? 10 : 100, duration: 1, context: context) { buffer, context, value in
+            let color = buffer.color(.white, context: context)
+            return buffer.sizing(color, x: .fixed(value), y: .fixed(10), context: context)
           }
-        }))
+        }, context: context)
+    }
     _ = render(runtime)
     runtime.handleInput(InputState(pointerPosition: Point(x: 5, y: 5)))
     _ = render(runtime)

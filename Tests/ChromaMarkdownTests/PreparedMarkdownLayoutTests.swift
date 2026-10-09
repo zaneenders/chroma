@@ -9,12 +9,12 @@ struct PreparedMarkdownLayoutTests {
   private let leaf = MarkdownLeaf(block: .paragraph("**café** 👨‍👩‍👧‍👦 tea"), scale: 1, lineSpacing: 4)
 
   @Test func measurementRegistrationAndPaintingShareOneLayout() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let preparation = MarkdownLayoutPreparation()
     var buffer = LayoutBuffer()
     var current = leaf
     current.preparation = preparation
-    let resolved = buffer.emit(current, context: context)
+    let resolved = current.build(into: &buffer, context: context)
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     let size = buffer.sizeThatFits(resolved, rect.size)
@@ -49,12 +49,12 @@ struct PreparedMarkdownLayoutTests {
       "**unfinished `code",
     ], [Float(12), 72, 500])
   func preparedCommandsMatchUncachedLayout(source: String, width: Float) {
-    let context = BlockContext(textScale: 1.5)
+    let context = LayoutContext(textScale: 1.5)
     let bounds = Rect(x: 37, y: 41, width: width, height: 500)
     for block in segmentMarkdown(source) {
       let current = MarkdownLeaf(block: block, scale: 2, lineSpacing: 3, hasLeadingGap: true)
       var buffer = LayoutBuffer()
-      let resolved = buffer.emit(current, context: context)
+      let resolved = current.build(into: &buffer, context: context)
       let scale = current.scale * context.textScale
       let cellWidth = context.fontMetrics.cellAdvance * scale
       var lines = layoutMarkdown(
@@ -74,9 +74,9 @@ struct PreparedMarkdownLayoutTests {
   }
 
   @Test func paintingAloneDoesNotRegisterOrReplayInput() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
-    let resolved = buffer.emit(leaf, context: context)
+    let resolved = leaf.build(into: &buffer, context: context)
     var list = DrawList()
     buffer.paint(resolved, into: &list, in: rect)
     #expect(!list.commands.isEmpty)
@@ -88,7 +88,7 @@ struct PreparedMarkdownLayoutTests {
   }
 
   @Test func changedInputsReplaceTheSingleEntry() {
-    var context = BlockContext()
+    var context = LayoutContext()
     let preparation = MarkdownLayoutPreparation()
     var current = leaf
     var bounds = rect
@@ -123,14 +123,14 @@ struct PreparedMarkdownLayoutTests {
     #expect(resolve().text == "replacement")
     #expect(preparation.layoutsBuilt == 9)
     current = leaf
-    context = BlockContext()
+    context = LayoutContext()
     bounds = rect
     #expect(resolve().lines == original.lines)
     #expect(preparation.layoutsBuilt == 10)  // Older keys are not retained.
   }
 
   @Test func originAndSameColumnWidthReuseShapingButRefreshGeometry() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let preparation = MarkdownLayoutPreparation()
     let original = preparation.resolve(leaf, in: rect, context: context)
     let moved = Rect(x: 140, y: 230, width: 73, height: 250)
@@ -144,12 +144,12 @@ struct PreparedMarkdownLayoutTests {
   }
 
   @Test func newOperationsInstallFreshTextAndGeometry() {
-    let context = BlockContext()
+    let context = LayoutContext()
     func register(_ text: String, width: Float) {
       context.interaction.beginFrame(input: InputState())
       let content = MarkdownText(text)
       var buffer = LayoutBuffer()
-      let resolved = buffer.emit(content, context: context)
+      let resolved = content.build(into: &buffer, context: context)
       buffer.register(resolved, in: Rect(x: 20, y: 30, width: width, height: 400))
       context.interaction.endFrame()
       context.interaction.selectAll(at: .zero)
@@ -163,7 +163,7 @@ struct PreparedMarkdownLayoutTests {
   }
 
   @Test func registrationRetainsSnapshotButNotPreparation() {
-    let context = BlockContext()
+    let context = LayoutContext()
     weak var weakPreparation: MarkdownLayoutPreparation?
     context.interaction.beginFrame(input: InputState())
     do {
@@ -172,7 +172,7 @@ struct PreparedMarkdownLayoutTests {
       var buffer = LayoutBuffer()
       var current = leaf
       current.preparation = preparation
-      let resolved = buffer.emit(current, context: context)
+      let resolved = current.build(into: &buffer, context: context)
       buffer.register(resolved, in: rect)
       // Replacing the cache cannot change text captured by registered callbacks.
       _ = preparation.resolve(
@@ -186,11 +186,11 @@ struct PreparedMarkdownLayoutTests {
   }
 
   @Test func emissionPreservesTheExistingLeafIdentity() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let expected = context.scoped([.component(ObjectIdentifier(MarkdownLeaf.self))]).widgetID
     context.interaction.beginFrame(input: InputState())
     var buffer = LayoutBuffer()
-    let resolved = buffer.emit(leaf, context: context)
+    let resolved = leaf.build(into: &buffer, context: context)
     buffer.register(resolved, in: rect)
     #expect(context.interaction.builderRoot?.children.map(\.leafID) == [expected])
     context.interaction.endFrame()
@@ -198,11 +198,11 @@ struct PreparedMarkdownLayoutTests {
 
   @Test(arguments: [false, true], [false, true])
   func focusHighlightPreservesPrimitiveBehavior(claimed: Bool, ignored: Bool) {
-    var context = BlockContext()
+    var context = LayoutContext()
     context.focusLeafClaimed = claimed
     context.navigationIgnored = ignored
     var buffer = LayoutBuffer()
-    let resolved = buffer.emit(leaf, context: context)
+    let resolved = leaf.build(into: &buffer, context: context)
     context.interaction.beginFrame(input: InputState())
     buffer.register(resolved, in: rect)
     context.interaction.selectedLeafID = context.component(MarkdownLeaf.self).widgetID

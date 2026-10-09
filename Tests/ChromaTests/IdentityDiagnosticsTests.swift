@@ -7,12 +7,12 @@ struct IdentityDiagnosticsTests {
     let id: Int
   }
 
-  @MainActor private static func draw(_ block: any Block, context: BlockContext = BlockContext()) {
+  @MainActor private static func draw(_ build: LayoutBuilder, context: LayoutContext = LayoutContext()) {
     beginTestFrame(context.interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(block, context: context)
+      let resolved = build(&resolvedBuffer, context)
       resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 100, height: 100))
       resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
     }
@@ -22,7 +22,7 @@ struct IdentityDiagnosticsTests {
   @Test func duplicateDirectLeafKeysFail() async {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
-        let context = BlockContext()
+        let context = LayoutContext()
         var buffer = LayoutBuffer()
         let first = buffer.text(Text("first"), context: context.keyed("same"))
         let second = buffer.text(Text("second"), context: context.keyed("same"))
@@ -36,7 +36,7 @@ struct IdentityDiagnosticsTests {
   }
 
   @MainActor @Test func matchingChildKeysInDifferentParentsRemainDistinctAcrossUpdates() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
     for _ in 0..<2 {
       buffer.reset()
@@ -52,24 +52,32 @@ struct IdentityDiagnosticsTests {
     }
   }
 
-  @Test func duplicateForEachKeysFail() async {
+  @Test func duplicateIdentifiableKeysFail() async {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
-        _ = ForEach([Item(id: 1), Item(id: 1)]) { _ in Text("Row") }
+        Self.draw { buffer, context in
+          let children = [Item(id: 1), Item(id: 1)].map { item in
+            buffer.text(Text("Row"), context: context.keyed(item.id))
+          }
+          return buffer.stack(children, axis: .vertical, context: context)
+        }
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("Duplicate collection element ID: 1"))
+    #expect(diagnostic.contains("Duplicate interaction leaf ID"))
   }
 
   @Test func duplicateKeyPathCollectionKeysFail() async {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
-        _ = ForEach([1, 1], id: \.self) { _ in Text("Row") }
+        Self.draw { buffer, context in
+          let children = [1, 1].map { id in buffer.text(Text("Row"), context: context.keyed(id)) }
+          return buffer.stack(children, axis: .vertical, context: context)
+        }
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-    #expect(diagnostic.contains("Duplicate collection element ID: 1"))
+    #expect(diagnostic.contains("Duplicate interaction leaf ID"))
   }
 
   @Test func duplicateLazyDataKeysFail() async {
@@ -78,7 +86,7 @@ struct IdentityDiagnosticsTests {
         _ = ScrollView(
           data: [Item(id: 1), Item(id: 1)], rowHeight: 20,
           controller: ScrollViewController()
-        ) { _ in Text("Row") }
+        ) { buffer, context, _ in buffer.text(Text("Row"), context: context) }
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
@@ -88,13 +96,15 @@ struct IdentityDiagnosticsTests {
   @Test func distinctLazyRowKeyTypesSucceed() async {
     await #expect(processExitsWith: .success) {
       await MainActor.run {
-        Self.draw(
-          ScrollView(
-            controller: ScrollViewController(),
-            rows: [
-              .init(id: Int(1), content: Text("Int")),
-              .init(id: Int64(1), content: Text("Int64")),
-            ]))
+        Self.draw { buffer, context in
+          buffer.scrollView(
+            ScrollView(
+              controller: ScrollViewController(),
+              rows: [
+                .init(id: Int(1)) { buffer, context in buffer.text(Text("Int"), context: context) },
+                .init(id: Int64(1)) { buffer, context in buffer.text(Text("Int64"), context: context) },
+              ]), context: context)
+        }
       }
     }
   }
@@ -102,13 +112,15 @@ struct IdentityDiagnosticsTests {
   @Test func duplicateLazyRowKeysFail() async {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
-        Self.draw(
-          ScrollView(
-            controller: ScrollViewController(),
-            rows: [
-              .init(id: 1, content: Text("First")),
-              .init(id: 1, content: Text("Second")),
-            ]))
+        Self.draw { buffer, context in
+          buffer.scrollView(
+            ScrollView(
+              controller: ScrollViewController(),
+              rows: [
+                .init(id: 1) { buffer, context in buffer.text(Text("First"), context: context) },
+                .init(id: 1) { buffer, context in buffer.text(Text("Second"), context: context) },
+              ]), context: context)
+        }
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
@@ -119,11 +131,15 @@ struct IdentityDiagnosticsTests {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
         let target = FocusTarget()
-        Self.draw(
-          VStack {
-            Button("First") {}.focusTarget(target)
-            Button("Second") {}.focusTarget(target)
-          })
+        Self.draw { buffer, context in
+          let first = buffer.focus(target, context: context.childScope(0)) { buffer, context in
+            buffer.button(Button("First") {}, context: context)
+          }
+          let second = buffer.focus(target, context: context.childScope(1)) { buffer, context in
+            buffer.button(Button("Second") {}, context: context)
+          }
+          return buffer.stack([first, second], axis: .vertical, context: context)
+        }
       }
     }
     let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
@@ -134,10 +150,20 @@ struct IdentityDiagnosticsTests {
     let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
       await MainActor.run {
         let target = FocusTarget()
-        let first = BlockContext()
-        let second = BlockContext()
-        Self.draw(Button("First") {}.focusTarget(target), context: first)
-        Self.draw(Button("Second") {}.focusTarget(target), context: second)
+        let first = LayoutContext()
+        let second = LayoutContext()
+        Self.draw(
+          { buffer, context in
+            buffer.focus(target, context: context) { buffer, context in
+              buffer.button(Button("First") {}, context: context)
+            }
+          }, context: first)
+        Self.draw(
+          { buffer, context in
+            buffer.focus(target, context: context) { buffer, context in
+              buffer.button(Button("Second") {}, context: context)
+            }
+          }, context: second)
         withExtendedLifetime(first) {}
       }
     }

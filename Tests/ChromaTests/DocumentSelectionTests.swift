@@ -5,17 +5,27 @@ import Testing
 @MainActor
 struct DocumentSelectionTests {
   @Test func selectionCrossesTextLeavesInDepthFirstOrderAndShrinks() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let first = FocusTarget()
-    let content = Group("Session") {
-      Text("ab").selectable().focusTarget(first)
-      Group("Nested") { Text("café").selectable() }
-      Text("end").selectable()
+    let content: LayoutBuilder = { buffer, context in
+      let node59 = buffer.group("Session", context: context) { buffer, context in
+        let node54 = buffer.focus(
+          first, context: context.childScope(0),
+          content: { buffer, context in
+            return buffer.text(Text("ab").selectable(), context: context)
+          })
+        let node56 = buffer.group("Nested", context: context.childScope(1)) { buffer, context in
+          return buffer.text(Text("café").selectable(), context: context.childScope(0))
+        }
+        let node57 = buffer.text(Text("end").selectable(), context: context.childScope(2))
+        return buffer.overlay([node54, node56, node57], group: false, context: context)
+      }
+      return node59
     }
     func render(_ events: [TextEditEvent] = [], commands: [Command] = []) {
       _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
+        build: content, viewport: Size(width: 500, height: 500),
         input: InputState(commands: commands, textEvents: events), context: context, onChange: {})
     }
     render()
@@ -34,20 +44,27 @@ struct DocumentSelectionTests {
   }
 
   @Test func selectAllUsesSelectedGroupAndRootAndExcludesEditors() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let first = FocusTarget()
-    let content = VStack {
-      Group("Session") {
-        Text("one").selectable().focusTarget(first)
-        Text("two").selectable()
+    let content: LayoutBuilder = { buffer, context in
+      let node64 = buffer.group("Session", context: context.childScope(0)) { buffer, context in
+        let node61 = buffer.focus(
+          first, context: context.childScope(0),
+          content: { buffer, context in
+            return buffer.text(Text("one").selectable(), context: context)
+          })
+        let node62 = buffer.text(Text("two").selectable(), context: context.childScope(1))
+        return buffer.overlay([node61, node62], group: false, context: context)
       }
-      Text("outside").selectable()
-      TextEditor(text: { "private draft" }, onChange: { _ in })
+      let node65 = buffer.text(Text("outside").selectable(), context: context.childScope(1))
+      let node66 = buffer.textEditor(
+        TextEditor(text: { "private draft" }, onChange: { _ in }), context: context.childScope(2))
+      return buffer.stack([node64, node65, node66], axis: .vertical, context: context)
     }
     func render(_ commands: [Command] = []) {
       _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
+        build: content, viewport: Size(width: 500, height: 500),
         input: InputState(commands: commands), context: context, onChange: {})
     }
     render()
@@ -65,26 +82,35 @@ struct DocumentSelectionTests {
 @MainActor
 struct VirtualizedTextSelectionTests {
   @Test func selectableTextInsideRowsRegistersForDocumentSelectionAndFocus() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let target = FocusTarget()
-    let content = ScrollView(
-      controller: ScrollViewController(),
-      rows: [
-        .init(
-          id: "tool",
-          content: VStack {
-            Text("read_file").selectable().focusTarget(target)
-            Text("arguments\noutput").selectable()
-          }),
-        .init(id: "answer", content: Text("Answer").selectable()),
-      ])
+    let controller = ScrollViewController()
+    let content: LayoutBuilder = { buffer, context in
+      let node68 = buffer.scrollView(
+        ScrollView(
+          controller: controller,
+          rows: [
+            .init(
+              id: "tool",
+              build: { buffer, context in
+                let first = buffer.focus(target, context: context.childScope(0)) { buffer, context in
+                  buffer.text(Text("read_file").selectable(), context: context)
+                }
+                let second = buffer.text(Text("arguments\noutput").selectable(), context: context.childScope(1))
+                return buffer.stack([first, second], axis: .vertical, context: context)
+              }),
+            .init(
+              id: "answer", build: { buffer, context in buffer.text(Text("Answer").selectable(), context: context) }),
+          ]), context: context)
+      return node68
+    }
     _ = producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
+      build: content, viewport: Size(width: 500, height: 500),
       input: InputState(), context: context, onChange: {})
     target.focus()
     _ = producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 500, height: 500),
+      build: content, viewport: Size(width: 500, height: 500),
       input: InputState(), context: context, onChange: {})
     #expect(target.isFocused)
     context.interaction.navigationPath = []

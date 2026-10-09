@@ -2,7 +2,7 @@ import Chroma
 
 /// A read-only Markdown renderer with selectable text.
 /// Links and images render their labels; emphasis renders without italic styling.
-public struct MarkdownText: Block {
+public struct MarkdownText {
   public let document: MarkdownDocument
   public let scale: Float
   public let lineSpacing: Float
@@ -19,7 +19,7 @@ public struct MarkdownText: Block {
     self.lineSpacing = lineSpacing
   }
 
-  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+  @MainActor public func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
     let context = context.component(Self.self)
     let blocks = document.blocks
     let revision = document.revision
@@ -31,7 +31,7 @@ public struct MarkdownText: Block {
         block: blocks[index].block, scale: scale, lineSpacing: lineSpacing,
         hasLeadingGap: hasGap(before: index, in: blocks), parsedRuns: blocks[index].runs,
         preparation: preparation, source: (revision, index))
-      children.append(leaf.emit(into: &buffer, context: context.keyed(index)))
+      children.append(leaf.build(into: &buffer, context: context.keyed(index)))
     }
     return buffer.stack(children, axis: .vertical, context: context)
   }
@@ -43,7 +43,7 @@ public struct MarkdownText: Block {
   }
 }
 
-struct MarkdownLeaf: Block {
+struct MarkdownLeaf {
   let block: MarkdownBlock
   let scale: Float
   let lineSpacing: Float
@@ -52,7 +52,7 @@ struct MarkdownLeaf: Block {
   var preparation: MarkdownLayoutPreparation?
   var source: (revision: UInt64, index: Int)?
 
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
     let context = context.component(Self.self)
     let preparation = preparation ?? MarkdownLayoutPreparation()
     return buffer.customLeaf(

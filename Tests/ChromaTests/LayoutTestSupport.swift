@@ -1,23 +1,23 @@
 @testable import Chroma
 
 @MainActor
-func measureBlock(_ block: any Block, proposal: Size, context: BlockContext) -> Size {
+func measureLayout(_ build: LayoutBuilder, proposal: Size, context: LayoutContext) -> Size {
   var buffer = LayoutBuffer()
-  let node = buffer.emit(block, context: context)
+  let node = build(&buffer, context)
   return buffer.sizeThatFits(node, proposal)
 }
 
 @MainActor
-func blockExpandsHorizontally(_ block: any Block) -> Bool {
+func layoutExpandsHorizontally(_ build: LayoutBuilder) -> Bool {
   var buffer = LayoutBuffer()
-  let node = buffer.emit(block, context: BlockContext())
+  let node = build(&buffer, LayoutContext())
   return buffer.expandsHorizontally(node)
 }
 
 @MainActor
-func blockExpandsVertically(_ block: any Block) -> Bool {
+func layoutExpandsVertically(_ build: LayoutBuilder) -> Bool {
   var buffer = LayoutBuffer()
-  let node = buffer.emit(block, context: BlockContext())
+  let node = build(&buffer, LayoutContext())
   return buffer.expandsVertically(node)
 }
 

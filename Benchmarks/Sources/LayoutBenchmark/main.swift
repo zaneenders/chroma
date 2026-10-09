@@ -4,37 +4,45 @@ import Foundation
 
 @MainActor private final class Counter { var emissions = 0 }
 
-private struct Row: Block {
-  let index: Int
-  let counter: Counter
-
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    counter.emissions += 1
-    return buffer.emit(content(), context: context.component(Self.self))
-  }
-
-  @MainActor private func content() -> some Block {
-    HStack(spacing: 4) {
-      Text("Session \(index)")
-      Spacer()
-      Text("Ready")
-    }.padding(4).background(Color.black)
-  }
+@MainActor
+private func row(_ index: Int, counter: Counter, into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode
+{
+  counter.emissions += 1
+  return buffer.background(
+    context: context,
+    content: { buffer, context in
+      let title = buffer.text(Text("Session \(index)"), context: context.childScope(0))
+      let spacer = buffer.spacer(context: context.childScope(1))
+      let status = buffer.text(Text("Ready"), context: context.childScope(2))
+      let stack = buffer.stack([title, spacer, status], axis: .horizontal, spacing: 4, context: context)
+      return buffer.padding(stack, 4, context: context)
+    }, background: { buffer, context in buffer.color(.black, context: context) })
 }
 
-private struct Layer: Block {
-  let child: any Block
-
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.emit(content(), context: context.component(Self.self))
+@MainActor
+private func layers(
+  _ depth: Int, interactive: Bool, counter: Counter, into buffer: inout LayoutBuffer, context: LayoutContext
+) -> LayoutNode {
+  guard depth > 0 else {
+    let rows = (0..<20).map { row($0, counter: counter, into: &buffer, context: context.childScope($0)) }
+    return buffer.stack(rows, axis: .vertical, context: context)
   }
-
-  @MainActor private func content() -> some Block {
-    Group {
-      HStack {
-        VStack { child }.padding(2).sizing(x: .grow)
-      }
+  return buffer.group(context: context) { buffer, context in
+    let childContext = context.childScope(0).childScope(0).childScope(0)
+    let child: LayoutNode
+    if interactive {
+      child = buffer.interactive(
+        action: {},
+        content: { buffer, context, _ in
+          layers(depth - 1, interactive: interactive, counter: counter, into: &buffer, context: context)
+        }, context: childContext)
+    } else {
+      child = layers(depth - 1, interactive: interactive, counter: counter, into: &buffer, context: childContext)
     }
+    let vertical = buffer.stack([child], axis: .vertical, context: context.childScope(0).childScope(0))
+    let padded = buffer.padding(vertical, 2, context: context.childScope(0))
+    let sized = buffer.sizing(padded, x: .grow, context: context.childScope(0))
+    return buffer.stack([sized], axis: .horizontal, context: context)
   }
 }
 
@@ -58,18 +66,15 @@ private struct Result: Encodable {
     for depth in [1, 3, 5] {
       for scrolling in [false, true] {
         let counter = Counter()
-        var content: any Block = VStack {
-          for index in 0..<20 { Row(index: index, counter: counter) }
-        }
-        for _ in 0..<depth {
-          if interactive {
-            let child = content
-            content = Interactive(action: {}, content: { _ in TupleBlock(children: [child]) })
-          }
-          content = Layer(child: content)
-        }
         let host = HeadlessHost(size: Size(width: 400, height: 300))
-        host.setContent(ScrollView { content })
+        host.build = { buffer, context in
+          buffer.scrollView(
+            ScrollView(build: { buffer, context in
+              let child = layers(
+                depth, interactive: interactive, counter: counter, into: &buffer, context: context.childScope(0))
+              return buffer.stack([child], axis: .vertical, context: context)
+            }), context: context)
+        }
         let input = InputState(
           pointerPosition: Point(x: 10, y: 10),
           scrollDelta: scrolling ? Point(x: 0, y: -1) : .zero)

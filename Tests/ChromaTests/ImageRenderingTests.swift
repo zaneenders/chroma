@@ -112,39 +112,52 @@ struct ImageRenderingTests {
   @Test func imageUsesIntrinsicSizeWithoutImplicitExpansion() throws {
     let image = Image(try resource(width: 80, height: 40))
     let proposal = Size(width: 300, height: 200)
-    let context = BlockContext()
+    let context = LayoutContext()
 
-    #expect(measureBlock(image, proposal: proposal, context: context) == image.resource.size)
-    #expect(measureBlock(image.sizing(), proposal: proposal, context: context) == image.resource.size)
-    #expect(!blockExpandsHorizontally(image))
-    #expect(!blockExpandsVertically(image))
+    #expect(
+      measureLayout({ $0.image(image, context: $1) }, proposal: proposal, context: context) == image.resource.size)
+    #expect(
+      measureLayout(
+        { buffer, context in
+          let node = buffer.image(image, context: context)
+          return buffer.sizing(node, context: context)
+        }, proposal: proposal, context: context) == image.resource.size)
+    #expect(!layoutExpandsHorizontally { $0.image(image, context: $1) })
+    #expect(!layoutExpandsVertically { $0.image(image, context: $1) })
   }
 
   @Test func imageCanOptIntoExpansionIndependentlyOnEachAxis() throws {
     let image = Image(try resource(width: 80, height: 40))
     let proposal = Size(width: 300, height: 200)
-    let context = BlockContext()
-    let horizontal = image.sizing(x: .grow)
-    let vertical = image.sizing(y: .grow)
+    let context = LayoutContext()
+    let horizontal: LayoutBuilder = { buffer, context in
+      let node = buffer.image(image, context: context)
+      return buffer.sizing(node, x: .grow, context: context)
+    }
+    let vertical: LayoutBuilder = { buffer, context in
+      let node = buffer.image(image, context: context)
+      return buffer.sizing(node, y: .grow, context: context)
+    }
 
-    #expect(measureBlock(horizontal, proposal: proposal, context: context) == Size(width: 300, height: 40))
-    #expect(blockExpandsHorizontally(horizontal))
-    #expect(!blockExpandsVertically(horizontal))
-    #expect(measureBlock(vertical, proposal: proposal, context: context) == Size(width: 80, height: 200))
-    #expect(!blockExpandsHorizontally(vertical))
-    #expect(blockExpandsVertically(vertical))
+    #expect(measureLayout(horizontal, proposal: proposal, context: context) == Size(width: 300, height: 40))
+    #expect(layoutExpandsHorizontally(horizontal))
+    #expect(!layoutExpandsVertically(horizontal))
+    #expect(measureLayout(vertical, proposal: proposal, context: context) == Size(width: 80, height: 200))
+    #expect(!layoutExpandsHorizontally(vertical))
+    #expect(layoutExpandsVertically(vertical))
   }
 
   @Test func imageInStackKeepsIntrinsicSize() throws {
     let image = try resource(width: 80, height: 40)
-    let stack = HStack(spacing: 5) {
-      Image(image)
-      Image(image)
+    let stack: LayoutBuilder = { buffer, context in
+      let first = buffer.image(Image(image), context: context.childScope(0))
+      let second = buffer.image(Image(image), context: context.childScope(1))
+      return buffer.stack([first, second], axis: .horizontal, spacing: 5, context: context)
     }
-    let context = BlockContext()
+    let context = LayoutContext()
 
     #expect(
-      measureBlock(
+      measureLayout(
         stack, proposal: Size(width: 300, height: 200), context: context)
         == Size(width: 165, height: 40))
   }
@@ -152,15 +165,16 @@ struct ImageRenderingTests {
   @Test func imageInFixedFrameUsesAssignedRectForEveryScalingMode() throws {
     let resource = try resource(width: 80, height: 40)
     let frame = Rect(x: 0, y: 0, width: 100, height: 100)
-    let context = BlockContext()
+    let context = LayoutContext()
 
     for scaling in [ImageScaling.contain, .cover, .stretch] {
-      let image = Image(resource, scaling: scaling).sizing(
-        x: .fixed(frame.size.width), y: .fixed(frame.size.height))
+      let image = Image(resource, scaling: scaling)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
-        let resolved = resolvedBuffer.emit(image, context: context)
+        let node = resolvedBuffer.image(image, context: context)
+        let resolved = resolvedBuffer.sizing(
+          node, x: .fixed(frame.size.width), y: .fixed(frame.size.height), context: context)
         resolvedBuffer.register(resolved, in: frame)
         resolvedBuffer.paint(resolved, into: &list, in: frame)
       }
@@ -175,24 +189,24 @@ struct ImageRenderingTests {
   @Test func imageInScrollViewUsesIntrinsicContentSize() throws {
     let resource = try resource(width: 80, height: 40)
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let viewport = Rect(x: 0, y: 0, width: 100, height: 20)
     beginTestFrame(interaction, input: InputState())
     var list = DrawList()
 
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(
-        ScrollView(showsIndicator: false) {
-          Image(resource)
-        }.id(WidgetID("image-scroll")), context: context)
+      let resolved = resolvedBuffer.scrollView(
+        ScrollView(showsIndicator: false, build: { $0.image(Image(resource), context: $1) }),
+        context: context.keyed(WidgetID("image-scroll")))
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
     interaction.endFrame()
 
-    #expect(interaction.scrollState(for: WidgetID("image-scroll")).limit.y == 20)
-    #expect(interaction.scrollState(for: WidgetID("image-scroll")).limit.x == 0)
+    let scrollID = context.keyed(WidgetID("image-scroll")).component(ScrollView.self).widgetID
+    #expect(interaction.scrollState(for: scrollID).limit.y == 20)
+    #expect(interaction.scrollState(for: scrollID).limit.x == 0)
     #expect(
       list.paintSnapshot == [
         .pushClip(viewport),
@@ -203,12 +217,13 @@ struct ImageRenderingTests {
       ])
   }
 
-  @Test func imageBlockEmitsDeterministicHeadlessCommand() throws {
+  @Test func imageNodeEmitsDeterministicHeadlessCommand() throws {
     let image = try resource()
     let renderer = HeadlessHost(size: Size(width: 120, height: 80))
-    renderer.setContent(
-      Image(image, scaling: .cover, alignment: .top)
-        .sizing(x: .grow, y: .grow))
+    renderer.build = { buffer, context in
+      let image = buffer.image(Image(image, scaling: .cover, alignment: .top), context: context)
+      return buffer.sizing(image, x: .grow, y: .grow, context: context)
+    }
 
     let first = renderer.render()
     let second = renderer.render()

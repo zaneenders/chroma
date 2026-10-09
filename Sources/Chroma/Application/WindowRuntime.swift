@@ -28,17 +28,10 @@ package final class WindowRuntime {
       scheduler.requestContent()
     }
   }
-  package func setContent(_ content: (any Block)?) {
-    guard let content else {
-      build = nil
-      return
-    }
-    build = { (buffer: inout LayoutBuffer, context: BlockContext) in buffer.emit(content, context: context) }
-  }
 
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
-  package var context: BlockContext { BlockContext(interaction: interaction) }
+  package var context: LayoutContext { LayoutContext(interaction: interaction) }
 
   package func resolve(_ input: KeyboardInput) -> ResolvedKeyboardInput? {
     if interaction.tree != nil {

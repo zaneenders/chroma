@@ -8,9 +8,3 @@ public enum HoverStyle: Equatable, Sendable {
     return Color(r: base.r, g: base.g, b: base.b, a: base.a * 0.5)
   }
 }
-
-extension Block {
-  public func hover(_ style: HoverStyle) -> some Block {
-    ContextModifier(content: self, operation: .hover(style))
-  }
-}

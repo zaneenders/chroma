@@ -30,7 +30,7 @@ final class MarkdownLayoutPreparation {
     self.capacity = capacity
   }
 
-  func resolve(_ leaf: MarkdownLeaf, in rect: Rect, context: BlockContext) -> MarkdownLayout {
+  func resolve(_ leaf: MarkdownLeaf, in rect: Rect, context: LayoutContext) -> MarkdownLayout {
     let effectiveScale = leaf.scale * context.textScale
     let metrics = context.fontMetrics
     let cellWidth = metrics.cellAdvance * effectiveScale

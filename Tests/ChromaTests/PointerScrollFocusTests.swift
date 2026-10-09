@@ -8,10 +8,21 @@ struct PointerScrollFocusTests {
     let runtime = WindowRuntime()
     let controller = ScrollViewController()
     var clicks: [Int] = []
-    let content = ScrollView(data: 0..<30, rowHeight: 30, controller: controller) { index in
-      Interactive(action: { clicks.append(index) }) { _ in Text("Row \(index)") }
+    let content: LayoutBuilder = { buffer, context in
+      let node317 = buffer.scrollView(
+        ScrollView(
+          data: 0..<30, rowHeight: 30, controller: controller,
+          build: { buffer, context, index in
+            let node316 = buffer.interactive(
+              action: { clicks.append(index) },
+              content: { buffer, context, _ in
+                return buffer.text(Text("Row \(index)"), context: context)
+              }, context: context)
+            return node316
+          }), context: context)
+      return node317
     }
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    runtime.build = content
     func render(_ input: InputState = InputState()) {
       _ = runtime.render(
         viewport: Size(width: 200, height: 100),
@@ -40,14 +51,24 @@ struct PointerScrollFocusTests {
     let context = runtime.context
     let controller = ScrollViewController()
     let target = FocusTarget()
-    let row: any Block =
-      hasControl
-      ? Button("Message") {}.sizing(y: .fixed(2000)).focusTarget(target)
-      : Text("Message").sizing(y: .fixed(2000))
-    let content = ScrollView(
-      "Transcript", controller: controller,
-      rows: [ScrollView.Row(id: "message", content: row)])
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    let row: LayoutBuilder = { buffer, context in
+      if hasControl {
+        return buffer.focus(target, context: context) { buffer, context in
+          let button = buffer.button(Button("Message") {}, context: context)
+          return buffer.sizing(button, y: .fixed(2000), context: context)
+        }
+      }
+      let text = buffer.text(Text("Message"), context: context)
+      return buffer.sizing(text, y: .fixed(2000), context: context)
+    }
+    let content: LayoutBuilder = { buffer, context in
+      let node318 = buffer.scrollView(
+        ScrollView(
+          "Transcript", controller: controller,
+          rows: [ScrollView.Row(id: "message", build: row)]), context: context)
+      return node318
+    }
+    runtime.build = content
     func render(_ input: InputState = InputState()) {
       _ = runtime.render(
         viewport: Size(width: 400, height: 200),
@@ -84,13 +105,21 @@ struct PointerScrollFocusTests {
     let controller = ScrollViewController()
     let selection = ScrollSelection<Int>()
     let targets = [FocusTarget(), FocusTarget()]
-    let content = ScrollView(
-      data: [Item(id: 0), Item(id: 1)], rowHeight: 1000,
-      controller: controller, selection: selection
-    ) { item in
-      Button("Message \(item.id)") {}.focusTarget(targets[item.id])
+    let content: LayoutBuilder = { buffer, context in
+      let node321 = buffer.scrollView(
+        ScrollView(
+          data: [Item(id: 0), Item(id: 1)], rowHeight: 1000, controller: controller, selection: selection,
+          build: { buffer, context, item in
+            let node320 = buffer.focus(
+              targets[item.id], context: context,
+              content: { buffer, context in
+                return buffer.button(Button("Message \(item.id)") {}, context: context)
+              })
+            return node320
+          }), context: context)
+      return node321
     }
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    runtime.build = content
     func render(_ input: InputState = InputState()) {
       _ = runtime.render(
         viewport: Size(width: 400, height: 200),

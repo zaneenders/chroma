@@ -11,7 +11,7 @@ struct DirectScrollTests {
   }
 
   @MainActor private final class Harness {
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
     let rect = Rect(x: 0, y: 0, width: 120, height: 60)
 
@@ -28,11 +28,11 @@ struct DirectScrollTests {
     }
   }
 
-  @Test func normalDirectScrollMatchesBlockConvenience() {
+  @Test func normalDirectScrollMatchesRetainedConfiguration() {
     let direct = Harness()
-    let blocks = Harness()
+    let retained = Harness()
     let directController = ScrollViewController()
-    let blockController = ScrollViewController()
+    let retainedController = ScrollViewController()
     let directBuild: LayoutBuilder = { buffer, context in
       buffer.scrollView(
         ScrollView(
@@ -42,25 +42,30 @@ struct DirectScrollTests {
             return buffer.sizing(fill, x: .fixed(300), y: .fixed(600), context: context)
           }), context: context)
     }
-    let blockBuild: LayoutBuilder = { buffer, context in
-      buffer.emit(
-        ScrollView(controller: blockController) {
-          Color.white.sizing(x: .fixed(300), y: .fixed(600))
-        }, context: context)
+    let retainedBuild: LayoutBuilder = { buffer, context in
+      buffer.scrollView(
+        ScrollView(
+          controller: retainedController,
+          build: { buffer, context in
+            let child = buffer.sizing(
+              buffer.color(.white, context: context.childScope(0)), x: .fixed(300), y: .fixed(600),
+              context: context.childScope(0))
+            return buffer.stack([child], axis: .vertical, context: context)
+          }), context: context)
     }
-    #expect(direct.render(directBuild) == blocks.render(blockBuild))
+    #expect(direct.render(directBuild) == retained.render(retainedBuild))
     directController.scroll(to: 150)
-    blockController.scroll(to: 150)
-    #expect(direct.render(directBuild) == blocks.render(blockBuild))
+    retainedController.scroll(to: 150)
+    #expect(direct.render(directBuild) == retained.render(retainedBuild))
     #expect(directController.offset == 150)
-    #expect(directController.offset == blockController.offset)
+    #expect(directController.offset == retainedController.offset)
   }
 
-  @Test func identifiedDirectScrollMatchesBlockConvenience() {
+  @Test func identifiedDirectScrollMatchesRetainedConfiguration() {
     let direct = Harness()
-    let blocks = Harness()
+    let retained = Harness()
     let directController = ScrollViewController()
-    let blockController = ScrollViewController()
+    let retainedController = ScrollViewController()
     let items = (0..<100).map { Item(id: $0) }
     let directBuild: LayoutBuilder = { buffer, context in
       buffer.scrollView(
@@ -71,17 +76,20 @@ struct DirectScrollTests {
             buffer.text(Text("Row \(item.id)"), context: context)
           }), context: context)
     }
-    let blockBuild: LayoutBuilder = { buffer, context in
-      buffer.emit(
-        ScrollView(data: items, rowHeight: 20, controller: blockController) { Text("Row \($0.id)") },
-        context: context)
+    let retainedBuild: LayoutBuilder = { buffer, context in
+      buffer.scrollView(
+        ScrollView(
+          data: items, rowHeight: 20, controller: retainedController,
+          build: { buffer, context, element in
+            return buffer.text(Text("Row \(element.id)"), context: context)
+          }), context: context)
     }
-    #expect(direct.render(directBuild) == blocks.render(blockBuild))
-    #expect(directController.uniformRowIdentity?.keys == blockController.uniformRowIdentity?.keys)
+    #expect(direct.render(directBuild) == retained.render(retainedBuild))
+    #expect(directController.uniformRowIdentity?.keys == retainedController.uniformRowIdentity?.keys)
     directController.scrollToRow(50)
-    blockController.scrollToRow(50)
-    #expect(direct.render(directBuild) == blocks.render(blockBuild))
-    #expect(directController.offset == blockController.offset)
+    retainedController.scrollToRow(50)
+    #expect(direct.render(directBuild) == retained.render(retainedBuild))
+    #expect(directController.offset == retainedController.offset)
     #expect(directController.offset > 0)
   }
 
@@ -228,4 +236,81 @@ struct DirectScrollTests {
     host.render(input: InputState(commands: [.navigation(.down)]))
     #expect(selection.selectedID == 3)
   }
+
+  @Test func virtualizingAnEditorEndsEditingWithoutKeepingStaleCallbacks() throws {
+    @MainActor final class Model {
+      var items = (0..<100).map { Item(id: $0) }
+      var revision: UInt64 = 1
+      var text = "edit"
+      var changes = 0
+      var textEvents = 0
+    }
+    let model = Model()
+    let controller = ScrollViewController()
+    let editor = FocusTarget()
+    let host = HeadlessHost(size: Size(width: 200, height: 60))
+    defer { host.close() }
+    host.build = { buffer, context in
+      buffer.scrollView(
+        ScrollView(
+          data: model.items, rowHeight: 20, controller: controller, identityRevision: model.revision,
+          build: { buffer, context, item in
+            guard item.id == 0 else { return buffer.text(Text("Row \(item.id)"), context: context) }
+            return buffer.focus(editor, context: context) { buffer, context in
+              buffer.textEditor(
+                TextEditor(
+                  padding: 0, singleLine: true, text: { model.text },
+                  onChange: {
+                    model.text = $0
+                    model.changes += 1
+                  },
+                  onTextEvent: { _, _ in
+                    model.textEvents += 1
+                    return nil
+                  }), context: context)
+            }
+          }), context: context)
+    }
+    host.render()
+    editor.focus(editing: true)
+    host.render()
+    host.render(input: InputState(textEvents: [.selectAll]))
+    let interaction = host.runtime.interaction
+    let editingID = try #require(editor.boundID)
+    #expect(interaction.editingLeaf == editingID)
+    #expect(editor.isEditing)
+    #expect(interaction.textSelectionRange == 0..<4)
+    let eventCount = model.textEvents
+
+    controller.scroll(to: 1000)
+    host.render()
+    #expect(controller.offset == 1000)
+    #expect(interaction.tree?.findLeaf(editingID) == nil)
+    #expect(interaction.editingLeaf == nil)
+    #expect(!interaction.isTextEditing)
+    #expect(interaction.textSelectionRange == nil)
+    #expect(interaction.editingText == nil)
+    #expect(interaction.scrollStates.values.first!.rows.count < 10)
+    host.render(input: InputState(textEvents: [.insert("stale")]))
+    #expect(model.textEvents == eventCount)
+    #expect(model.changes == 0)
+    #expect(model.text == "edit")
+
+    controller.scrollToTop()
+    host.render()
+    #expect(editor.boundID == editingID)
+    #expect(!editor.isEditing)
+    #expect(interaction.editingLeaf == nil)
+    #expect(interaction.textSelectionRange == nil)
+    model.items.removeFirst()
+    model.revision += 1
+    host.render()
+    host.render(input: InputState(textEvents: [.insert("removed")]))
+    #expect(interaction.tree?.findLeaf(editingID) == nil)
+    #expect(interaction.editingLeaf == nil)
+    #expect(interaction.textSelectionRange == nil)
+    #expect(model.textEvents == eventCount)
+    #expect(model.changes == 0)
+  }
+
 }

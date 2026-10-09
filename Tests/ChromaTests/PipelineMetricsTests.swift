@@ -7,7 +7,7 @@ struct PipelineMetricsTests {
   @Test func disabledCaptureDoesNotRecordOrAllocateLifetimeTokens() {
     PipelineMetrics.isEnabled = false
     PipelineMetrics.reset()
-    PipelineMetrics.record(.bodyEvaluation)
+    PipelineMetrics.record(.registration)
     PipelineMetrics.record(.layoutNode)
     PipelineMetrics.record(.bufferGrowth)
     PipelineMetrics.record(.drawingCommands, count: 12)
@@ -19,12 +19,12 @@ struct PipelineMetricsTests {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     var lifetime = PipelineMetrics.trackObservationLifetime()
-    PipelineMetrics.record(.bodyEvaluation, count: 2)
+    PipelineMetrics.record(.registration, count: 2)
     PipelineMetrics.record(.layoutNode, count: 5)
     PipelineMetrics.record(.bufferGrowth, count: 4)
     PipelineMetrics.record(.measurement, count: 3)
     PipelineMetrics.record(.measurementCacheHit)
-    #expect(PipelineMetrics.snapshot.bodyEvaluations == 2)
+    #expect(PipelineMetrics.snapshot.registrations == 2)
     #expect(PipelineMetrics.snapshot.layoutNodes == 5)
     #expect(PipelineMetrics.snapshot.bufferGrowths == 4)
     #expect(PipelineMetrics.snapshot.measurements == 3)
@@ -32,7 +32,7 @@ struct PipelineMetricsTests {
     #expect(PipelineMetrics.snapshot.liveObservationSubscriptions == 1)
     #expect(PipelineMetrics.snapshot.peakObservationSubscriptions == 1)
     PipelineMetrics.reset()
-    #expect(PipelineMetrics.snapshot.bodyEvaluations == 0)
+    #expect(PipelineMetrics.snapshot.registrations == 0)
     #expect(PipelineMetrics.snapshot.layoutNodes == 0)
     #expect(PipelineMetrics.snapshot.bufferGrowths == 0)
     #expect(PipelineMetrics.snapshot.liveObservationSubscriptions == 1)

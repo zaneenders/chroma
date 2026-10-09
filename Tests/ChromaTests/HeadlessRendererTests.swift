@@ -7,7 +7,7 @@ import Testing
 struct HeadlessHostTests {
   @Test func rendersDeterministicFramesAtTheConfiguredViewport() {
     let renderer = HeadlessHost(size: Size(width: 120, height: 80))
-    renderer.setContent(Color.yellow)
+    renderer.build = { $0.color(.yellow, context: $1) }
 
     let first = renderer.render()
     let second = renderer.render()
@@ -27,7 +27,7 @@ struct HeadlessHostTests {
 
   @Test func runCapturesTheTitleAndRendersOneFrame() {
     let renderer = HeadlessHost(size: Size(width: 40, height: 30))
-    renderer.setContent(Color.white)
+    renderer.build = { $0.color(.white, context: $1) }
 
     renderer.run(title: "Snapshot")
 
@@ -38,10 +38,9 @@ struct HeadlessHostTests {
   @Test func repeatedFramesPreserveButtonInteractionState() {
     let renderer = HeadlessHost(size: Size(width: 100, height: 50))
     let clickCount = Counter()
-    renderer.setContent(
-      Button("Click", id: WidgetID("headless-button")) {
-        clickCount.value += 1
-      })
+    renderer.build = { buffer, context in
+      buffer.button(Button("Click", id: WidgetID("headless-button")) { clickCount.value += 1 }, context: context)
+    }
 
     _ = renderer.render()
     _ = renderer.render(
@@ -80,7 +79,7 @@ private final class Counter {
 @MainActor
 @Test func frameObserverSeesProducedCommandsAndCanBeRemoved() {
   let renderer = HeadlessHost(size: Size(width: 40, height: 30))
-  renderer.setContent(Color.white)
+  renderer.build = { $0.color(.white, context: $1) }
   var observations: [FrameObservation] = []
   renderer.frameObserver = { observations.append($0) }
   let frame = renderer.render()

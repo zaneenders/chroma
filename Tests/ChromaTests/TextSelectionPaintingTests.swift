@@ -14,13 +14,17 @@ struct TextSelectionPaintingTests {
     _ text: String, lines: [String], selection: Range<Int>, selectedRows: [SelectedRow],
     wraps: Bool = false, columns: Int = 20, scale: Float = 1
   ) {
-    let context = BlockContext()
+    let context = LayoutContext()
     let metrics = context.fontMetrics
     let cell = metrics.cellAdvance * scale
     let height = metrics.lineAdvance * scale
     let rect = Rect(x: 13, y: 17, width: Float(columns) * cell, height: 400)
     let foreground = Color(r: 1, g: 0, b: 0, a: 1)
-    let block = Text(text).foregroundColor(foreground).fontScale(scale).wrapping(wraps).selectable()
+    let text = Text(text).foregroundColor(foreground).fontScale(scale).wrapping(wraps).selectable(context.widgetID)
+    var buffer = LayoutBuffer()
+    let node = buffer.text(text, context: context)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(node, in: rect)
     context.interaction.beginEditing(context.widgetID, caretOffset: selection.upperBound)
     context.interaction.textSelectionRange = selection
     let generation = context.interaction.editingSessionGeneration
@@ -41,14 +45,15 @@ struct TextSelectionPaintingTests {
     }
     for _ in 0..<2 {
       var actual = DrawList()
-      block.paint(into: &actual, in: rect, context: context)
+      buffer.paint(node, into: &actual, in: rect)
       #expect(actual.commands == expected.commands)
     }
     #expect(context.interaction.textSelectionRange == selection)
     #expect(context.interaction.caretOffset == selection.upperBound)
     #expect(context.interaction.editingSessionGeneration == generation)
     #expect(context.interaction.tree == nil)
-    #expect(context.interaction.textSelection.layoutRegistry.entry(at: rect.origin) == nil)
+    #expect(context.interaction.textSelection.layoutRegistry.entry(at: rect.origin) != nil)
+    context.interaction.endFrame()
   }
 
   @Test func partialMultilineSelectionKeepsGeometryColorsAndPainterOrder() {
@@ -76,14 +81,17 @@ struct TextSelectionPaintingTests {
   }
 
   @Test func collapsedSelectionKeepsTheWrappedCaretPosition() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let cell = context.fontMetrics.cellAdvance
     let height = context.fontMetrics.lineAdvance
     let rect = Rect(x: 13, y: 17, width: 3 * cell, height: 200)
-    let block = Text("abcdef").wrapping().selectable()
+    var buffer = LayoutBuffer()
+    let node = buffer.text(Text("abcdef").wrapping().selectable(context.widgetID), context: context)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(node, in: rect)
     context.interaction.beginEditing(context.widgetID, caretOffset: 4)
     var actual = DrawList()
-    block.paint(into: &actual, in: rect, context: context)
+    buffer.paint(node, into: &actual, in: rect)
     var expected = DrawList()
     expected.text("abc", at: rect.origin, color: .white)
     expected.text("def", at: Point(x: rect.minX, y: rect.minY + height), color: .white)
@@ -109,7 +117,11 @@ struct TextSelectionPaintingTests {
       defer { host.close() }
       let target = FocusTarget()
       let text = Array(repeating: String(repeating: "a", count: 80), count: lineCount).joined(separator: "\n")
-      host.setContent(Text(text).selectable().focusTarget(target))
+      host.build = { buffer, context in
+        buffer.focus(target, context: context) { buffer, context in
+          buffer.text(Text(text).selectable(), context: context)
+        }
+      }
       let before = host.render()
       target.focus()
       host.render()
@@ -128,15 +140,17 @@ struct TextSelectionPaintingTests {
   }
 
   @Test func documentSelectionRedrawsEachRowOnlyOnceAndPreservesCopy() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
-    let content = VStack {
-      Text("ab\ncd").foregroundColor(.black).selectable()
-      Text("e\u{301}f\n👨‍👩‍👧‍👦g").foregroundColor(.black).selectable()
+    let build: LayoutBuilder = { buffer, context in
+      let first = buffer.text(Text("ab\ncd").foregroundColor(.black).selectable(), context: context.childScope(0))
+      let second = buffer.text(
+        Text("e\u{301}f\n👨‍👩‍👧‍👦g").foregroundColor(.black).selectable(), context: context.childScope(1))
+      return buffer.stack([first, second], axis: .vertical, context: context)
     }
     func render() -> DrawList {
       producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 400, height: 300),
+        build: build, viewport: Size(width: 400, height: 300),
         input: InputState(),
         context: context, onChange: {})
     }

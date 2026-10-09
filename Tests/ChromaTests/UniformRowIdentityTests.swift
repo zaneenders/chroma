@@ -145,9 +145,11 @@ struct UniformRowIdentityTests {
 
   @Test func identifiableInitializerUsesKeysWithoutAnExplicitRevision() {
     let controller = ScrollViewController()
-    _ = ScrollView(data: [Item(id: 7), Item(id: 9)], rowHeight: 20, controller: controller) { _ in
-      Text("row")
-    }
+    _ = ScrollView(
+      data: [Item(id: 7), Item(id: 9)], rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        return buffer.text(Text("row"), context: context)
+      })
     #expect(controller.uniformRowIdentity?.keys == [StructuralKey(7), StructuralKey(9)])
     #expect(controller.uniformRowIdentity?.indices[StructuralKey(9)] == 1)
   }
@@ -155,9 +157,9 @@ struct UniformRowIdentityTests {
   @Test func unconstrainedInitializerRemainsPositionalWithOrWithoutARevision() {
     let controller = ScrollViewController()
     func positional<Data: RandomAccessCollection>(_ data: Data, revision: UInt64?) -> ScrollView {
-      ScrollView(data: data, rowHeight: 20, controller: controller, identityRevision: revision) { _ in
-        Text("row")
-      }
+      ScrollView(
+        data: data, rowHeight: 20, controller: controller, identityRevision: revision,
+        build: { buffer, context, _ in buffer.text(Text("row"), context: context) })
     }
     _ = positional([Item(id: 7), Item(id: 9)], revision: nil)
     #expect(controller.uniformRowIdentity == nil)
@@ -233,16 +235,17 @@ struct UniformRowIdentityTests {
       var actions: [String] = []
     }
     let model = Model()
-    runtime.setContent(
-      DeferredBlock {
-        let capturedLabel = model.label
-        return ScrollView(
+    runtime.build = { buffer, context in
+      let capturedLabel = model.label
+      return buffer.scrollView(
+        ScrollView(
           data: [Item(id: 1, value: model.value)], rowHeight: 40,
-          controller: controller, identityRevision: 1
-        ) { item in
-          Button(capturedLabel) { model.actions.append("\(item.value):\(capturedLabel)") }
-        }
-      })
+          controller: controller, identityRevision: 1,
+          build: { buffer, context, item in
+            buffer.button(
+              Button(capturedLabel) { model.actions.append("\(item.value):\(capturedLabel)") }, context: context)
+          }), context: context)
+    }
     _ = runtime.render(viewport: Size(width: 200, height: 100), input: InputState(), onChange: {})
     runtime.interaction.focusFirstControlForTest()
     let identity = controller.uniformRowIdentity

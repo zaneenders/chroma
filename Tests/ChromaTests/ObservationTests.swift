@@ -23,13 +23,18 @@ struct ObservationTests {
     let model = Model()
     let renderer = HeadlessHost()
     defer { renderer.close() }
-    renderer.setContent(
-      DeferredBlock {
-        HStack {
-          if model.primary { ScrollView { Text("First") } }
-          ScrollView { Text("Second") }
-        }
-      })
+    renderer.build = { buffer, context in
+      var children: [LayoutNode] = []
+      if model.primary {
+        children.append(
+          buffer.scrollView(
+            ScrollView(build: { $0.text(Text("First"), context: $1) }), context: context.childScope(0)))
+      }
+      children.append(
+        buffer.scrollView(
+          ScrollView(build: { $0.text(Text("Second"), context: $1) }), context: context.childScope(1)))
+      return buffer.stack(children, axis: .horizontal, context: context)
+    }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -42,7 +47,7 @@ struct ObservationTests {
   @Test func tracksOnlyReadPropertiesAndRearmsAfterRendering() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.setContent(DeferredBlock { model.first })
+    renderer.build = { $0.color(model.first, context: $1) }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     let initial = renderer.render()
@@ -67,10 +72,9 @@ struct ObservationTests {
   @Test func conditionalDependenciesAreReplaced() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.setContent(
-      DeferredBlock {
-        if model.primary { model.first } else { model.second }
-      })
+    renderer.build = { buffer, context in
+      buffer.color(model.primary ? model.first : model.second, context: context)
+    }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -93,10 +97,9 @@ struct ObservationTests {
       var primary = true
     }
     let condition = Condition()
-    renderer.setContent(
-      DeferredBlock {
-        if condition.primary { model.first } else { model.second }
-      })
+    renderer.build = { buffer, context in
+      buffer.color(condition.primary ? model.first : model.second, context: context)
+    }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -116,7 +119,7 @@ struct ObservationTests {
   @Test func newerFrameAndContentReplacementDiscardQueuedCallbacks() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.setContent(DeferredBlock { model.first })
+    renderer.build = { $0.color(model.first, context: $1) }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -125,7 +128,7 @@ struct ObservationTests {
     await drainChanges()
     #expect(redraws == 0)
     model.first = .black
-    renderer.setContent(Color.white)
+    renderer.build = { $0.color(.white, context: $1) }
     await drainChanges()
     #expect(redraws == 0)
   }
@@ -133,7 +136,7 @@ struct ObservationTests {
   @Test func closeDiscardsQueuedCallbacks() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.setContent(DeferredBlock { model.first })
+    renderer.build = { $0.color(model.first, context: $1) }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.render()
@@ -146,7 +149,7 @@ struct ObservationTests {
   @Test func observerReadsAreNotDependenciesAndWritesInvalidateAfterFrame() async {
     let model = Model()
     let renderer = HeadlessHost()
-    renderer.setContent(DeferredBlock { model.first })
+    renderer.build = { $0.color(model.first, context: $1) }
     var redraws = 0
     renderer.onRedrawRequested = { redraws += 1 }
     renderer.frameObserver = { _ in
@@ -165,36 +168,22 @@ struct ObservationTests {
 
   @Test func explicitRedrawSurvivesMutationDuringFirstDraw() {
     let model = Model()
-    struct MutatingBlock: Block {
-      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-        let context = context.component(Self.self)
-        return buffer.customLeaf(
-          context: context, focusRule: focusRule,
-          expandsHorizontally: false, expandsVertically: false,
-          measure: { sizeThatFits($0, context: context) },
-          register: { register(in: $0, context: context) },
-          paint: { paint(into: &$0, in: $1, context: context) })
-      }
-
-      @MainActor func register(in rect: Rect, context: BlockContext) {}
-
-      let model: Model
-      var focusRule: FocusRule { .standard }
-      @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-        drawList.fillRect(rect, color: model.first)
-        model.first = .yellow
-        context.requestRedraw()
-      }
-    }
     let interaction = Interaction()
     let producer = FrameProducer()
     var requests = 0
     interaction.onRedrawRequested = { requests += 1 }
     _ = producer.render(
-      build: { buffer, context in buffer.emit(MutatingBlock(model: model), context: context) },
+      build: { buffer, context in
+        buffer.customLeaf(
+          context: context, measure: { $0 }, register: { _ in },
+          paint: { list, rect in
+            list.fillRect(rect, color: model.first)
+            model.first = .yellow
+            context.requestRedraw()
+          })
+      },
       viewport: Size(width: 20, height: 20),
-      input: InputState(), context: BlockContext(interaction: interaction), onChange: {})
+      input: InputState(), context: LayoutContext(interaction: interaction), onChange: {})
     #expect(requests == 1)
     #expect(interaction.consumeRedrawRequest())
     #expect(model.first == .yellow)
@@ -206,7 +195,7 @@ struct ObservationTests {
     do {
       let renderer = HeadlessHost()
       releasedRenderer = renderer
-      renderer.setContent(DeferredBlock { model.first })
+      renderer.build = { $0.color(model.first, context: $1) }
       renderer.render()
     }
     #expect(releasedRenderer == nil)
@@ -214,13 +203,15 @@ struct ObservationTests {
     await drainChanges()
   }
 
-  @Test func appRootIsDeferredAndAsynchronousMutationRequestsRedraw() async throws {
+  @Test func appRootReadsCurrentStateAndAsynchronousMutationRequestsRedraw() async throws {
     let model = Model()
     struct TestApp: App {
       let model: Model
       init() { model = Model() }
       init(model: Model) { self.model = model }
-      @MainActor var body: some Block { model.first }
+      func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+        buffer.color(model.first, context: context)
+      }
     }
     let renderer = HeadlessHost()
     var redraws = 0

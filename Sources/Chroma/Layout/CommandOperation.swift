@@ -1,14 +1,9 @@
-struct CommandScope: Block {
-  enum Operation {
-    case keyBindings(KeyBindings)
-    case handler(Command, @MainActor () -> CommandResult)
-  }
-
-  var content: any Block
-  var operation: Operation
+enum CommandOperation {
+  case keyBindings(KeyBindings)
+  case handler(Command, @MainActor () -> CommandResult)
 
   @MainActor static func withRegistration(
-    _ operation: Operation, in rect: Rect, context: BlockContext, content: () -> Void
+    _ operation: CommandOperation, in rect: Rect, context: LayoutContext, content: () -> Void
   ) {
     let interaction = context.interaction
     switch operation {
@@ -27,7 +22,7 @@ struct CommandScope: Block {
         && context.structuralPath.segments.allSatisfy {
           switch $0 {
           case .component, .key: true
-          case .slot, .branch, .background: false
+          case .slot, .background: false
           }
         }
       if isRoot {

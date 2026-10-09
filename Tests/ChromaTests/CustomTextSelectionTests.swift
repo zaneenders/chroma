@@ -9,9 +9,9 @@ struct CustomTextSelectionTests {
     var state: TextInputState?
   }
 
-  @MainActor private struct ReadOnlyText: Block {
+  @MainActor private struct ReadOnlyText {
 
-    func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
       let context = context.component(Self.self)
       return buffer.customLeaf(
         context: context, focusRule: focusRule,
@@ -23,11 +23,11 @@ struct CustomTextSelectionTests {
     let renderer: Renderer
     var focusRule: FocusRule { .standard }
 
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
       Size(width: 200, height: 40)
     }
 
-    func register(in rect: Rect, context: BlockContext) {
+    func register(in rect: Rect, context: LayoutContext) {
       let layout = TextLayout(renderer.text)
       renderer.state = context.textSelectionState(
         in: rect, text: { renderer.text },
@@ -38,20 +38,30 @@ struct CustomTextSelectionTests {
         },
         verticalOffset: { layout.verticalOffset($0, direction: $1) })
     }
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       renderer.state = context.textInputVisualState()
     }
   }
 
   @Test func customRendererSelectsCopiesAndRejectsMutations() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let renderer = Renderer()
     let target = FocusTarget()
-    let content = Group("Response") { ReadOnlyText(renderer: renderer).focusTarget(target) }
+    let content: LayoutBuilder = { buffer, context in
+      let node13 = buffer.group("Response", context: context) { buffer, context in
+        let node12 = buffer.focus(
+          target, context: context.childScope(0),
+          content: { buffer, context in
+            return ReadOnlyText(renderer: renderer).build(into: &buffer, context: context)
+          })
+        return node12
+      }
+      return node13
+    }
     func render(_ commands: [Command] = [], text: [TextEditEvent] = []) {
       _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 600, height: 400),
+        build: content, viewport: Size(width: 600, height: 400),
         input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
     }
     render()
@@ -86,13 +96,15 @@ struct CustomTextSelectionTests {
   }
 
   @Test func mouseAndKeyboardUseTheSameCustomSelection() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let renderer = Renderer()
-    let content = ReadOnlyText(renderer: renderer)
+    let content: LayoutBuilder = { buffer, context in
+      return ReadOnlyText(renderer: renderer).build(into: &buffer, context: context)
+    }
     func render(_ input: InputState = InputState()) {
       _ = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 600, height: 400),
+        build: content, viewport: Size(width: 600, height: 400),
         input: input, context: context, onChange: {})
     }
     render()

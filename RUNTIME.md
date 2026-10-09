@@ -1,60 +1,59 @@
-# One construction and execution path
+# Direct runtime
 
-The runtime owns a reusable `LayoutBuffer` and a committed indexed interaction
-snapshot. A root `LayoutBuilder` writes typed nodes directly; optional `Block`
-authoring values implement only `emit(into:context:)` and use those same methods.
-There is no associated `Body`, primitive/prepared protocol hierarchy, or second
-standalone owner. Compose custom UI with ordinary functions.
+A window owns reusable layout buffers and a committed indexed interaction snapshot.
+Its `build` closure constructs typed nodes; ordinary functions compose them.
+There is no `Block` protocol, result builder, intermediate authoring tree, or
+standalone rendering path.
 
 ```swift
 host.build = { buffer, context in
   let title = buffer.text(Text("Hello"), context: context.keyed("title"))
-  let saveButton = buffer.button(Button("Save", action: save), context: context.keyed("save"))
+  let saveButton = buffer.button(Button("Save", action: { print("Saved") }), context: context.keyed("save"))
   return buffer.stack([title, saveButton], axis: .vertical, spacing: 8, context: context)
 }
 ```
 
-`host.setContent(VStack { ... })` is optional authoring convenience. It installs a
-root construction function, not another execution path. `BlockBuilder` collects
-children; keyed collections emit fragment records. Unary typed operations distribute
-across those fragments without a second protocol-based flattening system.
+`App` implements `build(into:context:)` with that same signature. Text, button,
+editor and scroll values are plain configuration. Scroll row factories receive the
+buffer and their final keyed context. Use distinct `keyed` child contexts for state
+that must survive reordering; `childScope` gives explicit positional identity.
+Duplicate interaction leaf IDs fail early instead of silently sharing callbacks.
 
 ## Update contract
 
-Every actionable event first commits current callbacks and geometry. Raw key
-resolution and delivery share that preparation. The event is applied exactly once;
-drawing cannot replay it. Hover may use last-presented geometry. Commit and drawing
-share rectangles, clipping and painter order. Built-in drawing never builds nodes. `WindowRuntime` alone dispatches input; the
-producer only commits registrations and draws the root current after dispatch.
+`WindowRuntime` alone dispatches input. Every actionable event first commits current
+callbacks and geometry; raw key resolution and delivery share that preparation.
+Input is applied once. The producer then commits and draws the current root, so an
+action may replace it synchronously. Hover may use last-presented geometry.
 
-`LayoutNode` is an owner/generation/index handle, not persistent widget identity.
-Reset destroys captures but keeps buffer capacity. Large control payloads use
-side buffers; the common record and context occupy 112 and 80 bytes on x86_64. Keys own focus, editing, scroll
-and animation state. Committed interaction rows outlive temporary layout storage;
-render and navigation views link the same rows. Root replacement clears both.
+Low-level code emits and measures nodes, registers them, then paints at the same
+rectangle. Drawing does not build nodes or replay input. `LayoutNode` is a checked
+owner/generation/index handle, never persistent identity. Reset destroys captures
+and retains capacity. Committed interaction rows survive temporary layout storage;
+render and navigation views link the same rows. Keys preserve focus/editing across
+reordering of realized content. Virtualizing an editor out of view ends its editing
+session and clears selection; scrolling it back does not resume editing. Scroll
+focus memory is retained separately.
 
-For low-level tests/tools: create one buffer, emit a root, measure as needed, then
-register and paint at the same rectangle. Painting before registration is invalid.
-The window handles this lifecycle. `BlockEngine`, `PreparedLayout`,
-`PaintableBlock` and `LayoutPreparingBlock` are removed.
+## Retained work
 
-## Reusable content
+- Plain text caches exact UTF-8/wrapping results, capped at 512 entries and 4 MiB
+  estimated storage. Oversized entries bypass retention.
+- Keep `MarkdownDocument` in the model to reuse parsing and revision-keyed wrapping.
+  Two width/style slots retain per-block plans. Placement stays fresh. Markdown
+  still emits all paragraph handles; it does not virtualize paragraphs.
+- Uniform lists accept `identityRevision`; change it on every ID/order change,
+  including same-count changes. Nil scans IDs. Row values and callbacks stay fresh.
+- Variable lists reset one measurement buffer after each invalid row. Cold work is
+  O(rows), but retained node capacity covers one row plus the visible window.
+- Keyed scalar animation commits ownership during registration. Retargeting starts
+  at the current value; removal or virtual eviction cancels it; scheduling stops at rest.
 
-- Plain text uses an exact UTF-8/wrapping cache: 512 entries and 4 MiB estimated
-  storage. Oversized layouts bypass retention. Geometry and callbacks stay fresh.
-- Keep `MarkdownDocument` in the model. Source changes replace its parsed snapshot
-  and revision-keyed wrap cache. Two layout-input slots reuse per-block plans;
-  placement geometry is rebuilt. No callbacks are cached. `MarkdownText` still
-  emits all block handles; it does not virtualize paragraphs.
-- Uniform lists accept `identityRevision`; bump it on every ID/order change, even
-  at fixed count. Nil scans IDs. Row values and callbacks remain current.
-- Variable lists reuse one controller-owned measurement buffer, reset after each
-  invalid row. Cold measurement is O(rows), but retained node capacity is bounded
-  by one row plus the visible window, rather than the full dataset.
-- Keyed scalar animation samples one time per update and commits ownership only
-  during registration. Retargeting starts at the current value. Removal or virtual
-  eviction cancels it; the scheduler stops at rest.
+Large control payloads use side buffers. On x86_64 the common record is 112 bytes,
+plus an 80-byte context and any child/measurement/payload entries. Metal/OpenGL use
+the existing ordered `DrawList`; returned lists preserve value semantics.
 
-Metal/OpenGL consume the same ordered `DrawList`. Returned lists retain value
-semantics when scratch storage is reused. CPU checks use
-`CHROMA_HEADLESS_ONLY=1 swift test -j 2`; native presentation is separate validation.
+CPU validation: `CHROMA_HEADLESS_ONLY=1 swift test -j 2`. This omits native backend
+products for that invocation. Use the same setting for resolution/build/test;
+SwiftPM replans when the manifest environment changes. Native presentation needs
+separate validation. Existing Block-based apps must migrate to direct construction.

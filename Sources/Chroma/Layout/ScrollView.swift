@@ -1,5 +1,5 @@
-public struct ScrollView: Block {
-  public typealias RowBuilder<Element> = @MainActor (inout LayoutBuffer, BlockContext, Element) -> LayoutNode
+public struct ScrollView {
+  public typealias RowBuilder<Element> = @MainActor (inout LayoutBuffer, LayoutContext, Element) -> LayoutNode
 
   public struct Row: Identifiable {
     public let id: AnyHashable
@@ -13,14 +13,6 @@ public struct ScrollView: Block {
       self.id = AnyHashable(id)
       self.key = StructuralKey(id)
       self.build = build
-    }
-
-    @MainActor public init(id: some Hashable & Sendable, content: any Block) {
-      self.init(id: id, build: { buffer, context in buffer.emit(content, context: context) })
-    }
-
-    @MainActor public mutating func setContent(_ content: any Block) {
-      build = { buffer, context in buffer.emit(content, context: context) }
     }
 
     /// Invalidates persistent measurement after an unobserved value used by this row changes.
@@ -76,18 +68,6 @@ public struct ScrollView: Block {
     self.content = content
   }
 
-  @MainActor public init(
-    _ name: String? = nil,
-    showsIndicator: Bool = true, sticksToBottom: Bool = false,
-    controller: ScrollViewController? = nil,
-    @BlockBuilder content: () -> TupleBlock
-  ) {
-    let stack = VStack(content: content)
-    self.init(
-      name, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller,
-      build: { buffer, context in buffer.emit(stack, context: context) })
-  }
-
   public init(
     _ name: String? = nil,
     showsIndicator: Bool = true, sticksToBottom: Bool = false,
@@ -105,45 +85,6 @@ public struct ScrollView: Block {
     self.init(
       name: name, spacing: spacing, showsIndicator: showsIndicator, sticksToBottom: sticksToBottom,
       content: .rows(rows, controller))
-  }
-
-  @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
-    _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
-    showsIndicator: Bool = true, sticksToBottom: Bool = false,
-    controller: ScrollViewController, identityRevision: UInt64? = nil,
-    @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
-  ) {
-    self.init(
-      name, data: data, rowHeight: rowHeight, spacing: spacing,
-      showsIndicator: showsIndicator, sticksToBottom: sticksToBottom,
-      controller: controller, identityRevision: identityRevision,
-      build: { buffer, context, element in buffer.emit(content(element), context: context) })
-  }
-
-  @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
-    _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
-    showsIndicator: Bool = true, sticksToBottom: Bool = false,
-    controller: ScrollViewController, identityRevision: UInt64? = nil,
-    @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
-  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    self.init(
-      name, data: data, rowHeight: rowHeight, spacing: spacing,
-      showsIndicator: showsIndicator, sticksToBottom: sticksToBottom,
-      controller: controller, identityRevision: identityRevision,
-      build: { buffer, context, element in buffer.emit(content(element), context: context) })
-  }
-
-  @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
-    _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
-    showsIndicator: Bool = true, sticksToBottom: Bool = false,
-    controller: ScrollViewController, selection: ScrollSelection<Data.Element.ID>, identityRevision: UInt64? = nil,
-    @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
-  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    self.init(
-      name, data: data, rowHeight: rowHeight, spacing: spacing,
-      showsIndicator: showsIndicator, sticksToBottom: sticksToBottom,
-      controller: controller, selection: selection, identityRevision: identityRevision,
-      build: { buffer, context, element in buffer.emit(content(element), context: context) })
   }
 
   @MainActor public init<Data: RandomAccessCollection>(
@@ -229,7 +170,7 @@ public struct ScrollView: Block {
   /// Placement events are shared by registration and presentation. No event requires painting.
   enum Placement {
     case content(LayoutNode, Rect)
-    case rowFocus(BlockContext, Rect)
+    case rowFocus(LayoutContext, Rect)
   }
 
   /// The resolved operation owns this snapshot. It is never stored on the controller or
@@ -241,11 +182,7 @@ public struct ScrollView: Block {
     let placements: [Placement]
   }
 
-  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.scrollView(self, context: context)
-  }
-
-  @MainActor func registerContent(in rect: Rect, context: BlockContext, buffer: inout LayoutBuffer)
+  @MainActor func registerContent(in rect: Rect, context: LayoutContext, buffer: inout LayoutBuffer)
     -> PreparedScroll
   {
     let geometry = prepareScroll(in: rect, context: context, buffer: &buffer)
@@ -261,7 +198,7 @@ public struct ScrollView: Block {
   }
 
   @MainActor func paint(
-    _ prepared: PreparedScroll, into drawList: inout DrawList, context: BlockContext, buffer: inout LayoutBuffer
+    _ prepared: PreparedScroll, into drawList: inout DrawList, context: LayoutContext, buffer: inout LayoutBuffer
   ) {
     drawList.pushClip(prepared.rect)
     for placement in prepared.placements {
@@ -275,7 +212,7 @@ public struct ScrollView: Block {
   }
 
   @MainActor private func paintIndicators(
-    into drawList: inout DrawList, in rect: Rect, geometry: ScrollGeometry, context: BlockContext
+    into drawList: inout DrawList, in rect: Rect, geometry: ScrollGeometry, context: LayoutContext
   ) {
     if showsIndicator {
       drawIndicator(
@@ -289,7 +226,7 @@ public struct ScrollView: Block {
     }
   }
 
-  @MainActor private func prepareScroll(in rect: Rect, context: BlockContext, buffer: inout LayoutBuffer)
+  @MainActor private func prepareScroll(in rect: Rect, context: LayoutContext, buffer: inout LayoutBuffer)
     -> ScrollGeometry
   {
     let id = context.widgetID
@@ -345,7 +282,7 @@ public struct ScrollView: Block {
   }
 
   @MainActor private func placeContent(
-    in rect: Rect, context: BlockContext, geometry: ScrollGeometry, buffer: inout LayoutBuffer,
+    in rect: Rect, context: LayoutContext, geometry: ScrollGeometry, buffer: inout LayoutBuffer,
     visit: (inout LayoutBuffer, Placement) -> Void
   ) {
     let interaction = context.interaction
@@ -390,7 +327,7 @@ public struct ScrollView: Block {
   }
 
   @MainActor private func placeRows(
-    in rect: Rect, context: BlockContext, id: WidgetID, offset: Float, buffer: inout LayoutBuffer,
+    in rect: Rect, context: LayoutContext, id: WidgetID, offset: Float, buffer: inout LayoutBuffer,
     visit: (inout LayoutBuffer, Placement) -> Void
   ) {
     let interaction = context.interaction
@@ -450,7 +387,7 @@ public struct ScrollView: Block {
 
   @MainActor private func placeRow(
     _ build: LayoutBuilder, in rect: Rect,
-    context rowContext: BlockContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
+    context rowContext: LayoutContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
     rowKey: StructuralKey, buffer: inout LayoutBuffer, visit: (inout LayoutBuffer, Placement) -> Void
   ) {
     guard let group = interaction.builderStack.last else {
@@ -491,7 +428,7 @@ public struct ScrollView: Block {
   }
 
   @MainActor private func updateCache(
-    rows: [Row], controller: ScrollViewController, width: Float, context: BlockContext
+    rows: [Row], controller: ScrollViewController, width: Float, context: LayoutContext
   ) {
     precondition(Set(rows.map(\.key)).count == rows.count, "Duplicate lazy row ID")
     let cache = controller.lazyStackCache

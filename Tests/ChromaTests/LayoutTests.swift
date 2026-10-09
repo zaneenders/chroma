@@ -13,129 +13,60 @@ struct LayoutTests {
     }
   }
 
-  private struct Host: Block {
+  private func chromeLine(
+    _ title: String, height: Float, color: Color, into buffer: inout LayoutBuffer, context: LayoutContext
+  ) -> LayoutNode {
+    buffer.background(
+      context: context,
+      content: { buffer, context in
+        let text = buffer.text(Text(title), context: context)
+        return buffer.sizing(text, x: .grow, y: .fixed(height), context: context)
+      }, background: { $0.color(color, context: $1) })
+  }
 
-    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      buffer.emit(body, context: context.component(Self.self))
+  private func chrome(showQueue: Bool, into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    var children: [LayoutNode] = []
+    if showQueue {
+      children.append(
+        chromeLine(
+          "QUEUED (1)", height: 24, color: Color(r: 0.2, g: 0.2, b: 0.3, a: 1), into: &buffer,
+          context: context.childScope(0)))
     }
+    children.append(
+      chromeLine(
+        "COMPOSER", height: 36, color: Color(r: 0.15, g: 0.15, b: 0.25, a: 1), into: &buffer,
+        context: context.childScope(1)))
+    children.append(
+      chromeLine(
+        "STATUS", height: 24, color: Color(r: 0.12, g: 0.12, b: 0.18, a: 1), into: &buffer,
+        context: context.childScope(2)))
+    let column = buffer.stack(children, axis: .vertical, context: context)
+    return buffer.sizing(column, x: .grow, context: context)
+  }
 
-    var showQueue: Bool
-
-    @MainActor var body: some Block {
-      VStack(spacing: 0) {
-        header
-        switch showQueue {
-        case true:
-          readyWithQueue
-        case false:
-          readyWithoutQueue
-        }
-      }
-      .background(Color(r: 0, g: 0, b: 0, a: 1))
-    }
-
-    @MainActor private var header: some Block {
-      Text("HEADER")
-        .sizing(y: .fixed(40))
-        .sizing(x: .grow)
-    }
-
-    @MainActor private var readyWithQueue: some Block {
-      VStack(spacing: 0) {
-        transcript
-        bottomChrome
-      }
-      .sizing(x: .grow, y: .grow)
-    }
-
-    @MainActor private var readyWithoutQueue: some Block {
-      VStack(spacing: 0) {
-        transcript
-        bottomChrome
-      }
-      .sizing(x: .grow, y: .grow)
-    }
-
-    @MainActor private var transcript: some Block {
-      Color(r: 0.1, g: 0.1, b: 0.2, a: 1)
-        .sizing(x: .grow, y: .grow)
-    }
-
-    @MainActor private var bottomChrome: some Block {
-      BottomChromeHost(showQueue: showQueue)
-    }
-
-    private struct BottomChromeHost: Block {
-
-      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-        buffer.emit(body, context: context.component(Self.self))
-      }
-
-      var showQueue: Bool
-
-      @MainActor var body: some Block {
-        VStack(spacing: 0) {
-          if showQueue {
-            QueuedTrayHost()
-          }
-          ComposerHost()
-          StatusHost()
-        }
-        .sizing(x: .grow)
-      }
-    }
-
-    private struct QueuedTrayHost: Block {
-
-      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-        buffer.emit(body, context: context.component(Self.self))
-      }
-
-      @MainActor var body: some Block {
-        Text("QUEUED (1)")
-          .sizing(x: .grow)
-          .sizing(y: .fixed(24))
-          .background(Color(r: 0.2, g: 0.2, b: 0.3, a: 1))
-      }
-    }
-
-    private struct ComposerHost: Block {
-
-      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-        buffer.emit(body, context: context.component(Self.self))
-      }
-
-      @MainActor var body: some Block {
-        Text("COMPOSER")
-          .sizing(x: .grow)
-          .sizing(y: .fixed(36))
-          .background(Color(r: 0.15, g: 0.15, b: 0.25, a: 1))
-      }
-    }
-
-    private struct StatusHost: Block {
-
-      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-        buffer.emit(body, context: context.component(Self.self))
-      }
-
-      @MainActor var body: some Block {
-        Text("STATUS")
-          .sizing(x: .grow)
-          .sizing(y: .fixed(24))
-          .background(Color(r: 0.12, g: 0.12, b: 0.18, a: 1))
-      }
-    }
+  private func readyScene(includeHeader: Bool, into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    let contentContext = context.childScope(1)
+    let transcriptContext = contentContext.childScope(0)
+    let color = buffer.color(Color(r: 0.1, g: 0.1, b: 0.2, a: 1), context: transcriptContext)
+    let transcript = buffer.sizing(color, x: .grow, y: .grow, context: transcriptContext)
+    let chrome = chrome(showQueue: true, into: &buffer, context: contentContext.childScope(1))
+    let column = buffer.stack([transcript, chrome], axis: .vertical, context: contentContext)
+    let content = buffer.sizing(column, x: .grow, y: .grow, context: contentContext)
+    guard includeHeader else { return content }
+    let headerContext = context.childScope(0)
+    let header = buffer.text(Text("HEADER"), context: headerContext)
+    let headerSized = buffer.sizing(header, x: .grow, y: .fixed(40), context: headerContext)
+    return buffer.stack([headerSized, content], axis: .vertical, context: context)
   }
 
   @Test func readyLayoutPinsBottomChromeBelowTranscript() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(Host(showQueue: true), context: context)
+      let resolved = readyScene(includeHeader: true, into: &resolvedBuffer, context: context)
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
@@ -158,14 +89,14 @@ struct LayoutTests {
     #expect(statusY! < viewport.size.height)
   }
 
-  @Test func computedPropertyBottomChromeStillStacksChildren() {
+  @Test func factoredBottomChromeStillStacksChildren() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(ComputedPropertyHost(showQueue: true), context: context)
+      let resolved = readyScene(includeHeader: false, into: &resolvedBuffer, context: context)
       resolvedBuffer.register(resolved, in: viewport)
       resolvedBuffer.paint(resolved, into: &list, in: viewport)
     }
@@ -186,42 +117,52 @@ struct LayoutTests {
 
   @Test func sizingResolvesEachAxisIndependently() {
     let proposal = Size(width: 400, height: 300)
-    let context = BlockContext()
-    let fitted = Text("fit").sizing()
-    let fixed = Text("fixed").sizing(x: .fixed(120), y: .fixed(48))
-    let horizontalGrow = Text("grow").sizing(x: .grow)
-    let verticalGrow = Text("grow").sizing(y: .grow)
+    let context = LayoutContext()
+    let fitted: LayoutBuilder = { buffer, context in
+      let text = buffer.text(Text("fit"), context: context)
+      return buffer.sizing(text, context: context)
+    }
+    let fixed: LayoutBuilder = { buffer, context in
+      let text = buffer.text(Text("fixed"), context: context)
+      return buffer.sizing(text, x: .fixed(120), y: .fixed(48), context: context)
+    }
+    let horizontalGrow: LayoutBuilder = { buffer, context in
+      let text = buffer.text(Text("grow"), context: context)
+      return buffer.sizing(text, x: .grow, context: context)
+    }
+    let verticalGrow: LayoutBuilder = { buffer, context in
+      let text = buffer.text(Text("grow"), context: context)
+      return buffer.sizing(text, y: .grow, context: context)
+    }
 
-    let fittedTextSize = measureBlock(Text("fit"), proposal: proposal, context: context)
-    #expect(measureBlock(fitted, proposal: proposal, context: context) == fittedTextSize)
-    #expect(measureBlock(fixed, proposal: proposal, context: context) == Size(width: 120, height: 48))
-    #expect(measureBlock(horizontalGrow, proposal: proposal, context: context).width == 400)
-    #expect(measureBlock(verticalGrow, proposal: proposal, context: context).height == 300)
+    let fittedTextSize = measureLayout({ $0.text(Text("fit"), context: $1) }, proposal: proposal, context: context)
+    #expect(measureLayout(fitted, proposal: proposal, context: context) == fittedTextSize)
+    #expect(measureLayout(fixed, proposal: proposal, context: context) == Size(width: 120, height: 48))
+    #expect(measureLayout(horizontalGrow, proposal: proposal, context: context).width == 400)
+    #expect(measureLayout(verticalGrow, proposal: proposal, context: context).height == 300)
 
-    #expect(!blockExpandsHorizontally(fitted))
-    #expect(!blockExpandsVertically(fitted))
-    #expect(!blockExpandsHorizontally(fixed))
-    #expect(!blockExpandsVertically(fixed))
-    #expect(blockExpandsHorizontally(horizontalGrow))
-    #expect(!blockExpandsVertically(horizontalGrow))
-    #expect(!blockExpandsHorizontally(verticalGrow))
-    #expect(blockExpandsVertically(verticalGrow))
+    #expect(!layoutExpandsHorizontally(fitted))
+    #expect(!layoutExpandsVertically(fitted))
+    #expect(!layoutExpandsHorizontally(fixed))
+    #expect(!layoutExpandsVertically(fixed))
+    #expect(layoutExpandsHorizontally(horizontalGrow))
+    #expect(!layoutExpandsVertically(horizontalGrow))
+    #expect(!layoutExpandsHorizontally(verticalGrow))
+    #expect(layoutExpandsVertically(verticalGrow))
   }
 
   @Test func reverseLayoutFlipsStackChildOrder() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
     beginTestFrame(interaction, input: InputState())
 
     var horizontalList = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(
-        HStack {
-          Text("first")
-          Text("second")
-        }.reverseLayout(), context: context)
+      let first = resolvedBuffer.text(Text("first"), context: context.childScope(0))
+      let second = resolvedBuffer.text(Text("second"), context: context.childScope(1))
+      let resolved = resolvedBuffer.stack([first, second], axis: .horizontal, reversed: true, context: context)
       resolvedBuffer.register(resolved, in: rect)
       resolvedBuffer.paint(resolved, into: &horizontalList, in: rect)
     }
@@ -231,11 +172,9 @@ struct LayoutTests {
     var verticalList = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(
-        VStack {
-          Text("first")
-          Text("second")
-        }.reverseLayout(), context: context)
+      let first = resolvedBuffer.text(Text("first"), context: context.childScope(0))
+      let second = resolvedBuffer.text(Text("second"), context: context.childScope(1))
+      let resolved = resolvedBuffer.stack([first, second], axis: .vertical, reversed: true, context: context)
       resolvedBuffer.register(resolved, in: rect)
       resolvedBuffer.paint(resolved, into: &verticalList, in: rect)
     }
@@ -257,76 +196,27 @@ struct LayoutTests {
   }
 
   @Test func spacerOnlyExpandsAlongItsStackAxis() {
-    let horizontal = HStack {
-      Text("left")
-      Spacer()
-      Text("right")
+    let horizontal: LayoutBuilder = { buffer, context in
+      let left = buffer.text(Text("left"), context: context.childScope(0))
+      let spacer = buffer.spacer(context: context.childScope(1))
+      let right = buffer.text(Text("right"), context: context.childScope(2))
+      return buffer.stack([left, spacer, right], axis: .horizontal, context: context)
     }
-    let vertical = VStack {
-      Text("top")
-      Spacer()
-      Text("bottom")
+    let vertical: LayoutBuilder = { buffer, context in
+      let top = buffer.text(Text("top"), context: context.childScope(0))
+      let spacer = buffer.spacer(context: context.childScope(1))
+      let bottom = buffer.text(Text("bottom"), context: context.childScope(2))
+      return buffer.stack([top, spacer, bottom], axis: .vertical, context: context)
     }
     let proposal = Size(width: 400, height: 300)
-    let context = BlockContext()
+    let context = LayoutContext()
 
-    #expect(blockExpandsHorizontally(horizontal))
-    #expect(!blockExpandsVertically(horizontal))
-    #expect(measureBlock(horizontal, proposal: proposal, context: context).height < proposal.height)
+    #expect(layoutExpandsHorizontally(horizontal))
+    #expect(!layoutExpandsVertically(horizontal))
+    #expect(measureLayout(horizontal, proposal: proposal, context: context).height < proposal.height)
 
-    #expect(!blockExpandsHorizontally(vertical))
-    #expect(blockExpandsVertically(vertical))
-    #expect(measureBlock(vertical, proposal: proposal, context: context).width < proposal.width)
-  }
-}
-
-private struct ComputedPropertyHost: Block {
-
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.emit(body, context: context.component(Self.self))
-  }
-
-  var showQueue: Bool
-
-  @MainActor var body: some Block {
-    VStack(spacing: 0) {
-      transcript
-      bottomChrome
-    }
-    .sizing(x: .grow, y: .grow)
-  }
-
-  @MainActor private var transcript: some Block {
-    Color(r: 0.1, g: 0.1, b: 0.2, a: 1)
-      .sizing(x: .grow, y: .grow)
-  }
-
-  @MainActor private var bottomChrome: some Block {
-    VStack(spacing: 0) {
-      if showQueue {
-        queuedTray
-      }
-      composer
-      status
-    }
-    .sizing(x: .grow)
-  }
-
-  @MainActor private var queuedTray: some Block {
-    Text("QUEUED (1)")
-      .sizing(x: .grow)
-      .sizing(y: .fixed(24))
-  }
-
-  @MainActor private var composer: some Block {
-    Text("COMPOSER")
-      .sizing(x: .grow)
-      .sizing(y: .fixed(36))
-  }
-
-  @MainActor private var status: some Block {
-    Text("STATUS")
-      .sizing(x: .grow)
-      .sizing(y: .fixed(24))
+    #expect(!layoutExpandsHorizontally(vertical))
+    #expect(layoutExpandsVertically(vertical))
+    #expect(measureLayout(vertical, proposal: proposal, context: context).width < proposal.width)
   }
 }

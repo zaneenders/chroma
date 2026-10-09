@@ -16,7 +16,7 @@ struct ContentAPITests {
   }
 
   @Test func wrappedTextMeasurementDrawingAndSelectionAgree() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let metrics = context.fontMetrics
     let width = metrics.cellAdvance * 2
     let text = Text("abcd").wrapping().selectable()
@@ -24,7 +24,7 @@ struct ContentAPITests {
     #expect(size.height == metrics.lineAdvance * 2)
     let producer = FrameProducer()
     let list = producer.render(
-      build: { buffer, context in buffer.emit(text, context: context) }, viewport: size, input: InputState(),
+      build: { buffer, context in buffer.text(text, context: context) }, viewport: size, input: InputState(),
       context: context, onChange: {})
     let strings = list.paintSnapshot.compactMap { command -> String? in
       if case .text(_, let text, _, _) = command { return text }
@@ -44,7 +44,7 @@ struct ContentAPITests {
     let context = runtime.context
     var text = "abcd"
     let editor = TextEditor(text: { text }, onChange: { text = $0 })
-    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
+    runtime.build = { buffer, context in buffer.textEditor(editor, context: context) }
     func render(_ events: [TextEditEvent] = []) {
       _ = runtime.render(
         viewport: Size(width: 200, height: 100),
@@ -75,7 +75,7 @@ struct ContentAPITests {
         ended += 1
         return .handled
       })
-    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
+    runtime.build = { buffer, context in buffer.textEditor(editor, context: context) }
     func render(_ events: [TextEditEvent] = []) {
       _ = runtime.render(
         viewport: Size(width: 200, height: 100),
@@ -95,14 +95,14 @@ struct ContentAPITests {
   @Test func rowRevealUsesStableKeysAfterReordering() {
     let controller = ScrollViewController()
     let producer = FrameProducer()
-    let context = BlockContext()
+    let context = LayoutContext()
     struct Item: Identifiable { let id: Int }
     func render(_ ids: [Int]) {
       _ = producer.render(
         build: { buffer, context in
-          buffer.emit(
-            ScrollView(data: ids.map { Item(id: $0) }, rowHeight: 20, controller: controller) {
-              Text(String($0.id))
+          buffer.scrollView(
+            ScrollView(data: ids.map { Item(id: $0) }, rowHeight: 20, controller: controller) { buffer, context, item in
+              buffer.text(Text(String(item.id)), context: context)
             }, context: context)
         },
         viewport: Size(width: 200, height: 40), input: InputState(), context: context, onChange: {})
@@ -119,14 +119,14 @@ struct ContentAPITests {
   @Test func rowRevealWaitsForMissingRow() {
     let controller = ScrollViewController()
     let producer = FrameProducer()
-    let context = BlockContext()
+    let context = LayoutContext()
     struct Item: Identifiable { let id: Int }
     func render(_ ids: [Int]) {
       _ = producer.render(
         build: { buffer, context in
-          buffer.emit(
-            ScrollView(data: ids.map { Item(id: $0) }, rowHeight: 20, controller: controller) {
-              Text(String($0.id))
+          buffer.scrollView(
+            ScrollView(data: ids.map { Item(id: $0) }, rowHeight: 20, controller: controller) { buffer, context, item in
+              buffer.text(Text(String(item.id)), context: context)
             }, context: context)
         }, viewport: Size(width: 200, height: 40), input: InputState(), context: context, onChange: {})
     }
@@ -144,7 +144,7 @@ struct ContentAPITests {
     let editor = TextEditor(lineLimits: 2...2, text: { text }, onChange: { _ in })
     let line = context.fontMetrics.lineAdvance
     let height = 2 * line + 16
-    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
+    runtime.build = { buffer, context in buffer.textEditor(editor, context: context) }
     func render(_ input: InputState = InputState()) -> DrawList {
       runtime.render(
         viewport: Size(width: 200, height: height),
@@ -177,7 +177,7 @@ struct ContentAPITests {
     let editor = TextEditor(lineLimits: 2...2, text: { text }, onChange: { _ in })
     let line = context.fontMetrics.lineAdvance
     let size = Size(width: 200, height: 2 * line + 16)
-    runtime.build = { buffer, context in buffer.emit(editor, context: context) }
+    runtime.build = { buffer, context in buffer.textEditor(editor, context: context) }
     func render(_ input: InputState = InputState()) {
       _ = runtime.render(
         viewport: size, input: input,
@@ -191,17 +191,22 @@ struct ContentAPITests {
     #expect(context.interaction.textSelectionRange == 0..<text.count)
   }
 
-  @Test func stringsComposeWithLoopsAndModifiers() {
-    let content = ScrollView("Messages") {
-      "Header".padding(2)
+  @Test func directTextNodesComposeWithLoopsAndLayout() {
+    let content = ScrollView("Messages") { buffer, context in
+      let headerContext = context.childScope(0)
+      let header = buffer.text(Text("Header"), context: headerContext)
+      var children = [buffer.padding(header, 2, context: headerContext)]
       for index in 0..<3 {
-        "Message \(index)"
+        children.append(buffer.text(Text("Message \(index)"), context: context.childScope(1).keyed(index)))
       }
-      if true { "Footer" }
+      let showFooter = true
+      if showFooter { children.append(buffer.text(Text("Footer"), context: context.childScope(2))) }
+      return buffer.stack(children, axis: .vertical, context: context)
     }
-    let context = BlockContext()
+    let context = LayoutContext()
     let list = FrameProducer().render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 200),
+      build: { buffer, context in buffer.scrollView(content, context: context) },
+      viewport: Size(width: 200, height: 200),
       input: InputState(),
       context: context, onChange: {})
     let strings = list.paintSnapshot.compactMap { command -> String? in
@@ -215,14 +220,14 @@ struct ContentAPITests {
   @Test func namedVirtualizedScrollUsesCurrentConfiguration() {
     let controller = ScrollViewController()
     controller.scrollToBottom()
-    var view = ScrollView("History", data: 0..<100, rowHeight: 20, controller: controller) {
-      "Row \($0)"
+    var view = ScrollView("History", data: 0..<100, rowHeight: 20, controller: controller) { buffer, context, row in
+      buffer.text(Text("Row \(row)"), context: context)
     }
     view.showsIndicator = false
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let list = producer.render(
-      build: { buffer, context in buffer.emit(view, context: context) }, viewport: Size(width: 200, height: 40),
+      build: { buffer, context in buffer.scrollView(view, context: context) }, viewport: Size(width: 200, height: 40),
       input: InputState(), context: context, onChange: {})
     #expect(view.controller === controller)
     #expect(controller.offset == 1960)
@@ -234,7 +239,7 @@ struct ContentAPITests {
     #expect(strings.contains("Row 99"))
     #expect(strings.count <= 3)
     _ = producer.render(
-      build: { buffer, context in buffer.emit(EmptyBlock(), context: context) }, viewport: Size(width: 200, height: 40),
+      build: { buffer, context in buffer.empty(context: context) }, viewport: Size(width: 200, height: 40),
       input: InputState(),
       context: context, onChange: {})
     #expect(context.interaction.scrollStates.isEmpty)
@@ -244,16 +249,19 @@ struct ContentAPITests {
     let controller = ScrollViewController()
     let view = ScrollView(
       controller: controller,
-      rows: (0..<20).map {
-        ScrollView.Row(id: $0, content: Text("Row \($0)").sizing(y: .fixed(20)))
+      rows: (0..<20).map { row in
+        ScrollView.Row(id: row) { buffer, context in
+          let text = buffer.text(Text("Row \(row)"), context: context)
+          return buffer.sizing(text, y: .fixed(20), context: context)
+        }
       })
     var copy = view
     copy.name = "Copied"
     copy.showsIndicator = false
     controller.scrollToBottom()
-    let context = BlockContext()
+    let context = LayoutContext()
     _ = FrameProducer().render(
-      build: { buffer, context in buffer.emit(copy, context: context) }, viewport: Size(width: 200, height: 40),
+      build: { buffer, context in buffer.scrollView(copy, context: context) }, viewport: Size(width: 200, height: 40),
       input: InputState(),
       context: context, onChange: {})
     #expect(copy.controller === controller)
@@ -267,18 +275,21 @@ struct ContentAPITests {
     let runtime = WindowRuntime()
     let context = runtime.context
     let viewport = Size(width: 100, height: 40)
-    let wide = ScrollView(controller: controller) {
-      Color.white.sizing(x: .fixed(300), y: .fixed(100))
+    let wide = ScrollView(controller: controller) { buffer, context in
+      let color = buffer.color(.white, context: context)
+      return buffer.sizing(color, x: .fixed(300), y: .fixed(100), context: context)
     }
-    var content: any Block = wide
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    var content = wide
+    runtime.build = { buffer, context in buffer.scrollView(content, context: context) }
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     _ = runtime.render(
       viewport: viewport,
       input: InputState(pointerPosition: Point(x: 20, y: 20), scrollDelta: Point(x: -50, y: 0)),
       onChange: {})
     #expect(controller.horizontalOffset == 50)
-    let rows = ScrollView(data: 0..<20, rowHeight: 20, controller: controller) { "Row \($0)" }
+    let rows = ScrollView(data: 0..<20, rowHeight: 20, controller: controller) { buffer, context, row in
+      buffer.text(Text("Row \(row)"), context: context)
+    }
     content = rows
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     #expect(controller.horizontalOffset == 0)

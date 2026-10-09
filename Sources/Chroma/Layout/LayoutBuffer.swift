@@ -24,11 +24,10 @@ public struct LayoutBuffer: ~Copyable {
     case empty, spacer
     case stack(Stack)
     case overlay(Range<Int>, Bool)
-    case fragment(Range<Int>)
-    case layout(LayoutNode, LayoutModifier.Operation)
+    case layout(LayoutNode, LayoutOperation)
     case decoration(LayoutNode, Decoration)
     case group(LayoutNode, String?)
-    case command(LayoutNode, CommandScope.Operation)
+    case command(LayoutNode, CommandOperation)
     case focus(LayoutNode, FocusTarget)
     case animation(LayoutNode, ScalarAnimation)
     case trailing(LayoutNode, LayoutNode, Float)
@@ -82,7 +81,7 @@ public struct LayoutBuffer: ~Copyable {
   private let owner: UInt64
   private var generation: UInt64 = 0
   private var nodes = BasicContainers.UniqueArray<Record>()
-  private var contexts = BasicContainers.UniqueArray<BlockContext>()
+  private var contexts = BasicContainers.UniqueArray<LayoutContext>()
   private var buttons = BasicContainers.UniqueArray<Button>()
   private var editors = BasicContainers.UniqueArray<TextEditorNode>()
   private var interactives = BasicContainers.UniqueArray<InteractiveNode>()
@@ -125,10 +124,7 @@ public struct LayoutBuffer: ~Copyable {
   public func contains(_ node: LayoutNode) -> Bool {
     node.owner == owner && node.generation == generation && nodes.indices.contains(node.index)
   }
-  public mutating func emit(_ block: any Block, context: BlockContext) -> LayoutNode {
-    block.emit(into: &self, context: context)
-  }
-  mutating func node(_ content: Content, context: BlockContext) -> LayoutNode {
+  mutating func node(_ content: Content, context: LayoutContext) -> LayoutNode {
     let node = LayoutNode(owner: owner, generation: generation, index: nodes.count)
     if nodes.count == nodes.capacity { PipelineMetrics.record(.bufferGrowth) }
     PipelineMetrics.record(.layoutNode)
@@ -137,28 +133,28 @@ public struct LayoutBuffer: ~Copyable {
     nodes.append(Record(content: content))
     return node
   }
-  public mutating func text(_ text: Text, context: BlockContext) -> LayoutNode {
+  public mutating func text(_ text: Text, context: LayoutContext) -> LayoutNode {
     node(.text(text), context: context.component(Text.self))
   }
-  public mutating func image(_ image: Image, context: BlockContext) -> LayoutNode {
+  public mutating func image(_ image: Image, context: LayoutContext) -> LayoutNode {
     node(.image(image), context: context.component(Image.self))
   }
-  public mutating func color(_ color: Color, context: BlockContext) -> LayoutNode {
+  public mutating func color(_ color: Color, context: LayoutContext) -> LayoutNode {
     node(.color(color), context: context.component(Color.self))
   }
-  public mutating func marqueeText(_ text: MarqueeText, context: BlockContext) -> LayoutNode {
+  public mutating func marqueeText(_ text: MarqueeText, context: LayoutContext) -> LayoutNode {
     node(.marquee(text), context: context.component(MarqueeText.self))
   }
-  public mutating func progressIndicator(_ progress: ProgressIndicator, context: BlockContext) -> LayoutNode {
+  public mutating func progressIndicator(_ progress: ProgressIndicator, context: LayoutContext) -> LayoutNode {
     node(.progress(progress), context: context.component(ProgressIndicator.self))
   }
-  public mutating func button(_ button: Button, context: BlockContext) -> LayoutNode {
+  public mutating func button(_ button: Button, context: LayoutContext) -> LayoutNode {
     let index = buttons.count
     if index == buttons.capacity { PipelineMetrics.record(.bufferGrowth) }
     buttons.append(button)
     return node(.button(index), context: context.component(Button.self))
   }
-  public mutating func textEditor(_ editor: TextEditor, context: BlockContext) -> LayoutNode {
+  public mutating func textEditor(_ editor: TextEditor, context: LayoutContext) -> LayoutNode {
     let context = context.component(TextEditor.self)
     let index = editors.count
     if index == editors.capacity { PipelineMetrics.record(.bufferGrowth) }
@@ -167,15 +163,15 @@ public struct LayoutBuffer: ~Copyable {
   }
   public mutating func interactive(
     action: @escaping @MainActor () -> Void,
-    content: @escaping @MainActor (inout LayoutBuffer, BlockContext, InteractionPhase) -> LayoutNode,
-    context: BlockContext
+    content: @escaping @MainActor (inout LayoutBuffer, LayoutContext, InteractionPhase) -> LayoutNode,
+    context: LayoutContext
   ) -> LayoutNode {
     interactive(id: nil, action: action, content: content, context: context)
   }
   mutating func interactive(
     id: WidgetID?, action: @escaping @MainActor () -> Void,
-    content: @escaping @MainActor (inout LayoutBuffer, BlockContext, InteractionPhase) -> LayoutNode,
-    context: BlockContext
+    content: @escaping @MainActor (inout LayoutBuffer, LayoutContext, InteractionPhase) -> LayoutNode,
+    context: LayoutContext
   ) -> LayoutNode {
     let context = context.component(InteractiveNode.self)
     let index = interactives.count
@@ -183,18 +179,18 @@ public struct LayoutBuffer: ~Copyable {
     interactives.append(InteractiveNode(id: id, action: action, content: content, context: context))
     return node(.interactive(index), context: context)
   }
-  public mutating func scrollView(_ scroll: ScrollView, context: BlockContext) -> LayoutNode {
+  public mutating func scrollView(_ scroll: ScrollView, context: LayoutContext) -> LayoutNode {
     let index = scrolls.count
     if index == scrolls.capacity { PipelineMetrics.record(.bufferGrowth) }
     scrolls.append(ScrollNode(scroll: scroll))
     return node(.scroll(index), context: context.component(ScrollView.self))
   }
-  public mutating func spacer(context: BlockContext) -> LayoutNode { node(.spacer, context: context) }
-  public mutating func empty(context: BlockContext) -> LayoutNode { node(.empty, context: context) }
+  public mutating func spacer(context: LayoutContext) -> LayoutNode { node(.spacer, context: context) }
+  public mutating func empty(context: LayoutContext) -> LayoutNode { node(.empty, context: context) }
 
   /// Narrow extension for an externally defined leaf. Built-in nodes use typed records.
   public mutating func customLeaf(
-    context: BlockContext, focusRule: FocusRule = .standard,
+    context: LayoutContext, focusRule: FocusRule = .standard,
     expandsHorizontally: Bool = false, expandsVertically: Bool = false,
     measure: @escaping (Size) -> Size, register: @escaping (Rect) -> Void,
     paint: @escaping (inout DrawList, Rect) -> Void
@@ -220,7 +216,7 @@ public struct LayoutBuffer: ~Copyable {
       .focus(let child, _), .animation(let child, _):
       value = expands(child, horizontally: horizontally)
     case .stack(let stack): value = stackExpands(stack, horizontally: horizontally)
-    case .overlay(let range, _), .fragment(let range):
+    case .overlay(let range, _):
       value = range.contains { expands(children[$0].node, horizontally: horizontally) }
     case .interactive(let index):
       var state = interactives[index]
@@ -263,14 +259,14 @@ public struct LayoutBuffer: ~Copyable {
       size = state.sizeThatFits(proposal, in: &self)
       interactives[index] = state
     case .layout(let child, let operation):
-      size = LayoutModifier.sizeThatFits(operation, proposal: proposal) {
+      size = LayoutOperation.sizeThatFits(operation, proposal: proposal) {
         sizeThatFits(child, $0)
       }
     case .decoration(let child, _), .group(let child, _), .command(let child, _), .focus(let child, _),
       .animation(let child, _):
       size = sizeThatFits(child, proposal)
     case .stack(let stack): (size, layout) = placeStack(stack, proposal: proposal)
-    case .overlay(let range, _), .fragment(let range):
+    case .overlay(let range, _):
       size = range.reduce(.zero) { result, index in
         let child = sizeThatFits(children[index].node, proposal)
         return Size(width: max(result.width, child.width), height: max(result.height, child.height))
@@ -305,16 +301,9 @@ public struct LayoutBuffer: ~Copyable {
     switch nodes[node.index].content {
     case .text(let value):
       value.register(in: rect, context: context)
-      rule = value.focusRule
-    case .image(let value):
-      value.register(in: rect, context: context)
-      rule = value.focusRule
-    case .marquee(let value):
-      value.register(in: rect, context: context)
-      rule = value.focusRule
-    case .progress(let value):
-      value.register(in: rect, context: context)
-      rule = value.focusRule
+      rule = .container
+    case .image, .marquee: rule = .standard
+    case .progress: rule = .decorative
     case .color: rule = .standard
     case .button(let index):
       buttons[index].register(in: rect, context: context)
@@ -327,7 +316,7 @@ public struct LayoutBuffer: ~Copyable {
     case .custom(let leaf):
       leaf.register(rect)
       rule = leaf.focusRule
-    case .layout(let child, let operation): register(child, in: LayoutModifier.placed(operation, in: rect))
+    case .layout(let child, let operation): register(child, in: LayoutOperation.placed(operation, in: rect))
     case .decoration(let child, let decoration):
       switch decoration {
       case .background(let background):
@@ -350,13 +339,12 @@ public struct LayoutBuffer: ~Copyable {
         register(child, in: Rect(origin: rect.origin, size: group ? sizeThatFits(child, rect.size) : rect.size))
       }
       if group { context.interaction.endGroup() }
-    case .fragment(let range): for index in range { register(children[index].node, in: rect) }
     case .group(let child, let name):
       context.interaction.beginGroup(rect: rect, navigationID: context.widgetID, navigationName: name)
       register(child, in: rect)
       context.interaction.endGroup()
     case .command(let child, let operation):
-      CommandScope.withRegistration(operation, in: rect, context: context) { register(child, in: rect) }
+      CommandOperation.withRegistration(operation, in: rect, context: context) { register(child, in: rect) }
     case .focus(let child, let target):
       _ = target.pendingEditing
       register(child, in: rect)
@@ -401,16 +389,16 @@ public struct LayoutBuffer: ~Copyable {
     switch nodes[node.index].content {
     case .text(let value):
       value.paint(into: &list, in: rect, context: context)
-      highlight = value.focusRule == .standard
+      highlight = false
     case .image(let value):
       value.paint(into: &list, in: rect, context: context)
-      highlight = value.focusRule == .standard
+      highlight = true
     case .marquee(let value):
       value.paint(into: &list, in: rect, context: context)
-      highlight = value.focusRule == .standard
+      highlight = true
     case .progress(let value):
       value.paint(into: &list, in: rect, context: context)
-      highlight = value.focusRule == .standard
+      highlight = false
     case .color(let color):
       list.fillRect(rect, color: color)
       highlight = true
@@ -422,7 +410,7 @@ public struct LayoutBuffer: ~Copyable {
     case .custom(let leaf):
       leaf.paint(&list, rect)
       highlight = leaf.focusRule == .standard
-    case .layout(let child, let operation): paint(child, into: &list, in: LayoutModifier.placed(operation, in: rect))
+    case .layout(let child, let operation): paint(child, into: &list, in: LayoutOperation.placed(operation, in: rect))
     case .decoration(let child, let decoration):
       switch decoration {
       case .background(let background):
@@ -448,7 +436,7 @@ public struct LayoutBuffer: ~Copyable {
       for (childIndex, placementIndex) in zip(stack.children, range) {
         paint(children[childIndex].node, into: &list, in: placed(placements[placementIndex], in: rect))
       }
-    case .overlay(let range, _), .fragment(let range):
+    case .overlay(let range, _):
       for index in range {
         let child = children[index].node
         paint(child, into: &list, in: nodes[child.index].registeredRect!)
@@ -468,19 +456,10 @@ public struct LayoutBuffer: ~Copyable {
     }
   }
 
-  private mutating func appendChildren(_ childNodes: [LayoutNode], flatten: Bool) -> Range<Int> {
-    var expanded: [LayoutNode] = []
-    func collect(_ node: LayoutNode) {
-      precondition(contains(node), "Stale layout handle")
-      if flatten, case .fragment(let range) = nodes[node.index].content {
-        for index in range { collect(children[index].node) }
-      } else {
-        expanded.append(node)
-      }
-    }
-    for child in childNodes { collect(child) }
+  private mutating func appendChildren(_ childNodes: [LayoutNode]) -> Range<Int> {
     let start = children.count
-    for child in expanded {
+    for child in childNodes {
+      precondition(contains(child), "Stale layout handle")
       if children.count == children.capacity { PipelineMetrics.record(.bufferGrowth) }
       let spacer: Bool
       if case .spacer = nodes[child.index].content { spacer = true } else { spacer = false }
@@ -488,34 +467,15 @@ public struct LayoutBuffer: ~Copyable {
     }
     return start..<children.count
   }
-  mutating func mapChildren(
-    _ node: LayoutNode, context: BlockContext,
-    transform: (inout LayoutBuffer, LayoutNode, BlockContext) -> LayoutNode
-  ) -> LayoutNode {
-    if case .fragment(let range) = nodes[node.index].content {
-      var result: [LayoutNode] = []
-      for index in range {
-        let child = children[index].node
-        let childContext = contexts[child.index]
-        result.append(transform(&self, child, childContext))
-      }
-      return fragment(result, context: context)
-    }
-    return transform(&self, node, context)
-  }
-  mutating func fragment(_ childNodes: [LayoutNode], context: BlockContext) -> LayoutNode {
-    let range = appendChildren(childNodes, flatten: true)
-    return node(.fragment(range), context: context)
-  }
-  public mutating func overlay(_ childNodes: [LayoutNode], group: Bool = true, context: BlockContext) -> LayoutNode {
-    let range = appendChildren(childNodes, flatten: true)
+  public mutating func overlay(_ childNodes: [LayoutNode], group: Bool = true, context: LayoutContext) -> LayoutNode {
+    let range = appendChildren(childNodes)
     return node(.overlay(range, group), context: context)
   }
   public mutating func stack(
     _ childNodes: [LayoutNode], axis: FocusGroupAxis, spacing: Float = 0,
-    reversed: Bool = false, bottomAligned: Bool = false, context: BlockContext
+    reversed: Bool = false, bottomAligned: Bool = false, context: LayoutContext
   ) -> LayoutNode {
-    let range = appendChildren(childNodes, flatten: true)
+    let range = appendChildren(childNodes)
     return node(
       .stack(
         Stack(

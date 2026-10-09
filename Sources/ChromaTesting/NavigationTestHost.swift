@@ -24,12 +24,12 @@ public final class NavigationTestHost {
   }
 
   public init(
-    content: any Block, size: Size = Size(width: 800, height: 600),
+    build: @escaping LayoutBuilder, size: Size = Size(width: 800, height: 600),
     keyBindings: KeyBindings = .modalNavigation
   ) {
     host = HeadlessHost(size: size)
     host.keyBindings = keyBindings
-    host.setContent(content)
+    host.build = build
     host.render()
   }
 

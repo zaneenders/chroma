@@ -34,23 +34,33 @@ public final class StressScene {
     controllers = (0..<configuration.panes).map { _ in ScrollViewController() }
   }
 
-  public var content: some Block {
+  public func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
     let capturedActions = actions
-    return VStack(spacing: 4) {
-      Button("Update all panes (\(capturedActions))") { [weak self] in
-        self?.actions = capturedActions + 1
-      }
-      Text("\(configuration.panes) panes × \(configuration.rows) identified rows • depth \(configuration.depth)")
-      HStack(spacing: 8) {
-        for pane in 0..<configuration.panes {
-          ScrollView(data: items, rowHeight: 100, spacing: 2, controller: controllers[pane]) { [weak self] item in
+    let action = buffer.button(
+      Button("Update all panes (\(capturedActions))") { [weak self] in self?.actions = capturedActions + 1 },
+      context: context.childScope(0))
+    let title = buffer.text(
+      Text("\(configuration.panes) panes × \(configuration.rows) identified rows • depth \(configuration.depth)"),
+      context: context.childScope(1))
+    let panesContext = context.childScope(2)
+    let panes = (0..<configuration.panes).map { pane in
+      let paneContext = panesContext.keyed(pane)
+      let scroll = buffer.scrollView(
+        ScrollView(
+          data: items, rowHeight: 100, spacing: 2, controller: controllers[pane],
+          build: { [weak self] buffer, context, item in
             self?.rowConstructions += 1
             return StressRow(
-              index: item.id, pane: pane, revision: capturedActions, depth: self?.configuration.depth ?? 0)
-          }.sizing(x: .grow, y: .grow)
-        }
-      }.sizing(y: .grow)
-    }.padding(8)
+              index: item.id, pane: pane, revision: capturedActions, depth: self?.configuration.depth ?? 0
+            )
+            .build(into: &buffer, context: context)
+          }), context: paneContext)
+      return buffer.sizing(scroll, x: .grow, y: .grow, context: paneContext)
+    }
+    let horizontal = buffer.stack(panes, axis: .horizontal, spacing: 8, context: panesContext)
+    let expanded = buffer.sizing(horizontal, y: .grow, context: panesContext)
+    let root = buffer.stack([action, title, expanded], axis: .vertical, spacing: 4, context: context)
+    return buffer.padding(root, 8, context: context)
   }
 
   public func scrollInput(event: Int) -> InputState {
@@ -62,38 +72,51 @@ public final class StressScene {
   }
 }
 
-private struct StressRow: Block {
+private struct StressRow {
   let index: Int
   let pane: Int
   let revision: Int
   let depth: Int
 
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.emit(content(), context: context.component(Self.self))
+  @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.background(
+      context: context,
+      content: { buffer, context in
+        let group = buffer.group(context: context) { buffer, context in
+          nested(depth, into: &buffer, context: context)
+        }
+        return buffer.sizing(group, x: .grow, context: context)
+      }, background: { buffer, context in buffer.color(.black, context: context) })
   }
 
-  @MainActor private func content() -> some Block {
-    var content: any Block = VStack(spacing: 2) {
-      HStack {
-        Text("Pane \(pane) / Session \(index)")
-        Spacer()
-        Text("Revision \(revision)")
-      }
-      Text("A longer session preview exercises text measurement alongside nested layout and controls.")
-      HStack {
-        Button("Open") {}
-        Button("Retry") {}
-        Text(index % 3 == 0 ? "Running" : "Ready")
-      }
-    }
-    for _ in 0..<depth {
-      let child = content
-      content = Interactive(
+  @MainActor private func nested(_ remaining: Int, into buffer: inout LayoutBuffer, context: LayoutContext)
+    -> LayoutNode
+  {
+    if remaining > 0 {
+      return buffer.interactive(
         action: {},
-        content: { _ in
-          VStack { HStack { child.sizing(x: .grow) } }.padding(1)
-        })
+        content: { buffer, context, _ in
+          let childContext = context.childScope(0).childScope(0)
+          let child = nested(remaining - 1, into: &buffer, context: childContext)
+          let expanded = buffer.sizing(child, x: .grow, context: childContext)
+          let horizontal = buffer.stack([expanded], axis: .horizontal, context: context.childScope(0))
+          let vertical = buffer.stack([horizontal], axis: .vertical, context: context)
+          return buffer.padding(vertical, 1, context: context)
+        }, context: context)
     }
-    return Group { content }.sizing(x: .grow).background(Color.black)
+    let headingContext = context.childScope(0)
+    let title = buffer.text(Text("Pane \(pane) / Session \(index)"), context: headingContext.childScope(0))
+    let spacer = buffer.spacer(context: headingContext.childScope(1))
+    let status = buffer.text(Text("Revision \(revision)"), context: headingContext.childScope(2))
+    let heading = buffer.stack([title, spacer, status], axis: .horizontal, context: headingContext)
+    let preview = buffer.text(
+      Text("A longer session preview exercises text measurement alongside nested layout and controls."),
+      context: context.childScope(1))
+    let controlsContext = context.childScope(2)
+    let open = buffer.button(Button("Open") {}, context: controlsContext.childScope(0))
+    let retry = buffer.button(Button("Retry") {}, context: controlsContext.childScope(1))
+    let state = buffer.text(Text(index % 3 == 0 ? "Running" : "Ready"), context: controlsContext.childScope(2))
+    let controls = buffer.stack([open, retry, state], axis: .horizontal, context: controlsContext)
+    return buffer.stack([heading, preview, controls], axis: .vertical, spacing: 2, context: context)
   }
 }

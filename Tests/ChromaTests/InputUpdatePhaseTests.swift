@@ -11,8 +11,8 @@ struct InputUpdatePhaseTests {
     var paints = 0
     var showing = true
   }
-  struct Observer: Block {
-    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+  struct Observer {
+    @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
       let context = context.component(Self.self)
       return buffer.customLeaf(
         context: context, focusRule: focusRule,
@@ -24,8 +24,8 @@ struct InputUpdatePhaseTests {
 
     let state: State
     var focusRule: FocusRule { .decorative }
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    @MainActor func register(in rect: Rect, context: BlockContext) {
+    @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
+    @MainActor func register(in rect: Rect, context: LayoutContext) {
       state.updates += 1
       context.registerInputHandler { input in
         state.events.append(contentsOf: input.textEvents.map(String.init(describing:)))
@@ -33,15 +33,15 @@ struct InputUpdatePhaseTests {
         _ = context.interactionMode
       }
     }
-    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) { state.paints += 1 }
+    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) { state.paints += 1 }
 
   }
 
   @Test func beginningRegistrationDoesNotDispatchInput() {
     let state = State()
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
-    let node = buffer.emit(Observer(state: state), context: context)
+    let node = Observer(state: state).build(into: &buffer, context: context)
     let rect = Rect(x: 0, y: 0, width: 20, height: 20)
     context.interaction.beginFrame(input: InputState())
     buffer.register(node, in: rect)
@@ -62,7 +62,9 @@ struct InputUpdatePhaseTests {
     let state = State()
     let host = HeadlessHost()
     defer { host.close() }
-    host.setContent(Observer(state: state))
+    host.build = { buffer, context in
+      return Observer(state: state).build(into: &buffer, context: context)
+    }
     _ = host.renderIfNeeded()
     host.sendInput(InputState(textEvents: [.insert("a")]))
     host.sendInput(InputState(textEvents: [.insert("b")]))
@@ -78,7 +80,9 @@ struct InputUpdatePhaseTests {
     do {
       let state = State()
       captured = state
-      ownedHost!.setContent(Observer(state: state))
+      ownedHost!.build = { buffer, context in
+        return Observer(state: state).build(into: &buffer, context: context)
+      }
       ownedHost!.render()
     }
     #expect(captured != nil)
@@ -89,16 +93,20 @@ struct InputUpdatePhaseTests {
     do {
       let state = State()
       captured = state
-      host.setContent(Observer(state: state))
+      host.build = { buffer, context in
+        return Observer(state: state).build(into: &buffer, context: context)
+      }
       host.render()
     }
-    host.setContent(EmptyBlock())
+    host.build = { buffer, context in
+      return buffer.empty(context: context)
+    }
     #expect(captured == nil)
     host.close()
   }
   @Test func removedProviderDoesNotKeepCopyOrSelectAllCallbacks() {
-    struct Provider: Block {
-      @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    struct Provider {
+      @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
         let context = context.component(Self.self)
         return buffer.customLeaf(
           context: context, focusRule: focusRule,
@@ -109,46 +117,48 @@ struct InputUpdatePhaseTests {
       }
 
       var focusRule: FocusRule { .decorative }
-      @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      @MainActor func register(in rect: Rect, context: BlockContext) {
+      @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
+      @MainActor func register(in rect: Rect, context: LayoutContext) {
         context.setCopyTextProvider { "old root" }
         context.setSelectAllHandler { true }
       }
-      @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {}
+      @MainActor func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {}
 
     }
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let state = State()
-    let content = DeferredBlock { if state.showing { Provider() } }
+    let content: LayoutBuilder = { buffer, context in
+      if state.showing { return Provider().build(into: &buffer, context: context) }
+      return buffer.empty(context: context)
+    }
     _ = producer.render(
-      build: { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 20, height: 20),
+      build: content, viewport: Size(width: 20, height: 20),
       input: InputState(),
       context: context, onChange: {})
     #expect(context.interaction.copyText() == "old root")
     state.showing = false
     producer.refreshRegistrations(
-      { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 20, height: 20),
+      content, viewport: Size(width: 20, height: 20),
       context: context)
     #expect(context.interaction.copyText() == nil)
     #expect(context.interaction.onSelectAll == nil)
   }
 
   @Test func opaquePaintingDoesNotConstructItsChildAgain() {
-    struct Factory: Block {
+    struct Factory {
       let state: State
-      @MainActor var child: some Block {
+      @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
         state.updates += 1
-        return Text(String(state.updates))
-      }
-      func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-        buffer.emit(child, context: context.component(Self.self))
+        return buffer.text(Text(String(state.updates)), context: context.component(Self.self))
       }
     }
     let state = State()
     let host = HeadlessHost()
     defer { host.close() }
-    host.setContent(Factory(state: state))
+    host.build = { buffer, context in
+      return Factory(state: state).build(into: &buffer, context: context)
+    }
     host.render()
     #expect(state.updates == 2)  // Initial registration and first presentation update.
     let frame = host.render()

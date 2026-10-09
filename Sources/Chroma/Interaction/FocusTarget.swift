@@ -25,18 +25,6 @@ public final class FocusTarget {
   }
 }
 
-public struct FocusTargetBlock: Block {
-  var content: any Block
-  let target: FocusTarget
-
-}
-
-extension Block {
-  public func focusTarget(_ target: FocusTarget) -> FocusTargetBlock {
-    FocusTargetBlock(content: self, target: target)
-  }
-}
-
 extension Interaction {
   func registerFocusTargets(_ targets: [FocusTarget], id: WidgetID) {
     for target in targets {

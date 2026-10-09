@@ -208,9 +208,9 @@ import Testing
 
   struct InvalidGeometry: PaintableBlock {
     var focusRule: FocusRule { .standard }
-    func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-    func register(in rect: Rect, context: BlockContext) {}
-    func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+    func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
+    func register(in rect: Rect, context: LayoutContext) {}
+    func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
       list.fillRect(Rect(x: .nan, y: 0, width: 10, height: 10), color: Color(r: 1, g: 0, b: 0, a: 1))
     }
   }

@@ -1,8 +1,4 @@
-public struct Image: Block {
-  @MainActor public func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    buffer.image(self, context: context)
-  }
-
+public struct Image {
   public var resource: ImageResource
   public var scaling: ImageScaling
   public var alignment: ImageAlignment
@@ -17,15 +13,11 @@ public struct Image: Block {
     self.alignment = alignment
   }
 
-  var focusRule: FocusRule { .standard }
-
-  func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+  func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size {
     resource.size
   }
 
-  func register(in rect: Rect, context: BlockContext) {}
-
-  func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+  func paint(into drawList: inout DrawList, in rect: Rect, context: LayoutContext) {
     drawList.image(resource, in: rect, scaling: scaling, alignment: alignment)
   }
 }

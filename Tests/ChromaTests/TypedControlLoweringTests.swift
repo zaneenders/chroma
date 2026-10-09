@@ -7,13 +7,14 @@ struct TypedControlLoweringTests {
   private let rect = Rect(x: 0, y: 0, width: 200, height: 80)
 
   @Test func idleMeasurementAndRegistrationShareOneChild() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var phases: [InteractionPhase] = []
     var buffer = LayoutBuffer()
-    let node = buffer.emit(
-      Interactive(action: {}) { phase in
+    let node = buffer.interactive(
+      action: {},
+      content: { buffer, context, phase in
         phases.append(phase)
-        return Text("same child")
+        return buffer.text(Text("same child"), context: context)
       }, context: context)
     _ = buffer.expandsHorizontally(node)
     _ = buffer.expandsVertically(node)
@@ -30,7 +31,7 @@ struct TypedControlLoweringTests {
   }
 
   @Test func eachPhaseIsLoweredOnceWithinTheOperation() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var phases: [InteractionPhase] = []
     var buffer = LayoutBuffer()
     var node = InteractiveNode(
@@ -53,14 +54,15 @@ struct TypedControlLoweringTests {
   }
 
   @Test func paintKeepsRegisteredPhaseAndDoesNotResolveOrRegisterAgain() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let id = WidgetID("phase")
     var phases: [InteractionPhase] = []
     var buffer = LayoutBuffer()
-    let node = buffer.emit(
-      Interactive(id: id, action: {}) { phase in
+    let node = buffer.interactive(
+      id: id, action: {},
+      content: { buffer, context, phase in
         phases.append(phase)
-        return Text("\(phase)")
+        return buffer.text(Text("\(phase)"), context: context)
       }, context: context)
     _ = buffer.sizeThatFits(node, rect.size)
     context.interaction.hoveredLeafID = id
@@ -84,7 +86,7 @@ struct TypedControlLoweringTests {
   }
 
   @Test func editorReadsBindingOnceAcrossLayoutRegistrationAndDrawing() throws {
-    let context = BlockContext()
+    let context = LayoutContext()
     var reads = 0
     var text = "a👨‍👩‍👧‍👦e\u{301}"
     let snapshot = text
@@ -94,7 +96,7 @@ struct TypedControlLoweringTests {
         return text
       }, onChange: { text = $0 })
     var buffer = LayoutBuffer()
-    let node = buffer.emit(editor, context: context)
+    let node = buffer.textEditor(editor, context: context)
     #expect(reads == 1)
     text = "later binding value"
     _ = buffer.sizeThatFits(node, rect.size)
@@ -122,7 +124,7 @@ struct TypedControlLoweringTests {
       })
     context.interaction.endFrame()
     buffer.reset()
-    let fresh = buffer.emit(editor, context: context)
+    let fresh = buffer.textEditor(editor, context: context)
     #expect(reads == 2)
     context.interaction.beginFrame(input: InputState())
     buffer.register(fresh, in: rect)
@@ -131,13 +133,13 @@ struct TypedControlLoweringTests {
   }
 
   @Test func resetReplacesControlCallbacksBeforeAnotherInputEvent() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var actions: [String] = []
     var buffer = LayoutBuffer()
     func action(_ value: String) -> Button {
       Button(value, id: WidgetID("action"), action: { actions.append(value) })
     }
-    let first = buffer.emit(action("first"), context: context)
+    let first = buffer.button(action("first"), context: context)
     context.interaction.beginFrame(input: InputState())
     buffer.register(first, in: rect)
     context.interaction.endFrame()
@@ -145,7 +147,7 @@ struct TypedControlLoweringTests {
     context.interaction.processInput(
       InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
     buffer.reset()
-    let second = buffer.emit(action("second"), context: context)
+    let second = buffer.button(action("second"), context: context)
     context.interaction.beginFrame(input: InputState())
     buffer.register(second, in: rect)
     context.interaction.endFrame()
@@ -154,140 +156,105 @@ struct TypedControlLoweringTests {
     #expect(actions == ["second"])
   }
 
-  @Test func directModifiersMatchBuilderDrawingAndClippedActions() {
-    var activations = [0, 0]
-    var outputs: [[DrawEntry]] = []
+  @Test func directModifiersPreserveDrawingOrderAndClippedActions() {
+    var activations = 0
     let insets = EdgeInsets(leading: -20, trailing: -20)
-    for direct in [false, true] {
-      let index = direct ? 1 : 0
-      let context = BlockContext()
-      var buffer = LayoutBuffer()
-      let root: LayoutNode
-      if direct {
-        let background = buffer.background(
-          context: context,
-          content: { buffer, context in
-            let control = buffer.interactive(
-              action: { activations[index] += 1 },
-              content: { buffer, context, phase in
-                buffer.text(Text("\(phase)"), context: context)
-              }, context: context)
-            return buffer.padding(control, insets, context: context)
-          },
-          background: { buffer, context in buffer.color(.black, context: context) })
-        let rounded = buffer.roundedBackground(background, color: .black, radii: CornerRadii(3), context: context)
-        let bordered = buffer.border(rounded, color: .white, radii: CornerRadii(4), width: 2, context: context)
-        root = buffer.clip(bordered, context: context)
-      } else {
-        root = buffer.emit(
-          Interactive(action: { activations[index] += 1 }) { Text("\($0)") }
-            .padding(insets).background(Color.black).roundedBackground(.black, radius: 3)
-            .roundedBorder(.white, radius: 4, width: 2).clipped(), context: context)
-      }
-      context.interaction.beginFrame(
-        input: InputState(pointerPosition: Point(x: -100, y: -100)))
-      buffer.register(root, in: rect)
-      var list = DrawList()
-      buffer.paint(root, into: &list, in: rect)
-      outputs.append(list.commands)
-      context.interaction.endFrame()
-      #expect(activations[index] == 0)
-      #expect(context.interaction.tree?.children.count == 1)
-      for point in [Point(x: -5, y: 5), Point(x: 5, y: 5)] {
-        context.interaction.processInput(
-          InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
-        context.interaction.processInput(InputState(pointerPosition: point, pointerReleased: true))
-        context.interaction.finishInput()
-        #expect(activations[index] == (point.x < 0 ? 0 : 1))
-      }
-    }
-    #expect(outputs[0] == outputs[1])
-    #expect(activations == [1, 1])
-  }
-
-  @Test func directGroupFocusAndCommandScopesMatchBuilderBehavior() {
-    var activations = [0, 0]
-    var commands = [0, 0]
-    for direct in [false, true] {
-      let index = direct ? 1 : 0
-      let target = FocusTarget()
-      let context = BlockContext()
-      var buffer = LayoutBuffer()
-      let root: LayoutNode
-      if direct {
-        root = buffer.group("Actions", context: context) { buffer, context in
-          let child = buffer.focus(target, context: context) { buffer, context in
-            buffer.button(Button("Run", action: { activations[index] += 1 }), context: context)
-          }
-          let bound = buffer.keyBindings(child, .modalNavigation, context: context)
-          return buffer.onCommand(bound, .action(.submit), context: context) {
-            commands[index] += 1
-            return .handled
-          }
-        }
-      } else {
-        root = buffer.emit(
-          Group("Actions") {
-            Button("Run", action: { activations[index] += 1 }).focusTarget(target)
-              .keyBindings(.modalNavigation).onCommand(.action(.submit)) {
-                commands[index] += 1
-                return .handled
-              }
-          }, context: context)
-      }
-      target.focus()
-      context.interaction.beginFrame(input: InputState())
-      buffer.register(root, in: rect)
-      context.interaction.endFrame()
-      #expect(target.isFocused)
-      context.interaction.processInput(InputState(commands: [.action(.submit)]))
-      #expect(commands[index] == 1)
-      #expect(activations[index] == 0)
-      context.interaction.processInput(InputState(commands: [.action(.activate)]))
-      #expect(activations[index] == 1)
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    let background = buffer.background(
+      context: context,
+      content: { buffer, context in
+        let control = buffer.interactive(
+          action: { activations += 1 },
+          content: { buffer, context, phase in buffer.text(Text("\(phase)"), context: context) },
+          context: context)
+        return buffer.padding(control, insets, context: context)
+      }, background: { buffer, context in buffer.color(.black, context: context) })
+    let rounded = buffer.roundedBackground(background, color: .black, radii: CornerRadii(3), context: context)
+    let bordered = buffer.border(rounded, color: .white, radii: CornerRadii(4), width: 2, context: context)
+    let root = buffer.clip(bordered, context: context)
+    context.interaction.beginFrame(input: InputState(pointerPosition: Point(x: -100, y: -100)))
+    buffer.register(root, in: rect)
+    var list = DrawList()
+    buffer.paint(root, into: &list, in: rect)
+    context.interaction.endFrame()
+    #expect(
+      list.paintSnapshot == [
+        .pushClip(rect),
+        .fillRoundedRect(rect: rect, radii: CornerRadii(3), color: .black),
+        .fillRect(rect: rect, color: .black),
+        .text(position: Point(x: -20, y: 0), text: "idle", color: .white, scale: 1),
+        .strokeRoundedRect(rect: rect, radii: CornerRadii(4), width: 2, color: .white),
+        .popClip,
+      ])
+    #expect(activations == 0)
+    #expect(context.interaction.tree?.children.count == 1)
+    for point in [Point(x: -5, y: 5), Point(x: 5, y: 5)] {
+      context.interaction.processInput(
+        InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
+      context.interaction.processInput(InputState(pointerPosition: point, pointerReleased: true))
+      context.interaction.finishInput()
+      #expect(activations == (point.x < 0 ? 0 : 1))
     }
   }
 
-  @Test func directTrailingControlsAndSizingMatchBuilderGeometry() {
-    var outputs: [[DrawEntry]] = []
-    var sizes: [Size] = []
-    for direct in [false, true] {
-      let context = BlockContext()
-      var buffer = LayoutBuffer()
-      let root: LayoutNode
-      if direct {
-        root = buffer.trailingControls(
-          spacing: 6, context: context,
-          input: { buffer, context in
-            let text = buffer.text(Text("input"), context: context)
-            return buffer.sizing(text, x: .grow, y: .fixed(40), context: context)
-          },
-          controls: { buffer, context in
-            let text = buffer.text(Text("send"), context: context)
-            return buffer.padding(text, 3, context: context)
-          })
-      } else {
-        root = buffer.emit(
-          TrailingControlsRow(spacing: 6) {
-            Text("input").sizing(x: .grow, y: .fixed(40))
-          } controls: {
-            Text("send").padding(3)
-          }, context: context)
+  @Test func directGroupFocusAndCommandScopesPreserveBehavior() {
+    var activations = 0
+    var commands = 0
+    let target = FocusTarget()
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    let root = buffer.group("Actions", context: context) { buffer, context in
+      let child = buffer.focus(target, context: context) { buffer, context in
+        buffer.button(Button("Run", action: { activations += 1 }), context: context)
       }
-      sizes.append(buffer.sizeThatFits(root, rect.size))
-      context.interaction.beginFrame(input: InputState())
-      buffer.register(root, in: rect)
-      var list = DrawList()
-      buffer.paint(root, into: &list, in: rect)
-      outputs.append(list.commands)
-      context.interaction.endFrame()
+      let bound = buffer.keyBindings(child, .modalNavigation, context: context)
+      return buffer.onCommand(bound, .action(.submit), context: context) {
+        commands += 1
+        return .handled
+      }
     }
-    #expect(sizes[0] == sizes[1])
-    #expect(outputs[0] == outputs[1])
+    target.focus()
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(root, in: rect)
+    context.interaction.endFrame()
+    #expect(target.isFocused)
+    context.interaction.processInput(InputState(commands: [.action(.submit)]))
+    #expect(commands == 1)
+    #expect(activations == 0)
+    context.interaction.processInput(InputState(commands: [.action(.activate)]))
+    #expect(activations == 1)
+  }
+
+  @Test func directTrailingControlsAndSizingPlaceExactGeometry() {
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    let root = buffer.trailingControls(
+      spacing: 6, context: context,
+      input: { buffer, context in
+        let text = buffer.text(Text("input"), context: context)
+        return buffer.sizing(text, x: .grow, y: .fixed(40), context: context)
+      },
+      controls: { buffer, context in
+        let text = buffer.text(Text("send"), context: context)
+        return buffer.padding(text, 3, context: context)
+      })
+    let measured = buffer.sizeThatFits(root, rect.size)
+    #expect(measured == Size(width: 200, height: 40))
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(root, in: rect)
+    var list = DrawList()
+    buffer.paint(root, into: &list, in: rect)
+    context.interaction.endFrame()
+    #expect(
+      list.paintSnapshot == [
+        .text(position: Point(x: 0, y: 40), text: "input", color: .white, scale: 1),
+        .text(position: Point(x: 149, y: 49), text: "send", color: .white, scale: 1),
+      ])
   }
 
   @Test func directAnimationSamplesOnceAndRetargetsContinuously() {
-    let context = BlockContext()
+    let context = LayoutContext()
     var buffer = LayoutBuffer()
     var samples: [Float] = []
     for (time, target): (Double, Float) in [(0, 10), (0, 110), (0.5, 110), (0.5, 10), (1, 10), (1.5, 10)] {

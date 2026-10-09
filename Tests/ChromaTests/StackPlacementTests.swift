@@ -4,41 +4,27 @@ import Testing
 
 @MainActor
 struct StackPlacementTests {
-  private struct Wrapping: Block {
-    @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-      let context = context.component(Self.self)
-      return buffer.customLeaf(
-        context: context, focusRule: focusRule,
-        expandsHorizontally: false, expandsVertically: false,
-        measure: { sizeThatFits($0, context: context) },
-        register: { register(in: $0, context: context) },
-        paint: { paint(into: &$0, in: $1, context: context) })
-    }
-
-    @MainActor func register(in rect: Rect, context: BlockContext) {}
-
-    var focusRule: FocusRule { .standard }
-    @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-      Size(width: proposal.width, height: proposal.width < 80 ? 40 : 20)
-    }
-    @MainActor func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
-      list.fillRect(rect, color: .white)
-    }
-  }
-
   @Test func growRemeasuresAtRemainingWidthAndBottomAligns() {
-    let row = HStack(spacing: 8, alignment: .bottom) {
-      Wrapping().sizing(x: .grow)
-      Color.black.sizing(x: .fixed(30), y: .fixed(10))
+    let row: LayoutBuilder = { buffer, context in
+      let firstContext = context.childScope(0)
+      let first = buffer.customLeaf(
+        context: firstContext,
+        measure: { Size(width: $0.width, height: $0.width < 80 ? 40 : 20) },
+        register: { _ in }, paint: { $0.fillRect($1, color: .white) })
+      let input = buffer.sizing(first, x: .grow, context: firstContext)
+      let secondContext = context.childScope(1)
+      let second = buffer.color(.black, context: secondContext)
+      let controls = buffer.sizing(second, x: .fixed(30), y: .fixed(10), context: secondContext)
+      return buffer.stack([input, controls], axis: .horizontal, spacing: 8, bottomAligned: true, context: context)
     }
-    let context = BlockContext()
+    let context = LayoutContext()
     #expect(
-      measureBlock(row, proposal: Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
-    #expect(measureBlock(row, proposal: Size(width: 150, height: 200), context: context).height == 20)
+      measureLayout(row, proposal: Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
+    #expect(measureLayout(row, proposal: Size(width: 150, height: 200), context: context).height == 20)
     var list = DrawList()
     beginTestFrame(context.interaction, input: InputState())
     var resolvedBuffer = LayoutBuffer()
-    let resolved = resolvedBuffer.emit(row, context: context)
+    let resolved = row(&resolvedBuffer, context)
     resolvedBuffer.register(resolved, in: Rect(x: 10, y: 20, width: 100, height: 60))
     resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
     context.interaction.endFrame()
@@ -51,31 +37,26 @@ struct StackPlacementTests {
 
   @Test(arguments: [false, true], [false, true])
   func placementPreservesAxisAndReversal(horizontal: Bool, reversed: Bool) {
-    let first = Color.white.sizing(x: .fixed(20), y: .fixed(30))
-    let second = Color.black.sizing(x: .fixed(40), y: .fixed(50))
-    let stack: any Block
-    if horizontal {
-      let value = HStack(spacing: 5) {
-        first
-        second
-      }
-      stack = reversed ? value.reverseLayout() : value
-    } else {
-      let value = VStack(spacing: 5) {
-        first
-        second
-      }
-      stack = reversed ? value.reverseLayout() : value
+    let stack: LayoutBuilder = { buffer, context in
+      let firstContext = context.childScope(0)
+      let first = buffer.color(.white, context: firstContext)
+      let firstSized = buffer.sizing(first, x: .fixed(20), y: .fixed(30), context: firstContext)
+      let secondContext = context.childScope(1)
+      let second = buffer.color(.black, context: secondContext)
+      let secondSized = buffer.sizing(second, x: .fixed(40), y: .fixed(50), context: secondContext)
+      return buffer.stack(
+        [firstSized, secondSized], axis: horizontal ? .horizontal : .vertical,
+        spacing: 5, reversed: reversed, context: context)
     }
-    let context = BlockContext()
+    let context = LayoutContext()
     let rect = Rect(x: 10, y: 15, width: 200, height: 150)
-    let measured = measureBlock(stack, proposal: rect.size, context: context)
+    let measured = measureLayout(stack, proposal: rect.size, context: context)
     #expect(measured == (horizontal ? Size(width: 65, height: 50) : Size(width: 40, height: 85)))
     var drawList = DrawList()
     beginTestFrame(context.interaction, input: InputState())
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(stack, context: context)
+      let resolved = stack(&resolvedBuffer, context)
       resolvedBuffer.register(resolved, in: rect)
       resolvedBuffer.paint(resolved, into: &drawList, in: rect)
     }

@@ -20,7 +20,6 @@ public final class WaylandHost: Chroma.Host {
     get { runtime.build }
     set { runtime.build = newValue }
   }
-  public func setContent(_ content: (any Block)?) { runtime.setContent(content) }
   public var frameObserver: FrameObserver? {
     get { runtime.frameObserver }
     set { runtime.frameObserver = newValue }

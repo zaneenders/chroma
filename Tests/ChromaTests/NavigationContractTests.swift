@@ -6,15 +6,19 @@ import Testing
 struct NavigationContractTests {
   @MainActor private final class Harness {
     let runtime = WindowRuntime()
-    var context: BlockContext { runtime.context }
-    private var currentContent: any Block = EmptyBlock()
+    var context: LayoutContext { runtime.context }
+    private var currentContent: LayoutBuilder = { buffer, context in
+      return buffer.empty(context: context)
+    }
 
     init() {
       runtime.build = { [unowned self] buffer, context in
-        buffer.emit(currentContent, context: context)
+        currentContent(&buffer, context)
       }
     }
-    @discardableResult func render(_ content: any Block, _ commands: [Command] = [], text: [TextEditEvent] = [])
+    @discardableResult func render(
+      _ content: @escaping LayoutBuilder, _ commands: [Command] = [], text: [TextEditEvent] = []
+    )
       -> DrawList
     {
       currentContent = content
@@ -29,12 +33,31 @@ struct NavigationContractTests {
     let first = FocusTarget()
     let field = FocusTarget()
     let last = FocusTarget()
-    let content = VStack {
-      Group("First") { Button("One") {}.focusTarget(first) }
-      Group("Second") {
-        TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(field)
-        Button("Three") {}.focusTarget(last)
+    let content: LayoutBuilder = { buffer, context in
+      let node254 = buffer.group("First", context: context.childScope(0)) { buffer, context in
+        let node253 = buffer.focus(
+          first, context: context.childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("One") {}, context: context)
+          })
+        return node253
       }
+      let node260 = buffer.group("Second", context: context.childScope(1)) { buffer, context in
+        let node256 = buffer.focus(
+          field, context: context.childScope(0),
+          content: { buffer, context in
+            let node255 = buffer.textEditor(
+              TextEditor(singleLine: true, text: { "" }, onChange: { _ in }), context: context)
+            return node255
+          })
+        let node258 = buffer.focus(
+          last, context: context.childScope(1),
+          content: { buffer, context in
+            return buffer.button(Button("Three") {}, context: context)
+          })
+        return buffer.overlay([node256, node258], group: false, context: context)
+      }
+      return buffer.stack([node254, node260], axis: .vertical, context: context)
     }
     h.render(content)
     h.render(content, [.navigation(.nextFocus)])
@@ -57,14 +80,28 @@ struct NavigationContractTests {
     let h = Harness()
     let input = FocusTarget()
     let send = FocusTarget()
-    let content = HStack(spacing: 20) {
-      Group("Sessions") { Button("Session") {} }.sizing(x: .fixed(150), y: .grow)
-      Group("Composer") {
-        HStack {
-          TextEditor(singleLine: true, text: { "" }, onChange: { _ in }).focusTarget(input)
-          Button("Send") {}.focusTarget(send)
-        }
-      }.sizing(x: .grow, y: .grow)
+    let content: LayoutBuilder = { buffer, context in
+      let node263 = buffer.group("Sessions", context: context.childScope(0)) { buffer, context in
+        return buffer.button(Button("Session") {}, context: context.childScope(0))
+      }
+      let node264 = buffer.sizing(node263, x: .fixed(150), y: .grow, context: context.childScope(0))
+      let node270 = buffer.group("Composer", context: context.childScope(1)) { buffer, context in
+        let node266 = buffer.focus(
+          input, context: context.childScope(0).childScope(0),
+          content: { buffer, context in
+            let node265 = buffer.textEditor(
+              TextEditor(singleLine: true, text: { "" }, onChange: { _ in }), context: context)
+            return node265
+          })
+        let node268 = buffer.focus(
+          send, context: context.childScope(0).childScope(1),
+          content: { buffer, context in
+            return buffer.button(Button("Send") {}, context: context)
+          })
+        return buffer.stack([node266, node268], axis: .horizontal, context: context.childScope(0))
+      }
+      let node271 = buffer.sizing(node270, x: .grow, y: .grow, context: context.childScope(1))
+      return buffer.stack([node264, node271], axis: .horizontal, spacing: 20, context: context)
     }
     h.render(content)
     input.focus()
@@ -81,9 +118,10 @@ struct NavigationContractTests {
   @Test func layoutOnlyContentUsesTheSameUnselectedRoot() {
     let h = Harness()
     var calls = 0
-    let content = HStack {
-      Button("One") { calls += 1 }
-      Button("Two") {}
+    let content: LayoutBuilder = { buffer, context in
+      let node273 = buffer.button(Button("One") { calls += 1 }, context: context.childScope(0))
+      let node274 = buffer.button(Button("Two") {}, context: context.childScope(1))
+      return buffer.stack([node273, node274], axis: .horizontal, context: context)
     }
     h.render(content)
     #expect(h.context.interaction.selection == nil)
@@ -95,10 +133,15 @@ struct NavigationContractTests {
 
   @Test func hoverAppearanceDoesNotRemoveNavigation() {
     let h = Harness()
-    let content = VStack {
-      Text("Hidden tint").hover(.none)
-      Text("Decoration").navigationIgnored()
-      Button("Action") {}
+    let content: LayoutBuilder = { buffer, context in
+      var context276 = context.childScope(0)
+      context276.hoverStyle = HoverStyle.none
+      let node277 = buffer.text(Text("Hidden tint"), context: context276)
+      var context278 = context.childScope(1)
+      context278.navigationIgnored = true
+      let node279 = buffer.text(Text("Decoration"), context: context278)
+      let node280 = buffer.button(Button("Action") {}, context: context.childScope(2))
+      return buffer.stack([node277, node279, node280], axis: .vertical, context: context)
     }
     h.render(content)
     #expect(h.context.interaction.navigation?.children.count == 2)
@@ -110,14 +153,21 @@ struct NavigationContractTests {
   @Test func wideContentMovesToFirstAlignedAction() {
     let h = Harness()
     let save = FocusTarget()
-    let content = Group {
-      VStack {
-        Text("A wide message spanning the entire action row").sizing(x: .grow)
-        HStack {
-          Button("Save") {}.focusTarget(save)
-          Button("Quote") {}
-        }
+    let content: LayoutBuilder = { buffer, context in
+      let node289 = buffer.group(context: context) { buffer, context in
+        let node282 = buffer.text(
+          Text("A wide message spanning the entire action row"), context: context.childScope(0).childScope(0))
+        let node283 = buffer.sizing(node282, x: .grow, context: context.childScope(0).childScope(0))
+        let node285 = buffer.focus(
+          save, context: context.childScope(0).childScope(1).childScope(0),
+          content: { buffer, context in
+            return buffer.button(Button("Save") {}, context: context)
+          })
+        let node286 = buffer.button(Button("Quote") {}, context: context.childScope(0).childScope(1).childScope(1))
+        let node287 = buffer.stack([node285, node286], axis: .horizontal, context: context.childScope(0).childScope(1))
+        return buffer.stack([node283, node287], axis: .vertical, context: context.childScope(0))
       }
+      return node289
     }
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn), .navigation(.down)])
@@ -142,9 +192,11 @@ struct NavigationContractTests {
   @Test func keyboardCopiesMultilineUnicodeAndPastesIntoEditor() throws {
     let h = Harness()
     var draft = ""
-    let content = VStack {
-      Text("café\n👨‍👩‍👧‍👦 tea").selectable()
-      TextEditor(singleLine: true, text: { draft }, onChange: { draft = $0 })
+    let content: LayoutBuilder = { buffer, context in
+      let node290 = buffer.text(Text("café\n👨‍👩‍👧‍👦 tea").selectable(), context: context.childScope(0))
+      let node291 = buffer.textEditor(
+        TextEditor(singleLine: true, text: { draft }, onChange: { draft = $0 }), context: context.childScope(1))
+      return buffer.stack([node290, node291], axis: .vertical, context: context)
     }
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn)])
@@ -175,7 +227,9 @@ struct NavigationContractTests {
     let h = Harness()
     @MainActor final class Value { var text = "abcd" }
     let value = Value()
-    let content = DeferredBlock { Text(value.text).selectable() }
+    let content: LayoutBuilder = { buffer, context in
+      return buffer.text(Text(value.text).selectable(), context: context)
+    }
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn)])
     h.render(content, text: [.selectCaretRight, .selectCaretRight, .selectCaretLeft])
@@ -192,11 +246,19 @@ extension NavigationContractTests {
     let h = Harness()
     var value = "abcd"
     let field = FocusTarget()
-    let content = Group("Composer") {
-      HStack {
-        TextEditor(singleLine: true, text: { value }, onChange: { value = $0 }).focusTarget(field)
-        Button("Send") {}
+    let content: LayoutBuilder = { buffer, context in
+      let node298 = buffer.group("Composer", context: context) { buffer, context in
+        let node295 = buffer.focus(
+          field, context: context.childScope(0).childScope(0),
+          content: { buffer, context in
+            let node294 = buffer.textEditor(
+              TextEditor(singleLine: true, text: { value }, onChange: { value = $0 }), context: context)
+            return node294
+          })
+        let node296 = buffer.button(Button("Send") {}, context: context.childScope(0).childScope(1))
+        return buffer.stack([node295, node296], axis: .horizontal, context: context.childScope(0))
       }
+      return node298
     }
     func press(_ key: Character, shift: Bool = false) {
       let input = KeyboardInput(
@@ -242,7 +304,9 @@ extension NavigationContractTests {
 
   @Test func readOnlyTextCannotEnterInputAndMovesAcrossLines() {
     let h = Harness()
-    let content = Text("ab\ncd").selectable()
+    let content: LayoutBuilder = { buffer, context in
+      return buffer.text(Text("ab\ncd").selectable(), context: context)
+    }
     h.render(content)
     h.render(content, [.navigation(.down), .navigation(.stepIn)])
     h.render(content, [.navigation(.right)])

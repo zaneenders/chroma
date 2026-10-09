@@ -3,11 +3,11 @@ import Testing
 @testable import Chroma
 
 @MainActor
-struct BlockContextTests {
+struct LayoutContextTests {
 
   @Test func contextBundlesInteractionState() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
 
     #expect(context.interaction === interaction)
     #expect(context.selection === interaction.textSelection)
@@ -29,7 +29,7 @@ struct BlockContextTests {
       interaction,
       input: InputState(pointerPosition: current, pointerDown: true))
 
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     #expect(context.isPointerDragging)
     #expect(context.pointerDragOrigin == origin)
     #expect(context.pointerDragPosition == current)
@@ -37,7 +37,7 @@ struct BlockContextTests {
 
   @Test func contextFontMetricsWriteThroughToInteraction() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
 
     var metrics = FontMetrics()
     metrics.glyphWidth = 10
@@ -54,23 +54,31 @@ struct BlockContextTests {
   }
 
   @Test func contextsOwnIndependentSelectionManagers() {
-    let first = BlockContext()
-    let second = BlockContext()
+    let first = LayoutContext()
+    let second = LayoutContext()
 
     #expect(first.selection !== second.selection)
   }
 
-  @Test func blockEngineForwardsExplicitContext() {
+  @Test func directLayoutForwardsExplicitContext() {
     let interaction = Interaction()
-    let context = BlockContext(interaction: interaction)
+    let context = LayoutContext(interaction: interaction)
     let recorder = ContextRecorder()
-    let block = ContextRecordingBlock(recorder: recorder)
+    let build: LayoutBuilder = { buffer, context in
+      buffer.customLeaf(
+        context: context,
+        measure: { proposal in
+          recorder.measuredInteraction = context.interaction
+          return proposal
+        },
+        register: { _ in }, paint: { _, _ in recorder.drawnInteraction = context.interaction })
+    }
 
-    _ = measureBlock(block, proposal: Size(width: 20, height: 10), context: context)
+    _ = measureLayout(build, proposal: Size(width: 20, height: 10), context: context)
     var drawList = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
-      let resolved = resolvedBuffer.emit(block, context: context)
+      let resolved = build(&resolvedBuffer, context)
       resolvedBuffer.register(resolved, in: Rect(x: 0, y: 0, width: 20, height: 10))
       resolvedBuffer.paint(resolved, into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
     }
@@ -107,38 +115,10 @@ private final class ContextRecorder {
   var drawnInteraction: Interaction?
 }
 
-private struct ContextRecordingBlock: Block {
-
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    let context = context.component(Self.self)
-    return buffer.customLeaf(
-      context: context, focusRule: focusRule,
-      expandsHorizontally: false, expandsVertically: false,
-      measure: { sizeThatFits($0, context: context) },
-      register: { register(in: $0, context: context) },
-      paint: { paint(into: &$0, in: $1, context: context) })
-  }
-
-  @MainActor func register(in rect: Rect, context: BlockContext) {}
-
-  let recorder: ContextRecorder
-
-  var focusRule: FocusRule { .standard }
-
-  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    recorder.measuredInteraction = context.interaction
-    return proposal
-  }
-
-  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    recorder.drawnInteraction = context.interaction
-  }
-}
-
 @MainActor
 private final class FakeRenderer: Host {
   let name = "Fake"
-  var content: (any Block)?
+  var build: LayoutBuilder?
   var frameObserver: FrameObserver?
   var onClose: (() -> Void)?
   let runtime = WindowRuntime()

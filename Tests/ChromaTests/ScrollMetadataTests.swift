@@ -9,17 +9,18 @@ struct ScrollMetadataTests {
     let runtime = WindowRuntime()
     let context = runtime.context
     let controller = ScrollViewController()
-    let content = ScrollView(data: 0..<10_000, rowHeight: 20, controller: controller) { _ in
-      if multipleControls {
-        HStack {
-          Button("Left") {}
-          VStack { Button("Right") {} }
+    let content = ScrollView(
+      data: 0..<10_000, rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        if multipleControls {
+          let left = buffer.button(Button("Left") {}, context: context.childScope(0))
+          let right = buffer.button(Button("Right") {}, context: context.childScope(1).childScope(0))
+          let rightStack = buffer.stack([right], axis: .vertical, context: context.childScope(1))
+          return buffer.stack([left, rightStack], axis: .horizontal, context: context)
         }
-      } else {
-        Color.white
-      }
-    }
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+        return buffer.color(.white, context: context)
+      })
+    runtime.build = { buffer, context in buffer.scrollView(content, context: context) }
     func render(_ commands: [NavigationCommand] = []) {
       _ = runtime.render(
         viewport: Size(width: 200, height: 100),
@@ -48,20 +49,24 @@ struct ScrollMetadataTests {
   }
 
   @Test func registrationOnlyScrollAlsoEvictsOldRows() {
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     let controller = ScrollViewController()
-    let content = ScrollView(data: 0..<10_000, rowHeight: 20, controller: controller) { _ in Color.white }
+    let content = ScrollView(
+      data: 0..<10_000, rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        return buffer.color(Color.white, context: context)
+      })
     context.interaction.viewport = Rect(x: 0, y: 0, width: 200, height: 100)
     producer.refreshRegistrations(
-      { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+      { buffer, context in buffer.scrollView(content, context: context) }, viewport: Size(width: 200, height: 100),
       context: context)
     for _ in 1...1_000 {
       context.interaction.processInput(
         InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -180)))
       context.interaction.finishInput()
       producer.refreshRegistrations(
-        { buffer, context in buffer.emit(content, context: context) }, viewport: Size(width: 200, height: 100),
+        { buffer, context in buffer.scrollView(content, context: context) }, viewport: Size(width: 200, height: 100),
         context: context)
     }
     #expect(controller.offset == 180_000)
@@ -71,7 +76,7 @@ struct ScrollMetadataTests {
     #expect(context.interaction.registrations.scrollRows.isEmpty)
     #expect(context.interaction.building.scrollRows.isEmpty)
     producer.refreshRegistrations(
-      { buffer, context in buffer.emit(EmptyBlock(), context: context) }, viewport: Size(width: 200, height: 100),
+      { buffer, context in buffer.empty(context: context) }, viewport: Size(width: 200, height: 100),
       context: context)
     #expect(context.interaction.scrollStates.isEmpty)
   }
@@ -147,12 +152,12 @@ struct ScrollMetadataTests {
     let controller = ScrollViewController()
     @MainActor final class Model { var revision = 0 }
     let model = Model()
-    let content = DeferredBlock {
-      ScrollView(data: 0..<100, rowHeight: 20, controller: controller) { _ in
-        Button("Control") {}.id(model.revision)
-      }
-    }
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
+    let content = ScrollView(
+      data: 0..<100, rowHeight: 20, controller: controller,
+      build: { buffer, context, _ in
+        buffer.button(Button("Control") {}, context: context.keyed(model.revision))
+      })
+    runtime.build = { buffer, context in buffer.scrollView(content, context: context) }
     func render(_ commands: [NavigationCommand] = []) {
       _ = runtime.render(
         viewport: Size(width: 200, height: 100),

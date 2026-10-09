@@ -12,7 +12,7 @@ struct MarkdownDocumentTests {
     var buffer = LayoutBuffer()
     for _ in 0..<10 {
       buffer.reset()
-      _ = buffer.emit(MarkdownText(document), context: BlockContext())
+      _ = MarkdownText(document).build(into: &buffer, context: LayoutContext())
     }
     document.markdown = "# Heading\n\n**first**"
     #expect(document.revision == 0)
@@ -49,7 +49,7 @@ struct MarkdownDocumentTests {
     let changed = Mutex(false)
     withObservationTracking {
       var buffer = LayoutBuffer()
-      _ = buffer.emit(MarkdownText(document), context: BlockContext())
+      _ = MarkdownText(document).build(into: &buffer, context: LayoutContext())
     } onChange: {
       changed.withLock { $0 = true }
     }
@@ -73,11 +73,11 @@ struct MarkdownDocumentTests {
   @Test func retainedRendererReadsCurrentDocumentAfterMutation() {
     let document = MarkdownDocument("**first**")
     let content = MarkdownText(document)
-    let context = BlockContext()
+    let context = LayoutContext()
     let producer = FrameProducer()
     func render() -> DrawList {
       let list = producer.render(
-        build: { buffer, context in buffer.emit(content, context: context) },
+        build: { buffer, context in content.build(into: &buffer, context: context) },
         viewport: Size(width: 120, height: 400),
         input: InputState(), context: context, onChange: {})
       context.interaction.selectAll(at: .zero)
@@ -95,10 +95,10 @@ struct MarkdownDocumentTests {
   @Test func documentMutationDoesNotChangeAnAlreadyPreparedOperation() {
     let document = MarkdownDocument("**first**")
     let content = MarkdownText(document)
-    let context = BlockContext()
+    let context = LayoutContext()
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
     var buffer = LayoutBuffer()
-    let original = buffer.emit(content, context: context)
+    let original = content.build(into: &buffer, context: context)
     document.markdown = "**second**"
     context.interaction.beginFrame(input: InputState())
     buffer.register(original, in: rect)
@@ -107,7 +107,7 @@ struct MarkdownDocumentTests {
     #expect(context.interaction.copyText() == "first")
 
     buffer.reset()
-    let updated = buffer.emit(content, context: context)
+    let updated = content.build(into: &buffer, context: context)
     context.interaction.beginFrame(input: InputState())
     buffer.register(updated, in: rect)
     context.interaction.endFrame()

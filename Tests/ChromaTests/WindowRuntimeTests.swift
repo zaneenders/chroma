@@ -45,11 +45,21 @@ struct WindowRuntimeTests {
     let editor = FocusTarget()
     let button = FocusTarget()
     let viewport = Size(width: 300, height: 200)
-    runtime.setContent(
-      VStack {
-        TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 }).focusTarget(editor)
-        Button("Action") { model.actions += 1 }.focusTarget(button)
-      })
+    runtime.build = { buffer, context in
+      let node388 = buffer.focus(
+        editor, context: context.childScope(0),
+        content: { buffer, context in
+          let node387 = buffer.textEditor(
+            TextEditor(singleLine: true, text: { model.text }, onChange: { model.text = $0 }), context: context)
+          return node387
+        })
+      let node390 = buffer.focus(
+        button, context: context.childScope(1),
+        content: { buffer, context in
+          return buffer.button(Button("Action") { model.actions += 1 }, context: context)
+        })
+      return buffer.stack([node388, node390], axis: .vertical, context: context)
+    }
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.context.focus(try #require(editor.boundID), editing: true)
     for event: TextEditEvent in [.insert("a"), .insert("b"), .backspace, .insert("c")] {
@@ -89,11 +99,10 @@ struct WindowRuntimeTests {
     defer { runtime.reset() }
     let model = InputModel()
     let viewport = Size(width: 200, height: 200)
-    runtime.setContent(
-      DeferredBlock {
-        let count = model.actions
-        return Button("Increment") { model.actions = count + 1 }
-      })
+    runtime.build = { buffer, context in
+      let count = model.actions
+      return buffer.button(Button("Increment") { model.actions = count + 1 }, context: context)
+    }
     if !beforeInitialFrame {
       _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     }
@@ -112,7 +121,16 @@ struct WindowRuntimeTests {
     model.text = "a"
     let editor = FocusTarget()
     let viewport = Size(width: 200, height: 200)
-    runtime.setContent(TextEditor(text: { model.text }, onChange: { model.text = $0 }).focusTarget(editor))
+    runtime.build = { buffer, context in
+      let node394 = buffer.focus(
+        editor, context: context,
+        content: { buffer, context in
+          let node393 = buffer.textEditor(
+            TextEditor(text: { model.text }, onChange: { model.text = $0 }), context: context)
+          return node393
+        })
+      return node394
+    }
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.context.focus(try #require(editor.boundID), editing: true)
     runtime.handleInput(InputState(textEvents: [.insert("\nb")]))
@@ -127,7 +145,9 @@ struct WindowRuntimeTests {
     let runtime = WindowRuntime()
     let model = InputModel()
     let viewport = Size(width: 100, height: 100)
-    runtime.setContent(DeferredBlock { Text(model.text) })
+    runtime.build = { buffer, context in
+      return buffer.text(Text(model.text), context: context)
+    }
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     runtime.dispatchInput {
       model.text += "a"
@@ -147,8 +167,8 @@ struct WindowRuntimeTests {
 
   @Test func hoverEventsShareTheLastFrameUntilPresentation() {
     final class Counter { var draws = 0 }
-    @MainActor struct Probe: Block {
-      func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
+    @MainActor struct Probe {
+      func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
         let context = context.component(Self.self)
         return buffer.customLeaf(
           context: context, focusRule: focusRule,
@@ -157,12 +177,12 @@ struct WindowRuntimeTests {
           paint: { self.paint(into: &$0, in: $1, context: context) })
       }
 
-      func register(in rect: Rect, context: BlockContext) {}
+      func register(in rect: Rect, context: LayoutContext) {}
 
       let counter: Counter
       var focusRule: FocusRule { .standard }
-      @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size { proposal }
-      func paint(into list: inout DrawList, in rect: Rect, context: BlockContext) {
+      @MainActor func sizeThatFits(_ proposal: Size, context: LayoutContext) -> Size { proposal }
+      func paint(into list: inout DrawList, in rect: Rect, context: LayoutContext) {
         counter.draws += 1
         list.fillRect(rect, color: .white)
       }
@@ -171,7 +191,9 @@ struct WindowRuntimeTests {
     let runtime = WindowRuntime()
     defer { runtime.reset() }
     let viewport = Size(width: 200, height: 200)
-    runtime.setContent(Probe(counter: counter))
+    runtime.build = { buffer, context in
+      return Probe(counter: counter).build(into: &buffer, context: context)
+    }
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     counter.draws = 0
     for x in 1...100 {
@@ -189,12 +211,16 @@ struct WindowRuntimeTests {
     let clock = FrameSchedulerTests.Clock()
     let runtime = WindowRuntime(clock: { clock.now })
     let target = FocusTarget()
-    runtime.setContent(
-      VStack {
-        ProgressIndicator()
-        MarqueeText("Overflowing text that stays still")
-        TextEditor(text: { "draft" }, onChange: { _ in }).focusTarget(target)
-      })
+    runtime.build = { buffer, context in
+      let node397 = buffer.progressIndicator(ProgressIndicator(), context: context.childScope(0))
+      let node398 = buffer.marqueeText(MarqueeText("Overflowing text that stays still"), context: context.childScope(1))
+      let node400 = buffer.focus(
+        target, context: context.childScope(2),
+        content: { buffer, context in
+          return buffer.textEditor(TextEditor(text: { "draft" }, onChange: { _ in }), context: context)
+        })
+      return buffer.stack([node397, node398, node400], axis: .vertical, context: context)
+    }
     let viewport = Size(width: 100, height: 100)
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
     runtime.context.focus(try #require(target.boundID), editing: true)
@@ -214,12 +240,15 @@ struct WindowRuntimeTests {
     defer { runtime.reset() }
     let controller = ScrollViewController()
     let viewport = Size(width: 200, height: 200)
-    runtime.setContent(
-      DeferredBlock {
-        ScrollView(data: 0..<1_000, rowHeight: 20, controller: controller) { index in
-          Text("Row \(index)")
-        }
-      })
+    runtime.build = { buffer, context in
+      let node403 = buffer.scrollView(
+        ScrollView(
+          data: 0..<1_000, rowHeight: 20, controller: controller,
+          build: { buffer, context, index in
+            return buffer.text(Text("Row \(index)"), context: context)
+          }), context: context)
+      return node403
+    }
     let onChange: @MainActor @Sendable () -> Void = { runtime.scheduler.requestContent() }
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: onChange)
     await drainObservationChanges()
@@ -239,7 +268,9 @@ struct WindowRuntimeTests {
   @Test func eventsBeforeInitialFrameAreReplayedInOrder() {
     let runtime = WindowRuntime()
     let model = InputModel()
-    runtime.setContent(Button("Action") { model.actions += 1 })
+    runtime.build = { buffer, context in
+      return buffer.button(Button("Action") { model.actions += 1 }, context: context)
+    }
     runtime.handleInput(InputState(commands: [.navigation(.nextFocus)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
@@ -254,7 +285,9 @@ struct WindowRuntimeTests {
     let runtime = WindowRuntime(clock: { clock.now })
     let model = InputModel()
     let viewport = Size(width: 100, height: 100)
-    runtime.setContent(DeferredBlock { Text(model.text) })
+    runtime.build = { buffer, context in
+      return buffer.text(Text(model.text), context: context)
+    }
     #expect(runtime.scheduler.takeFrame() == .content)
     _ = runtime.renderScheduled(.content, viewport: viewport, onChange: { runtime.scheduler.requestContent() })
     model.text = "one"
@@ -271,7 +304,9 @@ struct WindowRuntimeTests {
         return false
       })
     #expect(runtime.scheduler.nextFrame == nil)
-    runtime.setContent(ProgressIndicator())
+    runtime.build = { buffer, context in
+      return buffer.progressIndicator(ProgressIndicator(), context: context)
+    }
     #expect(runtime.scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
     #expect(runtime.scheduler.takeFrame() == nil)
     runtime.reset()
@@ -290,5 +325,7 @@ struct WindowRuntimeTests {
 
 private struct BoundApp: App {
   var keyBindings: KeyBindings { KeyBindings { bind("j", to: .navigation(.down)) } }
-  var body: some Block { Text("Runtime") }
+  func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
+    buffer.text(Text("Runtime"), context: context)
+  }
 }

@@ -27,11 +27,12 @@ struct TextSelectionTests {
     let runtime = WindowRuntime()
     let context = runtime.context
     var value = "editable"
-    let content = VStack {
-      Text("selectable").selectable()
-      TextEditor(singleLine: true, text: { value }, onChange: { value = $0 })
+    runtime.build = { buffer, context in
+      let label = buffer.text(Text("selectable").selectable(), context: context.childScope(0))
+      let editor = buffer.textEditor(
+        TextEditor(singleLine: true, text: { value }, onChange: { value = $0 }), context: context.childScope(1))
+      return buffer.stack([label, editor], axis: .vertical, context: context)
     }
-    runtime.build = { buffer, context in buffer.emit(content, context: context) }
     func render(_ input: InputState = InputState()) {
       _ = runtime.render(
         viewport: Size(width: 300, height: 150),
@@ -231,14 +232,14 @@ struct TextSelectionTests {
   }
 
   @Test func blockContextCanInstallCustomCopyProvider() {
-    let ctx = BlockContext()
+    let ctx = LayoutContext()
     ctx.setCopyTextProvider { "custom copy" }
 
     #expect(ctx.interaction.copyText() == "custom copy")
   }
 
   @Test func customSelectAllHandlerPrecedesBuiltInSelection() {
-    let ctx = BlockContext()
+    let ctx = LayoutContext()
     var handled = false
     ctx.setSelectAllHandler {
       handled = true

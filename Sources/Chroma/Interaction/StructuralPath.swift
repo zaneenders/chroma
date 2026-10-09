@@ -2,7 +2,6 @@ struct StructuralPath: Hashable, Sendable {
   enum Segment: Hashable, Sendable {
     case key(StructuralKey)
     case slot(Int)
-    case branch(Int)
     case background(Int)
     case component(ObjectIdentifier)
   }
@@ -23,21 +22,5 @@ struct StructuralKey: Hashable, Sendable {
   func hash(into hasher: inout Hasher) {
     hasher.combine(ObjectIdentifier(type(of: value)))
     hasher.combine(AnyHashable(value))
-  }
-}
-
-struct KeyedBlock: Block {
-  let content: any Block
-  let key: StructuralKey
-  @MainActor func emit(into buffer: inout LayoutBuffer, context: BlockContext) -> LayoutNode {
-    var context = context
-    if case .slot = context.structuralPath.segments.last { context.structuralPath.segments.removeLast() }
-    return buffer.emit(content, context: context.scoped([.key(key)]))
-  }
-}
-
-extension Block {
-  public func id(_ key: some Hashable & Sendable) -> some Block {
-    KeyedBlock(content: self, key: StructuralKey(key))
   }
 }
