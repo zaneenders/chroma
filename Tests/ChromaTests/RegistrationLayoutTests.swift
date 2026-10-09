@@ -30,7 +30,7 @@ struct RegistrationLayoutTests {
     let block = VStack { VStack { Leaf(state: state) }.padding(3) }
     let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 100, height: 60)
-    let resolved = BlockEngine.resolve(block, context: context)
+    var resolved = BlockEngine.prepare(block, context: context)
     #expect(resolved.sizeThatFits(rect.size).height == 18)
     let before = state.measures
     _ = resolved.sizeThatFits(rect.size)
@@ -94,7 +94,6 @@ struct RegistrationLayoutTests {
     #expect(counts.registrations > 0)
     #expect(counts.paints == 0)
     #expect(counts.drawingCommands == 0)
-    #expect(counts.liveResolvedNodes == 0)
   }
 
 }

@@ -89,7 +89,7 @@ public struct ScrollView: LayoutPreparingBlock {
   @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
     _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
     showsIndicator: Bool = true, sticksToBottom: Bool = false,
-    controller: ScrollViewController,
+    controller: ScrollViewController, identityRevision: UInt64? = nil,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) {
     self.init(
@@ -98,25 +98,29 @@ public struct ScrollView: LayoutPreparingBlock {
     self.name = name
   }
 
+  /// A supplied revision skips repeated ID scans. Change it whenever IDs or their order change,
+  /// including same-count edits. The token is scoped to this controller; row content stays fresh.
   @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
     _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
     showsIndicator: Bool = true, sticksToBottom: Bool = false,
-    controller: ScrollViewController,
+    controller: ScrollViewController, identityRevision: UInt64? = nil,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
     self.init(
-      data: data, keys: controller.rowIdentity(for: data), selection: nil, rowHeight: rowHeight, spacing: spacing,
+      data: data, keys: controller.rowIdentity(for: data, identityRevision: identityRevision), selection: nil,
+      rowHeight: rowHeight, spacing: spacing,
       showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
     self.name = name
   }
 
+  /// Change identityRevision whenever IDs or their order change. Nil validates IDs on each use.
   @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
     _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
     showsIndicator: Bool = true, sticksToBottom: Bool = false,
-    controller: ScrollViewController, selection: ScrollSelection<Data.Element.ID>,
+    controller: ScrollViewController, selection: ScrollSelection<Data.Element.ID>, identityRevision: UInt64? = nil,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    let identity = controller.rowIdentity(for: data)
+    let identity = controller.rowIdentity(for: data, identityRevision: identityRevision)
     self.init(
       data: data, keys: identity,
       selection: LogicalSelection(
@@ -160,12 +164,12 @@ public struct ScrollView: LayoutPreparingBlock {
     let contentSize: Size
     let horizontal: Bool
     let offsets: Point
-    let resolvedContent: BlockEngine.Resolved?
+    let resolvedContent: LayoutNode?
   }
 
   /// Placement events are shared by registration and presentation. No event requires painting.
   private enum Placement {
-    case content(BlockEngine.Resolved, Rect)
+    case content(LayoutNode, Rect)
     case rowFocus(BlockContext, Rect)
   }
 
@@ -178,36 +182,40 @@ public struct ScrollView: LayoutPreparingBlock {
     let placements: [Placement]
   }
 
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
     var prepared: PreparedScroll?
-    return BlockEngine.Resolved(
-      expandsHorizontally: { true }, expandsVertically: { true },
-      measure: { $0 },
-      register: { rect in prepared = registerContent(in: rect, context: context) },
-      paint: { list, rect in
+    return buffer.append(
+      expandsHorizontally: { _ in true }, expandsVertically: { _ in true },
+      measure: { _, proposal in proposal },
+      register: { buffer, rect in prepared = registerContent(in: rect, context: context, buffer: &buffer) },
+      paint: { buffer, list, rect in
         precondition(prepared?.rect == rect, "ScrollView painting requires registration in the same operation")
-        paint(prepared!, into: &list, context: context)
+        paint(prepared!, into: &list, context: context, buffer: &buffer)
       })
   }
 
-  @MainActor private func registerContent(in rect: Rect, context: BlockContext) -> PreparedScroll {
-    let geometry = prepareScroll(in: rect, context: context)
+  @MainActor private func registerContent(in rect: Rect, context: BlockContext, buffer: inout LayoutBuffer)
+    -> PreparedScroll
+  {
+    let geometry = prepareScroll(in: rect, context: context, buffer: &buffer)
     var placements: [Placement] = []
-    placeContent(in: rect, context: context, geometry: geometry) { placement in
+    placeContent(in: rect, context: context, geometry: geometry, buffer: &buffer) { buffer, placement in
       placements.append(placement)
       switch placement {
-      case .content(let resolved, let rect): resolved.register(in: rect)
+      case .content(let resolved, let rect): buffer.register(resolved, in: rect)
       case .rowFocus(let context, let rect): context.registerFocusable(in: rect)
       }
     }
     return PreparedScroll(rect: rect, geometry: geometry, placements: placements)
   }
 
-  @MainActor private func paint(_ prepared: PreparedScroll, into drawList: inout DrawList, context: BlockContext) {
+  @MainActor private func paint(
+    _ prepared: PreparedScroll, into drawList: inout DrawList, context: BlockContext, buffer: inout LayoutBuffer
+  ) {
     drawList.pushClip(prepared.rect)
     for placement in prepared.placements {
       switch placement {
-      case .content(let resolved, let rect): resolved.paint(into: &drawList, in: rect)
+      case .content(let resolved, let rect): buffer.paint(resolved, into: &drawList, in: rect)
       case .rowFocus(let context, let rect): context.paintFocusHighlight(in: rect, into: &drawList)
       }
     }
@@ -230,19 +238,21 @@ public struct ScrollView: LayoutPreparingBlock {
     }
   }
 
-  @MainActor private func prepareScroll(in rect: Rect, context: BlockContext) -> ScrollGeometry {
+  @MainActor private func prepareScroll(in rect: Rect, context: BlockContext, buffer: inout LayoutBuffer)
+    -> ScrollGeometry
+  {
     let id = context.widgetID
     let interaction = context.interaction
     controller?.restore(id: id, interaction: interaction)
     let contentSize: Size
     let horizontal: Bool
-    var resolvedContent: BlockEngine.Resolved?
+    var resolvedContent: LayoutNode?
     switch content {
     case .block(let block, _):
       horizontal = true
-      let resolved = BlockEngine.resolve(block, context: context)
+      let resolved = buffer.prepare(block, context: context)
       resolvedContent = resolved
-      contentSize = resolved.sizeThatFits(Size(width: rect.size.width, height: .greatestFiniteMagnitude))
+      contentSize = buffer.sizeThatFits(resolved, Size(width: rect.size.width, height: .greatestFiniteMagnitude))
     case .rows(let rows, let controller):
       horizontal = false
       updateCache(rows: rows, controller: controller, width: rect.size.width, context: context)
@@ -284,8 +294,8 @@ public struct ScrollView: LayoutPreparingBlock {
   }
 
   @MainActor private func placeContent(
-    in rect: Rect, context: BlockContext, geometry: ScrollGeometry,
-    visit: (Placement) -> Void
+    in rect: Rect, context: BlockContext, geometry: ScrollGeometry, buffer: inout LayoutBuffer,
+    visit: (inout LayoutBuffer, Placement) -> Void
   ) {
     let interaction = context.interaction
     interaction.pushClip(rect)
@@ -295,13 +305,14 @@ public struct ScrollView: LayoutPreparingBlock {
     switch content {
     case .block:
       visit(
+        &buffer,
         .content(
           geometry.resolvedContent!,
           Rect(
             x: rect.minX - geometry.offsets.x, y: rect.minY - geometry.offsets.y,
             width: geometry.contentSize.width, height: geometry.contentSize.height)))
     case .rows, .uniform:
-      placeRows(in: rect, context: context, id: geometry.id, offset: geometry.offsets.y, visit: visit)
+      placeRows(in: rect, context: context, id: geometry.id, offset: geometry.offsets.y, buffer: &buffer, visit: visit)
     }
     interaction.endGroup()
     interaction.popClip()
@@ -328,8 +339,8 @@ public struct ScrollView: LayoutPreparingBlock {
   }
 
   @MainActor private func placeRows(
-    in rect: Rect, context: BlockContext, id: WidgetID, offset: Float,
-    visit: (Placement) -> Void
+    in rect: Rect, context: BlockContext, id: WidgetID, offset: Float, buffer: inout LayoutBuffer,
+    visit: (inout LayoutBuffer, Placement) -> Void
   ) {
     let interaction = context.interaction
     let visibleTop = offset
@@ -362,7 +373,7 @@ public struct ScrollView: LayoutPreparingBlock {
               width: rect.size.width, height: uniformRows.height),
             context: uniformRows.keys.map { context.scoped([.key($0.keys[index])]) } ?? context.childScope(index),
             interaction: interaction, offset: offset, scrollID: id,
-            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index), visit: visit)
+            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index), buffer: &buffer, visit: visit)
         }
       }
     case .rows(let rows, let controller):
@@ -379,7 +390,8 @@ public struct ScrollView: LayoutPreparingBlock {
               x: rect.minX, y: rect.minY + positions.starts[index] - offset,
               width: rect.size.width, height: positions.heights[index]),
             context: context.scoped([.key(rows[index].key)]),
-            interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key, visit: visit)
+            interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key, buffer: &buffer,
+            visit: visit)
         }
       }
     }
@@ -388,7 +400,7 @@ public struct ScrollView: LayoutPreparingBlock {
   @MainActor private func placeRow(
     _ content: any Block, in rect: Rect,
     context rowContext: BlockContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
-    rowKey: StructuralKey, visit: (Placement) -> Void
+    rowKey: StructuralKey, buffer: inout LayoutBuffer, visit: (inout LayoutBuffer, Placement) -> Void
   ) {
     guard let group = interaction.builderStack.last else {
       preconditionFailure("placeRow outside of a frame; call beginFrame first")
@@ -396,9 +408,10 @@ public struct ScrollView: LayoutPreparingBlock {
     let children = group.children.count
     var rowContext = rowContext
     rowContext.focusLeafClaimed = true
-    visit(.content(BlockEngine.resolve(content, context: rowContext), rect))
+    let node = buffer.prepare(content, context: rowContext)
+    visit(&buffer, .content(node, rect))
     if group.children.count == children {
-      visit(.rowFocus(rowContext, rect))
+      visit(&buffer, .rowFocus(rowContext, rect))
     }
     recordScrollRows(
       in: group.children[children...], offset: offset, scrollID: scrollID,

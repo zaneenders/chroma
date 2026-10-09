@@ -42,7 +42,6 @@ struct StressFixturesTests {
     #expect(PipelineMetrics.snapshot == work)
     #expect(scene.rowConstructions == rows)
     host.close()
-    #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
     #expect(PipelineMetrics.snapshot.liveObservationSubscriptions == 0)
   }
 }

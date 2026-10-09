@@ -42,7 +42,7 @@ struct StructuralPathTests {
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(block, context: context)
+      var resolved = BlockEngine.prepare(block, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &list, in: rect)
     }
@@ -142,21 +142,21 @@ struct StructuralPathTests {
       return BlockEngine.measure(
         Probe(name: "second", recorder: recorder), proposal: proposal, context: context.childScope(1))
     }
-    @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-      let first = BlockEngine.prepare(Probe(name: "first", recorder: recorder), context: context.childScope(0))
-      let second = BlockEngine.prepare(Probe(name: "second", recorder: recorder), context: context.childScope(1))
-      return BlockEngine.Resolved(
-        measure: { proposal in
-          _ = first.sizeThatFits(proposal)
-          return second.sizeThatFits(proposal)
+    @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+      let first = buffer.prepare(Probe(name: "first", recorder: recorder), context: context.childScope(0))
+      let second = buffer.prepare(Probe(name: "second", recorder: recorder), context: context.childScope(1))
+      return buffer.append(
+        measure: { buffer, proposal in
+          _ = buffer.sizeThatFits(first, proposal)
+          return buffer.sizeThatFits(second, proposal)
         },
-        register: { rect in
-          first.register(in: rect)
-          second.register(in: rect)
+        register: { buffer, rect in
+          buffer.register(first, in: rect)
+          buffer.register(second, in: rect)
         },
-        paint: { list, rect in
-          second.paint(into: &list, in: rect)
-          first.paint(into: &list, in: rect)
+        paint: { buffer, list, rect in
+          buffer.paint(second, into: &list, in: rect)
+          buffer.paint(first, into: &list, in: rect)
         })
     }
   }
@@ -194,7 +194,7 @@ struct StructuralPathTests {
       recorder.drawn = [:]
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(layered, context: context)
+        var resolved = BlockEngine.prepare(layered, context: context)
         resolved.register(in: rect)
         resolved.paint(into: &list, in: rect)
       }
@@ -218,8 +218,8 @@ struct StructuralPathTests {
     @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       BlockEngine.measure(content, proposal: proposal, context: context)
     }
-    @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-      return BlockEngine.prepare(content, context: context)
+    @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+      return buffer.prepare(content, context: context)
     }
   }
 
@@ -253,8 +253,8 @@ struct StructuralPathTests {
     @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
       BlockEngine.measure(content, proposal: proposal, context: context)
     }
-    @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-      return BlockEngine.prepare(content, context: context)
+    @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+      return buffer.prepare(content, context: context)
     }
   }
 
@@ -402,7 +402,7 @@ struct StructuralPathTests {
       context.interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(stack, context: context)
+        var resolved = BlockEngine.prepare(stack, context: context)
         resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 100))
         resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
       }

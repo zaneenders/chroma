@@ -80,7 +80,6 @@ struct StressBenchmark {
       }
       host.close()
       if instrumented {
-        precondition(PipelineMetrics.snapshot.liveResolvedNodes == 0)
         precondition(PipelineMetrics.snapshot.liveObservationSubscriptions == 0)
       }
       PipelineMetrics.isEnabled = false

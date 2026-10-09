@@ -31,7 +31,7 @@ struct TrailingControlsRowTests {
     #expect(row.sizeThatFits(Size(width: 150, height: 200), context: context).height == 20)
     interaction.beginFrame(input: InputState())
     var list = DrawList()
-    let resolved = row.prepareLayout(context: context)
+    var resolved = BlockEngine.prepare(row, context: context)
     resolved.register(in: Rect(x: 10, y: 20, width: 100, height: 60))
     resolved.paint(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
     interaction.endFrame()

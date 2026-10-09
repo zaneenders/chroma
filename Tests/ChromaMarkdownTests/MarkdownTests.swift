@@ -155,10 +155,11 @@ struct MarkdownNavigationTests {
     let rect = Rect(x: 0, y: 0, width: 500, height: 600)
     func render(_ commands: [Command] = []) {
       context.interaction.beginFrame(input: InputState(commands: commands))
-      let resolved = BlockEngine.prepare(content, context: context)
-      resolved.register(in: rect)
+      var buffer = LayoutBuffer()
+      let resolved = buffer.prepare(content, context: context)
+      buffer.register(resolved, in: rect)
       var list = DrawList()
-      resolved.paint(into: &list, in: rect)
+      buffer.paint(resolved, into: &list, in: rect)
       context.interaction.endFrame()
     }
     func leaves(_ node: FocusNode) -> [FocusNode] {

@@ -14,6 +14,21 @@ UI Library in swift
 
 The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma-examples) repository.
 
+## Runtime and CPU-only development
+
+Blocks and the direct API share one reusable, integer-handle layout buffer.
+See [runtime and migration](RUNTIME.md) for the small public API and freshness rules.
+
+Run CPU-side tests without Metal/Wayland development dependencies:
+
+```sh
+CHROMA_HEADLESS_ONLY=1 swift test -j 2
+```
+
+This omits native backend and ChromaApp products for that SwiftPM invocation.
+Use the same environment setting for dependency resolution, builds and tests;
+unset it for the normal package. SwiftPM replans when the manifest environment changes.
+
 ## Installing apps
 
 Run `swift package chroma-install` from the app package. Builds release with symbols;

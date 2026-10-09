@@ -138,7 +138,7 @@ struct RegistrationControlTests {
       registration.interaction.endFrame()
       presentation.interaction.beginFrame(input: input)
       var list = DrawList()
-      let resolved = editor.prepareLayout(context: presentation)
+      var resolved = BlockEngine.prepare(editor, context: presentation)
       resolved.register(in: rect)
       resolved.paint(into: &list, in: rect)
       presentation.interaction.endFrame()

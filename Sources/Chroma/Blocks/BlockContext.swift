@@ -15,6 +15,11 @@ public struct BlockContext {
     scoped([.slot(slot)])
   }
 
+  /// A stable child identity for direct layout construction. Use unique sibling keys.
+  public func keyed(_ key: some Hashable & Sendable) -> BlockContext {
+    scoped([.key(StructuralKey(key))])
+  }
+
   var backgroundContentContext: BlockContext {
     var copy = self
     copy.backgroundDepth += 1

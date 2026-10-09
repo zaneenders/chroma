@@ -60,7 +60,7 @@ struct BoundaryTests {
 
     var outerBackground = DrawList()
     do {
-      let resolved = BlockEngine.prepare(NamedBlock(name: "content").padding(5).background(red), context: context)
+      var resolved = BlockEngine.prepare(NamedBlock(name: "content").padding(5).background(red), context: context)
       resolved.register(in: viewport)
       resolved.paint(into: &outerBackground, in: viewport)
     }
@@ -72,7 +72,7 @@ struct BoundaryTests {
 
     var innerBackground = DrawList()
     do {
-      let resolved = BlockEngine.prepare(NamedBlock(name: "content").background(blue).padding(5), context: context)
+      var resolved = BlockEngine.prepare(NamedBlock(name: "content").background(blue).padding(5), context: context)
       resolved.register(in: viewport)
       resolved.paint(into: &innerBackground, in: viewport)
     }
@@ -90,7 +90,7 @@ struct BoundaryTests {
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(NamedBlock(name: "x").clipped().clipped(), context: context)
+      var resolved = BlockEngine.prepare(NamedBlock(name: "x").clipped().clipped(), context: context)
       resolved.register(in: viewport)
       resolved.paint(into: &list, in: viewport)
     }

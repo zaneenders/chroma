@@ -22,7 +22,7 @@ struct DefaultFocusTests {
     context.interaction.beginFrame(input: input)
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(content, context: context)
+      var resolved = BlockEngine.prepare(content, context: context)
       resolved.register(in: viewport)
       resolved.paint(into: &list, in: viewport)
     }

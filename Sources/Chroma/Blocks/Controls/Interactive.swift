@@ -31,42 +31,52 @@ public struct Interactive<Content: Block>: LayoutPreparingBlock {
 }
 
 extension Interactive {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
     // Layout queries intentionally use the idle tree. The current-phase tree belongs
     // to this operation and is shared by registration and painting, never a later event.
-    var idle: BlockEngine.Resolved?
-    func measurementTree() -> BlockEngine.Resolved {
+    var idle: LayoutNode?
+    func measurementTree(_ buffer: inout LayoutBuffer) -> LayoutNode {
       if let idle { return idle }
-      let resolved = BlockEngine.resolve(content(.idle), context: context)
+      let resolved = buffer.prepare(content(.idle), context: context)
       idle = resolved
       return resolved
     }
     var childContext = context
     childContext.focusTargets = []
     childContext.focusLeafClaimed = true
-    var active: BlockEngine.Resolved?
+    var active: LayoutNode?
     var activePhase: InteractionPhase?
-    func current(_ phase: InteractionPhase) -> BlockEngine.Resolved {
+    func current(_ phase: InteractionPhase, buffer: inout LayoutBuffer) -> LayoutNode {
       if let active, activePhase == phase { return active }
-      let resolved = BlockEngine.resolve(content(phase), context: childContext)
+      let resolved = buffer.prepare(content(phase), context: childContext)
       active = resolved
       activePhase = phase
       return resolved
     }
     let id = id ?? context.widgetID
-    return BlockEngine.Resolved(
-      expandsHorizontally: { measurementTree().expandsHorizontally },
-      expandsVertically: { measurementTree().expandsVertically },
-      measure: { measurementTree().sizeThatFits($0) },
-      register: { rect in
-        let state = context.buttonState(id: id, in: rect, action: action)
-        current(state.phase).register(in: rect)
+    return buffer.append(
+      expandsHorizontally: { buffer in
+        let child = measurementTree(&buffer)
+        return buffer.expandsHorizontally(child)
       },
-      paint: { list, rect in
+      expandsVertically: { buffer in
+        let child = measurementTree(&buffer)
+        return buffer.expandsVertically(child)
+      },
+      measure: { buffer, proposal in
+        let child = measurementTree(&buffer)
+        return buffer.sizeThatFits(child, proposal)
+      },
+      register: { buffer, rect in
+        let state = context.buttonState(id: id, in: rect, action: action)
+        let child = current(state.phase, buffer: &buffer)
+        buffer.register(child, in: rect)
+      },
+      paint: { buffer, list, rect in
         // Canonical update has prepared this exact phase; direct standalone paint may
         // prepare a fresh visual tree, but never installs its handlers or focus leaves.
-        let child = active ?? current(context.buttonVisualState(id: id).phase)
-        child.paint(into: &list, in: rect)
+        let child = active ?? current(context.buttonVisualState(id: id).phase, buffer: &buffer)
+        buffer.paint(child, into: &list, in: rect)
       })
   }
 }

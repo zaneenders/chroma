@@ -18,7 +18,7 @@ struct CommandConsumptionTests {
         return .handled
       }
       do {
-        let resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
+        var resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
         resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
@@ -43,7 +43,7 @@ struct CommandConsumptionTests {
         consumes ? .handled : .ignored
       }
       do {
-        let resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
+        var resolved = BlockEngine.prepare(view, context: BlockContext(interaction: interaction))
         resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }

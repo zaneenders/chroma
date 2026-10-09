@@ -98,10 +98,12 @@ struct InputUpdatePhaseTests {
         state.updates += 1
         return Text(String(state.updates))
       }
-      func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-        let prepared = BlockEngine.prepare(child, context: context)
-        return BlockEngine.Resolved(
-          measure: { $0 }, register: prepared.register, paint: prepared.paint)
+      func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+        let prepared = buffer.prepare(child, context: context)
+        return buffer.append(
+          measure: { _, proposal in proposal },
+          register: { buffer, rect in buffer.register(prepared, in: rect) },
+          paint: { buffer, list, rect in buffer.paint(prepared, into: &list, in: rect) })
       }
     }
     let state = State()

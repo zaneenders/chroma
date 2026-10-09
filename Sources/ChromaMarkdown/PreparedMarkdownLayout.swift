@@ -33,7 +33,8 @@ final class MarkdownLayoutPreparation {
       lines = cached.lines
     } else {
       var result = layoutMarkdown(
-        [leaf.block], columns: columns, theme: context.theme, baseColor: context.theme.foreground)
+        [leaf.block], columns: columns, theme: context.theme, baseColor: context.theme.foreground,
+        parsedRuns: leaf.parsedRuns.map { [$0] })
       if leaf.hasLeadingGap { result.insert(VisualLine(), at: 0) }
       cached = (key, result)
       lines = result

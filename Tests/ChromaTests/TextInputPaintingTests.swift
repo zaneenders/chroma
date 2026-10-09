@@ -85,7 +85,7 @@ struct TextInputPaintingTests {
     context.interaction.textDragViewportRow = 0
     #expect(context.interaction.isDragging)
     var list = DrawList()
-    let resolved = editor.prepareLayout(context: context)
+    var resolved = BlockEngine.prepare(editor, context: context)
     resolved.register(in: Rect(x: 0, y: 0, width: 200, height: 100))
     resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
     #expect(context.interaction.textDragViewportRow == 0)

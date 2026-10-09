@@ -117,7 +117,7 @@ struct LazyLayoutCacheTests {
         ]
       ).id(id)
       do {
-        let resolved = BlockEngine.prepare(stack, context: BlockContext(interaction: interaction))
+        var resolved = BlockEngine.prepare(stack, context: BlockContext(interaction: interaction))
         resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
       }
@@ -139,7 +139,7 @@ struct LazyLayoutCacheTests {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
+        var resolved = BlockEngine.prepare(
           ScrollView(controller: controller, rows: [row]).id(id), context: BlockContext(interaction: interaction))
         resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))
         resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 100, height: 20))
@@ -161,7 +161,7 @@ struct LazyLayoutCacheTests {
       interaction.beginFrame(input: InputState())
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(
+        var resolved = BlockEngine.prepare(
           ScrollView(controller: controller, rows: rows).id(id),
           context: BlockContext(interaction: interaction, textScale: scale))
         resolved.register(in: Rect(x: 0, y: 0, width: 100, height: 20))

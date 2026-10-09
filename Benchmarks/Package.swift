@@ -1,15 +1,20 @@
 // swift-tools-version: 6.4
+import Foundation
 import PackageDescription
+
+let headlessOnly = ProcessInfo.processInfo.environment["CHROMA_HEADLESS_ONLY"] == "1"
 
 var runnerDependencies: [Target.Dependency] = [
   "RenderFixtures",
   .product(name: "Chroma", package: "chroma"),
 ]
-#if os(macOS)
-runnerDependencies.append(.product(name: "MetalBackend", package: "chroma"))
-#elseif os(Linux)
-runnerDependencies.append(.product(name: "WaylandBackend", package: "chroma"))
-#endif
+if !headlessOnly {
+  #if os(macOS)
+  runnerDependencies.append(.product(name: "MetalBackend", package: "chroma"))
+  #elseif os(Linux)
+  runnerDependencies.append(.product(name: "WaylandBackend", package: "chroma"))
+  #endif
+}
 
 let package = Package(
   name: "ChromaBenchmarks",
@@ -70,11 +75,15 @@ let package = Package(
     .executableTarget(name: "CompareBenchmarks"),
     .testTarget(name: "CompareBenchmarksTests", dependencies: ["CompareBenchmarks"]),
     .target(name: "RenderFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
-    .executableTarget(name: "RenderBenchmark", dependencies: runnerDependencies),
     .testTarget(
       name: "RenderFixturesTests",
       dependencies: [
         "RenderFixtures", .product(name: "Chroma", package: "chroma"),
       ]),
   ]
+    + (headlessOnly
+      ? []
+      : [
+        .executableTarget(name: "RenderBenchmark", dependencies: runnerDependencies)
+      ])
 )

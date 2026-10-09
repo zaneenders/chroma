@@ -8,6 +8,11 @@ public enum InteractionMode: Equatable, Sendable {
 @Observable
 @MainActor
 package final class Interaction {
+  @ObservationIgnored var animations: [WidgetID: ScalarAnimation] = [:]
+  @ObservationIgnored var animationKeys: Set<WidgetID> = []
+  @ObservationIgnored var animationTime: Double = 0
+  @ObservationIgnored var animationsActive = false
+
   @ObservationIgnored var inputLengthText: String?
   @ObservationIgnored var inputLength = 0
 
@@ -16,6 +21,7 @@ package final class Interaction {
   var documentEnd: TextEndpoint?
 
   package let textSelection = TextSelectionManager()
+  @ObservationIgnored let textLayouts = TextLayoutPreparation()
 
   package var fontMetrics = FontMetrics()
 
@@ -303,6 +309,10 @@ package final class Interaction {
     documentAnchor = nil
     documentEnd = nil
     textSelection.layoutRegistry.clear()
+    textLayouts.clear()
+    animations.removeAll()
+    animationKeys.removeAll()
+    animationsActive = false
     pendingFocus = nil
     scrollStates = [:]
     tree = nil
@@ -369,6 +379,7 @@ package final class Interaction {
   }
 
   package func beginFrame(input: InputState, processingInput: Bool = true) {
+    animationKeys.removeAll(keepingCapacity: true)
     building = FrameRegistrations()
     buildingLogicalSelections = [:]
 
@@ -462,6 +473,8 @@ package final class Interaction {
     defer { finishInput() }
     if !refreshingRegistrations { routePendingCommands() }
     guard let newTree = builderRoot else { return }
+    animations = animations.filter { animationKeys.contains($0.key) }
+    animationsActive = animations.values.contains { $0.isActive(at: animationTime) }
 
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil { endEditing() }
     if let pressedLeaf, newTree.findLeaf(pressedLeaf) == nil { self.pressedLeaf = nil }

@@ -35,11 +35,21 @@ final class FrameTrackingSubscription: Observable, Sendable {
 
 @MainActor
 package final class FrameProducer {
+  private let clock: @MainActor () -> Double
+
+  package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
+    self.clock = clock
+  }
+
   private var generation: UInt64 = 0
+  private var layout = LayoutBuffer()
+  private var drawBuffer = DrawList()
   private var subscription: FrameTrackingSubscription?
   private weak var interaction: Interaction?
 
   package func reset() {
+    layout.reset(releasingCapacity: true)
+    drawBuffer.removeAll(keepingCapacity: false)
     interaction?.resetRegistrations()
     interaction = nil
     resetTracking()
@@ -85,22 +95,24 @@ package final class FrameProducer {
     {
       refreshRegistrations(content, viewport: viewport, context: context, commands: input.commands)
     }
+    interaction.animationTime = clock()
     interaction.beginFrame(input: input, processingInput: processingInput)
     let subscription = FrameTrackingSubscription(
-      onChange, metricsLifetime: PipelineMetrics.trackLifetime(.observationSubscription))
+      onChange, metricsLifetime: PipelineMetrics.trackObservationLifetime())
     self.subscription = subscription
     let enqueue = ObservationDelivery.enqueue
-    let drawList = withObservationTracking(options: .didSet) {
+    withObservationTracking(options: .didSet) {
       subscription.trackCancellation()
-      var drawList = DrawList()
+      drawBuffer.removeAll()
 
       if let content {
-        let resolved = BlockEngine.resolve(content, context: context)
+        layout.reset()
+        defer { layout.reset() }
+        let resolved = layout.prepare(content, context: context)
         let rect = Rect(origin: .zero, size: viewport)
-        resolved.register(in: rect)
-        resolved.paint(into: &drawList, in: rect)
+        layout.register(resolved, in: rect)
+        layout.paint(resolved, into: &drawBuffer, in: rect)
       }
-      return drawList
     } onChange: { [weak self, weak subscription] event in
       event.cancel()
       guard let onChange = subscription?.takeCallback() else { return }
@@ -110,11 +122,10 @@ package final class FrameProducer {
       }
     }
     interaction.endFrame()
-    var result = drawList
-    BlockEngine.countDrawingCommands(into: &result) { list in
+    BlockEngine.countDrawingCommands(into: &drawBuffer) { list in
       interaction.paintNavigation(into: &list, theme: context.theme)
     }
-    return result
+    return drawBuffer
   }
 
   package func refreshRegistrations(
@@ -126,11 +137,15 @@ package final class FrameProducer {
 
     let interaction = context.interaction
     interaction.refreshingRegistrations = interaction.tree != nil
+    interaction.animationTime = clock()
     interaction.beginFrame(input: InputState(commands: commands))
     interaction.refreshingRegistrations = true
     defer { interaction.refreshingRegistrations = false }
     if let content {
-      BlockEngine.register(content, in: Rect(origin: .zero, size: viewport), context: context)
+      layout.reset()
+      defer { layout.reset() }
+      let root = layout.prepare(content, context: context)
+      layout.register(root, in: Rect(origin: .zero, size: viewport))
     }
     interaction.endFrame()
   }

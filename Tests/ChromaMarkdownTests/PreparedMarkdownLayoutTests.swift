@@ -11,24 +11,25 @@ struct PreparedMarkdownLayoutTests {
   @Test func measurementRegistrationAndPaintingShareOneLayout() {
     let context = BlockContext()
     let preparation = MarkdownLayoutPreparation()
-    let resolved = leaf.prepareLayout(context: context, preparation: preparation)
+    var buffer = LayoutBuffer()
+    let resolved = leaf.prepareLayout(context: context, preparation: preparation, in: &buffer)
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    let size = resolved.sizeThatFits(rect.size)
+    let size = buffer.sizeThatFits(resolved, rect.size)
     #expect(size.height > 0)
-    #expect(resolved.sizeThatFits(Size(width: rect.size.width, height: 999)) == size)
+    #expect(buffer.sizeThatFits(resolved, Size(width: rect.size.width, height: 999)) == size)
     #expect(preparation.layoutsBuilt == 1)
     context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
+    buffer.register(resolved, in: rect)
     #expect(preparation.layoutsBuilt == 1)
     #expect(context.interaction.builderRoot?.children.count == 1)
     #expect(PipelineMetrics.snapshot.paints == 0)
     #expect(PipelineMetrics.snapshot.drawingCommands == 0)
     let handlers = context.interaction.building.inputHandlers.count
     var first = DrawList()
-    resolved.paint(into: &first, in: rect)
+    buffer.paint(resolved, into: &first, in: rect)
     var second = DrawList()
-    resolved.paint(into: &second, in: rect)
+    buffer.paint(resolved, into: &second, in: rect)
     #expect(preparation.layoutsBuilt == 1)
     #expect(first.commands == second.commands)
     #expect(context.interaction.builderRoot?.children.count == 1)
@@ -50,7 +51,8 @@ struct PreparedMarkdownLayoutTests {
     let bounds = Rect(x: 37, y: 41, width: width, height: 500)
     for block in segmentMarkdown(source) {
       let current = MarkdownLeaf(block: block, scale: 2, lineSpacing: 3, hasLeadingGap: true)
-      let resolved = current.prepareLayout(context: context)
+      var buffer = LayoutBuffer()
+      let resolved = current.prepareLayout(context: context, in: &buffer)
       let scale = current.scale * context.textScale
       let cellWidth = context.fontMetrics.cellAdvance * scale
       var lines = layoutMarkdown(
@@ -60,9 +62,9 @@ struct PreparedMarkdownLayoutTests {
       let expected = MarkdownLayout(
         lines: lines, lineHeight: context.fontMetrics.lineAdvance * scale + current.lineSpacing,
         cellWidth: cellWidth, scale: scale, hasLeadingGap: true, rect: bounds)
-      #expect(resolved.sizeThatFits(bounds.size).height == Float(lines.count) * expected.lineHeight)
+      #expect(buffer.sizeThatFits(resolved, bounds.size).height == Float(lines.count) * expected.lineHeight)
       var actualCommands = DrawList()
-      resolved.paint(into: &actualCommands, in: bounds)
+      buffer.paint(resolved, into: &actualCommands, in: bounds)
       var expectedCommands = DrawList()
       expected.draw(into: &expectedCommands, theme: context.theme, selection: context.textInputVisualState())
       #expect(actualCommands.commands == expectedCommands.commands)
@@ -71,9 +73,10 @@ struct PreparedMarkdownLayoutTests {
 
   @Test func paintingAloneDoesNotRegisterOrReplayInput() {
     let context = BlockContext()
-    let resolved = leaf.prepareLayout(context: context)
+    var buffer = LayoutBuffer()
+    let resolved = leaf.prepareLayout(context: context, in: &buffer)
     var list = DrawList()
-    resolved.paint(into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
     #expect(!list.commands.isEmpty)
     #expect(context.interaction.tree == nil)
     #expect(context.interaction.builderRoot == nil)
@@ -143,8 +146,9 @@ struct PreparedMarkdownLayoutTests {
     func register(_ text: String, width: Float) {
       context.interaction.beginFrame(input: InputState())
       let content = MarkdownText(text)
-      let resolved = BlockEngine.prepare(content, context: context)
-      resolved.register(in: Rect(x: 20, y: 30, width: width, height: 400))
+      var buffer = LayoutBuffer()
+      let resolved = buffer.prepare(content, context: context)
+      buffer.register(resolved, in: Rect(x: 20, y: 30, width: width, height: 400))
       context.interaction.endFrame()
       context.interaction.selectAll(at: .zero)
     }
@@ -163,8 +167,9 @@ struct PreparedMarkdownLayoutTests {
     do {
       let preparation = MarkdownLayoutPreparation()
       weakPreparation = preparation
-      let resolved = leaf.prepareLayout(context: context, preparation: preparation)
-      resolved.register(in: rect)
+      var buffer = LayoutBuffer()
+      let resolved = leaf.prepareLayout(context: context, preparation: preparation, in: &buffer)
+      buffer.register(resolved, in: rect)
       // Replacing the cache cannot change text captured by registered callbacks.
       _ = preparation.resolve(
         MarkdownLeaf(block: .paragraph("new value"), scale: 1, lineSpacing: 4),
@@ -180,7 +185,9 @@ struct PreparedMarkdownLayoutTests {
     let context = BlockContext()
     let expected = context.scoped([.component(ObjectIdentifier(MarkdownLeaf.self))]).widgetID
     context.interaction.beginFrame(input: InputState())
-    BlockEngine.prepare(leaf, context: context).register(in: rect)
+    var buffer = LayoutBuffer()
+    let resolved = buffer.prepare(leaf, context: context)
+    buffer.register(resolved, in: rect)
     #expect(context.interaction.builderRoot?.children.map(\.leafID) == [expected])
     context.interaction.endFrame()
   }
@@ -190,12 +197,13 @@ struct PreparedMarkdownLayoutTests {
     var context = BlockContext()
     context.focusLeafClaimed = claimed
     context.navigationIgnored = ignored
-    let resolved = leaf.prepareLayout(context: context)
+    var buffer = LayoutBuffer()
+    let resolved = leaf.prepareLayout(context: context, in: &buffer)
     context.interaction.beginFrame(input: InputState())
-    resolved.register(in: rect)
+    buffer.register(resolved, in: rect)
     context.interaction.selectedLeafID = context.widgetID
     var list = DrawList()
-    resolved.paint(into: &list, in: rect)
+    buffer.paint(resolved, into: &list, in: rect)
     var highlight = DrawList()
     highlight.strokeRect(rect, width: 2, color: context.theme.focus.ring)
     #expect(list.commands.contains(highlight.commands[0]) == (!claimed && !ignored))

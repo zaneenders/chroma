@@ -50,9 +50,12 @@ struct ScrollPaintTests {
   private struct Wrapper: LayoutPreparingBlock {
     let content: any Block
     var focusRule: FocusRule { .container }
-    func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-      let child = BlockEngine.prepare(content, context: context)
-      return BlockEngine.Resolved(measure: { $0 }, register: child.register, paint: child.paint)
+    func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+      let child = buffer.prepare(content, context: context)
+      return buffer.append(
+        measure: { _, proposal in proposal },
+        register: { buffer, rect in buffer.register(child, in: rect) },
+        paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
     }
   }
 
@@ -93,7 +96,7 @@ struct ScrollPaintTests {
       capture.built.append(index)
       return Row(index: index, capture: capture)
     }.id(scrollID)
-    let resolved = BlockEngine.resolve(view, context: context)
+    var resolved = BlockEngine.prepare(view, context: context)
     interaction.beginFrame(input: InputState(pointerPosition: Point(x: -10, y: -10)))
     resolved.register(in: viewport)
     interaction.endFrame()
@@ -157,15 +160,15 @@ struct ScrollPaintTests {
       ]
     ).id(scrollID)
 
-    func register() -> BlockEngine.Resolved {
-      let resolved = BlockEngine.resolve(view, context: context)
+    func register() -> PreparedLayout {
+      var resolved = BlockEngine.prepare(view, context: context)
       context.interaction.beginFrame(input: InputState())
       resolved.register(in: viewport)
       context.interaction.endFrame()
       return resolved
     }
 
-    let resolved = register()
+    var resolved = register()
     let measurements = controller.lazyStackCache.measurements
     let layout = controller.lazyStackCache.layout
     #expect(capture.measured == [0, 1])
@@ -181,7 +184,7 @@ struct ScrollPaintTests {
     #expect(!controller.lazyStackCache.measurements[0].valid)
 
     capture.painted = []
-    let next = register()
+    var next = register()
     next.paint(into: &list, in: viewport)
     #expect(capture.measured == [0, 1, 0])
     #expect(capture.painted.map(\.index) == [0])
@@ -195,16 +198,16 @@ struct ScrollPaintTests {
       let capture: Capture
       var body: some Block {
         capture.built.append(0)
-        return Row(index: 0, capture: capture).sizing(y: .fixed(100))
+        let lifetime = Lifetime()
+        capture.lastRowLifetime = lifetime
+        return Row(index: 0, capture: capture, lifetime: lifetime).sizing(y: .fixed(100))
       }
     }
     let context = BlockContext()
     let capture = Capture()
     let view = ScrollView(showsIndicator: false) { Content(capture: capture) }
-    weak var retained: BlockEngine.Resolved?
     do {
-      let resolved = BlockEngine.resolve(view, context: context)
-      retained = resolved
+      var resolved = BlockEngine.prepare(view, context: context)
       context.interaction.beginFrame(input: InputState())
       resolved.register(in: viewport)
       context.interaction.endFrame()
@@ -212,10 +215,11 @@ struct ScrollPaintTests {
       var list = DrawList()
       resolved.paint(into: &list, in: viewport)
       #expect(capture.built == [0])
+      #expect(capture.lastRowLifetime != nil)
       #expect(capture.measured == measurements)
       #expect(capture.registered == [0])
       #expect(capture.painted.map(\.rect) == [Rect(x: 0, y: 0, width: 100, height: 100)])
     }
-    #expect(retained == nil)
+    #expect(capture.lastRowLifetime == nil)
   }
 }

@@ -1,95 +1,5 @@
 @MainActor
 public enum BlockEngine {
-  /// Owned by one traversal. Expansion, measurement, and painting share the same body values.
-  /// Proposal-dependent sizes are discarded with the tree, so the next traversal observes fresh state.
-  @MainActor public final class Resolved {
-    public init(
-      expandsHorizontally: @escaping () -> Bool = { false },
-      expandsVertically: @escaping () -> Bool = { false },
-      measure: @escaping (Size) -> Size,
-      register: @escaping (Rect) -> Void,
-      paint: @escaping (inout DrawList, Rect) -> Void
-    ) {
-      horizontalExpansion = expandsHorizontally
-      verticalExpansion = expandsVertically
-      self.measure = measure
-      self.update = register
-      self.presentation = paint
-
-    }
-
-    public convenience init(
-      child: Resolved,
-      register: @escaping (Rect) -> Void,
-      paint: @escaping (inout DrawList, Rect) -> Void
-    ) {
-      self.init(
-        expandsHorizontally: { child.expandsHorizontally },
-        expandsVertically: { child.expandsVertically },
-        measure: child.sizeThatFits,
-        register: register, paint: paint)
-    }
-
-    private let metricsLifetime = PipelineMetrics.trackLifetime(.resolvedNode)
-    private let horizontalExpansion: () -> Bool
-    private let verticalExpansion: () -> Bool
-    private let measure: (Size) -> Size
-    private let update: (Rect) -> Void
-    private let presentation: (inout DrawList, Rect) -> Void
-    private var measurements: [(proposal: Size, size: Size)] = []
-
-    public private(set) lazy var expandsHorizontally = horizontalExpansion()
-    public private(set) lazy var expandsVertically = verticalExpansion()
-
-    public func sizeThatFits(_ proposal: Size) -> Size {
-      PipelineMetrics.record(.measurement)
-      if let cached = measurements.first(where: { $0.proposal == proposal }) {
-        PipelineMetrics.record(.measurementCacheHit)
-        return cached.size
-      }
-      let size = measure(proposal)
-      measurements.append((proposal, size))
-      return size
-    }
-
-    public func register(in rect: Rect) {
-      PipelineMetrics.record(.placement)
-      PipelineMetrics.record(.registration)
-      update(rect)
-    }
-
-    public func paint(into drawList: inout DrawList, in rect: Rect) {
-      PipelineMetrics.record(.paint)
-      BlockEngine.countDrawingCommands(into: &drawList) { list in presentation(&list, rect) }
-    }
-
-  }
-
-  static func resolve(_ block: any Block, context: BlockContext) -> Resolved {
-    if let scoped = block as? ScopedBlock {
-      return resolve(scoped.content, context: context.scoped(scoped.path))
-    }
-    if let container = block as? any LayoutPreparingBlock {
-      let context =
-        container.preservesContentIdentity
-        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
-      return container.prepareLayout(context: context)
-    }
-    if let primitive = block as? any PaintableBlock {
-      let context =
-        primitive.preservesContentIdentity
-        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
-      return Resolved(
-        expandsHorizontally: { primitive.expandsHorizontally },
-        expandsVertically: { primitive.expandsVertically },
-        measure: { primitive.sizeThatFits($0, context: context) },
-        register: { registerResolved(primitive, in: $0, context: context) },
-        paint: { paintResolved(primitive, into: &$0, in: $1, context: context) })
-    }
-    PipelineMetrics.record(.bodyEvaluation)
-    return resolve(block.body, context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))
-  }
-
   private static var paintingDepth = 0
 
   /// Count once at the outermost drawing boundary, including nested prepared children.
@@ -118,21 +28,23 @@ public enum BlockEngine {
     proposal: Size,
     context: BlockContext
   ) -> Size {
-    let resolved = resolve(block, context: context)
+    var resolved = prepare(block, context: context)
     return resolved.sizeThatFits(proposal)
   }
 
   /// Builds one consistent interaction update from fresh block values. The resolved tree and
   /// proposal caches live only for this call; identity alone never retains callbacks or layout.
   public static func register(_ block: any Block, in rect: Rect, context: BlockContext) {
-    let resolved = resolve(block, context: context)
+    var resolved = prepare(block, context: context)
     resolved.register(in: rect)
   }
 
   /// Prepares fresh child values once for a custom primitive's current operation.
   /// Keep the result local to `prepareLayout`; never retain it across updates.
-  public static func prepare(_ block: any Block, context: BlockContext) -> Resolved {
-    resolve(block, context: context)
+  public static func prepare(_ block: any Block, context: BlockContext) -> PreparedLayout {
+    var buffer = LayoutBuffer()
+    let root = buffer.prepare(block, context: context)
+    return PreparedLayout(buffer: consume buffer, root: root)
   }
 
   static func paintResolved(
@@ -188,10 +100,12 @@ public enum BlockEngine {
   }
 
   public static func expandsHorizontally(_ block: any Block) -> Bool {
-    resolve(block, context: BlockContext()).expandsHorizontally
+    var prepared = prepare(block, context: BlockContext())
+    return prepared.expandsHorizontally
   }
 
   public static func expandsVertically(_ block: any Block) -> Bool {
-    resolve(block, context: BlockContext()).expandsVertically
+    var prepared = prepare(block, context: BlockContext())
+    return prepared.expandsVertically
   }
 }

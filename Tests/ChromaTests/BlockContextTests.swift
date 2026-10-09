@@ -67,7 +67,7 @@ struct BlockContextTests {
     _ = BlockEngine.measure(block, proposal: Size(width: 20, height: 10), context: context)
     var drawList = DrawList()
     do {
-      let resolved = BlockEngine.prepare(block, context: context)
+      var resolved = BlockEngine.prepare(block, context: context)
       resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 10))
       resolved.paint(into: &drawList, in: Rect(x: 0, y: 0, width: 20, height: 10))
     }

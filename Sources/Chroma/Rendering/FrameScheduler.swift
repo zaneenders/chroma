@@ -18,6 +18,7 @@ package final class FrameScheduler {
   package private(set) var lastFrameTime: Double?
   package private(set) var minimumRefreshRate = 30.0
   package private(set) var maximumRefreshRate = 60.0
+  package var animationsActive = false { didSet { schedule() } }
   package var scrollMomentumActive = false { didSet { schedule() } }
   package var inputPending = false { didSet { schedule() } }
   package var isReady = false { didSet { schedule() } }
@@ -47,7 +48,7 @@ package final class FrameScheduler {
         deadline: lastFrameTime.map { $0 + 1 / maximumRefreshRate } ?? pendingSince,
         kind: .content, priority: .userInitiated)
     }
-    guard scrollMomentumActive, let lastFrameTime else { return nil }
+    guard scrollMomentumActive || animationsActive, let lastFrameTime else { return nil }
     return ScheduledFrame(
       deadline: lastFrameTime + 1 / minimumRefreshRate,
       kind: .content, priority: .utility)
@@ -78,6 +79,7 @@ package final class FrameScheduler {
     pendingSince = nil
     lastFrameTime = nil
     scrollMomentumActive = false
+    animationsActive = false
     inputPending = false
   }
 

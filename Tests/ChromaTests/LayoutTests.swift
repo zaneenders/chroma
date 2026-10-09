@@ -109,7 +109,7 @@ struct LayoutTests {
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(Host(showQueue: true), context: context)
+      var resolved = BlockEngine.prepare(Host(showQueue: true), context: context)
       resolved.register(in: viewport)
       resolved.paint(into: &list, in: viewport)
     }
@@ -138,7 +138,7 @@ struct LayoutTests {
     interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(ComputedPropertyHost(showQueue: true), context: context)
+      var resolved = BlockEngine.prepare(ComputedPropertyHost(showQueue: true), context: context)
       resolved.register(in: viewport)
       resolved.paint(into: &list, in: viewport)
     }
@@ -189,7 +189,7 @@ struct LayoutTests {
 
     var horizontalList = DrawList()
     do {
-      let resolved = BlockEngine.prepare(
+      var resolved = BlockEngine.prepare(
         HStack {
           Text("first")
           Text("second")
@@ -202,7 +202,7 @@ struct LayoutTests {
 
     var verticalList = DrawList()
     do {
-      let resolved = BlockEngine.prepare(
+      var resolved = BlockEngine.prepare(
         VStack {
           Text("first")
           Text("second")

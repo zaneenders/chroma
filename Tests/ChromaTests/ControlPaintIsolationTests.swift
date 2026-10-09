@@ -18,7 +18,8 @@ struct ControlPaintIsolationTests {
     for control in controls {
       let context = BlockContext()
       var list = DrawList()
-      BlockEngine.resolve(control, context: context).paint(into: &list, in: rect)
+      var resolved = BlockEngine.prepare(control, context: context)
+      resolved.paint(into: &list, in: rect)
       #expect(!list.paintSnapshot.isEmpty)
       #expect(context.interaction.tree == nil)
       #expect(context.interaction.builderRoot == nil)
@@ -100,7 +101,7 @@ struct ControlPaintIsolationTests {
         return PhaseLeaf(phase: phase, capture: capture)
       })
     context.interaction.hoveredLeafID = id
-    let resolved = BlockEngine.resolve(interactive, context: context)
+    var resolved = BlockEngine.prepare(interactive, context: context)
     _ = resolved.sizeThatFits(rect.size)
     context.interaction.beginFrame(input: InputState(), processingInput: false)
     resolved.register(in: rect)
@@ -135,7 +136,7 @@ struct ControlPaintIsolationTests {
     update(InputState(pointerPosition: origin, pointerDown: true, pointerPressed: true))
     let below = Point(x: 20, y: 80)
     context.interaction.beginFrame(input: InputState(pointerPosition: below, pointerDown: true))
-    let resolved = BlockEngine.resolve(editor, context: context)
+    var resolved = BlockEngine.prepare(editor, context: context)
     resolved.register(in: rect)
     let row = context.interaction.textDragViewportRow
     let caret = context.interaction.caretOffset
@@ -153,22 +154,6 @@ struct ControlPaintIsolationTests {
     context.interaction.endFrame()
   }
 
-  @Test func shapingSnapshotValidityIncludesTextAndColumnsAndHasBoundedOwnership() {
-    let preparation = TextLayoutPreparation()
-    let original = preparation.resolve("ab\ncd", columns: 10)
-    #expect(preparation.resolve("ab\ncd", columns: 10) === original)
-    let changedText = preparation.resolve("ab\ncd\nef", columns: 10)
-    #expect(changedText !== original)
-    #expect(changedText.layout.lines.count == 3)
-    let changedColumns = preparation.resolve("ab\ncd\nef", columns: 1)
-    #expect(changedColumns !== changedText)
-    #expect(changedColumns.layout.lines.count == 6)
-    #expect(preparation.snapshot === changedColumns)
-    // Only the latest value is cached, and a new update has its own preparation.
-    #expect(preparation.resolve("ab\ncd", columns: 10) !== original)
-    #expect(TextLayoutPreparation().resolve("ab\ncd", columns: 10) !== original)
-  }
-
   @Test(arguments: [false, true])
   func updateAndPaintingShareTheMeasuredTextLayout(editor: Bool) {
     let context = BlockContext()
@@ -178,7 +163,7 @@ struct ControlPaintIsolationTests {
       : Text("ab\ncd\nef").wrapping().selectable()
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    let resolved = BlockEngine.resolve(block, context: context)
+    var resolved = BlockEngine.prepare(block, context: context)
     _ = resolved.sizeThatFits(rect.size)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
     context.interaction.beginFrame(input: InputState())
@@ -199,7 +184,7 @@ struct ControlPaintIsolationTests {
         reads += 1
         return text
       }, onChange: { text = $0 })
-    let resolved = BlockEngine.resolve(editor, context: context)
+    var resolved = BlockEngine.prepare(editor, context: context)
     context.interaction.beginFrame(input: InputState())
     resolved.register(in: rect)
     let registeredReads = reads
@@ -214,7 +199,7 @@ struct ControlPaintIsolationTests {
       })
     context.interaction.endFrame()
     context.interaction.beginFrame(input: InputState())
-    let updated = BlockEngine.resolve(editor, context: context)
+    var updated = BlockEngine.prepare(editor, context: context)
     updated.register(in: rect)
     var second = DrawList()
     updated.paint(into: &second, in: rect)
@@ -244,9 +229,9 @@ struct ControlPaintIsolationTests {
     let text = selectable ? Text("visible glyphs").selectable() : Text("visible glyphs")
     var context = BlockContext()
     context.hoverStyle = .tint(.black)
-    context.interaction.hoveredLeafID = context.widgetID
+    context.interaction.hoveredLeafID = context.scoped([.component(ObjectIdentifier(Text.self))]).widgetID
     context.interaction.beginFrame(input: InputState(), processingInput: false)
-    let resolved = text.prepareLayout(context: context)
+    var resolved = BlockEngine.prepare(text, context: context)
     var list = DrawList()
     resolved.register(in: rect)
     resolved.paint(into: &list, in: rect)

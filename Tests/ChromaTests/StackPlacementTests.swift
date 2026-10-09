@@ -26,7 +26,7 @@ struct StackPlacementTests {
     #expect(row.sizeThatFits(Size(width: 150, height: 200), context: context).height == 20)
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
-    let resolved = row.prepareLayout(context: context)
+    var resolved = BlockEngine.prepare(row, context: context)
     resolved.register(in: Rect(x: 10, y: 20, width: 100, height: 60))
     resolved.paint(into: &list, in: Rect(x: 10, y: 20, width: 100, height: 60))
     context.interaction.endFrame()
@@ -62,7 +62,7 @@ struct StackPlacementTests {
     var drawList = DrawList()
     context.interaction.beginFrame(input: InputState())
     do {
-      let resolved = BlockEngine.prepare(stack, context: context)
+      var resolved = BlockEngine.prepare(stack, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &drawList, in: rect)
     }

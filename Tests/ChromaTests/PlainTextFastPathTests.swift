@@ -10,7 +10,7 @@ struct PlainTextFastPathTests {
   func plainTextPreservesCommandsAndMeasurement(content: String) {
     let context = BlockContext(textScale: 1.5)
     let text = Text(content).fontScale(2).foregroundColor(.black)
-    let resolved = text.prepareLayout(context: context)
+    var resolved = BlockEngine.prepare(text, context: context)
     #expect(resolved.sizeThatFits(rect.size) == context.fontMetrics.measure(content, scale: 3))
     var expected = DrawList()
     for (row, line) in TextLayout(content).lines.enumerated() {
@@ -37,12 +37,12 @@ struct PlainTextFastPathTests {
     var context = BlockContext()
     context.focusLeafClaimed = claimed
     context.navigationIgnored = ignored
-    let resolved = Text("label").prepareLayout(context: context)
+    var resolved = BlockEngine.prepare(Text("label"), context: context)
     context.interaction.beginFrame(input: InputState())
     resolved.register(in: rect)
     let leaves = context.interaction.builderRoot?.children.count
     #expect(leaves == (claimed || ignored ? 0 : 1))
-    context.interaction.selectedLeafID = context.widgetID
+    context.interaction.selectedLeafID = context.scoped([.component(ObjectIdentifier(Text.self))]).widgetID
     var first = DrawList()
     resolved.paint(into: &first, in: rect)
     var second = DrawList()
@@ -58,12 +58,12 @@ struct PlainTextFastPathTests {
     context.interaction.endFrame()
   }
 
-  @Test func plainTextShapesOnlyWhenPaintedAndCountsEachLayout() {
+  @Test func plainTextShapesOnlyWhenPaintedAndReusesEachLayout() {
     let context = BlockContext()
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     PipelineMetrics.reset()
-    let resolved = Text("plain").prepareLayout(context: context)
+    var resolved = BlockEngine.prepare(Text("plain"), context: context)
     _ = resolved.sizeThatFits(rect.size)
     context.interaction.beginFrame(input: InputState())
     resolved.register(in: rect)
@@ -73,7 +73,7 @@ struct PlainTextFastPathTests {
     resolved.paint(into: &list, in: rect)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
     resolved.paint(into: &list, in: rect)
-    #expect(PipelineMetrics.snapshot.textLayouts == 2)
+    #expect(PipelineMetrics.snapshot.textLayouts == 1)
     context.interaction.endFrame()
   }
 }

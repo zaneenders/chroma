@@ -30,7 +30,7 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 3)
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(block, context: context)
+      var resolved = BlockEngine.prepare(block, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &list, in: rect)
     }
@@ -59,7 +59,7 @@ struct StackEvaluationTests {
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(stack, context: context)
+      var resolved = BlockEngine.prepare(stack, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &list, in: rect)
     }
@@ -83,7 +83,7 @@ struct StackEvaluationTests {
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(stack, context: context)
+      var resolved = BlockEngine.prepare(stack, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &list, in: rect)
     }
@@ -114,7 +114,7 @@ struct StackEvaluationTests {
     context.interaction.beginFrame(input: InputState())
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(stack, context: context)
+      var resolved = BlockEngine.prepare(stack, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &list, in: rect)
     }
@@ -129,7 +129,7 @@ struct StackEvaluationTests {
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
     do {
-      let resolved = BlockEngine.prepare(block, context: context)
+      var resolved = BlockEngine.prepare(block, context: context)
       resolved.register(in: Rect(x: 0, y: 0, width: 200, height: 100))
       resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 200, height: 100))
     }
@@ -167,7 +167,7 @@ struct StackEvaluationTests {
     }
     let context = BlockContext()
     let proposal = Size(width: 200, height: 100)
-    let resolved = BlockEngine.resolve(block, context: context)
+    var resolved = BlockEngine.prepare(block, context: context)
     #expect(resolved.sizeThatFits(proposal) == Size(width: 200, height: 12))
     var list = DrawList()
     context.interaction.beginFrame(input: InputState())
@@ -207,19 +207,19 @@ struct StackEvaluationTests {
     let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
     do {
-      let resolved = BlockEngine.prepare(block, context: context)
-      #expect(PipelineMetrics.snapshot.liveResolvedNodes == 1)
+      var resolved = BlockEngine.prepare(block, context: context)
+      #expect(resolved.nodeCount == 1)
       _ = resolved.expandsHorizontally
       _ = resolved.expandsVertically
       _ = resolved.sizeThatFits(rect.size)
-      #expect(PipelineMetrics.snapshot.liveResolvedNodes == 2 * depth + 1)
+      #expect(resolved.nodeCount == 2 * depth + 1)
       context.interaction.beginFrame(input: InputState())
       resolved.register(in: rect)
-      let registered = PipelineMetrics.snapshot.liveResolvedNodes
+      let registered = resolved.nodeCount
       #expect(registered == 4 * depth + 1)
       var list = DrawList()
       resolved.paint(into: &list, in: rect)
-      #expect(PipelineMetrics.snapshot.liveResolvedNodes == registered)
+      #expect(resolved.nodeCount == registered)
       #expect(
         list.paintSnapshot.contains {
           if case .text(_, "leaf", _, _) = $0 { return true }
@@ -227,7 +227,6 @@ struct StackEvaluationTests {
         })
       context.interaction.endFrame()
     }
-    #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
   }
 
   @Test func interactiveDrawingUsesCurrentPhaseAfterIdleMeasurement() {
@@ -271,7 +270,7 @@ struct StackEvaluationTests {
     var first = DrawList()
     context.interaction.beginFrame(input: InputState())
     do {
-      let resolved = BlockEngine.prepare(stack, context: context)
+      var resolved = BlockEngine.prepare(stack, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &first, in: rect)
     }
@@ -282,7 +281,7 @@ struct StackEvaluationTests {
     var second = DrawList()
     context.interaction.beginFrame(input: InputState())
     do {
-      let resolved = BlockEngine.prepare(stack, context: context)
+      var resolved = BlockEngine.prepare(stack, context: context)
       resolved.register(in: rect)
       resolved.paint(into: &second, in: rect)
     }

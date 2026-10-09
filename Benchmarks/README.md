@@ -2,6 +2,19 @@
 
 Run commands from the repository root. Use release builds and consistent hardware, toolchain, and workloads when comparing results.
 
+On systems without native display libraries, set `CHROMA_HEADLESS_ONLY=1` to omit
+the native render runner while retaining CPU benchmarks and fixture tests:
+
+```sh
+CHROMA_HEADLESS_ONLY=1 swift run --package-path Benchmarks -c release LayoutBenchmark
+CHROMA_HEADLESS_ONLY=1 swift run --package-path Benchmarks -c release InputBacklogBenchmark \
+  --workload stress --rows 1000 --depth 3 --events 60 --trials 3
+```
+
+These headless results measure CPU/runtime work, not backend or display performance.
+
+See [the runtime redesign measurements](RUNTIME_RESULTS.md) for one bounded baseline comparison and its limitations.
+
 ## Stress lab benchmark and native example
 
 ```sh
@@ -31,7 +44,7 @@ allocation; its p50/p95 are therefore the same, not a startup distribution. Acti
 phases use 5 warmups and 30 measured cycles by default. Percentiles use nearest-rank
 p95 and the lower median. Counters come from the final cycle of a separate matching
 replay with instrumentation enabled; timings disable instrumentation. Close checks
-that resolved nodes and observation subscriptions are released.
+that observation subscriptions are released; buffer capture lifetime is covered by tests.
 
 This intentionally stresses whole-collection ID scans as well as visible layout:
 virtualization does not eliminate metadata scanning. Timings exclude native event
@@ -41,7 +54,7 @@ versions, warmup and sample counts before comparing each phase’s p50/p95.
 The single-sample first-frame phase is also compared, but is noisier than steady state.
 Use the native example for manual profiling, not as evidence of frame-rate guarantees.
 
-`PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved block values and their ordinary proposal caches remain **traversal-scoped**. No cross-frame subtree geometry cache is retained. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
+`PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Prepared payloads and their proposal caches remain **operation-scoped** in reused buffers. `layoutNodes` counts records and `bufferGrowths` counts storage capacity changes, not mallocs. No cross-frame subtree geometry cache is retained. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
 
 ## Input frames
 

@@ -3,32 +3,36 @@ import Chroma
 /// A read-only Markdown renderer with selectable text.
 /// Links and images render their labels; emphasis renders without italic styling.
 public struct MarkdownText: Block {
-  public var markdown: String
+  public let document: MarkdownDocument
   public let scale: Float
   public let lineSpacing: Float
 
-  public init(_ markdown: String, scale: Float = 1, lineSpacing: Float = 4) {
+  @MainActor public init(_ markdown: String, scale: Float = 1, lineSpacing: Float = 4) {
+    self.init(MarkdownDocument(markdown), scale: scale, lineSpacing: lineSpacing)
+  }
+
+  public init(_ document: MarkdownDocument, scale: Float = 1, lineSpacing: Float = 4) {
     precondition(scale.isFinite && scale > 0)
     precondition(lineSpacing.isFinite && lineSpacing >= 0)
-    self.markdown = markdown
+    self.document = document
     self.scale = scale
     self.lineSpacing = lineSpacing
   }
 
   @MainActor public var body: some Block {
-    let blocks = segmentMarkdown(markdown)
+    let blocks = document.blocks
     return VStack(spacing: 0) {
       ForEach(Array(blocks.indices), id: \.self) { index in
         MarkdownLeaf(
-          block: blocks[index], scale: scale, lineSpacing: lineSpacing,
-          hasLeadingGap: hasGap(before: index, in: blocks))
+          block: blocks[index].block, scale: scale, lineSpacing: lineSpacing,
+          hasLeadingGap: hasGap(before: index, in: blocks), parsedRuns: blocks[index].runs)
       }
     }
   }
 
-  private func hasGap(before index: Int, in blocks: [MarkdownBlock]) -> Bool {
+  private func hasGap(before index: Int, in blocks: [ParsedMarkdownBlock]) -> Bool {
     guard index > 0 else { return false }
-    if case .listItem = blocks[index], case .listItem = blocks[index - 1] { return false }
+    if case .listItem = blocks[index].block, case .listItem = blocks[index - 1].block { return false }
     return true
   }
 }
@@ -38,22 +42,23 @@ struct MarkdownLeaf: LayoutPreparingBlock {
   let scale: Float
   let lineSpacing: Float
   var hasLeadingGap = false
+  var parsedRuns: [MarkdownRun]?
 
   @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     PreparedMarkdownLeaf(leaf: self, preparation: MarkdownLayoutPreparation())
       .paint(into: &drawList, in: rect, context: context)
   }
 
-  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    prepareLayout(context: context, preparation: MarkdownLayoutPreparation())
+  @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    prepareLayout(context: context, preparation: MarkdownLayoutPreparation(), in: &buffer)
   }
 
   @MainActor func prepareLayout(
-    context: BlockContext, preparation: MarkdownLayoutPreparation
-  ) -> BlockEngine.Resolved {
+    context: BlockContext, preparation: MarkdownLayoutPreparation, in buffer: inout LayoutBuffer
+  ) -> LayoutNode {
     // Retain the ordinary primitive focus/identity behavior while sharing preparation
     // across this operation's measurement, registration, and paint closures.
-    BlockEngine.prepare(
+    buffer.prepare(
       PreparedMarkdownLeaf(leaf: self, preparation: preparation), context: context)
   }
 }

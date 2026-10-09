@@ -37,8 +37,10 @@ func layoutMarkdown(
   _ blocks: [MarkdownBlock],
   columns: Int,
   theme: ChromaTheme,
-  baseColor: Color
+  baseColor: Color,
+  parsedRuns: [[MarkdownRun]]? = nil
 ) -> [VisualLine] {
+  precondition(parsedRuns == nil || parsedRuns!.count == blocks.count)
   let columns = max(1, columns)
   var lines: [VisualLine] = []
 
@@ -109,7 +111,7 @@ func layoutMarkdown(
     switch block {
     case .paragraph(let text):
       wrapRuns(
-        inlineRuns(text),
+        parsedRuns?[index] ?? inlineRuns(text),
         colorFor: { run in
           run.code ? theme.warning : run.bold ? theme.foreground : baseColor
         }, kind: .plain)
@@ -117,7 +119,7 @@ func layoutMarkdown(
       let prefix = String(repeating: "#", count: level) + " "
       wrapRuns(
         [MarkdownRun(text: prefix)]
-          + inlineRuns(text).map {
+          + (parsedRuns?[index] ?? inlineRuns(text)).map {
             var run = $0
             run.bold = true
             return run
@@ -126,7 +128,7 @@ func layoutMarkdown(
     case .listItem(let marker, let text, let depth):
       let indentation = String(repeating: "  ", count: min(depth, 4))
       var runs = [MarkdownRun(text: indentation + marker + " ")]
-      runs.append(contentsOf: inlineRuns(text))
+      runs.append(contentsOf: parsedRuns?[index] ?? inlineRuns(text))
       wrapRuns(
         runs,
         colorFor: { run in
@@ -135,7 +137,7 @@ func layoutMarkdown(
         }, kind: .plain)
     case .quote(let text):
       var runs = [MarkdownRun(text: "| ")]
-      runs.append(contentsOf: inlineRuns(text))
+      runs.append(contentsOf: parsedRuns?[index] ?? inlineRuns(text))
       wrapRuns(
         runs,
         colorFor: { run in

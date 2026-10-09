@@ -9,6 +9,12 @@ public struct DrawList: Sendable, Codable {
     self.commands = commands
   }
 
+  /// Reuse command storage when no previous frame still owns it. Array's value
+  /// semantics keep previously returned frames unchanged when they are retained.
+  public mutating func removeAll(keepingCapacity: Bool = true) {
+    commands.removeAll(keepingCapacity: keepingCapacity)
+  }
+
   public mutating func append(_ quad: DrawQuad) {
     commands.append(.quad(quad))
   }

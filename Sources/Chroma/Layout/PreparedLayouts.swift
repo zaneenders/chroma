@@ -1,4 +1,5 @@
-/// A traversal owns its resolved children and measurements. Nothing is reused across input events or frames.
+/// Emit operation-local integer handles into the shared runtime buffer.
+/// Callbacks and geometry are fresh for each update; allocated capacity can be reused.
 ///
 /// This low-level extension point owns all registration and painting, including focus behavior:
 /// the engine does not add automatic leaf focus to its prepared result.
@@ -6,72 +7,76 @@
 /// Prefer `PaintableBlock` for ordinary leaves that need automatic primitive focus handling.
 public protocol LayoutPreparingBlock: Block where Body == Never {
   var preservesContentIdentity: Bool { get }
-  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved
+  @MainActor func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode
 }
 
 /// Default entry points preserve direct primitive use; the engine prepares once and
-/// owns this object through measurement, registration, and painting of one update.
+/// owns its buffer through measurement, registration, and painting of one update.
 extension LayoutPreparingBlock {
   public var preservesContentIdentity: Bool { false }
   public var body: Never { fatalError("\(Self.self) is a prepared block") }
   @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    prepareLayout(context: context).sizeThatFits(proposal)
+    var prepared = BlockEngine.prepare(self, context: context)
+    return prepared.sizeThatFits(proposal)
   }
   @MainActor public func register(in rect: Rect, context: BlockContext) {
-    prepareLayout(context: context).register(in: rect)
+    var prepared = BlockEngine.prepare(self, context: context)
+    prepared.register(in: rect)
   }
 }
 
 extension LayoutModifier {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    let child = BlockEngine.resolve(content, context: context)
-    return BlockEngine.Resolved(
-      expandsHorizontally: {
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    let child = buffer.prepare(content, context: context)
+    return buffer.append(
+      expandsHorizontally: { buffer in
         if case .sizing(let x, _) = operation { return x == .grow }
-        return child.expandsHorizontally
+        return buffer.expandsHorizontally(child)
       },
-      expandsVertically: {
+      expandsVertically: { buffer in
         if case .sizing(_, let y) = operation { return y == .grow }
-        return child.expandsVertically
+        return buffer.expandsVertically(child)
       },
-      measure: { proposal in sizeThatFits(proposal, context: context, measure: child.sizeThatFits) },
-      register: { rect in child.register(in: placedContent(in: rect)) },
-      paint: { list, rect in child.paint(into: &list, in: placedContent(in: rect)) })
+      measure: { buffer, proposal in
+        sizeThatFits(proposal, context: context, measure: { buffer.sizeThatFits(child, $0) })
+      },
+      register: { buffer, rect in buffer.register(child, in: placedContent(in: rect)) },
+      paint: { buffer, list, rect in buffer.paint(child, into: &list, in: placedContent(in: rect)) })
   }
 }
 
 extension PaintModifier {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
     let childContext: BlockContext
     if case .background = operation { childContext = context.backgroundContentContext } else { childContext = context }
-    let child = BlockEngine.resolve(content, context: childContext)
-    var preparedBackground: BlockEngine.Resolved?
-    return BlockEngine.Resolved(
+    let child = buffer.prepare(content, context: childContext)
+    var preparedBackground: LayoutNode?
+    return buffer.append(
       child: child,
-      register: { rect in
+      register: { buffer, rect in
         switch operation {
         case .background(let background):
-          let background = BlockEngine.resolve(background, context: context.backgroundContext)
+          let background = buffer.prepare(background, context: context.backgroundContext)
           preparedBackground = background
-          background.register(in: rect)
-          child.register(in: rect)
+          buffer.register(background, in: rect)
+          buffer.register(child, in: rect)
         case .clip:
-          context.withInteractionClip(rect) { child.register(in: rect) }
+          context.withInteractionClip(rect) { buffer.register(child, in: rect) }
         case .roundedBackground, .border:
-          child.register(in: rect)
+          buffer.register(child, in: rect)
         }
       },
-      paint: { list, rect in
+      paint: { buffer, list, rect in
         switch operation {
         case .background:
           precondition(preparedBackground != nil, "Background painting requires a preceding update")
-          preparedBackground?.paint(into: &list, in: rect)
-          child.paint(into: &list, in: rect)
+          if let preparedBackground { buffer.paint(preparedBackground, into: &list, in: rect) }
+          buffer.paint(child, into: &list, in: rect)
         case .roundedBackground(let color, let radii):
           list.fillRoundedRect(rect, radii: radii, color: color)
-          child.paint(into: &list, in: rect)
+          buffer.paint(child, into: &list, in: rect)
         case .border(let color, let radii, let width):
-          child.paint(into: &list, in: rect)
+          buffer.paint(child, into: &list, in: rect)
           if radii == .zero {
             list.strokeRect(rect, width: width, color: color)
           } else {
@@ -79,7 +84,7 @@ extension PaintModifier {
           }
         case .clip:
           list.pushClip(rect)
-          child.paint(into: &list, in: rect)
+          buffer.paint(child, into: &list, in: rect)
           list.popClip()
         }
       })
@@ -87,146 +92,150 @@ extension PaintModifier {
 }
 
 extension ContextModifier {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
     var context = context
     switch operation {
     case .hover(let style): context.hoverStyle = style
     case .navigationIgnored: context.navigationIgnored = true
     }
-    return BlockEngine.resolve(content, context: context)
+    return buffer.prepare(content, context: context)
   }
 }
 
 extension CommandScope {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    let child = BlockEngine.resolve(content, context: context)
-    return BlockEngine.Resolved(
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    let child = buffer.prepare(content, context: context)
+    return buffer.append(
       child: child,
-      register: { rect in
-        withRegistration(in: rect, context: context) { child.register(in: rect) }
+      register: { buffer, rect in
+        withRegistration(in: rect, context: context) { buffer.register(child, in: rect) }
       },
-      paint: { list, rect in child.paint(into: &list, in: rect) })
+      paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
   }
 }
 
 extension Group {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    let child = BlockEngine.resolve(content, context: context)
-    return BlockEngine.Resolved(
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    let child = buffer.prepare(content, context: context)
+    return buffer.append(
       child: child,
-      register: { rect in
+      register: { buffer, rect in
         context.interaction.beginGroup(rect: rect, navigationID: context.widgetID, navigationName: name)
-        child.register(in: rect)
+        buffer.register(child, in: rect)
         context.interaction.endGroup()
       },
-      paint: { list, rect in child.paint(into: &list, in: rect) })
+      paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
   }
 }
 
 extension ThemeBlock {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    BlockEngine.resolve(content, context: context.withTheme(theme))
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    buffer.prepare(content, context: context.withTheme(theme))
   }
 }
 
 extension ThemeReader {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    let child = BlockEngine.resolve(content(context.theme), context: context)
-    return BlockEngine.Resolved(
-      measure: child.sizeThatFits, register: child.register,
-      paint: { list, rect in child.paint(into: &list, in: rect) })
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    let child = buffer.prepare(content(context.theme), context: context)
+    return buffer.append(
+      measure: { $0.sizeThatFits(child, $1) }, register: { $0.register(child, in: $1) },
+      paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
   }
 }
 
 extension FocusTargetBlock {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
     var context = context
     context.focusTargets.append(target)
-    let child = BlockEngine.resolve(content, context: context)
-    return BlockEngine.Resolved(
+    let child = buffer.prepare(content, context: context)
+    return buffer.append(
       child: child,
-      register: { rect in
+      register: { buffer, rect in
         _ = target.pendingEditing
-        child.register(in: rect)
+        buffer.register(child, in: rect)
       },
-      paint: { list, rect in child.paint(into: &list, in: rect) })
+      paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
   }
 }
 
 extension HStack {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    StackLayout(axis: .horizontal, spacing: spacing, bottomAligned: alignment == .bottom)
-      .prepare(scopedChildren, reversed: isLayoutReversed, context: context)
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    buffer.prepareStack(
+      scopedChildren, axis: .horizontal, spacing: spacing, reversed: isLayoutReversed,
+      bottomAligned: alignment == .bottom, context: context)
   }
 }
 
 extension VStack {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    StackLayout(axis: .vertical, spacing: spacing)
-      .prepare(scopedChildren, reversed: isLayoutReversed, context: context)
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    buffer.prepareStack(scopedChildren, axis: .vertical, spacing: spacing, reversed: isLayoutReversed, context: context)
   }
 }
 
 extension TupleBlock {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    BlockEngine.prepareOverlay(scopedChildren, group: false, context: context)
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    BlockEngine.prepareOverlay(scopedChildren, group: false, context: context, in: &buffer)
   }
 }
 
 extension ZStack {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    BlockEngine.prepareOverlay(scopedChildren, group: true, context: context)
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    BlockEngine.prepareOverlay(scopedChildren, group: true, context: context, in: &buffer)
   }
 }
 
 extension BlockEngine {
-  static func prepareOverlay(_ originals: [any Block], group: Bool, context: BlockContext) -> Resolved {
+  static func prepareOverlay(
+    _ originals: [any Block], group: Bool, context: BlockContext, in buffer: inout LayoutBuffer
+  ) -> LayoutNode {
     let children = originals.enumerated().map { index, child in
-      resolve(child, context: context.childContext(for: child, at: index))
+      buffer.prepare(child, context: context.childContext(for: child, at: index))
     }
     var placed: (Rect, [Rect])?
-    func placements(in rect: Rect) -> [Rect] {
+    func placements(in rect: Rect, buffer: inout LayoutBuffer) -> [Rect] {
       if let placed, placed.0 == rect { return placed.1 }
       let result = children.map { child in
-        Rect(origin: rect.origin, size: group ? child.sizeThatFits(rect.size) : rect.size)
+        Rect(origin: rect.origin, size: group ? buffer.sizeThatFits(child, rect.size) : rect.size)
       }
       placed = (rect, result)
       return result
     }
-    return Resolved(
-      expandsHorizontally: { children.contains { $0.expandsHorizontally } },
-      expandsVertically: { children.contains { $0.expandsVertically } },
-      measure: { proposal in
+    return buffer.append(
+      expandsHorizontally: { buffer in children.contains { buffer.expandsHorizontally($0) } },
+      expandsVertically: { buffer in children.contains { buffer.expandsVertically($0) } },
+      measure: { buffer, proposal in
         children.reduce(.zero) { result, child in
-          let size = child.sizeThatFits(proposal)
+          let size = buffer.sizeThatFits(child, proposal)
           return Size(width: max(result.width, size.width), height: max(result.height, size.height))
         }
       },
-      register: { rect in
+      register: { buffer, rect in
         if group { context.interaction.beginGroup(rect: rect) }
-        for (child, rect) in zip(children, placements(in: rect)) { child.register(in: rect) }
+        for (child, rect) in zip(children, placements(in: rect, buffer: &buffer)) { buffer.register(child, in: rect) }
         if group { context.interaction.endGroup() }
       },
-      paint: { list, rect in
-        for (child, rect) in zip(children, placements(in: rect)) { child.paint(into: &list, in: rect) }
+      paint: { buffer, list, rect in
+        for (child, rect) in zip(children, placements(in: rect, buffer: &buffer)) {
+          buffer.paint(child, into: &list, in: rect)
+        }
       })
   }
 }
 
 extension TrailingControlsRow {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    let input = BlockEngine.resolve(input, context: context.childScope(0))
-    let controls = BlockEngine.resolve(controls, context: context.childScope(1))
-    func sizes(_ proposal: Size) -> (input: Size, controls: Size) {
-      let controlsSize = controls.sizeThatFits(proposal)
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    let input = buffer.prepare(input, context: context.childScope(0))
+    let controls = buffer.prepare(controls, context: context.childScope(1))
+    func sizes(_ proposal: Size, buffer: inout LayoutBuffer) -> (input: Size, controls: Size) {
+      let controlsSize = buffer.sizeThatFits(controls, proposal)
       let inputWidth = max(0, proposal.width - controlsSize.width - spacing)
-      let inputSize = input.sizeThatFits(Size(width: inputWidth, height: proposal.height))
+      let inputSize = buffer.sizeThatFits(input, Size(width: inputWidth, height: proposal.height))
       return (Size(width: inputWidth, height: inputSize.height), controlsSize)
     }
     var placed: (Rect, Rect, Rect)?
-    func place(_ rect: Rect, visit: (BlockEngine.Resolved, Rect) -> Void) {
+    func place(_ rect: Rect, buffer: inout LayoutBuffer, visit: (inout LayoutBuffer, LayoutNode, Rect) -> Void) {
       if placed?.0 != rect {
-        let sizes = sizes(rect.size)
+        let sizes = sizes(rect.size, buffer: &buffer)
         placed = (
           rect,
           Rect(
@@ -237,18 +246,22 @@ extension TrailingControlsRow {
             width: sizes.controls.width, height: sizes.controls.height)
         )
       }
-      visit(input, placed!.1)
-      visit(controls, placed!.2)
+      visit(&buffer, input, placed!.1)
+      visit(&buffer, controls, placed!.2)
     }
-    return BlockEngine.Resolved(
-      expandsHorizontally: { true },
-      measure: { proposal in
-        let sizes = sizes(proposal)
+    return buffer.append(
+      expandsHorizontally: { _ in true },
+      measure: { buffer, proposal in
+        let sizes = sizes(proposal, buffer: &buffer)
         return Size(width: proposal.width, height: max(sizes.input.height, sizes.controls.height))
       },
-      register: { rect in
-        context.withFocusGroup(in: rect) { place(rect) { child, rect in child.register(in: rect) } }
+      register: { buffer, rect in
+        context.withFocusGroup(in: rect) {
+          place(rect, buffer: &buffer) { buffer, child, rect in buffer.register(child, in: rect) }
+        }
       },
-      paint: { list, rect in place(rect) { child, rect in child.paint(into: &list, in: rect) } })
+      paint: { buffer, list, rect in
+        place(rect, buffer: &buffer) { buffer, child, rect in buffer.paint(child, into: &list, in: rect) }
+      })
   }
 }

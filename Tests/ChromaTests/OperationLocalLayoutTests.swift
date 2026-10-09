@@ -44,7 +44,7 @@ struct OperationLocalLayoutTests {
     size: Size = Size(width: 100, height: 100), origin: Point = .zero
   ) -> Size {
     context.interaction.beginFrame(input: InputState())
-    let resolved = BlockEngine.resolve(content, context: context)
+    var resolved = BlockEngine.prepare(content, context: context)
     let measured = resolved.sizeThatFits(size)
     resolved.register(in: Rect(origin: origin, size: size))
     context.interaction.endFrame()
@@ -60,7 +60,7 @@ struct OperationLocalLayoutTests {
     }
     let context = BlockContext()
     let proposal = Size(width: 100, height: 100)
-    let resolved = BlockEngine.resolve(block, context: context)
+    var resolved = BlockEngine.prepare(block, context: context)
     #expect(resolved.sizeThatFits(proposal).height == 12)
     let measured = capture.measurements
     #expect(resolved.sizeThatFits(proposal).height == 12)
@@ -80,7 +80,6 @@ struct OperationLocalLayoutTests {
     #expect(capture.measurements > measured)
     #expect(capture.rects.last == Rect(x: 10, y: 20, width: 30, height: 28))
     #expect(PipelineMetrics.snapshot.paints == 0)
-    #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
   }
 
   @Test func observedLeafChangeImmediatelyRepositionsParentAndSibling() {
@@ -157,14 +156,18 @@ struct OperationLocalLayoutTests {
     #expect(update(block).height == 12)
   }
 
-  @Test func updatesReleaseResolvedNodesWithoutAddingGeometrySubscriptions() {
+  @Test func updatesReleasePreparedContentWithoutAddingGeometrySubscriptions() {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
     let model = Model()
-    let capture = Capture()
     for _ in 0..<20 {
-      update(Leaf(capture: capture, height: { model.height }))
-      #expect(PipelineMetrics.snapshot.liveResolvedNodes == 0)
+      weak var retained: Capture?
+      do {
+        let capture = Capture()
+        retained = capture
+        update(Leaf(capture: capture, height: { model.height }))
+      }
+      #expect(retained == nil)
       #expect(PipelineMetrics.snapshot.liveObservationSubscriptions == 0)
     }
   }

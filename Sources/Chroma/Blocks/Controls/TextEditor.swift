@@ -45,7 +45,7 @@ public struct TextEditor: LayoutPreparingBlock {
   }
 
   @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    sizeThatFits(proposal, context: context, preparation: TextLayoutPreparation())
+    sizeThatFits(proposal, context: context, preparation: context.interaction.textLayouts)
   }
 
   @MainActor private func sizeThatFits(
@@ -147,7 +147,7 @@ public struct TextEditor: LayoutPreparingBlock {
   @MainActor public func register(in rect: Rect, context: BlockContext) {
     guard
       let prepared = prepareText(
-        in: rect, context: context, preparation: TextLayoutPreparation())
+        in: rect, context: context, preparation: context.interaction.textLayouts)
     else { return }
     register(prepared, in: rect, context: context)
   }
@@ -155,7 +155,7 @@ public struct TextEditor: LayoutPreparingBlock {
   @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
     guard
       let prepared = prepareText(
-        in: rect, context: context, preparation: TextLayoutPreparation())
+        in: rect, context: context, preparation: context.interaction.textLayouts)
     else { return }
     paint(prepared, into: &drawList, in: rect, context: context)
   }
@@ -231,22 +231,22 @@ public struct TextEditor: LayoutPreparingBlock {
 }
 
 extension TextEditor {
-  @MainActor public func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-    let preparation = TextLayoutPreparation()
+  @MainActor public func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+    let preparation = context.interaction.textLayouts
     // Registration commits this operation's text and geometry. Its matching paint
     // does not read the application binding again, so editing and pixels cannot use
     // different versions. A later input/update resolves a fresh operation.
     var registered: (rect: Rect, text: PreparedText)?
-    return BlockEngine.Resolved(
-      expandsHorizontally: { true },
-      measure: { proposal in sizeThatFits(proposal, context: context, preparation: preparation) },
-      register: { rect in
+    return buffer.append(
+      expandsHorizontally: { _ in true },
+      measure: { buffer, proposal in sizeThatFits(proposal, context: context, preparation: preparation) },
+      register: { buffer, rect in
         registered = nil
         guard let prepared = prepareText(in: rect, context: context, preparation: preparation) else { return }
         registered = (rect, prepared)
         register(prepared, in: rect, context: context)
       },
-      paint: { list, rect in
+      paint: { buffer, list, rect in
         if let registered, registered.rect == rect {
           paint(registered.text, into: &list, in: rect, context: context)
           return

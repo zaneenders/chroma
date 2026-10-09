@@ -159,7 +159,7 @@ struct ImageRenderingTests {
         x: .fixed(frame.size.width), y: .fixed(frame.size.height))
       var list = DrawList()
       do {
-        let resolved = BlockEngine.prepare(image, context: context)
+        var resolved = BlockEngine.prepare(image, context: context)
         resolved.register(in: frame)
         resolved.paint(into: &list, in: frame)
       }
@@ -180,7 +180,7 @@ struct ImageRenderingTests {
     var list = DrawList()
 
     do {
-      let resolved = BlockEngine.prepare(
+      var resolved = BlockEngine.prepare(
         ScrollView(showsIndicator: false) {
           Image(resource)
         }.id(WidgetID("image-scroll")), context: context)

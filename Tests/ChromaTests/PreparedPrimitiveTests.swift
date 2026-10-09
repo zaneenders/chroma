@@ -23,20 +23,20 @@ struct PreparedPrimitiveTests {
   struct Pair: LayoutPreparingBlock {
     let counts: Counts
     var focusRule: FocusRule { .container }
-    func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
       counts.built += 1
-      let first = BlockEngine.prepare(Leaf(name: "first", counts: counts), context: context)
-      let last = BlockEngine.prepare(Leaf(name: "last", counts: counts), context: context)
-      return BlockEngine.Resolved(
-        measure: first.sizeThatFits,
-        register: { rect in
-          first.register(in: rect)
-          last.register(in: rect)
+      let first = buffer.prepare(Leaf(name: "first", counts: counts), context: context)
+      let last = buffer.prepare(Leaf(name: "last", counts: counts), context: context)
+      return buffer.append(
+        measure: { buffer, proposal in buffer.sizeThatFits(first, proposal) },
+        register: { buffer, rect in
+          buffer.register(first, in: rect)
+          buffer.register(last, in: rect)
         },
-        paint: { list, rect in
+        paint: { buffer, list, rect in
           // Local child ownership permits compositing order independent of visitation order.
-          last.paint(into: &list, in: rect)
-          first.paint(into: &list, in: rect)
+          buffer.paint(last, into: &list, in: rect)
+          buffer.paint(first, into: &list, in: rect)
         })
     }
   }
@@ -60,7 +60,7 @@ struct PreparedPrimitiveTests {
     let counts = Counts()
     var list = DrawList()
     do {
-      let resolved = BlockEngine.prepare(Pair(counts: counts), context: BlockContext())
+      var resolved = BlockEngine.prepare(Pair(counts: counts), context: BlockContext())
       resolved.register(in: Rect(x: 0, y: 0, width: 20, height: 20))
       resolved.paint(into: &list, in: Rect(x: 0, y: 0, width: 20, height: 20))
     }

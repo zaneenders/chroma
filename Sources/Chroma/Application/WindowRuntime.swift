@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 package final class WindowRuntime {
   package init(clock: @escaping @MainActor () -> Double = { ProcessInfo.processInfo.systemUptime }) {
-    producer = FrameProducer()
+    producer = FrameProducer(clock: clock)
     scheduler = FrameScheduler(clock: clock)
   }
 
@@ -24,6 +24,7 @@ package final class WindowRuntime {
       producer.reset()
       preparedKeyboardInput = false
       scheduler.scrollMomentumActive = false
+      scheduler.animationsActive = false
       scheduler.requestContent()
     }
   }
@@ -40,6 +41,7 @@ package final class WindowRuntime {
       // Clipboard translation may consult the last pointer position before the
       // resolved event is dispatched; the registration-only input is synthetic.
       interaction.restoreInputAfterRegistration(previousInput)
+      scheduler.animationsActive = interaction.animationsActive
     }
     return interaction.resolve(input, appBindings: keyBindings)
   }
@@ -120,6 +122,7 @@ package final class WindowRuntime {
     }
     interaction.processInput(input)
     interaction.finishInput()
+    scheduler.animationsActive = interaction.animationsActive
   }
 
   package func renderScheduled(
@@ -161,6 +164,7 @@ package final class WindowRuntime {
     let list = producer.render(
       content: content, viewport: viewport, input: input, context: context,
       processingInput: processingInput, onChange: onChange)
+    scheduler.animationsActive = interaction.animationsActive
     return list
   }
 

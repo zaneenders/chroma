@@ -17,28 +17,31 @@ struct PreparedPublicContractTests {
     let content: Content
     let counts: Counts
     var focusRule: FocusRule { .container }
-    func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
       counts.builds += 1
-      let child = BlockEngine.prepare(content, context: context)
-      return BlockEngine.Resolved(child: child, register: child.register, paint: child.paint)
+      let child = buffer.prepare(content, context: context)
+      return buffer.append(
+        child: child,
+        register: { buffer, rect in buffer.register(child, in: rect) },
+        paint: { buffer, list, rect in buffer.paint(child, into: &list, in: rect) })
     }
   }
 
   struct PreparedLeaf: LayoutPreparingBlock {
     let counts: Counts
     var focusRule: FocusRule { .standard }
-    func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
       counts.builds += 1
-      return BlockEngine.Resolved(
-        measure: { proposal in
+      return buffer.append(
+        measure: { _, proposal in
           counts.measurements += 1
           return proposal
         },
-        register: { rect in
+        register: { _, rect in
           counts.registrations += 1
           context.registerFocusable(in: rect)
         },
-        paint: { list, rect in
+        paint: { _, list, rect in
           counts.paints += 1
           list.fillRect(rect, color: .white)
           context.paintFocusHighlight(in: rect, into: &list)
@@ -59,26 +62,26 @@ struct PreparedPublicContractTests {
   struct TwoControls: LayoutPreparingBlock {
     let counts: Counts
     var focusRule: FocusRule { .container }
-    func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
-      let first = BlockEngine.prepare(Button("first") { counts.actions.append(0) }, context: context.childScope(0))
-      let second = BlockEngine.prepare(Button("second") { counts.actions.append(1) }, context: context.childScope(1))
+    func prepareLayout(context: BlockContext, in buffer: inout LayoutBuffer) -> LayoutNode {
+      let first = buffer.prepare(Button("first") { counts.actions.append(0) }, context: context.childScope(0))
+      let second = buffer.prepare(Button("second") { counts.actions.append(1) }, context: context.childScope(1))
       func rectangles(_ rect: Rect) -> (Rect, Rect) {
         (
           Rect(x: rect.minX, y: rect.minY, width: rect.size.width / 2, height: rect.size.height),
           Rect(x: rect.minX + rect.size.width / 2, y: rect.minY, width: rect.size.width / 2, height: rect.size.height)
         )
       }
-      return BlockEngine.Resolved(
-        measure: { $0 },
-        register: { rect in
+      return buffer.append(
+        measure: { _, proposal in proposal },
+        register: { buffer, rect in
           let (left, right) = rectangles(rect)
-          first.register(in: left)
-          second.register(in: right)
+          buffer.register(first, in: left)
+          buffer.register(second, in: right)
         },
-        paint: { list, rect in
+        paint: { buffer, list, rect in
           let (left, right) = rectangles(rect)
-          second.paint(into: &list, in: right)
-          first.paint(into: &list, in: left)
+          buffer.paint(second, into: &list, in: right)
+          buffer.paint(first, into: &list, in: left)
         })
     }
   }
@@ -87,7 +90,7 @@ struct PreparedPublicContractTests {
     let counts = Counts()
     let context = BlockContext()
     let rect = Rect(x: 0, y: 0, width: 20, height: 20)
-    let prepared = BlockEngine.prepare(
+    var prepared = BlockEngine.prepare(
       Wrapper(content: PreparedLeaf(counts: counts), counts: counts), context: context)
     context.interaction.beginFrame(input: InputState())
     prepared.register(in: rect)
@@ -104,7 +107,7 @@ struct PreparedPublicContractTests {
   @Test func measurementDoesNotRunRegistrationOrPainting() {
     let counts = Counts()
     let context = BlockContext()
-    let prepared = BlockEngine.prepare(PreparedLeaf(counts: counts), context: context)
+    var prepared = BlockEngine.prepare(PreparedLeaf(counts: counts), context: context)
     let proposal = Size(width: 20, height: 20)
     #expect(prepared.sizeThatFits(proposal) == proposal)
     #expect(prepared.sizeThatFits(proposal) == proposal)
