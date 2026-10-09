@@ -33,44 +33,52 @@ public struct MarkdownText: Block {
   }
 }
 
-struct MarkdownLeaf: PaintableBlock {
-  var focusRule: FocusRule { .standard }
+struct MarkdownLeaf: LayoutPreparingBlock {
   let block: MarkdownBlock
   let scale: Float
   let lineSpacing: Float
   var hasLeadingGap = false
 
-  @MainActor private func layout(in rect: Rect, context: BlockContext) -> MarkdownLayout {
-    let effectiveScale = scale * context.textScale
-    let cellWidth = context.fontMetrics.cellAdvance * effectiveScale
-    let columns =
-      rect.size.width.isFinite && cellWidth.isFinite && cellWidth > 0
-      ? Int(min(Float(Int32.max), max(1, rect.size.width / cellWidth))) : Int(Int32.max)
-    var lines = layoutMarkdown(
-      [block], columns: columns, theme: context.theme,
-      baseColor: context.theme.foreground)
-    if hasLeadingGap { lines.insert(VisualLine(), at: 0) }
-    return MarkdownLayout(
-      lines: lines,
-      lineHeight: context.fontMetrics.lineAdvance * effectiveScale + lineSpacing,
-      cellWidth: cellWidth, scale: effectiveScale, hasLeadingGap: hasLeadingGap, rect: rect)
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    PreparedMarkdownLeaf(leaf: self, preparation: MarkdownLayoutPreparation())
+      .paint(into: &drawList, in: rect, context: context)
   }
 
-  @MainActor public func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
-    let layout = layout(in: Rect(origin: .zero, size: proposal), context: context)
+  @MainActor func prepareLayout(context: BlockContext) -> BlockEngine.Resolved {
+    prepareLayout(context: context, preparation: MarkdownLayoutPreparation())
+  }
+
+  @MainActor func prepareLayout(
+    context: BlockContext, preparation: MarkdownLayoutPreparation
+  ) -> BlockEngine.Resolved {
+    // Retain the ordinary primitive focus/identity behavior while sharing preparation
+    // across this operation's measurement, registration, and paint closures.
+    BlockEngine.prepare(
+      PreparedMarkdownLeaf(leaf: self, preparation: preparation), context: context)
+  }
+}
+
+private struct PreparedMarkdownLeaf: PaintableBlock {
+  var preservesContentIdentity: Bool { true }
+  var focusRule: FocusRule { .standard }
+  let leaf: MarkdownLeaf
+  let preparation: MarkdownLayoutPreparation
+
+  @MainActor func sizeThatFits(_ proposal: Size, context: BlockContext) -> Size {
+    let layout = preparation.resolve(leaf, in: Rect(origin: .zero, size: proposal), context: context)
     return Size(width: proposal.width, height: Float(layout.lines.count) * layout.lineHeight)
   }
 
-  @MainActor public func register(in rect: Rect, context: BlockContext) {
-    let layout = layout(in: rect, context: context)
+  @MainActor func register(in rect: Rect, context: BlockContext) {
+    let layout = preparation.resolve(leaf, in: rect, context: context)
     _ = context.textSelectionState(
       in: rect, text: { layout.text },
       pointerOffset: { point, _ in layout.hitTest(point) },
       verticalOffset: { layout.verticalOffset($0, direction: $1) })
   }
 
-  @MainActor public func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
-    layout(in: rect, context: context).draw(
+  @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: BlockContext) {
+    preparation.resolve(leaf, in: rect, context: context).draw(
       into: &drawList, theme: context.theme, selection: context.textInputVisualState())
   }
 }
