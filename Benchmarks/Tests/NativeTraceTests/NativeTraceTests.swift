@@ -57,6 +57,7 @@ struct NativeTraceTests {
   @Test func diagonalInputCorrelatesToPresentationNotCallback() throws {
     let summary = try trace([
       event("fingerSource", 0), event("scrollVertical", 0.001), event("scrollHorizontal", 0.002),
+      event("pointerFrame", 0.002),
       event("input", 0.001, 0.003), event("frameStart", 0.01), event("frameCPU", 0.01, 0.012),
       event("eglSwap", 0.011, 0.012), event("frameCallback", 0.018, protocolMilliseconds: 5),
       event("presented", 0.025, presentation: .init(time: 0.020, clockTime: 0.020)),
@@ -145,8 +146,9 @@ struct NativeTraceTests {
 
   @Test func modeIntervalsExcludeTransitionsAndMissingIDs() throws {
     let summary = try trace([
-      event("fingerSource", 0), event("scrollVertical", 0), event("frameStart", 0),
-      event("scrollVertical", 0.015, frame: 2), event("frameStart", 0.02, frame: 2),
+      event("fingerSource", 0), event("scrollVertical", 0), event("pointerFrame", 0), event("frameStart", 0),
+      event("fingerSource", 0.015, frame: 2), event("scrollVertical", 0.015, frame: 2),
+      event("pointerFrame", 0.015, frame: 2), event("frameStart", 0.02, frame: 2),
       event("momentumInput", 0.04, frame: 3), event("frameStart", 0.04, frame: 3),
       event("momentumInput", 0.07, frame: 4), event("frameStart", 0.07, frame: 4),
       event("scrollVertical", 1, frame: 5), event("frameStart", 1, frame: 5),
@@ -157,6 +159,74 @@ struct NativeTraceTests {
       try object(try object(summary["consecutiveFrameIntervalsByMode"])["finger:vertical"])["samples"] as? Int == 1)
     #expect(approximately(try metric(summary, "consecutiveFrameIntervalsByMode", "momentum"), 30))
     #expect(try object(summary["consecutiveFrameIntervalsByMode"])["other"] == nil)
+  }
+
+  @Test func lateSourceAppliesToBothAxesAcrossRenderFrameIDs() throws {
+    let summary = try trace([
+      event("scrollVertical", 0.001), event("frameStart", 0.002),
+      event("scrollHorizontal", 0.003, frame: 2),
+      event("fingerSource", 0.004, frame: 2), event("pointerFrame", 0.005, frame: 2),
+      event("frameStart", 0.006, frame: 2),
+    ]).summarize()
+    let modes = try object(summary["perFrameInputAndFrameWallUnionByMode"])
+    #expect(modes["finger:vertical"] != nil)
+    #expect(modes["finger:horizontal"] != nil)
+    #expect(modes.count == 2)
+  }
+
+  @Test func sourceResetsAtEveryPointerFrameIncludingEmptyGroups() throws {
+    let summary = try trace([
+      event("fingerSource", 0), event("scrollVertical", 0.001), event("pointerFrame", 0.002),
+      event("frameStart", 0.003),
+      event("scrollVertical", 0.004, frame: 2), event("pointerFrame", 0.005, frame: 2),
+      event("frameStart", 0.006, frame: 2),
+      event("otherSource", 0.007, frame: 3), event("pointerFrame", 0.008, frame: 3),
+      event("scrollVertical", 0.009, frame: 3), event("pointerFrame", 0.010, frame: 3),
+      event("frameStart", 0.011, frame: 3),
+      event("scrollVertical", 0.012, frame: 4), event("otherSource", 0.013, frame: 4),
+      event("pointerFrame", 0.014, frame: 4), event("frameStart", 0.015, frame: 4),
+    ]).summarize()
+    let modes = try object(summary["perFrameInputAndFrameWallUnionByMode"])
+    #expect(try object(modes["finger:vertical"])["samples"] as? Int == 1)
+    #expect(try object(modes["unknown:vertical"])["samples"] as? Int == 2)
+    #expect(try object(modes["otherSource:vertical"])["samples"] as? Int == 1)
+  }
+
+  @Test func differentPointerSourcesInOneRenderFrameAreMixed() throws {
+    for secondSource in ["otherSource", "unrelated"] {
+      let summary = try trace([
+        event("fingerSource", 0), event("scrollVertical", 0.001), event("pointerFrame", 0.002),
+        event("scrollHorizontal", 0.003), event(secondSource, 0.004), event("pointerFrame", 0.005),
+        event("frameStart", 0.006),
+      ]).summarize()
+      let modes = try object(summary["perFrameInputAndFrameWallUnionByMode"])
+      #expect(modes["mixed:diagonal"] != nil)
+      #expect(modes.count == 1)
+    }
+  }
+
+  @Test func oldAndIncompleteCapturesDoNotGuessSources() throws {
+    for dropped in [0, 1] {
+      let summary = try trace(
+        [
+          event("fingerSource", 0), event("scrollVertical", 0.001), event("frameStart", 0.002),
+        ], dropped: dropped
+      ).summarize()
+      let modes = try object(summary["perFrameInputAndFrameWallUnionByMode"])
+      #expect(modes["unknown:vertical"] != nil)
+      #expect(modes["finger:vertical"] == nil)
+    }
+  }
+
+  @Test func selectedAxesUseFullPointerGroupButNotExcludedAxes() throws {
+    let summary = try trace([
+      event("otherSource", 0), event("scrollVertical", 0.001), event("pointerFrame", 0.002),
+      event("scrollVertical", 1), event("frameStart", 1.01),
+      event("fingerSource", 2), event("pointerFrame", 2.001),
+    ]).summarize(start: 1, end: 1.5)
+    let modes = try object(summary["perFrameInputAndFrameWallUnionByMode"])
+    #expect(modes["finger:vertical"] != nil)
+    #expect(modes.count == 1)
   }
 
   @Test func readinessWaitIsSeparateFromReadyWait() throws {
@@ -211,7 +281,7 @@ struct NativeTraceTests {
 
   @Test func sourceBeforeRangeAndRendererCountersArePreserved() throws {
     var report = trace([
-      event("otherSource", 0), event("scrollHorizontal", 2), event("frameStart", 2),
+      event("otherSource", 0), event("scrollHorizontal", 2), event("pointerFrame", 2), event("frameStart", 2),
       event("glInstances", 2, value: 20), event("glDrawCalls", 2, value: 2),
       event("glUploadCalls", 2, value: 3), event("glUploadBytes", 2, value: 512),
     ])

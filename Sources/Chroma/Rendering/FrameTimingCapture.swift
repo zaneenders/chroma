@@ -15,7 +15,7 @@ package final class FrameTimingCapture {
     case frameObservation, openGLClear, openGLSubmission, eglSwap, frameCallback
     case glInstances, glDrawCalls, glUploadCalls, glUploadBytes
     case scrollHorizontal, scrollVertical, scrollStopHorizontal, scrollStopVertical
-    case fingerSource, otherSource, presented, discarded, feedbackSkipped, feedbackPending, bufferScale
+    case pointerFrame, fingerSource, otherSource, presented, discarded, feedbackSkipped, feedbackPending, bufferScale
   }
 
   package struct Presentation: Codable, Sendable {

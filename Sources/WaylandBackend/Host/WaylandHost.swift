@@ -559,7 +559,14 @@ public final class WaylandHost: Chroma.Host {
     motion: pointerMotion,
     button: pointerButton,
     axis: pointerAxis,
-    frame: { _, _ in },
+    frame: { data, _ in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        renderer.runtime.timingCapture?.record(.pointerFrame)
+      }
+    },
     axis_source: { data, _, source in
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {

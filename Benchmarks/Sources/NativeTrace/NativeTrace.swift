@@ -110,13 +110,27 @@ struct NativeTrace {
     for event in selected where cpuPhases.contains(event.phase) {
       phases[event.phase, default: []].append(1000 * (event.end - event.start))
     }
-    var source = "unknown"
-    var sources: [Int: String] = [:]
+    // wl_pointer.axis_source describes its entire pointer frame, including axes
+    // received before it. A render frame may contain several pointer frames.
+    var source: String?
+    var pendingAxes: [TraceEvent] = []
+    var sources: [Int: Set<String>] = [:]
+    func finishPointerFrame(complete: Bool) {
+      for axis in pendingAxes where start <= axis.start - capture.started && axis.start - capture.started < end {
+        sources[axis.frame, default: []].insert(complete ? source ?? "unknown" : "unknown")
+      }
+      pendingAxes.removeAll(keepingCapacity: true)
+      source = nil
+    }
     for event in events {
       if event.phase == "fingerSource" { source = "finger" }
       if event.phase == "otherSource" { source = "otherSource" }
-      if event.isAxis { sources[event.frame] = source }
+      if event.isAxis { pendingAxes.append(event) }
+      if event.phase == "pointerFrame" { finishPointerFrame(complete: true) }
     }
+    // Old captures lack boundaries; saturated captures may end mid-group.
+    // Neither establishes a trustworthy source for the remaining axes.
+    finishPointerFrame(complete: false)
     var unavailable: [(Double, Double)] = []
     var blockedSince: Double? = events.contains { $0.phase == "readiness" } ? capture.started : nil
     for event in events where event.phase == "readiness" {
@@ -142,7 +156,8 @@ struct NativeTrace {
       let mode: String
       if horizontal || vertical {
         let direction = horizontal && vertical ? "diagonal" : horizontal ? "horizontal" : "vertical"
-        mode = (sources[frame] ?? "unknown") + ":" + direction
+        let frameSources = sources[frame] ?? ["unknown"]
+        mode = (frameSources.count == 1 ? frameSources.first! : "mixed") + ":" + direction
       } else {
         mode = names.contains("momentumInput") ? "momentum" : "other"
       }
@@ -239,6 +254,7 @@ struct NativeTrace {
       "CPU scopes are inclusive wall time (including driver waits); do not add parent and child distributions.",
       "All-frame and callback intervals include deliberate idle gaps; no FPS is inferred.",
       "Axis latency starts at client receipt, not hardware input; GPU execution is not measured.",
+      "Scroll sources require complete pointerFrame groups; absent sources or boundaries are unknown. Mixed render-frame sources are reported as mixed.",
     ]
     if axisCoverage["withoutFrameStart"]! > 0 || axisCoverage["withoutSuccessfulSwap"]! > 0 {
       warnings.append(

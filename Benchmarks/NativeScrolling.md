@@ -101,6 +101,21 @@ seconds to avoid endpoints. Finger release sends axis stops and keeps the device
 for two seconds so immediate removal does not cancel momentum. The JSON contains injection
 start/release times and maximum deadline lateness; client receipt may occur much later.
 
+## Scroll-source attribution
+
+The capture records `pointerFrame` at each `wl_pointer.frame` boundary. The report
+assigns the optional source to all axes in that pointer group, even when the source
+arrives after an axis; it resets the source at every boundary. Render-frame IDs are
+not pointer-group IDs: one rendered frame can contain several pointer groups, and
+one pointer group can span render-frame attribution IDs. A render frame containing
+different sources (including a known source plus unknown) is labeled `mixed`.
+
+Missing source events, unfinished groups, and older captures without `pointerFrame`
+boundaries are labeled `unknown`, not inferred from preceding gestures. Range filters
+use the whole capture to resolve each selected axis's group, including source/boundary
+events outside the range. These diagnostic labels do not change input delivery or
+establish native hardware latency or performance improvements.
+
 ## Boundaries
 
 All client timestamps use `clock_gettime(CLOCK_MONOTONIC)`. Durations are **wall time**,
