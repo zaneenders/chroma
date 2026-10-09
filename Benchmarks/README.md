@@ -61,7 +61,11 @@ These timings exclude native input dispatch, scheduler waits, Metal encoding, an
 See [the deterministic backlog experiment](INPUT_BACKLOG.md) for runtime recovery
 regressions and a configurable queueing model. It separates CPU saturation,
 completed dispatch opportunities and compositor readiness without claiming native
-latency measurements or changing input scheduling.
+latency measurements or changing input scheduling. The same guide documents
+`InputBacklogBenchmark`, a real-runtime scheduled headless replay with an
+independent ordered source, measured input cost, draw-completion coverage and idle
+recovery. Its measurements are separate from the deterministic model and native
+Wayland/physical-display validation.
 
 ## Nested layout
 
