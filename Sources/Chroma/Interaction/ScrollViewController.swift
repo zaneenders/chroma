@@ -31,14 +31,24 @@ public final class ScrollViewController {
   var request: ScrollRequest?
   @ObservationIgnored var lazyStackCache = LazyStackCache()
   @ObservationIgnored var uniformRowIdentity: UniformRowIdentity?
+  @ObservationIgnored private var uniformRowRevision: ScrollView.IdentityRevision?
 
-  func rowIdentity<Data: RandomAccessCollection>(for data: Data) -> TypedUniformRowIdentity<Data.Element.ID>
+  func rowIdentity<Data: RandomAccessCollection>(
+    for data: Data, revision: ScrollView.IdentityRevision? = nil
+  ) -> TypedUniformRowIdentity<Data.Element.ID>
   where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    if let cached = uniformRowIdentity as? TypedUniformRowIdentity<Data.Element.ID>, cached.matches(data) {
-      return cached
+    if let cached = uniformRowIdentity as? TypedUniformRowIdentity<Data.Element.ID> {
+      if let revision {
+        if revision == uniformRowRevision, cached.ids.count == data.count { return cached }
+      } else if cached.matches(data) {
+        // A later explicit contract must never reuse metadata validated for a different call.
+        uniformRowRevision = nil
+        return cached
+      }
     }
     let identity = TypedUniformRowIdentity(data: data)
     uniformRowIdentity = identity
+    uniformRowRevision = revision
     return identity
   }
 

@@ -1,4 +1,25 @@
 public struct ScrollView: LayoutPreparingBlock {
+  /// An opt-in validity contract for a collection's ordered element IDs.
+  ///
+  /// Keep `source` stable for one logical collection and change `revision` whenever
+  /// IDs are inserted, removed, reordered, or replaced, including same-count changes.
+  /// A source/revision pair must always identify the same ordered IDs. Use a distinct
+  /// source when replacing the collection, even if its revision happens to match.
+  /// Values used as source and revision must retain stable equality while cached.
+  ///
+  /// Reusing a pair skips ID validation. Content-only changes need no new revision:
+  /// visible row bodies and callbacks still resolve from the current data and closure.
+  /// Omit this contract to conservatively validate every ID on each construction.
+  public struct IdentityRevision: Hashable, Sendable {
+    private let source: StructuralKey
+    private let revision: StructuralKey
+
+    public init(source: some Hashable & Sendable, revision: some Hashable & Sendable) {
+      self.source = StructuralKey(source)
+      self.revision = StructuralKey(revision)
+    }
+  }
+
   public struct Row: Identifiable {
     public let id: AnyHashable
     public var content: any Block {
@@ -104,8 +125,22 @@ public struct ScrollView: LayoutPreparingBlock {
     controller: ScrollViewController,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    // Keep this overload's signature identical to the unkeyed initializer so Swift
+    // selects the more constrained identified overload for existing calls.
     self.init(
-      data: data, keys: controller.rowIdentity(for: data), selection: nil, rowHeight: rowHeight, spacing: spacing,
+      name, data: data, rowHeight: rowHeight, spacing: spacing, showsIndicator: showsIndicator,
+      sticksToBottom: sticksToBottom, controller: controller, identityRevision: nil, content: content)
+  }
+
+  @MainActor public init<Data: RandomAccessCollection, RowContent: Block>(
+    _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
+    showsIndicator: Bool = true, sticksToBottom: Bool = false,
+    controller: ScrollViewController, identityRevision: IdentityRevision?,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
+  ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
+    self.init(
+      data: data, keys: controller.rowIdentity(for: data, revision: identityRevision), selection: nil,
+      rowHeight: rowHeight, spacing: spacing,
       showsIndicator: showsIndicator, sticksToBottom: sticksToBottom, controller: controller, content: content)
     self.name = name
   }
@@ -114,9 +149,10 @@ public struct ScrollView: LayoutPreparingBlock {
     _ name: String? = nil, data: Data, rowHeight: Float, spacing: Float = 0,
     showsIndicator: Bool = true, sticksToBottom: Bool = false,
     controller: ScrollViewController, selection: ScrollSelection<Data.Element.ID>,
+    identityRevision: IdentityRevision? = nil,
     @BlockBuilder content: @escaping @MainActor (Data.Element) -> RowContent
   ) where Data.Element: Identifiable, Data.Element.ID: Sendable {
-    let identity = controller.rowIdentity(for: data)
+    let identity = controller.rowIdentity(for: data, revision: identityRevision)
     self.init(
       data: data, keys: identity,
       selection: LogicalSelection(

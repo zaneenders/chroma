@@ -1,3 +1,4 @@
+import ChromaTesting
 import Testing
 
 @testable import Chroma
@@ -138,4 +139,116 @@ struct UniformRowIdentityTests {
       layout == Interaction.ScrollLayout(width: 100, spacing: 0, rows: .uniform(count: 1, height: 20, keys: second)))
     #expect(layout.index(of: StructuralKey(1)) == 0)
   }
+
+  private final class IDReads {
+    var count = 0
+  }
+
+  private struct CountedItem: Identifiable {
+    let value: Int
+    let reads: IDReads
+    var id: Int {
+      reads.count += 1
+      return value
+    }
+  }
+
+  @Test func explicitRevisionSkipsEveryIDReadOnReuse() {
+    let controller = ScrollViewController()
+    let reads = IDReads()
+    let items = (0..<10_000).map { CountedItem(value: $0, reads: reads) }
+    let revision = ScrollView.IdentityRevision(source: "items", revision: 0)
+    let first = controller.rowIdentity(for: items, revision: revision)
+    #expect(reads.count == items.count)
+    reads.count = 0
+    for _ in 0..<5 {
+      #expect(controller.rowIdentity(for: items, revision: revision) === first)
+    }
+    #expect(reads.count == 0)
+    #expect(controller.rowIdentity(for: items) === first)
+    #expect(reads.count == items.count)
+    // Omitting the contract clears it; restoring one must revalidate its IDs.
+    reads.count = 0
+    #expect(controller.rowIdentity(for: items, revision: revision) !== first)
+    #expect(reads.count == items.count)
+  }
+
+  @Test func unchangedRevisionAvoidsIDReadsAcrossInputAndPresentation() {
+    let controller = ScrollViewController()
+    let reads = IDReads()
+    let items = (0..<10_000).map { CountedItem(value: $0, reads: reads) }
+    let host = HeadlessHost(size: Size(width: 200, height: 100))
+    defer { host.close() }
+    host.content = DeferredBlock {
+      ScrollView(
+        data: items, rowHeight: 20, controller: controller,
+        identityRevision: .init(source: "items", revision: 0)
+      ) { _ in Color.white }
+    }
+    _ = host.render()
+    #expect(reads.count == items.count)
+    reads.count = 0
+    for _ in 0..<5 {
+      host.sendInput(InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -20)))
+    }
+    #expect(host.renderIfNeeded() != nil)
+    #expect(reads.count == 0)
+  }
+
+  @Test func revisionsRebuildForAllStructuralMutations() {
+    let controller = ScrollViewController()
+    let sequences = [[1, 2], [2, 1], [2, 3], [2, 3, 4], [3, 4], [], [5]]
+    var previous: TypedUniformRowIdentity<Int>?
+    for (revision, ids) in sequences.enumerated() {
+      let identity = controller.rowIdentity(
+        for: ids.map { Item(id: $0) },
+        revision: .init(source: "items", revision: revision))
+      #expect(identity !== previous)
+      #expect(identity.matches(ids.map { Item(id: $0) }))
+      for (index, id) in ids.enumerated() { #expect(identity.indices[StructuralKey(id)] == index) }
+      previous = identity
+    }
+  }
+
+  @Test func explicitContractSeparatesSourcesAndTypes() {
+    let controller = ScrollViewController()
+    let first = controller.rowIdentity(for: [Item(id: 1)], revision: .init(source: "first", revision: 0))
+    let replaced = controller.rowIdentity(for: [Item(id: 2)], revision: .init(source: "second", revision: 0))
+    #expect(replaced !== first)
+    #expect(replaced.indices[StructuralKey(2)] == 0)
+    let typeChanged = controller.rowIdentity(for: [Item(id: Int64(2))], revision: .init(source: "second", revision: 0))
+    #expect(typeChanged !== replaced)
+    #expect(typeChanged.indices[StructuralKey(Int64(2))] == 0)
+    #expect(ScrollView.IdentityRevision(source: Int(1), revision: 0) != .init(source: Int64(1), revision: 0))
+    #expect(
+      ScrollView.IdentityRevision(source: "first", revision: Int(1)) != .init(source: "first", revision: Int64(1)))
+  }
+
+  @Test func explicitContractHandlesSlicesNoncontiguousDataAndCountChanges() {
+    let controller = ScrollViewController()
+    let items = (0..<6).map { Item(id: $0) }
+    let revision = ScrollView.IdentityRevision(source: "slice", revision: 0)
+    let first = controller.rowIdentity(for: items[2..<5], revision: revision)
+    #expect(controller.rowIdentity(for: NoncontiguousItems(items: items[2..<5]), revision: revision) === first)
+    #expect(first.indices[StructuralKey(2)] == 0)
+    let shifted = controller.rowIdentity(
+      for: NoncontiguousItems(items: items[3..<6]), revision: .init(source: "slice", revision: 1))
+    #expect(shifted !== first)
+    #expect(shifted.indices[StructuralKey(3)] == 0)
+    // Even an incorrectly unchanged contract cannot retain an incompatible count.
+    let smaller = controller.rowIdentity(for: items[3..<5], revision: .init(source: "slice", revision: 1))
+    #expect(smaller !== shifted)
+    #expect(smaller.keys.count == 2)
+  }
+
+  @Test func conservativeCallCannotLeaveAnExplicitContractActive() {
+    let controller = ScrollViewController()
+    let revision = ScrollView.IdentityRevision(source: "items", revision: 0)
+    _ = controller.rowIdentity(for: [Item(id: 1)], revision: revision)
+    let fallback = controller.rowIdentity(for: [Item(id: 2)])
+    let explicit = controller.rowIdentity(for: [Item(id: 1)], revision: revision)
+    #expect(explicit !== fallback)
+    #expect(explicit.indices[StructuralKey(1)] == 0)
+  }
+
 }

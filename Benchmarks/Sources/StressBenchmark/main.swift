@@ -13,8 +13,8 @@ private struct Phase: Encodable {
 
 private struct Report: Encodable {
   let benchmarkKind = "stress"
-  let schemaVersion = 1
-  let fixtureVersion = 1
+  let schemaVersion = 2
+  let fixtureVersion = 2
   let viewport = StressConfiguration.viewport
   let configuration: StressConfiguration
   let samples: Int

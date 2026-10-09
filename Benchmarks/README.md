@@ -6,6 +6,8 @@ Run commands from the repository root. Use release builds and consistent hardwar
 
 ```sh
 swift run --package-path Benchmarks -c release StressBenchmark
+# Skip repeated ID scans through the explicit immutable-fixture contract:
+swift run --package-path Benchmarks -c release StressBenchmark --identity-revisions 1
 swift run --package-path ../chroma-examples -c release StressExample
 # Increase collection scans, nesting, and input burst size:
 swift run --package-path Benchmarks -c release StressBenchmark \
@@ -33,8 +35,11 @@ p95 and the lower median. Counters come from the final cycle of a separate match
 replay with instrumentation enabled; timings disable instrumentation. Close checks
 that resolved nodes and observation subscriptions are released.
 
-This intentionally stresses whole-collection ID scans as well as visible layout:
-virtualization does not eliminate metadata scanning. Timings exclude native event
+By default this intentionally stresses whole-collection ID scans as well as visible layout:
+virtualization does not eliminate metadata scanning. `--identity-revisions 1` opts into
+explicit source/revision validity for the fixture's immutable IDs. The mode is included
+in configuration (schema/fixture version 2), so automated comparisons reject mixed modes.
+Cross-mode comparisons must be reported as deliberate matched-workload experiments. Timings exclude native event
 loops, GPU work, and refresh deadlines. `run.sh` includes `stress-headless.json`
 in every collection; `CompareBenchmarks` checks its workload, viewport, schema/fixture
 versions, warmup and sample counts before comparing each phase’s p50/p95.
@@ -49,7 +54,7 @@ Use the native example for manual profiling, not as evidence of frame-rate guara
 swift run --package-path Benchmarks -c release InputFrameBenchmark
 ```
 
-Measures the headless rendering path through `ChromaTesting.HeadlessHost` for scrolling lists with 1,000, 100,000, and 1,000,000 items, with and without explicit identity. Prints one cold and five warm frame timings per case:
+Measures the headless rendering path through `ChromaTesting.HeadlessHost` for scrolling lists with 1,000, 100,000, and 1,000,000 items, with unkeyed, conservatively identified, and explicitly revisioned identity. Prints one cold and five warm frame timings per case:
 
 - `replace-root` constructs and replaces the root before every render. `setup` includes construction and replacement; `render` includes registration and drawing. Even warm iterations reset the interaction tree.
 - `deferred-root` keeps a `DeferredBlock` installed, as an app does, and constructs its list during traversal. Warm iterations keep the interaction tree. List construction is included in `render` and can occur more than once per input frame.
@@ -85,7 +90,7 @@ swift test --filter StackEvaluationTests
 
 Registration refresh traverses blocks without painting. Custom primitives implement explicit registration and painting phases. Coalescing presentation still does not eliminate reconciliation, measurement, and registration work for each actionable event. Virtualized lists build visible rows, but identified list construction still scans every element's ID; a small command count does not imply cheap construction.
 
-Bodies, callbacks and geometry reconcile conservatively; stable identity alone never establishes validity. Prepared custom children are owned locally through one operation, without paired traversal bookkeeping. The experimental broad geometry cache was removed after measurements showed no end-to-end benefit. Custom blocks implement `PaintableBlock` or `LayoutPreparingBlock`. Identified collections still need explicit revisions or change sets before their ID scans can safely be skipped.
+Bodies, callbacks and geometry reconcile conservatively; stable identity alone never establishes validity. Prepared custom children are owned locally through one operation, without paired traversal bookkeeping. The experimental broad geometry cache was removed after measurements showed no end-to-end benefit. Custom blocks implement `PaintableBlock` or `LayoutPreparingBlock`. Identified collections without an explicit revision still scan IDs. See [the collection identity contract](../docs/collection-identity.md) for the opt-in source/revision API.
 
 The scheduler and hover regressions are covered without wall-clock performance thresholds:
 

@@ -6,18 +6,25 @@ import Testing
 @MainActor
 struct StressFixturesTests {
   @Test func optionsRejectInvalidWorkloads() throws {
-    for arguments in [["--rows", "0"], ["--depth", "-1"], ["--panes"], ["--unknown", "2"]] {
+    for arguments in [
+      ["--rows", "0"], ["--depth", "-1"], ["--panes"], ["--unknown", "2"], ["--identity-revisions", "2"],
+    ] {
       #expect(throws: StressOptions.InvalidOption.self) { try StressOptions(arguments: arguments) }
     }
     let options = try StressOptions(arguments: ["--depth", "0", "--warmup", "0"])
     #expect(options.configuration.depth == 0)
     #expect(options.warmup == 0)
+    #expect(!options.configuration.identityRevisions)
+    #expect(try StressOptions(arguments: ["--identity-revisions", "1"]).configuration.identityRevisions)
   }
 
-  @Test func burstIsFreshVirtualizedPaintFreeAndReturnsToIdle() {
+  @Test(arguments: [false, true])
+  func burstIsFreshVirtualizedPaintFreeAndReturnsToIdle(identityRevisions: Bool) {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    let scene = StressScene(configuration: StressConfiguration(rows: 10_000, panes: 3, depth: 4, events: 12))
+    let scene = StressScene(
+      configuration: StressConfiguration(
+        rows: 10_000, panes: 3, depth: 4, events: 12, identityRevisions: identityRevisions))
     let host = HeadlessHost(size: StressConfiguration.viewport)
     host.content = DeferredBlock { scene.content }
     #expect(!host.render().commands.isEmpty)

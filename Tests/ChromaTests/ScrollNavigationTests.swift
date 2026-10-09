@@ -39,14 +39,16 @@ struct ScrollNavigationTests {
     #expect(controller.offset > 0)
   }
 
-  @Test func logicalRowSelectionSurvivesVirtualizationAndDownRevealsSuccessor() {
+  @Test(arguments: [false, true])
+  func logicalRowSelectionSurvivesVirtualizationAndDownRevealsSuccessor(explicitRevision: Bool) {
     let h = Harness()
     let controller = ScrollViewController()
     let selection = ScrollSelection<Int>()
     let targets = (0..<100).map { _ in FocusTarget() }
     struct Item: Identifiable { let id: Int }
     let content = ScrollView(
-      data: (0..<100).map { Item(id: $0) }, rowHeight: 20, controller: controller, selection: selection
+      data: (0..<100).map { Item(id: $0) }, rowHeight: 20, controller: controller, selection: selection,
+      identityRevision: explicitRevision ? .init(source: "rows", revision: 0) : nil
     ) { index in
       Button("Row \(index.id)") {}.focusTarget(targets[index.id])
     }
@@ -66,14 +68,16 @@ struct ScrollNavigationTests {
     #expect(controller.offset < 1200)
   }
 
-  @Test func retainedSelectionCallbacksKeepTheirIdentitySnapshot() {
+  @Test(arguments: [false, true])
+  func retainedSelectionCallbacksKeepTheirIdentitySnapshot(explicitRevision: Bool) {
     let h = Harness()
     let controller = ScrollViewController()
     let selection = ScrollSelection<Int>()
     struct Item: Identifiable { let id: Int }
     let original = ScrollView(
       data: [Item(id: 0), Item(id: 1), Item(id: 2)], rowHeight: 20,
-      controller: controller, selection: selection
+      controller: controller, selection: selection,
+      identityRevision: explicitRevision ? .init(source: "rows", revision: 0) : nil
     ) { Text("Row \($0.id)") }
     h.render(original)
     h.render(original, [.down, .stepIn, .down])
@@ -81,7 +85,8 @@ struct ScrollNavigationTests {
 
     let replacement = ScrollView(
       data: [Item(id: 0), Item(id: 1), Item(id: 3)], rowHeight: 20,
-      controller: controller, selection: selection
+      controller: controller, selection: selection,
+      identityRevision: explicitRevision ? .init(source: "rows", revision: 1) : nil
     ) { Text("Row \($0.id)") }
     h.render(original, [.down])
     #expect(selection.selectedID == 2)
