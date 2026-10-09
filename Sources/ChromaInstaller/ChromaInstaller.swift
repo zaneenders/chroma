@@ -10,15 +10,15 @@ import Darwin
 struct ChromaInstaller {
   static func main() {
     do {
-      var arguments = Array(CommandLine.arguments.dropFirst())
-      let profiling = arguments.last != "--without-profiling"
-      if !profiling { arguments.removeLast() }
+      let options = try InstallOptions(arguments: Array(CommandLine.arguments.dropFirst()))
+      let arguments = options.positionalArguments
       guard arguments.count == 2 || arguments.count == 3 else {
-        throw InstallError("Invoke swift package chroma-install [--without-profiling] from the app package.")
+        throw InstallError("Invoke \(InstallOptions.usage) from the app package.")
       }
       let package = URL(fileURLWithPath: arguments[0], isDirectory: true)
       let metadata = try AppMetadata(package: package, product: arguments[1])
-      let installer = AppInstaller(metadata: metadata, profiling: profiling)
+      let installer = AppInstaller(
+        metadata: metadata, profiling: options.profiling, installDirectory: options.installDirectory)
       try installer.preflight()
       if arguments.count == 3 {
         try installer.install(binary: URL(fileURLWithPath: arguments[2]))

@@ -16,15 +16,17 @@ struct AppInstaller {
     #endif
   }
 
-  init(metadata: AppMetadata, profiling: Bool = true, home: URL = installHome()) {
+  init(
+    metadata: AppMetadata, profiling: Bool = true, home: URL = installHome(), installDirectory: URL? = nil
+  ) {
     self.metadata = metadata
     self.profiling = profiling
     #if os(Linux)
-    prefix = home.appendingPathComponent(".local")
+    prefix = installDirectory ?? home.appendingPathComponent(".local")
     destination = prefix.appendingPathComponent(
       "lib/\(metadata.isShapeTreeDesktop ? "shape-tree" : metadata.identifier)")
     #else
-    prefix = home.appendingPathComponent("Applications")
+    prefix = installDirectory ?? home.appendingPathComponent("Applications")
     destination = prefix.appendingPathComponent("\(metadata.name).app")
     #endif
   }
@@ -42,6 +44,13 @@ struct AppInstaller {
     #if os(Linux)
     let legacy = try isLegacyLinuxInstallation()
     #else
+    try requireStoppedMacApp()
+    var parent = prefix
+    while !exists(parent) { parent.deleteLastPathComponent() }
+    guard isDirectory(parent), fm.isWritableFile(atPath: parent.path) else {
+      throw InstallError(
+        "Cannot write to \(prefix.path). Choose a writable --install-directory; do not run builds with sudo.")
+    }
     let legacy = false
     #endif
     if exists(destination), !legacy {
@@ -151,6 +160,15 @@ struct AppInstaller {
     #endif
   }
 
+  #if os(macOS)
+  private func requireStoppedMacApp() throws {
+    let output = try runCommand("/bin/ps", ["-ww", "-axo", "ucomm="], capture: true)
+    guard !macAppIsRunning(in: output, product: product) else {
+      throw InstallError("Quit \(metadata.name) completely before installing, then rerun this command.")
+    }
+  }
+  #endif
+
   #if os(Linux)
   private func isLegacyLinuxInstallation() throws -> Bool {
     try rejectSymlinks(launcher.deletingLastPathComponent())
@@ -252,3 +270,11 @@ func rejectSymlinks(_ url: URL) throws {
     current.deleteLastPathComponent()
   }
 }
+
+#if os(macOS)
+func macAppIsRunning(in processNames: String, product: String) -> Bool {
+  processNames.split(separator: "\n").contains {
+    $0.trimmingCharacters(in: .whitespaces) == product
+  }
+}
+#endif
