@@ -3,18 +3,34 @@ import ChromaTesting
 import Foundation
 import StressFixtures
 
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
+
+// Process CPU time separates traversal cost from descheduling on shared hosts.
+// It is not input latency; elapsed wall time remains the primary report metric.
+private func cpuTime() -> Double {
+  var time = timespec()
+  precondition(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time) == 0)
+  return Double(time.tv_sec) + Double(time.tv_nsec) / 1_000_000_000
+}
+
 private struct Phase: Encodable {
   let name: String
   let samples: Int
   let p50MS: Double
   let p95MS: Double
+  let cpuP50MS: Double
+  let cpuP95MS: Double
   let work: PipelineMetrics.Snapshot
 }
 
 private struct Report: Encodable {
   let benchmarkKind = "stress"
   let schemaVersion = 1
-  let fixtureVersion = 1
+  let fixtureVersion = 2
   let viewport = StressConfiguration.viewport
   let configuration: StressConfiguration
   let samples: Int
@@ -37,6 +53,7 @@ struct StressBenchmark {
     let options = try StressOptions(arguments: Array(CommandLine.arguments.dropFirst()))
     let names = ["initial-frame", "input-burst", "presentation", "idle-1000-polls"]
     var timings = Array(repeating: [Double](), count: names.count)
+    var cpuTimings = Array(repeating: [Double](), count: names.count)
     var work = Array(repeating: PipelineMetrics.Snapshot(), count: names.count)
     var commands = 0
 
@@ -48,11 +65,18 @@ struct StressBenchmark {
       host.content = DeferredBlock { scene.content }
       func phase(_ index: Int, record: Bool, _ operation: () -> Void) {
         if instrumented { PipelineMetrics.reset() }
+        let cpuStart = cpuTime()
         let start = ProcessInfo.processInfo.systemUptime
         operation()
         let elapsed = (ProcessInfo.processInfo.systemUptime - start) * 1000
+        let cpuElapsed = (cpuTime() - cpuStart) * 1000
         if record {
-          if instrumented { work[index] = PipelineMetrics.snapshot } else { timings[index].append(elapsed) }
+          if instrumented {
+            work[index] = PipelineMetrics.snapshot
+          } else {
+            timings[index].append(elapsed)
+            cpuTimings[index].append(cpuElapsed)
+          }
         }
       }
       phase(0, record: true) { commands = host.render().commands.count }
@@ -87,9 +111,12 @@ struct StressBenchmark {
     }
     let phases = names.indices.map { index in
       let sorted = timings[index].sorted()
+      let cpuSorted = cpuTimings[index].sorted()
       return Phase(
         name: names[index], samples: sorted.count, p50MS: sorted[(sorted.count - 1) / 2],
-        p95MS: sorted[Int(ceil(Double(sorted.count) * 0.95)) - 1], work: work[index])
+        p95MS: sorted[Int(ceil(Double(sorted.count) * 0.95)) - 1],
+        cpuP50MS: cpuSorted[(cpuSorted.count - 1) / 2],
+        cpuP95MS: cpuSorted[Int(ceil(Double(cpuSorted.count) * 0.95)) - 1], work: work[index])
     }
     let report = Report(
       configuration: options.configuration, samples: options.samples,

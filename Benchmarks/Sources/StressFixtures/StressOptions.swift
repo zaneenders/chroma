@@ -3,22 +3,26 @@ public struct StressOptions: Sendable {
   public let samples: Int
   public let warmup: Int
 
-  public static let usage = "--rows 100000 --panes 3 --depth 8 --events 12 --samples 30 --warmup 5"
+  public static let usage = "--rows 100000 --panes 3 --depth 8 --events 12 --samples 30 --warmup 5 --identified 1"
 
   public init(arguments: [String]) throws {
-    var values = ["--rows": 100_000, "--panes": 3, "--depth": 8, "--events": 12, "--samples": 30, "--warmup": 5]
+    var values = [
+      "--rows": 100_000, "--panes": 3, "--depth": 8, "--events": 12, "--samples": 30, "--warmup": 5, "--identified": 1,
+    ]
     var index = 0
     while index < arguments.count {
       let flag = arguments[index]
       guard values[flag] != nil, index + 1 < arguments.count,
         let value = Int(arguments[index + 1]), value >= 0,
-        value > 0 || flag == "--depth" || flag == "--warmup"
+        value > 0 || flag == "--depth" || flag == "--warmup" || flag == "--identified"
       else { throw InvalidOption(argument: flag) }
+      if flag == "--identified", value > 1 { throw InvalidOption(argument: flag) }
       values[flag] = value
       index += 2
     }
     configuration = StressConfiguration(
-      rows: values["--rows"]!, panes: values["--panes"]!, depth: values["--depth"]!, events: values["--events"]!)
+      rows: values["--rows"]!, panes: values["--panes"]!, depth: values["--depth"]!, events: values["--events"]!,
+      identified: values["--identified"]! == 1)
     samples = values["--samples"]!
     warmup = values["--warmup"]!
   }

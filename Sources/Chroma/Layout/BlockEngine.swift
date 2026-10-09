@@ -72,13 +72,13 @@ public enum BlockEngine {
     if let container = block as? any LayoutPreparingBlock {
       let context =
         container.preservesContentIdentity
-        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
+        ? context : context.scoped(.component(ObjectIdentifier(type(of: block))))
       return container.prepareLayout(context: context)
     }
     if let primitive = block as? any PaintableBlock {
       let context =
         primitive.preservesContentIdentity
-        ? context : context.scoped([.component(ObjectIdentifier(type(of: block)))])
+        ? context : context.scoped(.component(ObjectIdentifier(type(of: block))))
       return Resolved(
         expandsHorizontally: { primitive.expandsHorizontally },
         expandsVertically: { primitive.expandsVertically },
@@ -87,7 +87,7 @@ public enum BlockEngine {
         paint: { paintResolved(primitive, into: &$0, in: $1, context: context) })
     }
     PipelineMetrics.record(.bodyEvaluation)
-    return resolve(block.body, context: context.scoped([.component(ObjectIdentifier(type(of: block)))]))
+    return resolve(block.body, context: context.scoped(.component(ObjectIdentifier(type(of: block)))))
   }
 
   private static var paintingDepth = 0

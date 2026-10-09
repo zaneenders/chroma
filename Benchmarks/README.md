@@ -172,3 +172,21 @@ Comparisons require matching workloads, configuration, toolchain, dependencies, 
 ```sh
 swift test --package-path Benchmarks
 ```
+
+## Structural-path registration diagnostics
+
+`StressBenchmark --identified 0` uses a plain range; the default `--identified 1`
+keeps the identified collection. Compare depths 0, 8, and 16 with identical rows,
+panes, events, warmups and sample counts to separate deep visible preparation from
+whole-collection identity scanning. Fixture version 2 includes this distinction in
+its configuration and must not be compared with the old fixture.
+
+Each phase also reports process `cpuP50MS`/`cpuP95MS` alongside elapsed p50/p95.
+CPU time helps identify descheduling noise on shared machines; it is not input
+latency, and its clock resolution can make very short idle phases report zero.
+`CompareBenchmarks` continues to compare elapsed timings. Both sets of timings
+come from the uninstrumented pass; work counters come from the separate replay.
+
+The Linux-only tools in [Diagnostics/StructuralPath](Diagnostics/StructuralPath)
+provide separate allocation/ARC-call counts and user-CPU instruction samples.
+Never preload either tool during a timing comparison.

@@ -20,11 +20,13 @@ public enum BlockBuilder {
   private static func scopedChildren(
     _ component: any Block, prefix: [StructuralPath.Segment]
   ) -> [ScopedBlock] {
-    if let children = collectionChildren(component, prefix: prefix) {
-      return children
-    }
+    // Unwrap scopes once before looking for a collection. Checking for a collection
+    // first would concatenate these same prefixes again when the leaf is not one.
     if let scoped = component as? ScopedBlock {
       return scopedChildren(scoped.content, prefix: prefix + scoped.path)
+    }
+    if let children = collectionChildren(component, prefix: prefix) {
+      return children
     }
     if let tuple = component as? TupleBlock {
       return tuple.scopedChildren.enumerated().flatMap { index, child in
