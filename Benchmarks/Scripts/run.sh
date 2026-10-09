@@ -2,14 +2,17 @@
 set -eu
 cd "$(dirname "$0")/../.."
 out=${1:-Benchmarks/results}
+if [ "$#" -gt 0 ]; then shift; fi
+jobs=${CHROMA_BUILD_JOBS:-2}
+case "$jobs" in ''|*[!0-9]*|0) echo 'CHROMA_BUILD_JOBS must be a positive integer' >&2; exit 2;; esac
 if [ -d "$out" ] && [ -n "$(ls -A "$out")" ]; then
   echo "Refusing to overwrite nonempty results directory: $out" >&2
   exit 1
 fi
 mkdir -p "$out"
-swift build --package-path Benchmarks -c release --product RenderBenchmark
-swift build --package-path Benchmarks -c release --product StressBenchmark
-bin=$(swift build --package-path Benchmarks -c release --show-bin-path)/RenderBenchmark
+swift build --package-path Benchmarks -c release --force-resolved-versions --jobs "$jobs" "$@" --product RenderBenchmark
+swift build --package-path Benchmarks -c release --force-resolved-versions --jobs "$jobs" "$@" --product StressBenchmark
+bin=$(swift build --package-path Benchmarks -c release --force-resolved-versions --jobs "$jobs" "$@" --show-bin-path)/RenderBenchmark
 swift --version > "$out/toolchain.txt"
 git rev-parse HEAD > "$out/revision.txt"
 git status --short > "$out/worktree.txt"

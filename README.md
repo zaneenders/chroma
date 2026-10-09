@@ -19,6 +19,11 @@ The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma
 Run `swift package chroma-install` from the app package. Builds release with symbols;
 add `--without-profiling` to omit debug info. See [Install](INSTALLING.md).
 
+## Development checks
+
+See [Validation](VALIDATION.md) for supported toolchains, local commands, CI coverage,
+and the native smoke checklist.
+
 ## Inspired by
 
 - Immediate mode UI

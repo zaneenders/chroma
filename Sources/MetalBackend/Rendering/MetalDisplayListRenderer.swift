@@ -161,8 +161,8 @@ public final class MetalDisplayListRenderer {
         let offset = shapeInstances.count
         shapeInstances.append(
           ShapeInstance(
-            dst_p0: ndc(rect.minX - padding, rect.minY - padding),
-            dst_p1: ndc(rect.maxX + padding, rect.maxY + padding),
+            dstP0: ndc(rect.minX - padding, rect.minY - padding),
+            dstP1: ndc(rect.maxX + padding, rect.maxY + padding),
             size: [rect.size.width, rect.size.height],
             radii: [radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft],
             topLeft: color(quad.colors.topLeft), topRight: color(quad.colors.topRight),

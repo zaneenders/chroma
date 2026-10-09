@@ -6,3 +6,5 @@ Package.resolved
 
 Benchmarks/results/
 !HeadlessModeTests/Package.resolved
+
+validation-results/

@@ -2,6 +2,12 @@
 
 Run commands from the repository root. Use release builds and consistent hardware, toolchain, and workloads when comparing results.
 
+`Scripts/run.sh` uses the committed dependency lockfile and defaults to two build
+jobs (`CHROMA_BUILD_JOBS` overrides this). Extra arguments after the output directory
+are forwarded to Swift build commands, for example for a non-system SDK. Update
+`Package.resolved` deliberately when changing dependencies; see
+[Validation](../VALIDATION.md).
+
 ## Stress lab benchmark and native example
 
 ```sh

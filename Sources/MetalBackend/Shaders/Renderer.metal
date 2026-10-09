@@ -1,8 +1,8 @@
 #include <metal_stdlib>
 using namespace metal;
 struct ShapeInstance {
-  float2 dst_p0;
-  float2 dst_p1;
+  float2 dstP0;
+  float2 dstP1;
   float2 size;
   float4 radii;
   float4 topLeft;
@@ -28,7 +28,7 @@ vertex ShapeVertexOut shape_vertex(uint vid [[vertex_id]], uint iid [[instance_i
   ShapeInstance inst = instances[iid];
   float2 q = corners[vid];
   ShapeVertexOut out;
-  out.position = float4(mix(inst.dst_p0, inst.dst_p1, q), 0, 1);
+  out.position = float4(mix(inst.dstP0, inst.dstP1, q), 0, 1);
   out.localPosition = q * (inst.size + 2 * inst.parameters.z) - inst.parameters.z;
   float2 t = out.localPosition / inst.size;
   out.uv = mix(inst.uv0, inst.uv1, t);

@@ -1,6 +1,6 @@
 struct ShapeInstance {
-  var dst_p0: SIMD2<Float>
-  var dst_p1: SIMD2<Float>
+  var dstP0: SIMD2<Float>
+  var dstP1: SIMD2<Float>
   var size: SIMD2<Float>
   var radii: SIMD4<Float>
   var topLeft: SIMD4<Float>
