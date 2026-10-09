@@ -175,7 +175,7 @@ struct ImageRenderingTests {
         let node = resolvedBuffer.image(image, context: context)
         let resolved = resolvedBuffer.sizing(
           node, x: .fixed(frame.size.width), y: .fixed(frame.size.height), context: context)
-        context.interaction.beginFrame(input: InputState())
+        context.interaction.beginFrame(input: InputState(pointerPosition: Point(x: -10, y: -10)))
         resolvedBuffer.register(resolved, in: frame)
         resolvedBuffer.paint(resolved, into: &list, in: frame)
         context.interaction.endFrame()

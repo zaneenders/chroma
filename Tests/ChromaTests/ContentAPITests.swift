@@ -279,8 +279,12 @@ struct ContentAPITests {
       let color = buffer.color(.white, context: context)
       return buffer.sizing(color, x: .fixed(300), y: .fixed(100), context: context)
     }
-    var content = wide
-    runtime.build = { buffer, context in buffer.scrollView(content, context: context) }
+    @MainActor final class Content {
+      var scroll: ScrollView
+      init(_ scroll: ScrollView) { self.scroll = scroll }
+    }
+    let content = Content(wide)
+    runtime.build = { buffer, context in buffer.scrollView(content.scroll, context: context) }
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     _ = runtime.render(
       viewport: viewport,
@@ -290,7 +294,7 @@ struct ContentAPITests {
     let rows = ScrollView(data: 0..<20, rowHeight: 20, controller: controller) { buffer, context, row in
       buffer.text(Text("Row \(row)"), context: context)
     }
-    content = rows
+    content.scroll = rows
     _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
     #expect(controller.horizontalOffset == 0)
     #expect(context.interaction.scrollStates.values.allSatisfy { $0.offset.x == 0 && $0.limit.x == 0 })
