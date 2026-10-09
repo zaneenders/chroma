@@ -360,7 +360,7 @@ public struct ScrollView: LayoutPreparingBlock {
             in: Rect(
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
               width: rect.size.width, height: uniformRows.height),
-            context: uniformRows.keys.map { context.scoped([.key($0.keys[index])]) } ?? context.childScope(index),
+            context: uniformRows.keys.map { context.scoped(.key($0.keys[index])) } ?? context.childScope(index),
             interaction: interaction, offset: offset, scrollID: id,
             rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index), visit: visit)
         }
@@ -378,7 +378,7 @@ public struct ScrollView: LayoutPreparingBlock {
             in: Rect(
               x: rect.minX, y: rect.minY + positions.starts[index] - offset,
               width: rect.size.width, height: positions.heights[index]),
-            context: context.scoped([.key(rows[index].key)]),
+            context: context.scoped(.key(rows[index].key)),
             interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key, visit: visit)
         }
       }
@@ -481,7 +481,7 @@ public struct ScrollView: LayoutPreparingBlock {
             BlockEngine.measure(
               row.content,
               proposal: Size(width: width, height: Float.greatestFiniteMagnitude),
-              context: context.scoped([.key(row.key)]))
+              context: context.scoped(.key(row.key)))
           })
       }
     }

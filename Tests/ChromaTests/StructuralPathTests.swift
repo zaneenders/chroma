@@ -1,9 +1,196 @@
+import Synchronization
 import Testing
 
 @testable import Chroma
 
 @MainActor
 struct StructuralPathTests {
+  private struct CollidingKey: Hashable, Sendable {
+    let value: Int
+    func hash(into hasher: inout Hasher) { hasher.combine(0) }
+  }
+
+  @Test func pathHashesRemainCollisionSafeAndIndependentOfScopeBatching() {
+    let root = BlockContext()
+    let segments: [StructuralPath.Segment] = [
+      .slot(2), .branch(1), .background(3), .component(ObjectIdentifier(Component.self)),
+      .key(StructuralKey(CollidingKey(value: 1))),
+    ]
+    let batch = root.scoped(segments).structuralPath
+    let singles = segments.reduce(root) { $0.scoped($1) }.structuralPath
+    #expect(batch == singles)
+    #expect(batch.hashValue == singles.hashValue)
+    #expect(batch.segments == segments)
+    #expect(root.scoped([]).structuralPath == root.structuralPath)
+
+    var changed = segments
+    changed[changed.count - 1] = .key(StructuralKey(CollidingKey(value: 2)))
+    let collision = root.scoped(changed).structuralPath
+    #expect(batch.hashValue == collision.hashValue)
+    #expect(batch != collision)
+    #expect(Set([batch, singles, collision]).count == 2)
+    let suffix: [StructuralPath.Segment] = (0..<StructuralPath.shortPathLimit).map { .slot($0) }
+    let leftChild = root.scoped(segments + suffix).structuralPath
+    let rightChild = root.scoped(changed + suffix).structuralPath
+    #expect(leftChild.tail?.fingerprint == rightChild.tail?.fingerprint)
+    #expect(leftChild != rightChild)
+    #expect(Set([leftChild, rightChild]).count == 2)
+    #expect(root.scoped(.key(StructuralKey(1))).widgetID != root.scoped(.key(StructuralKey(Int64(1)))).widgetID)
+    let deepRoot = root.scoped(suffix)
+    #expect(deepRoot.scoped(.key(StructuralKey(1))).widgetID != deepRoot.scoped(.key(StructuralKey(Int64(1)))).widgetID)
+    for (original, replacement) in zip(
+      segments,
+      [
+        StructuralPath.Segment.slot(3), .branch(2), .background(4), .component(ObjectIdentifier(Probe.self)),
+      ])
+    {
+      #expect(root.scoped(replacement).structuralPath != root.scoped(original).structuralPath)
+      #expect(deepRoot.scoped(replacement).structuralPath != deepRoot.scoped(original).structuralPath)
+    }
+  }
+
+  @Test(arguments: [0, 8, 16, 128])
+  func longPathExtensionSharesAncestorsWithoutCopyingSegments(depth: Int) {
+    var context = BlockContext()
+    var ancestors: [StructuralPath.Node] = []
+    for index in 0..<depth {
+      let previous = context.structuralPath.tail
+      let child = context.scoped(.slot(index))
+      if index >= StructuralPath.shortPathLimit {
+        #expect(child.structuralPath.tail?.parent.tail === previous)
+        #expect(child.structuralPath.tail?.count == index + 1)
+        if index == StructuralPath.shortPathLimit,
+          case .short(let prefix) = child.structuralPath.tail?.parent
+        {
+          // Crossing the threshold retains the existing contiguous prefix.
+          let original = context.structuralPath.segments
+          #expect(
+            prefix.withUnsafeBufferPointer { a in
+              original.withUnsafeBufferPointer { b in a.baseAddress == b.baseAddress }
+            })
+        }
+      } else {
+        #expect(child.structuralPath.tail == nil)
+      }
+      #expect(context.structuralPath.tail === previous)
+      if let node = child.structuralPath.tail { ancestors.append(node) }
+      context = child
+    }
+    var node = context.structuralPath.tail
+    for ancestor in ancestors.reversed() {
+      #expect(node === ancestor)
+      node = node?.parent.tail
+    }
+    #expect(node == nil)
+    #expect(context.structuralPath.segments == (0..<depth).map { .slot($0) })
+    let sibling = context.scoped(.branch(1))
+    if depth >= StructuralPath.shortPathLimit {
+      #expect(sibling.structuralPath.tail?.parent.tail === context.structuralPath.tail)
+    }
+    #expect(sibling.widgetID != context.widgetID)
+  }
+
+  @Test(arguments: [-1, 0, 1, 16])
+  func batchExtensionMatchesSinglesAcrossTheStorageBoundary(offset: Int) {
+    let count = StructuralPath.shortPathLimit + offset
+    let segments = (0..<count).map { StructuralPath.Segment.slot($0) }
+    let root = BlockContext()
+    let singles = segments.reduce(root) { $0.scoped($1) }.structuralPath
+    for split in 0...count {
+      let batched = root.scoped(Array(segments.prefix(split)))
+        .scoped(Array(segments.dropFirst(split))).structuralPath
+      #expect(batched == singles)
+      #expect(batched.hashValue == singles.hashValue)
+      #expect(batched.segments == segments)
+    }
+  }
+
+  @Test(arguments: [-1, 0, 1])
+  func collidingKeysStayDistinctOnBothSidesOfTheStorageBoundary(offset: Int) {
+    var left = Array(repeating: StructuralPath.Segment.slot(0), count: StructuralPath.shortPathLimit + 4)
+    var right = left
+    left[StructuralPath.shortPathLimit + offset] = .key(StructuralKey(CollidingKey(value: 1)))
+    right[StructuralPath.shortPathLimit + offset] = .key(StructuralKey(CollidingKey(value: 2)))
+    let a = BlockContext().scoped(left).structuralPath
+    let b = BlockContext().scoped(right).structuralPath
+    #expect(a.tail?.fingerprint == b.tail?.fingerprint)
+    #expect(a != b)
+    #expect(Set([a, b]).count == 2)
+  }
+
+  @Test func commandScopePredicateVisitsBothContiguousAndLinkedSegments() {
+    let count = StructuralPath.shortPathLimit + 4
+    let slots = Array(repeating: StructuralPath.Segment.slot(0), count: count)
+    func isSlot(_ segment: StructuralPath.Segment) -> Bool {
+      if case .slot = segment { true } else { false }
+    }
+    #expect(BlockContext().structuralPath.allSatisfy(isSlot))
+    #expect(BlockContext().scoped(slots).structuralPath.allSatisfy(isSlot))
+    for index in [0, StructuralPath.shortPathLimit, count - 1] {
+      var changed = slots
+      changed[index] = .background(0)
+      #expect(!BlockContext().scoped(changed).structuralPath.allSatisfy(isSlot))
+    }
+  }
+
+  @Test func forkingAtTheStorageBoundaryPreservesParentAndSiblingValues() {
+    let prefix = (0..<StructuralPath.shortPathLimit).map { StructuralPath.Segment.slot($0) }
+    let root = BlockContext().scoped(prefix)
+    let left = root.scoped(.branch(0))
+    let right = root.scoped(.branch(1))
+    #expect(root.structuralPath.tail == nil)
+    #expect(root.structuralPath.segments == prefix)
+    #expect(left.structuralPath.segments == prefix + [.branch(0)])
+    #expect(right.structuralPath.segments == prefix + [.branch(1)])
+    #expect(left.widgetID != right.widgetID)
+    #expect(left.structuralPath.tail !== right.structuralPath.tail)
+  }
+
+  private final class HashProbe: Hashable, Sendable {
+    let hashCalls = Mutex(0)
+    static func == (lhs: HashProbe, rhs: HashProbe) -> Bool { lhs === rhs }
+    func hash(into hasher: inout Hasher) {
+      hashCalls.withLock { $0 += 1 }
+      hasher.combine(42)
+    }
+  }
+
+  @Test func extensionAndRepeatedWidgetHashingDoNotRehashAncestors() {
+    let key = HashProbe()
+    var context = BlockContext().scoped(.key(StructuralKey(key)))
+    for index in 0..<StructuralPath.shortPathLimit { context = context.scoped(.slot(index)) }
+    let initialCalls = key.hashCalls.withLock { $0 }
+    #expect(initialCalls > 0)
+    for index in StructuralPath.shortPathLimit..<128 { context = context.scoped(.slot(index)) }
+    for _ in 0..<10 { _ = context.widgetID.hashValue }
+    #expect(key.hashCalls.withLock { $0 } == initialCalls)
+    var rebuilt = BlockContext().scoped(.key(StructuralKey(key)))
+    for index in 0..<128 { rebuilt = rebuilt.scoped(.slot(index)) }
+    let rebuiltCalls = key.hashCalls.withLock { $0 }
+    #expect(rebuiltCalls > initialCalls)
+    #expect(context.structuralPath == rebuilt.structuralPath)
+    #expect(key.hashCalls.withLock { $0 } == rebuiltCalls)
+  }
+
+  @Test func pathStorageLivesOnlyAsLongAsItsOwners() {
+    weak var rootNode: StructuralPath.Node?
+    weak var childNode: StructuralPath.Node?
+    do {
+      let root = BlockContext()
+        .scoped((0..<StructuralPath.shortPathLimit).map { .slot($0) })
+        .scoped(.key(StructuralKey("root")))
+      rootNode = root.structuralPath.tail
+      do {
+        let child = root.scoped(.slot(0))
+        childNode = child.structuralPath.tail
+        #expect(childNode?.parent.tail === rootNode)
+      }
+      #expect(childNode == nil)
+      #expect(rootNode != nil)
+    }
+    #expect(rootNode == nil)
+  }
+
   private final class Recorder {
     var measured: [String: StructuralPath] = [:]
     var drawn: [String: StructuralPath] = [:]

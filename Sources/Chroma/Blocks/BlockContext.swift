@@ -12,7 +12,7 @@ public struct BlockContext {
   public var hoverStyle: HoverStyle?
 
   public func childScope(_ slot: Int) -> BlockContext {
-    scoped([.slot(slot)])
+    scoped(.slot(slot))
   }
 
   var backgroundContentContext: BlockContext {
@@ -22,21 +22,29 @@ public struct BlockContext {
   }
 
   var backgroundContext: BlockContext {
-    var copy = scoped([.background(backgroundDepth)])
+    var copy = scoped(.background(backgroundDepth))
     copy.focusTargets = []
     copy.focusLeafClaimed = true
     return copy
   }
 
+  // Single-child scopes do not need a temporary one-element array.
+  func scoped(_ segment: StructuralPath.Segment) -> BlockContext {
+    var copy = self
+    copy.structuralPath.append(segment)
+    copy.backgroundDepth = 0
+    return copy
+  }
+
   func scoped(_ segments: [StructuralPath.Segment]) -> BlockContext {
     var copy = self
-    copy.structuralPath.segments += segments
+    copy.structuralPath.append(contentsOf: segments)
     copy.backgroundDepth = 0
     return copy
   }
 
   func childContext(for child: any Block, at index: Int) -> BlockContext {
-    child is ScopedBlock ? self : scoped([.slot(index)])
+    child is ScopedBlock ? self : scoped(.slot(index))
   }
 
   package var interaction: Interaction

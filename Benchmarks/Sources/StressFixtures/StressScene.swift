@@ -6,13 +6,15 @@ public struct StressConfiguration: Codable, Sendable {
   public let panes: Int
   public let depth: Int
   public let events: Int
+  public let identified: Bool
 
-  public init(rows: Int = 100_000, panes: Int = 3, depth: Int = 8, events: Int = 12) {
+  public init(rows: Int = 100_000, panes: Int = 3, depth: Int = 8, events: Int = 12, identified: Bool = true) {
     precondition(rows > 0 && panes > 0 && depth >= 0 && events > 0)
     self.rows = rows
     self.panes = panes
     self.depth = depth
     self.events = events
+    self.identified = identified
   }
 
   public static let viewport = Size(width: 1440, height: 900)
@@ -40,14 +42,23 @@ public final class StressScene {
       Button("Update all panes (\(capturedActions))") { [weak self] in
         self?.actions = capturedActions + 1
       }
-      Text("\(configuration.panes) panes × \(configuration.rows) identified rows • depth \(configuration.depth)")
+      Text("\(configuration.panes) panes × \(configuration.rows) rows • depth \(configuration.depth)")
       HStack(spacing: 8) {
         for pane in 0..<configuration.panes {
-          ScrollView(data: items, rowHeight: 100, spacing: 2, controller: controllers[pane]) { [weak self] item in
-            self?.rowConstructions += 1
-            return StressRow(
-              index: item.id, pane: pane, revision: capturedActions, depth: self?.configuration.depth ?? 0)
-          }.sizing(x: .grow, y: .grow)
+          if configuration.identified {
+            ScrollView(data: items, rowHeight: 100, spacing: 2, controller: controllers[pane]) { [weak self] item in
+              self?.rowConstructions += 1
+              return StressRow(
+                index: item.id, pane: pane, revision: capturedActions, depth: self?.configuration.depth ?? 0)
+            }.sizing(x: .grow, y: .grow)
+          } else {
+            ScrollView(data: 0..<configuration.rows, rowHeight: 100, spacing: 2, controller: controllers[pane]) {
+              [weak self] index in
+              self?.rowConstructions += 1
+              return StressRow(
+                index: index, pane: pane, revision: capturedActions, depth: self?.configuration.depth ?? 0)
+            }.sizing(x: .grow, y: .grow)
+          }
         }
       }.sizing(y: .grow)
     }.padding(8)

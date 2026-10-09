@@ -24,7 +24,7 @@ struct CommandScope: LayoutPreparingBlock, CollectionDistributingBlock {
     case .handler(let command, let action):
       let isRoot =
         interaction.builderPath.isEmpty
-        && context.structuralPath.segments.allSatisfy {
+        && context.structuralPath.allSatisfy {
           switch $0 {
           case .component, .key: true
           case .slot, .branch, .background: false
