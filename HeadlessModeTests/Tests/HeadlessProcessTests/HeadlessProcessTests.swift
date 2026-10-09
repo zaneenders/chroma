@@ -75,6 +75,49 @@ struct HeadlessProcessTests {
     #expect(outcome.diagnostics.contains("chroma-headless:"))
   }
 
+  @Test func partialRequestsAndChunkBoundariesKeepStdinInteractive() async throws {
+    let outcome = try await runSession("HeadlessProcessFixture") { client in
+      try await client.sendRaw(Data("{\"version\":1,\"id\":\"partial-".utf8) + Data([0xC3]))
+      do {
+        _ = try await withDeadline("incomplete request", after: .milliseconds(100)) {
+          try await client.receive()
+        }
+        Issue.record("A partial line must not produce a response")
+      } catch is DeadlineExceeded {}
+      try await client.sendRaw(Data([0xA9]) + Data("🙂\",\"op\":\"frame\"}\n".utf8))
+      try await client.receive().requireFrame(id: "partial-é🙂")
+
+      // JSON whitespace places the delimiter at and around the 4 KiB read boundary.
+      // Each response must arrive before we send anything else or close stdin.
+      for length in [4095, 4096, 4097, await HeadlessSession.maximumLineBytes] {
+        let request = try HeadlessRequest(id: "length-\(length)", op: .frame).encoded(terminated: false)
+        let padded = request + Data(repeating: 32, count: length - request.count)
+        try await client.sendRaw(padded + Data([10]))
+        try await client.receive().requireFrame(id: "length-\(length)")
+      }
+    }
+    try outcome.requireSuccess()
+    #expect(outcome.diagnostics.isEmpty)
+  }
+
+  @Test func oversizedAndInvalidUTF8LinesRecoverWithinOneBurst() async throws {
+    let outcome = try await runSession("HeadlessProcessFixture") { client in
+      let oversized = Data(repeating: 32, count: await HeadlessSession.maximumLineBytes * 3)
+      let valid = try HeadlessRequest(id: "after-invalid", op: .frame).encoded()
+      try await client.sendRaw(oversized + Data([10, 0xFF, 10]) + valid)
+      let tooLong = try await client.receive()
+      #expect(tooLong.error == .lineTooLong)
+      #expect(tooLong.id == nil)
+      let invalidUTF8 = try await client.receive()
+      #expect(invalidUTF8.error == .invalidUTF8)
+      #expect(invalidUTF8.id == nil)
+      try await client.receive().requireFrame(id: "after-invalid")
+    }
+    try outcome.requireSuccess()
+    #expect(outcome.diagnostics.contains("line_too_long"))
+    #expect(outcome.diagnostics.contains("invalid_utf8"))
+  }
+
   @Test func eofProcessesFinalUnterminatedRequest() async throws {
     let outcome = try await runSession { client in
       try await client.send(.init(id: "last", op: .frame), terminated: false)
