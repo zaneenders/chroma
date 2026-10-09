@@ -61,6 +61,23 @@ struct ScrollMomentumTests {
     #expect(momentum.advance(now: 1.01) > 0)
   }
 
+  @Test func repeatedTimestampUsesTheWholeSampleForReleaseVelocity() {
+    var split = ScrollMomentum()
+    split.record(delta: -10, time: 100)
+    split.record(delta: -3, time: 110)
+    split.record(delta: -7, time: 110)
+    split.stop(time: 115, now: 1)
+    var combined = fling()
+    #expect(abs(split.advance(now: 1.01) - combined.advance(now: 1.01)) < 0.001)
+  }
+
+  @Test func stoppedSequenceDoesNotReuseTimestampOrDelta() {
+    var momentum = fling()
+    momentum.record(delta: 2, time: 110)
+    momentum.stop(time: 115, now: 1)
+    #expect(!momentum.isActive)
+  }
+
   @Test func decayIsRefreshRateIndependent() {
     var fast = fling()
     var slow = fling()
@@ -74,8 +91,8 @@ struct ScrollMomentumTests {
   @MainActor @Test func wheelDoesNotStartMomentum() {
     let input = InputAccumulator()
     input.scrollSource(isFinger: false)
-    input.scrollBy(x: 0, y: -10, time: 100)
-    input.scrollBy(x: 0, y: -10, time: 110)
+    input.scrollBy(horizontal: false, delta: -10, time: 100)
+    input.scrollBy(horizontal: false, delta: -10, time: 110)
     input.stopScroll(horizontal: false, time: 115)
     #expect(!input.hasScrollMomentum)
     #expect(input.frameInput().scrollDelta.y == -20)

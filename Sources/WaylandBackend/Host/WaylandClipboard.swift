@@ -14,16 +14,16 @@ final class WaylandClipboard {
   private let interaction: Interaction
   private let keyboard: WaylandKeyboard
   private let flushWayland: () -> Void
-  private let requestFrame: () -> Void
+  private let dispatchInput: (@escaping @MainActor () -> Void) -> Void
 
   init(
     interaction: Interaction, keyboard: WaylandKeyboard,
-    flush: @escaping () -> Void, requestFrame: @escaping () -> Void
+    flush: @escaping () -> Void, dispatchInput: @escaping (@escaping @MainActor () -> Void) -> Void
   ) {
     self.interaction = interaction
     self.keyboard = keyboard
     self.flushWayland = flush
-    self.requestFrame = requestFrame
+    self.dispatchInput = dispatchInput
   }
 
   private var dataDeviceManager: OpaquePointer?
@@ -146,11 +146,7 @@ final class WaylandClipboard {
         transfer.data.append(contentsOf: buffer.prefix(count))
         clipboardReads[fd] = transfer
       } else if count == 0 {
-        let sessionIsCurrent =
-          interaction.editingLeaf == transfer.editingLeaf
-          && interaction.editingSessionGeneration == transfer.editingSessionGeneration
-        let text = sessionIsCurrent ? String(decoding: transfer.data, as: UTF8.self) : nil
-        finishClipboardRead(fd: fd, transfer: transfer, text: text)
+        finishClipboardRead(fd: fd, transfer: transfer, text: String(decoding: transfer.data, as: UTF8.self))
         return
       } else if errno == EAGAIN || errno == EWOULDBLOCK {
         return
@@ -170,8 +166,13 @@ final class WaylandClipboard {
     clipboardReads.removeValue(forKey: fd)
     transfer.timeout.cancel()
     transfer.source.cancel()
-    keyboard.completePaste(id: transfer.pasteID, text: text)
-    requestFrame()
+    dispatchInput { [weak self] in
+      guard let self else { return }
+      let sessionIsCurrent =
+        interaction.editingLeaf == transfer.editingLeaf
+        && interaction.editingSessionGeneration == transfer.editingSessionGeneration
+      keyboard.completePaste(id: transfer.pasteID, text: sessionIsCurrent ? text : nil)
+    }
   }
 
   private static var dataOfferListener = unsafe wl_data_offer_listener(

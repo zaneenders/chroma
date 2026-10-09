@@ -18,8 +18,12 @@ final class InputAccumulator {
 
   var hasScrollMomentum: Bool { horizontalMomentum.isActive || verticalMomentum.isActive }
 
-  func scrollSource(isFinger: Bool) {
-    if !isFinger { cancelMomentum() }
+  func scrollSource(isFinger: Bool, hasMovement: Bool = false) {
+    if !isFinger
+      || (hasMovement && hasScrollMomentum && !horizontalMomentum.isTracking && !verticalMomentum.isTracking)
+    {
+      cancelMomentum()
+    }
     fingerScrolling = isFinger
   }
 
@@ -28,9 +32,8 @@ final class InputAccumulator {
     verticalMomentum.cancel()
   }
 
-  func stopScroll(horizontal: Bool, time: UInt32) {
+  func stopScroll(horizontal: Bool, time: UInt32, now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
     guard fingerScrolling else { return }
-    let now = ProcessInfo.processInfo.systemUptime
     if horizontal {
       horizontalMomentum.stop(time: time, now: now)
     } else {
@@ -38,8 +41,7 @@ final class InputAccumulator {
     }
   }
 
-  func frameInput() -> InputState {
-    let now = ProcessInfo.processInfo.systemUptime
+  func frameInput(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> InputState {
     scroll.x += horizontalMomentum.advance(now: now)
     scroll.y += verticalMomentum.advance(now: now)
     let input = InputState(
@@ -59,6 +61,19 @@ final class InputAccumulator {
     commands.removeAll(keepingCapacity: true)
     textEvents.removeAll(keepingCapacity: true)
     return input
+  }
+
+  func reset() {
+    pointerPosition = Point(x: -1, y: -1)
+    pointerPressPosition = pointerPosition
+    pointerDown = false
+    pressedEdge = false
+    releasedEdge = false
+    scroll = .zero
+    commands.removeAll(keepingCapacity: true)
+    textEvents.removeAll(keepingCapacity: true)
+    fingerScrolling = false
+    cancelMomentum()
   }
 
   func drainKeyboard(_ keyboard: WaylandKeyboard, editingSession: Int) {
@@ -94,14 +109,16 @@ final class InputAccumulator {
     releasedEdge = true
   }
 
-  func scrollBy(x: Float, y: Float, time: UInt32) {
+  func scrollBy(horizontal: Bool, delta: Float, time: UInt32) {
     if fingerScrolling {
-      if x != 0 { horizontalMomentum.record(delta: x, time: time) }
-      if y != 0 { verticalMomentum.record(delta: y, time: time) }
+      if horizontal {
+        horizontalMomentum.record(delta: delta, time: time)
+      } else {
+        verticalMomentum.record(delta: delta, time: time)
+      }
     } else {
       cancelMomentum()
     }
-    scroll.x += x
-    scroll.y += y
+    if horizontal { scroll.x += delta } else { scroll.y += delta }
   }
 }
