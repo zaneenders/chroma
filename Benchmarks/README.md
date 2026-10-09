@@ -82,6 +82,33 @@ not establish native FPS. The command-count regression is deterministic and live
 in `TextSelectionPaintingTests`, alongside partial-range, wrap, Unicode, document
 selection, caret, and paint-isolation coverage.
 
+## Markdown preparation
+
+```sh
+swift run --package-path Benchmarks -c release MarkdownBenchmark
+swift test --filter 'Markdown|PreparedMarkdownLayoutTests'
+```
+
+The fixed fixtures cover 200 static paragraphs, the same document with a changing
+incomplete streaming tail, a three-column viewport, and an 8,000-character unbroken
+fenced-code line. Each case uses five warmups and 30 measured frames, a 600-point
+viewport height, the lower median, and nearest-rank p95. Static/narrow/code cases
+retain their root; streaming replaces the root for each appended tail and includes
+that setup in its timing. Reports include source bytes, command counts and a separate
+instrumented replay of the last sample. Work counters are disabled during timing.
+The timing fixture uses atlas-supported glyphs to avoid synchronous missing-glyph
+logging (#99); Unicode graphemes remain covered by the correctness tests.
+
+These are headless full-frame CPU timings: document parsing, layout, interaction
+registration and command generation are included together. They are not parser-only
+timings, native rendering, GPU measurements, or frame-rate guarantees. Run matched
+builds serially on an idle machine; no wall-clock threshold is used in tests.
+Operation-local tests separately verify one leaf preparation for matching measurement,
+registration and painting, input invalidation, relocated geometry, and callback lifetime.
+The parsed document and offscreen traversal are still rebuilt for each operation.
+
+See [the recorded comparison](MarkdownPreparationResults.md) for the initial matched results.
+
 ## Nested layout
 
 ```sh
