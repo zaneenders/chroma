@@ -6,13 +6,26 @@ struct ChromaInstall: CommandPlugin {
   func performCommand(context: PluginContext, arguments: [String]) async throws {
     if arguments == ["--help"] || arguments == ["-h"] {
       print(
-        "Usage: swift package chroma-install [--without-profiling]\nBuild release and install the app. Profiling symbols are included by default."
+        "Usage: swift package chroma-install [--without-profiling] [--install-directory /absolute/path]\nBuild release and install the app. Profiling symbols are included by default."
       )
       return
     }
-    guard arguments.isEmpty || arguments == ["--without-profiling"] else {
-      throw InstallPluginError("Use chroma-install [--without-profiling]. No configuration file is needed.")
+    for (index, argument) in arguments.enumerated() where argument == "--install-directory" {
+      guard index + 1 < arguments.count, !arguments[index + 1].hasPrefix("--") else {
+        throw InstallPluginError("--install-directory requires an absolute directory path.")
+      }
     }
+    var extractor = ArgumentExtractor(arguments)
+    let directories = extractor.extractOption(named: "install-directory")
+    let withoutProfiling = extractor.extractFlag(named: "without-profiling")
+    guard directories.count <= 1, withoutProfiling <= 1, extractor.remainingArguments.isEmpty else {
+      throw InstallPluginError(
+        "Use chroma-install [--without-profiling] [--install-directory /absolute/path]. No configuration file is needed."
+      )
+    }
+    let profiling = withoutProfiling == 0
+    var options: [String] = profiling ? [] : ["--without-profiling"]
+    if let directory = directories.first { options += ["--install-directory", directory] }
     let products = context.package.products.compactMap { $0 as? ExecutableProduct }
     guard products.count == 1, let product = products.first else {
       throw InstallPluginError(
@@ -20,10 +33,9 @@ struct ChromaInstall: CommandPlugin {
     }
     let tool = try context.tool(named: "ChromaInstaller")
     let request = [context.package.directoryURL.path, product.name]
-    try run(tool.url, arguments: request + arguments)
+    try run(tool.url, arguments: request + options)
 
     var parameters = PackageManager.BuildParameters(configuration: .release, logging: .concise, echoLogs: true)
-    let profiling = arguments.isEmpty
     parameters.otherSwiftcFlags = [profiling ? "-g" : "-gnone"]
     parameters.otherCFlags = [profiling ? "-g" : "-g0"]
     parameters.otherCxxFlags = parameters.otherCFlags
@@ -39,7 +51,7 @@ struct ChromaInstall: CommandPlugin {
         $0.kind == .executable && $0.url.lastPathComponent == product.name
       })
     else { throw InstallPluginError("Build did not produce \(product.name).") }
-    try run(tool.url, arguments: request + [executable.url.path] + arguments)
+    try run(tool.url, arguments: request + [executable.url.path] + options)
   }
 
   private func run(_ executable: URL, arguments: [String]) throws {

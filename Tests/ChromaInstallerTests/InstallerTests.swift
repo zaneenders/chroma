@@ -11,8 +11,12 @@ private struct Fixture {
   var binary: URL { bin.appendingPathComponent("Demo") }
 
   init() throws {
-    directory = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
-      .appendingPathComponent("chroma-install-tests-\(UUID().uuidString)")
+    #if os(macOS)
+    let temporaryDirectory = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+    #else
+    let temporaryDirectory = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+    #endif
+    directory = temporaryDirectory.appendingPathComponent("chroma-install-tests-\(UUID().uuidString)")
     home = directory.appendingPathComponent("test home")
     bin = directory.appendingPathComponent("build output")
     try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
@@ -145,7 +149,7 @@ struct InstallerTests {
     try fm.moveItem(at: license, to: original)
     try fm.createSymbolicLink(at: license, withDestinationURL: original)
     let metadata = try AppMetadata(package: fixture.directory, product: "Demo")
-    #expect(metadata.license == original)
+    #expect(metadata.license == original.resolvingSymlinksInPath())
   }
 
   @Test func selectsAStableDevelopmentIdentity() throws {
@@ -391,6 +395,47 @@ struct InstallerTests {
     #expect(throws: InstallError.self) { try installer.preflight() }
   }
   #else
+  @Test func explicitMacDirectoryUpdatesOnlyTheSelectedInstallation() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+    let metadata = try AppMetadata(package: fixture.directory, product: "Demo")
+    let directory = fixture.directory.appendingPathComponent("system Applications")
+    let installer = AppInstaller(metadata: metadata, home: fixture.home, installDirectory: directory)
+    #expect(installer.destination == directory.appendingPathComponent("Demo App.app"))
+    try installer.preflight()
+    let resources = installer.destination.appendingPathComponent("Contents/Resources")
+    try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+    try Data("chroma-install-v1:com.example.demo\n".utf8).write(to: resources.appendingPathComponent(".chroma-install"))
+    try installer.preflight()
+    #expect(!exists(fixture.home.appendingPathComponent("Applications/Demo App.app")))
+  }
+
+  @Test func explicitMacDirectoryStillRejectsUnrelatedAppsAndSymlinks() throws {
+    let fixture = try Fixture()
+    defer { fixture.cleanup() }
+    let fm = FileManager.default
+    let directory = fixture.directory.appendingPathComponent("system Applications")
+    let installer = AppInstaller(
+      metadata: try AppMetadata(package: fixture.directory, product: "Demo"),
+      home: fixture.home, installDirectory: directory)
+    try fm.createDirectory(at: installer.destination, withIntermediateDirectories: true)
+    #expect(throws: InstallError.self) { try installer.preflight() }
+    try fm.removeItem(at: installer.destination)
+    try fm.createSymbolicLink(at: installer.destination, withDestinationURL: fixture.bin)
+    #expect(throws: InstallError.self) { try installer.preflight() }
+    try fm.removeItem(at: installer.destination)
+    try fm.removeItem(at: directory)
+    try fm.createSymbolicLink(at: directory, withDestinationURL: fixture.bin)
+    #expect(throws: InstallError.self) { try installer.preflight() }
+  }
+
+  @Test func macProcessDetectionMatchesExecutableNamesNotShellArguments() {
+    #expect(macAppIsRunning(in: "launchd\n  ShapeTreeDesktop\nsh\n", product: "ShapeTreeDesktop"))
+    for names in ["ShapeTreeDesktopOther\n", "sh\nDemo\n", ""] {
+      #expect(!macAppIsRunning(in: names, product: "ShapeTreeDesktop"))
+    }
+  }
+
   @Test func macDestinationUsesBundleName() throws {
     let fixture = try Fixture()
     defer { fixture.cleanup() }
