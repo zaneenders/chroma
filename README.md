@@ -10,6 +10,11 @@ UI Library in swift
 - Linux (Hyprland OpenGL)
 - ... (PRs welcome)
 
+## Getting started
+
+[Build a minimal app and run contributor checks](docs/getting-started.md).
+[Runtime contracts and proposal status](docs/runtime.md).
+
 ## Examples
 
 The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma-examples) repository.
