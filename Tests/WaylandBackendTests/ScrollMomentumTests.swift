@@ -88,14 +88,27 @@ struct ScrollMomentumTests {
     #expect(abs(fastDistance - slowDistance) < 0.001)
   }
 
+  @MainActor @Test func accumulatorUsesSuppliedReleaseAndFrameTimes() {
+    let input = InputAccumulator()
+    input.scrollSource(isFinger: true)
+    input.scrollBy(horizontal: false, delta: -10, time: 100)
+    #expect(input.frameInput(now: 1).scrollDelta.y == -10)
+    input.scrollBy(horizontal: false, delta: -10, time: 110)
+    #expect(input.frameInput(now: 1.01).scrollDelta.y == -10)
+    input.stopScroll(horizontal: false, time: 115, now: 2)
+    #expect(input.frameInput(now: 2).scrollDelta.y == 0)
+    var momentum = fling()
+    #expect(abs(input.frameInput(now: 2.01).scrollDelta.y - momentum.advance(now: 1.01)) < 0.001)
+  }
+
   @MainActor @Test func wheelDoesNotStartMomentum() {
     let input = InputAccumulator()
     input.scrollSource(isFinger: false)
     input.scrollBy(horizontal: false, delta: -10, time: 100)
     input.scrollBy(horizontal: false, delta: -10, time: 110)
-    input.stopScroll(horizontal: false, time: 115)
+    input.stopScroll(horizontal: false, time: 115, now: 1)
     #expect(!input.hasScrollMomentum)
-    #expect(input.frameInput().scrollDelta.y == -20)
-    #expect(input.frameInput().scrollDelta.y == 0)
+    #expect(input.frameInput(now: 1).scrollDelta.y == -20)
+    #expect(input.frameInput(now: 1.01).scrollDelta.y == 0)
   }
 }

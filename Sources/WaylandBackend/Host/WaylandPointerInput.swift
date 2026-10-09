@@ -48,7 +48,7 @@ final class WaylandPointerInput {
 
   init(
     input: InputAccumulator,
-    clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+    clock: @escaping () -> TimeInterval,
     deliver: @escaping () -> Void
   ) {
     self.input = input

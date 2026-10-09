@@ -32,7 +32,7 @@ final class InputAccumulator {
     verticalMomentum.cancel()
   }
 
-  func stopScroll(horizontal: Bool, time: UInt32, now: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+  func stopScroll(horizontal: Bool, time: UInt32, now: TimeInterval) {
     guard fingerScrolling else { return }
     if horizontal {
       horizontalMomentum.stop(time: time, now: now)
@@ -41,7 +41,7 @@ final class InputAccumulator {
     }
   }
 
-  func frameInput(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> InputState {
+  func frameInput(now: TimeInterval) -> InputState {
     scroll.x += horizontalMomentum.advance(now: now)
     scroll.y += verticalMomentum.advance(now: now)
     let input = InputState(

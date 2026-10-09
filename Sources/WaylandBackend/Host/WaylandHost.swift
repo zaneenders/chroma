@@ -62,7 +62,8 @@ public final class WaylandHost: Chroma.Host {
   private var toplevel: OpaquePointer?
 
   private let input = InputAccumulator()
-  private lazy var pointerInput = WaylandPointerInput(input: input) { [weak self] in self?.receiveInput() }
+  private lazy var pointerInput = WaylandPointerInput(
+    input: input, clock: { ProcessInfo.processInfo.systemUptime }, deliver: { [weak self] in self?.receiveInput() })
   private let cursor = WaylandCursor()
   private var displayReadQueued = false
   private var displayReadSource: DispatchSourceRead?
