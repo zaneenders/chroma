@@ -67,6 +67,21 @@ independent ordered source, measured input cost, draw-completion coverage and id
 recovery. Its measurements are separate from the deterministic model and native
 Wayland/physical-display validation.
 
+## Multiline text selection
+
+```sh
+swift run --package-path Benchmarks -c release TextSelectionBenchmark
+```
+
+Replays keyboard Select All on 10, 50, and 100 explicit lines of 80 characters in
+an 800×600 `HeadlessHost`. Reports unselected and selected command counts separately
+from selected-render p50/p95 milliseconds (5 warmups, 20 samples, lower median and
+nearest-rank p95). Selection input is applied before timing. Run on idle hardware;
+these samples exclude native dispatch, backend encoding, and GPU execution and do
+not establish native FPS. The command-count regression is deterministic and lives
+in `TextSelectionPaintingTests`, alongside partial-range, wrap, Unicode, document
+selection, caret, and paint-isolation coverage.
+
 ## Nested layout
 
 ```sh

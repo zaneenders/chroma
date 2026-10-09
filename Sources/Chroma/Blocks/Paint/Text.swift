@@ -136,21 +136,22 @@ public struct Text: LayoutPreparingBlock {
       drawText(
         into: &drawList, in: rect, color: color, scale: effectiveScale, context: context, layout: layout.layout)
       if let range, !range.isEmpty {
-        for line in layout.layout.lines {
+        for (row, line) in layout.layout.lines.enumerated() {
           let start = line.range.lowerBound
           let end = line.range.upperBound
           let lower = max(start, range.lowerBound)
           let upper = min(end, range.upperBound)
           if lower < upper {
-            let origin = layout.position(at: lower)
+            let origin = Point(x: rect.minX, y: rect.minY + Float(row) * lineHeight)
             let highlight = Rect(
-              x: origin.x, y: origin.y,
+              x: origin.x + Float(lower - start) * cellWidth, y: origin.y,
               width: Float(upper - lower) * cellWidth, height: lineHeight)
             drawList.fillRect(highlight, color: context.theme.focus.selectionBackground)
             drawList.pushClip(highlight)
-            drawText(
-              into: &drawList, in: rect, color: context.theme.focus.selectionForeground, scale: effectiveScale,
-              context: context, layout: layout.layout)
+            // Clipping happens in the backend, after commands have been generated.
+            // Redraw only this row, rather than the entire layout for every selection.
+            drawList.text(
+              line.text, at: origin, color: context.theme.focus.selectionForeground, scale: effectiveScale)
             drawList.popClip()
           }
         }
