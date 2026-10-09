@@ -19,7 +19,28 @@ extension Interaction {
   }
 
   func recordScrollRow(id: WidgetID, leafID: WidgetID, rowKey: StructuralKey, rect: Rect) {
+    building.scrollRows[id, default: []].insert(leafID)
     scrollStates[id, default: ScrollState()].rows[leafID] = rect
     scrollStates[id, default: ScrollState()].rowKeys[leafID] = rowKey
+  }
+
+  /// Keep the current registration and only the offscreen leaves that navigation can restore.
+  /// Reconcile first: commands and pending focus still need the preceding registration's metadata.
+  func pruneScrollRows() {
+    for id in scrollStates.keys {
+      guard var state = scrollStates[id] else { continue }
+      let visible = building.scrollRows[id, default: []]
+      let visibleKeys = Set(visible.compactMap { state.rowKeys[$0] })
+      let remembered = rememberedNavigation[id]
+      let pending = pendingFocus.flatMap { $0.scrollID == id ? $0.leaf : nil }
+      state.rowKeys = state.rowKeys.filter { leaf, key in
+        visible.contains(leaf)
+          || ((leaf == remembered || leaf == pending) && !visibleKeys.contains(key))
+      }
+      state.rows = state.rows.filter { state.rowKeys[$0.key] != nil }
+      scrollStates[id] = state
+    }
+    // This is registration-local bookkeeping, not another retained metadata snapshot.
+    building.scrollRows = [:]
   }
 }
