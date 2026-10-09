@@ -117,7 +117,7 @@ struct ScrollViewTests {
     sticksToBottom: Bool = false
   ) -> DrawList {
     let context = BlockContext(interaction: interaction)
-    interaction.beginFrame(input: input)
+    beginTestFrame(interaction, input: input)
     var list = DrawList()
     let view = ScrollView(
       showsIndicator: true, sticksToBottom: sticksToBottom,
@@ -153,7 +153,7 @@ struct ScrollViewTests {
 
     func frame(_ input: InputState = InputState()) -> DrawList {
       let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       let view = ScrollView(showsIndicator: true) {
         FixedContent(size: Size(width: 200, height: 20))
@@ -191,7 +191,7 @@ struct ScrollViewTests {
 
     func frame(_ input: InputState = InputState()) {
       let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -225,7 +225,7 @@ struct ScrollViewTests {
     let context = BlockContext(interaction: interaction)
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -259,7 +259,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -293,7 +293,7 @@ struct ScrollViewTests {
     let log = PhaseLog()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -338,7 +338,7 @@ struct ScrollViewTests {
     let view = ScrollView(spacing: 2, showsIndicator: false, controller: controller, rows: rows)
 
     func frame() {
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -374,7 +374,7 @@ struct ScrollViewTests {
     }
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -433,7 +433,7 @@ struct ScrollViewTests {
     let innerID = WidgetID("inner-scroll")
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -470,7 +470,7 @@ struct ScrollViewTests {
     let controller = ScrollViewController()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -508,7 +508,7 @@ struct ScrollViewTests {
 
     func frame() {
       let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       let view = ScrollView(controller: controller) {
         FixedContent(size: Size(width: 200, height: 20))
@@ -534,7 +534,7 @@ struct ScrollViewTests {
 
     func frame(_ input: InputState = InputState()) {
       let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       let view = ScrollView(controller: controller) {
         FixedContent(size: Size(width: 100, height: 100))
@@ -688,7 +688,7 @@ struct ScrollViewTests {
 
     func frame(_ input: InputState = InputState()) {
       let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       let view = ScrollView(controller: controller) {
         FixedContent(size: Size(width: 200, height: 20))
@@ -735,7 +735,7 @@ struct ScrollViewTests {
   @Test func loopRowsStackAndCreateScrollableContent() {
     let interaction = Interaction()
     let context = BlockContext(interaction: interaction)
-    interaction.beginFrame(input: InputState())
+    beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     let colors = [
       Color(r: 1, g: 0, b: 0, a: 1),
@@ -775,7 +775,7 @@ struct ScrollViewTests {
 
     func frame() {
       let context = BlockContext(interaction: interaction)
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       let view = ScrollView(controller: controller, rows: rows).id(scrollID)
       do {
@@ -823,7 +823,7 @@ struct ScrollViewTests {
     func frame(_ data: ArraySlice<Int>, width: Float = 100, spacing: Float = 0) {
       built = []
       counter.drawn = []
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       let stack = ScrollView(
         data: data, rowHeight: 10, spacing: spacing,
@@ -877,7 +877,7 @@ struct ScrollViewTests {
     }
 
     func frame(_ indices: [Int], width: Float = 100) {
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       let rows = indices.map { retainedRows[$0] }
       do {
@@ -921,7 +921,7 @@ struct ScrollViewTests {
     func frame(_ rows: [ScrollView.Row]) {
       counter.measured = []
       counter.drawn = []
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -954,7 +954,7 @@ struct ScrollViewTests {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       interaction.pushClip(Rect(x: 0, y: 0, width: 50, height: 50))
       interaction.registerScrollInput(
         id: scrollID, rect: Rect(x: 0, y: 0, width: 100, height: 100), horizontal: true)
@@ -976,7 +976,7 @@ struct ScrollViewTests {
     let interaction = Interaction()
 
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       interaction.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 100))
       _ = interaction.interactiveBehavior(
         id: WidgetID("visible"), rect: Rect(x: 0, y: 0, width: 100, height: 10))

@@ -15,7 +15,7 @@ struct TextInputTests {
     verticalOffset: ((Int, Int) -> Int)? = nil
   ) -> TextInputState {
     let isInitialFrame = ctx.tree == nil
-    ctx.beginFrame(input: input)
+    beginTestFrame(ctx, input: input)
     var result = TextInputState(hovered: false, held: false, editing: false, caretOffset: nil)
     ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     if includeField {
@@ -198,7 +198,7 @@ struct TextInputTests {
       max(0, min(text.count, offset + direction * 3))
     }
 
-    ctx.beginFrame(input: InputState(textEvents: [.moveCaretUp]))
+    beginTestFrame(ctx, input: InputState(textEvents: [.moveCaretUp]))
     ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     var state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
@@ -209,7 +209,7 @@ struct TextInputTests {
     ctx.endFrame()
     #expect(state.caretOffset == 6)
 
-    ctx.beginFrame(input: InputState(textEvents: [.selectCaretUp]))
+    beginTestFrame(ctx, input: InputState(textEvents: [.selectCaretUp]))
     ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),
@@ -460,7 +460,7 @@ struct TextInputTests {
     var text = "abc"
     enterInsertMode(ctx, text: &text)
 
-    ctx.beginFrame(input: InputState(textEvents: [.endEditing]))
+    beginTestFrame(ctx, input: InputState(textEvents: [.endEditing]))
     ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     let state = ctx.testTextInput(
       id: WidgetID("name"), rect: Rect(x: 0, y: 0, width: 100, height: 20),

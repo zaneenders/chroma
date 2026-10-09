@@ -81,7 +81,8 @@ struct TextInputPaintingTests {
   @Test func draggingBelowShortEditorKeepsViewportAtFirstRow() {
     let context = BlockContext()
     let editor = TextEditor(text: { "short" }, onChange: { _ in })
-    context.interaction.beginFrame(
+    beginTestFrame(
+      context.interaction,
       input: InputState(
         pointerPosition: Point(x: 20, y: 99), pointerPressPosition: Point(x: 20, y: 16),
         pointerDown: true, pointerPressed: true))

@@ -50,7 +50,7 @@ struct RenderingCommandTests {
     context: BlockContext,
     input: InputState = InputState()
   ) -> DrawList {
-    context.interaction.beginFrame(input: input)
+    beginTestFrame(context.interaction, input: input)
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()

@@ -54,7 +54,7 @@ struct StructuralPathTests {
     recorder.measured = [:]
     recorder.drawn = [:]
     _ = measureBlock(block, proposal: rect.size, context: context)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -389,7 +389,7 @@ struct StructuralPathTests {
           rows: ids.map { .init(id: WidgetID(String($0)), content: Probe(name: String($0), recorder: recorder)) }
         ).id(WidgetID("list"))
       }
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()

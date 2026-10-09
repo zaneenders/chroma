@@ -9,7 +9,7 @@ struct FocusVisibilityTests {
 
   private func render(_ content: any Block, input: InputState = InputState()) {
     let isInitialFrame = context.interaction.tree == nil
-    context.interaction.beginFrame(input: input)
+    beginTestFrame(context.interaction, input: input)
     var drawList = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()

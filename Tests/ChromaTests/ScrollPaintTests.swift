@@ -105,7 +105,7 @@ struct ScrollPaintTests {
     }.id(scrollID)
     var buffer = LayoutBuffer()
     let root = buffer.emit(view, context: context)
-    interaction.beginFrame(input: InputState(pointerPosition: Point(x: -10, y: -10)))
+    beginTestFrame(interaction, input: InputState(pointerPosition: Point(x: -10, y: -10)))
     buffer.register(root, in: viewport)
     interaction.endFrame()
     #expect(capture.built == [0, 1, 2])
@@ -170,7 +170,7 @@ struct ScrollPaintTests {
 
     func register(in buffer: inout LayoutBuffer) -> LayoutNode {
       let root = buffer.emit(view, context: context)
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       buffer.register(root, in: viewport)
       context.interaction.endFrame()
       return root
@@ -222,7 +222,7 @@ struct ScrollPaintTests {
     do {
       var buffer = LayoutBuffer()
       let root = buffer.emit(view, context: context)
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       buffer.register(root, in: viewport)
       context.interaction.endFrame()
       let measurements = capture.measured

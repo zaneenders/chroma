@@ -12,7 +12,8 @@ public struct BlockContext {
   var focusTargets: [FocusTarget] = []
 
   var focusLeafClaimed = false
-  var navigationIgnored = false
+  /// Excludes emitted content from keyboard and spatial navigation.
+  public var navigationIgnored = false
 
   public var hoverStyle: HoverStyle?
 
@@ -189,21 +190,6 @@ public struct BlockContext {
       return ButtonState(hovered: false, held: false, clicked: false)
     }
     return buttonState(in: rect, role: role, action: action)
-  }
-
-  @discardableResult
-  public func focusable(
-    in rect: Rect, into drawList: inout DrawList,
-    role: ActionRole = .normal,
-    action: (@MainActor () -> Void)? = nil
-  ) -> ButtonState {
-    guard !navigationIgnored else {
-      return ButtonState(hovered: false, held: false, clicked: false)
-    }
-    let id = widgetID
-    let state = buttonState(in: rect, role: role, action: action)
-    paintFocusHighlight(for: id, in: rect, into: &drawList)
-    return state
   }
 
   func textInputState(

@@ -122,7 +122,7 @@ struct LazyLayoutCacheTests {
     let controller = ScrollViewController()
     let id = WidgetID("scroll")
     func frame(height: Float) {
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       let stack = ScrollView(
         controller: controller,
@@ -151,7 +151,7 @@ struct LazyLayoutCacheTests {
     var row = ScrollView.Row(
       id: WidgetID("row"), content: Color.white.sizing(y: .fixed(40)))
     func frame() {
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()
@@ -174,7 +174,7 @@ struct LazyLayoutCacheTests {
     let id = WidgetID("scroll")
     let rows = [ScrollView.Row(id: WidgetID("row"), content: Text("row"))]
     func frame(scale: Float) {
-      interaction.beginFrame(input: InputState())
+      beginTestFrame(interaction, input: InputState())
       var list = DrawList()
       do {
         var resolvedBuffer = LayoutBuffer()

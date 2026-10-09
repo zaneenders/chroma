@@ -151,17 +151,14 @@ struct MarkdownTests {
 @MainActor
 struct MarkdownNavigationTests {
   @Test func eachSemanticBlockIsAStableNavigationLeaf() {
-    let context = BlockContext()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let content = MarkdownText("# Heading\n\nParagraph\n\n- first\n- second\n\n```swift\nlet x = 1\n```")
-    let rect = Rect(x: 0, y: 0, width: 500, height: 600)
+    runtime.setContent(content)
     func render(_ commands: [Command] = []) {
-      context.interaction.beginFrame(input: InputState(commands: commands))
-      var buffer = LayoutBuffer()
-      let resolved = buffer.emit(content, context: context)
-      buffer.register(resolved, in: rect)
-      var list = DrawList()
-      buffer.paint(resolved, into: &list, in: rect)
-      context.interaction.endFrame()
+      _ = runtime.render(
+        viewport: Size(width: 500, height: 600), input: InputState(commands: commands), onChange: {})
     }
     func leaves(_ node: InteractionNode) -> [InteractionNode] {
       node.isLeaf ? [node] : node.children.flatMap(leaves)
@@ -196,15 +193,17 @@ struct MarkdownNavigationTests {
 @MainActor
 struct MarkdownSelectionTests {
   @Test func selectsRenderedCharactersCopiesAndRejectsEdits() {
-    let context = BlockContext()
-    let producer = FrameProducer()
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let context = runtime.context
     let target = FocusTarget()
     let content = MarkdownLeaf(block: .paragraph("**café** `👨‍👩‍👧‍👦` tea"), scale: 1, lineSpacing: 0)
       .focusTarget(target)
+    runtime.setContent(content)
     func render(_ commands: [Command] = [], text: [TextEditEvent] = []) {
-      _ = producer.render(
-        content: content, viewport: Size(width: 40, height: 300),
-        input: InputState(commands: commands, textEvents: text), context: context, onChange: {})
+      _ = runtime.render(
+        viewport: Size(width: 40, height: 300),
+        input: InputState(commands: commands, textEvents: text), onChange: {})
     }
     render()
     target.focus()
@@ -248,7 +247,8 @@ struct MarkdownDocumentSelectionTests {
       Text("Footer").selectable()
     }
     _ = producer.render(
-      content: content, viewport: Size(width: 500, height: 500),
+      build: { buffer, context in buffer.emit(content, context: context) },
+      viewport: Size(width: 500, height: 500),
       input: InputState(), context: context, onChange: {})
     context.interaction.navigationPath = []
     context.interaction.selectAll(at: .zero)

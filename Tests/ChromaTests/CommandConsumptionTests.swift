@@ -9,7 +9,7 @@ struct CommandConsumptionTests {
     let id = WidgetID("scroll")
     var handled = 0
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       let view = ScrollView {
         Color.white.sizing(y: .fixed(100))
@@ -36,7 +36,7 @@ struct CommandConsumptionTests {
     let id = WidgetID("scroll")
     var consumes = true
     func frame(_ input: InputState = InputState()) {
-      interaction.beginFrame(input: input)
+      beginTestFrame(interaction, input: input)
       var list = DrawList()
       let view = ScrollView {
         Color.white.sizing(y: .fixed(100))

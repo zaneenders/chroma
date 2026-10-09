@@ -19,12 +19,14 @@ struct BlockContextTests {
     let origin = Point(x: 10, y: 20)
     let current = Point(x: 30, y: 40)
 
-    interaction.beginFrame(
+    beginTestFrame(
+      interaction,
       input: InputState(
         pointerPosition: origin, pointerPressPosition: origin,
         pointerDown: true, pointerPressed: true))
     interaction.endFrame()
-    interaction.beginFrame(
+    beginTestFrame(
+      interaction,
       input: InputState(pointerPosition: current, pointerDown: true))
 
     let context = BlockContext(interaction: interaction)

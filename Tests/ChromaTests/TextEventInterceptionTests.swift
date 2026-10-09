@@ -11,7 +11,7 @@ struct TextEventInterceptionTests {
     let rect = Rect(x: 0, y: 0, width: 100, height: 40)
     var text = ""
     func frame(_ events: [TextEditEvent]) -> TextInputState {
-      interaction.beginFrame(input: InputState(textEvents: events))
+      beginTestFrame(interaction, input: InputState(textEvents: events))
       let state = interaction.testTextInput(
         id: id, rect: rect, text: text, onChange: { text = $0 },
         onEndEditing: { .handled },

@@ -79,7 +79,7 @@ struct TextLayoutCacheTests {
     let second = Interaction()
     weak let snapshot = first.textLayouts.resolve("same", columns: nil)
     #expect(second.textLayouts.resolve("same", columns: nil) !== snapshot)
-    first.beginFrame(input: InputState())
+    beginTestFrame(first, input: InputState())
     first.endFrame()
     #expect(first.textLayouts.resolve("same", columns: nil) === snapshot)
     first.resetRegistrations()

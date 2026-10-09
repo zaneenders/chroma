@@ -191,7 +191,7 @@ struct InteractionStorageTests {
       interaction.endGroup()
     }
 
-    interaction.beginFrame(input: InputState(), processingInput: false)
+    interaction.beginFrame(input: InputState())
     register([first, second])
     interaction.endFrame()
     interaction.focus(second, editing: true)
@@ -200,7 +200,7 @@ struct InteractionStorageTests {
     let capacity = storage.capacity
     #expect(interaction.selection == [0, 1])
 
-    interaction.beginFrame(input: InputState(), processingInput: false)
+    interaction.beginFrame(input: InputState())
     register([second, first])
     #expect(interaction.tree == committed, "registration leaves committed geometry intact")
     #expect(committed.findLeaf(second) == [0, 1])
@@ -210,7 +210,7 @@ struct InteractionStorageTests {
     #expect(interaction.editingLeaf == second)
     #expect(interaction.isTextEditing)
 
-    interaction.beginFrame(input: InputState(), processingInput: false)
+    interaction.beginFrame(input: InputState())
     register([first])
     interaction.endFrame()
     #expect(interaction.tree?.storage === storage)

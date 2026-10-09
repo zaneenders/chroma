@@ -59,7 +59,7 @@ struct ControlPaintIsolationTests {
     var list = DrawList()
     var buffer = LayoutBuffer()
     let node = buffer.emit(editor, context: context)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     buffer.register(node, in: rect)
     context.interaction.endFrame()
     let id = try #require(context.interaction.tree?.children.first?.leafID)
@@ -113,7 +113,7 @@ struct ControlPaintIsolationTests {
     var buffer = LayoutBuffer()
     let resolved = buffer.emit(interactive, context: context)
     _ = buffer.sizeThatFits(resolved, rect.size)
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(resolved, in: rect)
     let phases = capture.phases
     let registrations = capture.registrations
@@ -137,7 +137,7 @@ struct ControlPaintIsolationTests {
     let context = BlockContext()
     let editor = TextEditor(text: { "ab\ncd\nef\ngh\nij" }, onChange: { _ in })
     func update(_ input: InputState) {
-      context.interaction.beginFrame(input: input)
+      beginTestFrame(context.interaction, input: input)
       var buffer = LayoutBuffer()
       let node = buffer.emit(editor, context: context)
       buffer.register(node, in: rect)
@@ -147,7 +147,7 @@ struct ControlPaintIsolationTests {
     let origin = Point(x: 20, y: 10)
     update(InputState(pointerPosition: origin, pointerDown: true, pointerPressed: true))
     let below = Point(x: 20, y: 80)
-    context.interaction.beginFrame(input: InputState(pointerPosition: below, pointerDown: true))
+    beginTestFrame(context.interaction, input: InputState(pointerPosition: below, pointerDown: true))
     var buffer = LayoutBuffer()
     let resolved = buffer.emit(editor, context: context)
     buffer.register(resolved, in: rect)
@@ -180,7 +180,7 @@ struct ControlPaintIsolationTests {
     let resolved = buffer.emit(block, context: context)
     _ = buffer.sizeThatFits(resolved, rect.size)
     #expect(PipelineMetrics.snapshot.textLayouts == 1)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     buffer.register(resolved, in: rect)
     var list = DrawList()
     buffer.paint(resolved, into: &list, in: rect)
@@ -200,7 +200,7 @@ struct ControlPaintIsolationTests {
       }, onChange: { text = $0 })
     var buffer = LayoutBuffer()
     let resolved = buffer.emit(editor, context: context)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     buffer.register(resolved, in: rect)
     let registeredReads = reads
     text = "after"
@@ -213,7 +213,7 @@ struct ControlPaintIsolationTests {
         return false
       })
     context.interaction.endFrame()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     buffer.reset()
     let updated = buffer.emit(editor, context: context)
     buffer.register(updated, in: rect)
@@ -232,7 +232,7 @@ struct ControlPaintIsolationTests {
     do {
       let context = BlockContext()
       interaction = context.interaction
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       var buffer = LayoutBuffer()
       let node = buffer.emit(TextEditor(text: { "text" }, onChange: { _ in }), context: context)
       buffer.register(node, in: rect)
@@ -248,7 +248,7 @@ struct ControlPaintIsolationTests {
     var context = BlockContext()
     context.hoverStyle = .tint(.black)
     context.interaction.hoveredLeafID = context.scoped([.component(ObjectIdentifier(Text.self))]).widgetID
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     var buffer = LayoutBuffer()
     let resolved = buffer.emit(text, context: context)
     var list = DrawList()

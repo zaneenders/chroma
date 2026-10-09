@@ -54,7 +54,7 @@ struct OperationLocalLayoutTests {
     _ content: any Block, context: BlockContext = BlockContext(),
     size: Size = Size(width: 100, height: 100), origin: Point = .zero
   ) -> Size {
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     var resolvedBuffer = LayoutBuffer()
     let resolved = resolvedBuffer.emit(content, context: context)
     let measured = resolvedBuffer.sizeThatFits(resolved, size)
@@ -77,7 +77,7 @@ struct OperationLocalLayoutTests {
     #expect(resolvedBuffer.sizeThatFits(resolved, proposal).height == 12)
     let measured = capture.measurements
     #expect(resolvedBuffer.sizeThatFits(resolved, proposal).height == 12)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     resolvedBuffer.register(resolved, in: Rect(origin: .zero, size: proposal))
     context.interaction.endFrame()
     var list = DrawList()

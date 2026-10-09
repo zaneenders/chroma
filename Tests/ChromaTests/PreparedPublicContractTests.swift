@@ -87,7 +87,7 @@ struct PreparedPublicContractTests {
     var preparedBuffer = LayoutBuffer()
     let prepared = preparedBuffer.emit(
       Wrapper(content: PreparedLeaf(counts: counts), counts: counts), context: context)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     preparedBuffer.register(prepared, in: rect)
     var list = DrawList()
     preparedBuffer.paint(prepared, into: &list, in: rect)

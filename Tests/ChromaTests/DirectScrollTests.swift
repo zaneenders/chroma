@@ -34,10 +34,13 @@ struct DirectScrollTests {
     let directController = ScrollViewController()
     let blockController = ScrollViewController()
     let directBuild: LayoutBuilder = { buffer, context in
-      buffer.scrollView(controller: directController, context: context) { buffer, context in
-        let fill = buffer.color(.white, context: context)
-        return buffer.sizing(fill, x: .fixed(300), y: .fixed(600), context: context)
-      }
+      buffer.scrollView(
+        ScrollView(
+          controller: directController,
+          build: { buffer, context in
+            let fill = buffer.color(.white, context: context)
+            return buffer.sizing(fill, x: .fixed(300), y: .fixed(600), context: context)
+          }), context: context)
     }
     let blockBuild: LayoutBuilder = { buffer, context in
       buffer.emit(
@@ -60,10 +63,13 @@ struct DirectScrollTests {
     let blockController = ScrollViewController()
     let items = (0..<100).map { Item(id: $0) }
     let directBuild: LayoutBuilder = { buffer, context in
-      buffer.scrollView(data: items, rowHeight: 20, controller: directController, context: context) {
-        buffer, context, item in
-        buffer.text(Text("Row \(item.id)"), context: context)
-      }
+      buffer.scrollView(
+        ScrollView(
+          data: items, rowHeight: 20, controller: directController,
+          build: {
+            buffer, context, item in
+            buffer.text(Text("Row \(item.id)"), context: context)
+          }), context: context)
     }
     let blockBuild: LayoutBuilder = { buffer, context in
       buffer.emit(
@@ -79,24 +85,18 @@ struct DirectScrollTests {
     #expect(directController.offset > 0)
   }
 
-  @Test func identifiedOverloadsWinWithoutAnExplicitRevision() {
+  @Test func identifiedConstructorWinsWithoutAnExplicitRevision() {
     let items = [Item(id: 10), Item(id: 20)]
     let controller = ScrollViewController()
-    _ = ScrollView(
+    let scroll = ScrollView(
       data: items, rowHeight: 20, controller: controller,
       build: { buffer, context, item in
         buffer.text(Text("\(item.id)"), context: context)
       })
     #expect(controller.uniformRowIdentity?.indices[StructuralKey(20)] == 1)
-    let directController = ScrollViewController()
     let h = Harness()
-    h.render { buffer, context in
-      buffer.scrollView(data: items, rowHeight: 20, controller: directController, context: context) {
-        buffer, context, item in
-        buffer.text(Text("\(item.id)"), context: context)
-      }
-    }
-    #expect(directController.uniformRowIdentity?.indices[StructuralKey(20)] == 1)
+    h.render { buffer, context in buffer.scrollView(scroll, context: context) }
+    #expect(controller.uniformRowIdentity?.indices[StructuralKey(20)] == 1)
   }
 
   @Test func positionalRowsBuildOnlyTheVisibleWindowInTheirFinalContext() {
@@ -105,12 +105,15 @@ struct DirectScrollTests {
     let controller = ScrollViewController()
     let h = Harness()
     let build: LayoutBuilder = { buffer, context in
-      buffer.scrollView(data: 0..<100_000, rowHeight: 20, controller: controller, context: context) {
-        buffer, context, index in
-        #expect(context.focusLeafClaimed)
-        built.indices.append(index)
-        return buffer.text(Text("\(index)"), context: context)
-      }
+      buffer.scrollView(
+        ScrollView(
+          data: 0..<100_000, rowHeight: 20, controller: controller,
+          build: {
+            buffer, context, index in
+            #expect(context.focusLeafClaimed)
+            built.indices.append(index)
+            return buffer.text(Text("\(index)"), context: context)
+          }), context: context)
     }
     h.render(build)
     #expect(built.indices == [0, 1, 2, 3])
@@ -134,10 +137,10 @@ struct DirectScrollTests {
         })
     }
     var rows = [row(0, height: 10), row(1, height: 10)]
-    h.render { buffer, context in buffer.scrollView(controller: controller, rows: rows, context: context) }
+    h.render { buffer, context in buffer.scrollView(ScrollView(controller: controller, rows: rows), context: context) }
     let old = controller.lazyStackCache.measurements[0]
     rows[0].build = row(0, height: 30).build
-    h.render { buffer, context in buffer.scrollView(controller: controller, rows: rows, context: context) }
+    h.render { buffer, context in buffer.scrollView(ScrollView(controller: controller, rows: rows), context: context) }
     #expect(controller.lazyStackCache.rowSizes.map(\.height) == [30, 10])
     #expect(controller.lazyStackCache.measurements[0] !== old)
     #expect(controller.measurementBuffer.count == 0)
@@ -156,9 +159,13 @@ struct DirectScrollTests {
           })
       }
     }
-    h.render { buffer, context in buffer.scrollView(controller: controller, rows: rows(100), context: context) }
+    h.render { buffer, context in
+      buffer.scrollView(ScrollView(controller: controller, rows: rows(100)), context: context)
+    }
     let capacity = controller.measurementBuffer.capacity
-    h.render { buffer, context in buffer.scrollView(controller: controller, rows: rows(1000), context: context) }
+    h.render { buffer, context in
+      buffer.scrollView(ScrollView(controller: controller, rows: rows(1000)), context: context)
+    }
     #expect(controller.measurementBuffer.count == 0)
     #expect(controller.measurementBuffer.capacity == capacity)
     #expect(h.buffer.count < 30)
@@ -177,11 +184,12 @@ struct DirectScrollTests {
     host.build = { buffer, context in
       let label = model.label
       return buffer.scrollView(
-        data: [Item(id: 1, value: model.value)], rowHeight: 40,
-        controller: controller, identityRevision: 1, context: context
-      ) { buffer, context, item in
-        buffer.button(Button(label) { model.actions.append("\(item.value):\(label)") }, context: context)
-      }
+        ScrollView(
+          data: [Item(id: 1, value: model.value)], rowHeight: 40,
+          controller: controller, identityRevision: 1,
+          build: { buffer, context, item in
+            buffer.button(Button(label) { model.actions.append("\(item.value):\(label)") }, context: context)
+          }), context: context)
     }
     host.render()
     host.interaction.focusFirstControlForTest()
@@ -205,11 +213,12 @@ struct DirectScrollTests {
     defer { host.close() }
     host.build = { buffer, context in
       buffer.scrollView(
-        data: model.items, rowHeight: 20, controller: controller, selection: selection,
-        identityRevision: model.revision, context: context
-      ) { buffer, context, item in
-        buffer.text(Text("Row \(item.id)"), context: context)
-      }
+        ScrollView(
+          data: model.items, rowHeight: 20, controller: controller, selection: selection,
+          identityRevision: model.revision,
+          build: { buffer, context, item in
+            buffer.text(Text("Row \(item.id)"), context: context)
+          }), context: context)
     }
     host.render()
     host.render(input: InputState(commands: [.navigation(.down), .navigation(.stepIn), .navigation(.down)]))

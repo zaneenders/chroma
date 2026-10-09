@@ -94,7 +94,7 @@ struct AnimatedValueTests {
     let root = buffer.emit(AnimatedValue(20, duration: 0) { _ in Color.white }, context: context)
     _ = buffer.sizeThatFits(root, Size(width: 20, height: 20))
     #expect(context.interaction.animations.isEmpty)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     let rect = Rect(x: 0, y: 0, width: 20, height: 20)
     buffer.register(root, in: rect)
     context.interaction.endFrame()

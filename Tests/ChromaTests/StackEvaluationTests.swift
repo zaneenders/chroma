@@ -61,7 +61,7 @@ struct StackEvaluationTests {
     counter.bodies = 0
     _ = measureBlock(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -86,7 +86,7 @@ struct StackEvaluationTests {
     counter.bodies = 0
     _ = measureBlock(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -118,7 +118,7 @@ struct StackEvaluationTests {
     _ = measureBlock(stack, proposal: rect.size, context: context)
     #expect(counter.bodies == 1)
     counter.bodies = 0
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -135,7 +135,7 @@ struct StackEvaluationTests {
     let block = ScrollView { VStack { Composite(counter: counter).sizing(y: .fixed(500)) } }
     let context = BlockContext()
     var list = DrawList()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     do {
       var resolvedBuffer = LayoutBuffer()
       let resolved = resolvedBuffer.emit(block, context: context)
@@ -191,7 +191,7 @@ struct StackEvaluationTests {
     let resolved = resolvedBuffer.emit(block, context: context)
     #expect(resolvedBuffer.sizeThatFits(resolved, proposal) == Size(width: 200, height: 12))
     var list = DrawList()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     resolvedBuffer.register(resolved, in: Rect(origin: .zero, size: proposal))
     resolvedBuffer.paint(resolved, into: &list, in: Rect(origin: .zero, size: proposal))
     context.interaction.endFrame()
@@ -235,7 +235,7 @@ struct StackEvaluationTests {
       _ = resolvedBuffer.expandsVertically(resolved)
       _ = resolvedBuffer.sizeThatFits(resolved, rect.size)
       #expect(resolvedBuffer.count == 2 * depth + 1)
-      context.interaction.beginFrame(input: InputState())
+      beginTestFrame(context.interaction, input: InputState())
       resolvedBuffer.register(resolved, in: rect)
       let registered = resolvedBuffer.count
       #expect(registered == 4 * depth + 1)
@@ -291,7 +291,7 @@ struct StackEvaluationTests {
     #expect(counter.bodies == 1)
     counter.bodies = 0
     var first = DrawList()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     do {
       var resolvedBuffer = LayoutBuffer()
       let resolved = resolvedBuffer.emit(stack, context: context)
@@ -303,7 +303,7 @@ struct StackEvaluationTests {
 
     counter.text = "after"
     var second = DrawList()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     do {
       var resolvedBuffer = LayoutBuffer()
       let resolved = resolvedBuffer.emit(stack, context: context)

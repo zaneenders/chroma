@@ -40,7 +40,7 @@ struct TrailingControlsRowTests {
     #expect(
       measureBlock(row, proposal: Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
     #expect(measureBlock(row, proposal: Size(width: 150, height: 200), context: context).height == 20)
-    interaction.beginFrame(input: InputState())
+    beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     var resolvedBuffer = LayoutBuffer()
     let resolved = resolvedBuffer.emit(row, context: context)

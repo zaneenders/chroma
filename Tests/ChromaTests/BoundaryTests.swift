@@ -100,7 +100,7 @@ struct BoundaryTests {
     let interaction = Interaction()
     let context = BlockContext(interaction: interaction)
     let viewport = Rect(x: 0, y: 0, width: 20, height: 20)
-    interaction.beginFrame(input: InputState())
+    beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()

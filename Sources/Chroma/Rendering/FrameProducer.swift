@@ -71,9 +71,10 @@ package final class FrameProducer {
     input: InputState, refreshing: Bool, drawing: Bool
   ) {
     let interaction = context.interaction
+    self.interaction = interaction
     interaction.animationTime = clock()
     interaction.refreshingRegistrations = refreshing
-    interaction.beginFrame(input: input, processingInput: false)
+    interaction.beginFrame(input: input)
     defer { interaction.refreshingRegistrations = false }
     layout.reset()
     defer { layout.reset() }
@@ -90,7 +91,6 @@ package final class FrameProducer {
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
     resetTracking()
-    self.interaction = context.interaction
     let generation = generation
     let interaction = context.interaction
     interaction.viewport = Rect(origin: .zero, size: viewport)

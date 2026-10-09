@@ -36,7 +36,7 @@ struct StackPlacementTests {
       measureBlock(row, proposal: Size(width: 100, height: 200), context: context) == Size(width: 100, height: 40))
     #expect(measureBlock(row, proposal: Size(width: 150, height: 200), context: context).height == 20)
     var list = DrawList()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     var resolvedBuffer = LayoutBuffer()
     let resolved = resolvedBuffer.emit(row, context: context)
     resolvedBuffer.register(resolved, in: Rect(x: 10, y: 20, width: 100, height: 60))
@@ -72,7 +72,7 @@ struct StackPlacementTests {
     let measured = measureBlock(stack, proposal: rect.size, context: context)
     #expect(measured == (horizontal ? Size(width: 65, height: 50) : Size(width: 40, height: 85)))
     var drawList = DrawList()
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     do {
       var resolvedBuffer = LayoutBuffer()
       let resolved = resolvedBuffer.emit(stack, context: context)

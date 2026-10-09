@@ -68,7 +68,7 @@ struct RegistrationControlTests {
     let context = BlockContext()
     let block = Interactive(action: {}, content: { phase in PhaseProbe(phase: phase, capture: capture) })
     @MainActor func register(_ input: InputState) {
-      context.interaction.beginFrame(input: input)
+      beginTestFrame(context.interaction, input: input)
       var buffer = LayoutBuffer()
       let node = buffer.emit(block, context: context)
       buffer.register(node, in: rect)
@@ -152,12 +152,12 @@ struct RegistrationControlTests {
     let presentation = BlockContext()
     let editor = TextEditor(text: { "ab\ncd\nef\ngh\nij" }, onChange: { _ in })
     func frame(_ input: InputState) {
-      registration.interaction.beginFrame(input: input)
+      beginTestFrame(registration.interaction, input: input)
       var direct = LayoutBuffer()
       let node = direct.textEditor(editor, context: registration)
       direct.register(node, in: rect)
       registration.interaction.endFrame()
-      presentation.interaction.beginFrame(input: input)
+      beginTestFrame(presentation.interaction, input: input)
       var list = DrawList()
       var resolvedBuffer = LayoutBuffer()
       let resolved = resolvedBuffer.emit(editor, context: presentation)
@@ -188,7 +188,7 @@ struct RegistrationControlTests {
     let context = BlockContext()
     let editor = TextEditor(text: { "ab\ncd\nef\ngh\nij" }, onChange: { _ in })
     func frame(_ input: InputState) {
-      context.interaction.beginFrame(input: input)
+      beginTestFrame(context.interaction, input: input)
       var buffer = LayoutBuffer()
       let node = buffer.emit(editor, context: context)
       buffer.register(node, in: rect)

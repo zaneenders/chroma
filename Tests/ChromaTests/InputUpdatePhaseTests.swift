@@ -37,6 +37,27 @@ struct InputUpdatePhaseTests {
 
   }
 
+  @Test func beginningRegistrationDoesNotDispatchInput() {
+    let state = State()
+    let context = BlockContext()
+    var buffer = LayoutBuffer()
+    let node = buffer.emit(Observer(state: state), context: context)
+    let rect = Rect(x: 0, y: 0, width: 20, height: 20)
+    context.interaction.beginFrame(input: InputState())
+    buffer.register(node, in: rect)
+    context.interaction.endFrame()
+
+    let event = InputState(textEvents: [.insert("a")])
+    context.interaction.beginFrame(input: event)
+    buffer.register(node, in: rect)
+    context.interaction.endFrame()
+    #expect(state.events.isEmpty)
+
+    context.interaction.processInput(event)
+    context.interaction.finishInput()
+    #expect(state.events.count == 1)
+  }
+
   @Test func rawObserversReceiveEveryEdgeOnceAndPresentationDoesNotReplayThem() {
     let state = State()
     let host = HeadlessHost()

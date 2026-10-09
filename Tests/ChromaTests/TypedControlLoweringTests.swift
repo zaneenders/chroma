@@ -18,7 +18,7 @@ struct TypedControlLoweringTests {
     _ = buffer.expandsHorizontally(node)
     _ = buffer.expandsVertically(node)
     _ = buffer.sizeThatFits(node, rect.size)
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(node, in: rect)
     var list = DrawList()
     buffer.paint(node, into: &list, in: rect)
@@ -64,7 +64,7 @@ struct TypedControlLoweringTests {
       }, context: context)
     _ = buffer.sizeThatFits(node, rect.size)
     context.interaction.hoveredLeafID = id
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(node, in: rect)
     let registeredCount = context.interaction.builderRoot?.children.count
     let nodeCount = buffer.count
@@ -99,14 +99,14 @@ struct TypedControlLoweringTests {
     text = "later binding value"
     _ = buffer.sizeThatFits(node, rect.size)
     _ = buffer.sizeThatFits(node, Size(width: 100, height: 80))
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(node, in: rect)
     context.interaction.endFrame()
     let id = try #require(context.interaction.tree?.children.first?.leafID)
     context.focus(id, editing: true)
     context.interaction.caretOffset = 99
     context.interaction.textSelectionRange = 1..<99
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(node, in: rect)
     var list = DrawList()
     buffer.paint(node, into: &list, in: rect)
@@ -124,7 +124,7 @@ struct TypedControlLoweringTests {
     buffer.reset()
     let fresh = buffer.emit(editor, context: context)
     #expect(reads == 2)
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(fresh, in: rect)
     #expect(context.interaction.editingText == text)
     context.interaction.endFrame()
@@ -138,7 +138,7 @@ struct TypedControlLoweringTests {
       Button(value, id: WidgetID("action"), action: { actions.append(value) })
     }
     let first = buffer.emit(action("first"), context: context)
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(first, in: rect)
     context.interaction.endFrame()
     let point = Point(x: 10, y: 10)
@@ -146,7 +146,7 @@ struct TypedControlLoweringTests {
       InputState(pointerPosition: point, pointerDown: true, pointerPressed: true))
     buffer.reset()
     let second = buffer.emit(action("second"), context: context)
-    context.interaction.beginFrame(input: InputState(), processingInput: false)
+    context.interaction.beginFrame(input: InputState())
     buffer.register(second, in: rect)
     context.interaction.endFrame()
     context.interaction.processInput(InputState(pointerPosition: point, pointerReleased: true))
@@ -185,7 +185,7 @@ struct TypedControlLoweringTests {
             .roundedBorder(.white, radius: 4, width: 2).clipped(), context: context)
       }
       context.interaction.beginFrame(
-        input: InputState(pointerPosition: Point(x: -100, y: -100)), processingInput: false)
+        input: InputState(pointerPosition: Point(x: -100, y: -100)))
       buffer.register(root, in: rect)
       var list = DrawList()
       buffer.paint(root, into: &list, in: rect)
@@ -236,7 +236,7 @@ struct TypedControlLoweringTests {
           }, context: context)
       }
       target.focus()
-      context.interaction.beginFrame(input: InputState(), processingInput: false)
+      context.interaction.beginFrame(input: InputState())
       buffer.register(root, in: rect)
       context.interaction.endFrame()
       #expect(target.isFocused)
@@ -275,7 +275,7 @@ struct TypedControlLoweringTests {
           }, context: context)
       }
       sizes.append(buffer.sizeThatFits(root, rect.size))
-      context.interaction.beginFrame(input: InputState(), processingInput: false)
+      context.interaction.beginFrame(input: InputState())
       buffer.register(root, in: rect)
       var list = DrawList()
       buffer.paint(root, into: &list, in: rect)
@@ -301,7 +301,7 @@ struct TypedControlLoweringTests {
       }
       let root = buffer.stack([animated], axis: .vertical, context: context)
       _ = buffer.sizeThatFits(root, rect.size)
-      context.interaction.beginFrame(input: InputState(), processingInput: false)
+      context.interaction.beginFrame(input: InputState())
       buffer.register(root, in: rect)
       context.interaction.endFrame()
       let count = samples.count
@@ -312,6 +312,25 @@ struct TypedControlLoweringTests {
     }
     #expect(samples == [10, 10, 60, 60, 35, 10])
     #expect(!context.interaction.animationsActive)
+  }
+
+  @Test func firstInputRootReplacementClearsBootstrapRegistrations() {
+    let runtime = WindowRuntime()
+    var actions = 0
+    runtime.build = { buffer, context in
+      let child = buffer.text(Text("before"), context: context)
+      return buffer.onCommand(child, .action(.submit), context: context) {
+        actions += 1
+        runtime.build = nil
+        #expect(runtime.interaction.tree == nil)
+        return .handled
+      }
+    }
+    let list = runtime.render(
+      viewport: rect.size, input: InputState(commands: [.action(.submit)]), onChange: {})
+    #expect(actions == 1)
+    #expect(list.commands.isEmpty)
+    runtime.reset()
   }
 
   @Test func directActionRootReplacementDrawsNewRootWithoutReplayingInput() {

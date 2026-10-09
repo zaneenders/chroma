@@ -47,7 +47,7 @@ struct RegistrationLayoutTests {
     let before = state.measures
     _ = resolvedBuffer.sizeThatFits(resolved, rect.size)
     #expect(state.measures == before)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     resolvedBuffer.register(resolved, in: rect)
     context.interaction.endFrame()
     #expect(state.paints == 0)

@@ -131,7 +131,7 @@ struct LayoutTests {
   @Test func readyLayoutPinsBottomChromeBelowTranscript() {
     let interaction = Interaction()
     let context = BlockContext(interaction: interaction)
-    interaction.beginFrame(input: InputState())
+    beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -161,7 +161,7 @@ struct LayoutTests {
   @Test func computedPropertyBottomChromeStillStacksChildren() {
     let interaction = Interaction()
     let context = BlockContext(interaction: interaction)
-    interaction.beginFrame(input: InputState())
+    beginTestFrame(interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -212,7 +212,7 @@ struct LayoutTests {
     let interaction = Interaction()
     let context = BlockContext(interaction: interaction)
     let rect = Rect(x: 0, y: 0, width: 100, height: 100)
-    interaction.beginFrame(input: InputState())
+    beginTestFrame(interaction, input: InputState())
 
     var horizontalList = DrawList()
     do {
@@ -226,7 +226,7 @@ struct LayoutTests {
       resolvedBuffer.paint(resolved, into: &horizontalList, in: rect)
     }
     interaction.endFrame()
-    interaction.beginFrame(input: InputState())
+    beginTestFrame(interaction, input: InputState())
 
     var verticalList = DrawList()
     do {

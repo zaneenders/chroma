@@ -77,7 +77,8 @@ struct MarkdownDocumentTests {
     let producer = FrameProducer()
     func render() -> DrawList {
       let list = producer.render(
-        content: content, viewport: Size(width: 120, height: 400),
+        build: { buffer, context in buffer.emit(content, context: context) },
+        viewport: Size(width: 120, height: 400),
         input: InputState(), context: context, onChange: {})
       context.interaction.selectAll(at: .zero)
       return list

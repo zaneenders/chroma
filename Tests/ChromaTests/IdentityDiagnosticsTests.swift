@@ -8,7 +8,7 @@ struct IdentityDiagnosticsTests {
   }
 
   @MainActor private static func draw(_ block: any Block, context: BlockContext = BlockContext()) {
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     var list = DrawList()
     do {
       var resolvedBuffer = LayoutBuffer()
@@ -17,6 +17,39 @@ struct IdentityDiagnosticsTests {
       resolvedBuffer.paint(resolved, into: &list, in: Rect(x: 0, y: 0, width: 100, height: 100))
     }
     context.interaction.endFrame()
+  }
+
+  @Test func duplicateDirectLeafKeysFail() async {
+    let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
+      await MainActor.run {
+        let context = BlockContext()
+        var buffer = LayoutBuffer()
+        let first = buffer.text(Text("first"), context: context.keyed("same"))
+        let second = buffer.text(Text("second"), context: context.keyed("same"))
+        let root = buffer.stack([first, second], axis: .vertical, context: context)
+        beginTestFrame(context.interaction, input: InputState())
+        buffer.register(root, in: Rect(x: 0, y: 0, width: 100, height: 100))
+      }
+    }
+    let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+    #expect(diagnostic.contains("Duplicate interaction leaf ID"))
+  }
+
+  @MainActor @Test func matchingChildKeysInDifferentParentsRemainDistinctAcrossUpdates() {
+    let context = BlockContext()
+    var buffer = LayoutBuffer()
+    for _ in 0..<2 {
+      buffer.reset()
+      let first = buffer.text(Text("first"), context: context.keyed("left").keyed("child"))
+      let second = buffer.text(Text("second"), context: context.keyed("right").keyed("child"))
+      let root = buffer.stack([first, second], axis: .vertical, context: context)
+      beginTestFrame(context.interaction, input: InputState())
+      buffer.register(root, in: Rect(x: 0, y: 0, width: 100, height: 100))
+      context.interaction.endFrame()
+      let children = context.interaction.tree?.children.first?.children
+      #expect(children?.count == 2)
+      #expect(children?.first?.leafID != children?.last?.leafID)
+    }
   }
 
   @Test func duplicateForEachKeysFail() async {

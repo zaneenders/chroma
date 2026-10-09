@@ -1,4 +1,4 @@
-import Chroma
+@testable import Chroma
 
 @MainActor
 func measureBlock(_ block: any Block, proposal: Size, context: BlockContext) -> Size {
@@ -19,4 +19,11 @@ func blockExpandsVertically(_ block: any Block) -> Bool {
   var buffer = LayoutBuffer()
   let node = buffer.emit(block, context: BlockContext())
   return buffer.expandsVertically(node)
+}
+
+/// Low-level interaction tests dispatch an event explicitly before registering its frame.
+@MainActor
+func beginTestFrame(_ interaction: Interaction, input: InputState) {
+  interaction.processInput(input, notifyingObservers: input != InputState())
+  interaction.beginFrame(input: input)
 }

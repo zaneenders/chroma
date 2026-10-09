@@ -44,7 +44,7 @@ struct PlainTextFastPathTests {
     context.navigationIgnored = ignored
     var resolvedBuffer = LayoutBuffer()
     let resolved = resolvedBuffer.emit(Text("label"), context: context)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     resolvedBuffer.register(resolved, in: rect)
     let leaves = context.interaction.builderRoot?.children.count
     #expect(leaves == (claimed || ignored ? 0 : 1))
@@ -72,7 +72,7 @@ struct PlainTextFastPathTests {
     var resolvedBuffer = LayoutBuffer()
     let resolved = resolvedBuffer.emit(Text("plain"), context: context)
     _ = resolvedBuffer.sizeThatFits(resolved, rect.size)
-    context.interaction.beginFrame(input: InputState())
+    beginTestFrame(context.interaction, input: InputState())
     resolvedBuffer.register(resolved, in: rect)
     #expect(PipelineMetrics.snapshot.textLayouts == 0)
     #expect(PipelineMetrics.snapshot.paints == 0)

@@ -30,6 +30,7 @@ final class InteractionTree {
   }
 
   var rows: [Row] = []
+  private var leafIDs: Set<WidgetID> = []
   var generation = 0
   var viewport = Rect.zero
 
@@ -40,12 +41,14 @@ final class InteractionTree {
   func reset() {
     generation += 1
     rows.removeAll(keepingCapacity: true)
+    leafIDs.removeAll(keepingCapacity: true)
     _ = append(kind: .group, rect: .zero)
   }
 
   func clear() {
     generation += 1
     rows.removeAll(keepingCapacity: true)
+    leafIDs.removeAll(keepingCapacity: true)
   }
 
   @discardableResult
@@ -55,6 +58,9 @@ final class InteractionTree {
     navigationID: WidgetID? = nil, navigationName: String? = nil,
     canBeRevealed: Bool = false, navigationIgnored: Bool = false
   ) -> InteractionNode {
+    if case .leaf(let id) = kind {
+      precondition(leafIDs.insert(id).inserted, "Duplicate interaction leaf ID: \(id)")
+    }
     let index = rows.count
     rows.append(
       Row(

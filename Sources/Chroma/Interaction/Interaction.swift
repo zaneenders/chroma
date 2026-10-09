@@ -384,12 +384,12 @@ package final class Interaction {
     hoveredLeafID = tree?.hitTest(input.pointerPosition).flatMap { tree?.node(at: $0)?.leafID }
   }
 
-  package func beginFrame(input: InputState, processingInput: Bool = true) {
+  package func beginFrame(input: InputState) {
     animationKeys.removeAll(keepingCapacity: true)
     building = FrameRegistrations()
     buildingLogicalSelections = [:]
 
-    if processingInput { processInput(input, notifyingObservers: input != InputState()) } else { self.input = input }
+    self.input = input
     buildingTree.reset()
     builderRoot = buildingTree.root
     builderStack.removeAll(keepingCapacity: true)

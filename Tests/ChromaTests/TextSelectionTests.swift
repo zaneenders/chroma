@@ -18,7 +18,7 @@ struct TextSelectionTests {
   }
 
   private func frame(_ ctx: Interaction, id: WidgetID, input: InputState) {
-    ctx.beginFrame(input: input)
+    beginTestFrame(ctx, input: input)
     ctx.textSelection.layoutRegistry.register(id, layout: layout)
     ctx.endFrame()
   }

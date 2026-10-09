@@ -82,7 +82,7 @@ struct ScrollMetadataTests {
     let rect = Rect(x: 0, y: 0, width: 200, height: 100)
 
     @MainActor func register(_ leaves: [(WidgetID, Int)], count: Int = 100) {
-      interaction.beginFrame(input: InputState(), processingInput: false)
+      interaction.beginFrame(input: InputState())
       interaction.registerScrollInput(id: scrollID, rect: rect)
       interaction.updateScrollLayout(
         id: scrollID, layout: .init(width: 200, spacing: 0, rows: .uniform(count: count, height: 20, keys: nil)))
