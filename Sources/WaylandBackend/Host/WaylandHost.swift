@@ -49,14 +49,21 @@ public final class WaylandHost: Chroma.Host {
   private lazy var clipboard = WaylandClipboard(
     interaction: interaction, keyboard: keyboard,
     flush: { [weak self] in self?.flushWayland() },
-    requestFrame: { [weak self] in
-      self?.runtime.dispatchInput { [weak self] in self?.receiveInput() }
+    dispatchInput: { [weak self] action in
+      self?.runtime.dispatchInput { [weak self] in
+        self?.pointerInput.dispatchOrdered { [weak self] in
+          action()
+          self?.receiveInput()
+        }
+      }
     })
   private var surface: OpaquePointer?
   private var xdgSurface: OpaquePointer?
   private var toplevel: OpaquePointer?
 
   private let input = InputAccumulator()
+  private lazy var pointerInput = WaylandPointerInput(
+    input: input, clock: { ProcessInfo.processInfo.systemUptime }, deliver: { [weak self] in self?.receiveInput() })
   private let cursor = WaylandCursor()
   private var displayReadQueued = false
   private var displayReadSource: DispatchSourceRead?
@@ -84,9 +91,11 @@ public final class WaylandHost: Chroma.Host {
     height = max(1, Int32(size.height))
     runtime.scheduler.onFrame = { [weak self] kind in self?.renderFrame(kind) }
     keyboard.dispatch = { [weak self] input, deliver in
-      self?.runtime.handleKeyboardInput(input) { [weak self] resolved in
-        guard let self else { return }
-        deliver(resolved, interaction.isTextEditing, interaction.editingSessionGeneration)
+      self?.pointerInput.dispatchOrdered { [weak self] in
+        self?.runtime.handleKeyboardInput(input) { [weak self] resolved in
+          guard let self else { return }
+          deliver(resolved, interaction.isTextEditing, interaction.editingSessionGeneration)
+        }
       }
     }
     keyboard.onInputAvailable = { [weak self] in self?.receiveInput() }
@@ -186,7 +195,7 @@ public final class WaylandHost: Chroma.Host {
   private func updateKeyboardRepeatTimer() {
     keyboardRepeatTimer?.cancel()
     keyboardRepeatTimer = nil
-    guard running, let deadline = keyboard.repeatDeadline else { return }
+    guard running, !pointerInput.hasPendingFrame, let deadline = keyboard.repeatDeadline else { return }
     let delay = max(0, deadline - ProcessInfo.processInfo.systemUptime)
     let timer = DispatchSource.makeTimerSource(queue: .main)
     timer.schedule(deadline: .now() + delay, leeway: .milliseconds(1))
@@ -202,11 +211,14 @@ public final class WaylandHost: Chroma.Host {
   private func keyboardRepeatTimerFired() {
     keyboardRepeatTimer?.cancel()
     keyboardRepeatTimer = nil
-    _ = keyboard.dispatchRepeats(
-      editing: interaction.mode == .editing,
-      editingSession: interaction.editingSessionGeneration,
-      now: ProcessInfo.processInfo.systemUptime)
-    updateKeyboardRepeatTimer()
+    pointerInput.dispatchOrdered { [weak self] in
+      guard let self else { return }
+      _ = keyboard.dispatchRepeats(
+        editing: interaction.mode == .editing,
+        editingSession: interaction.editingSessionGeneration,
+        now: ProcessInfo.processInfo.systemUptime)
+      updateKeyboardRepeatTimer()
+    }
   }
 
   private func requestFrame() {
@@ -217,7 +229,7 @@ public final class WaylandHost: Chroma.Host {
   private func receiveInput() {
     guard running else { return }
     input.drainKeyboard(keyboard, editingSession: interaction.editingSessionGeneration)
-    runtime.handleInput(input.frameInput())
+    runtime.handleInput(input.frameInput(now: pointerInput.deliveryTime ?? ProcessInfo.processInfo.systemUptime))
     runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
 
@@ -297,6 +309,14 @@ public final class WaylandHost: Chroma.Host {
     return true
   }
 
+  private func dispatchPointerInput(_ action: @escaping @MainActor (WaylandHost) -> Void) {
+    pointerInput.dispatchPointer { [weak self] in
+      guard let self else { return }
+      action(self)
+      receiveInput()
+    }
+  }
+
   private static var registryListener = unsafe wl_registry_listener(
     global: { data, registry, name, interface, version in
       nonisolated(unsafe) let data = data
@@ -354,10 +374,13 @@ public final class WaylandHost: Chroma.Host {
         if hasPointer, renderer.pointer == nil, let seat {
           renderer.pointer = unsafe wl_seat_get_pointer(seat)
           if let pointer = renderer.pointer {
+            renderer.pointerInput.configure(version: unsafe wl_pointer_get_version(pointer))
             unsafe wl_pointer_add_listener(
               pointer, &pointerListener, Unmanaged.passUnretained(renderer).toOpaque())
           }
         } else if !hasPointer, let pointer = renderer.pointer {
+          renderer.pointerInput.reset()
+          renderer.receiveInput()
           unsafe wl_pointer_destroy(pointer)
           renderer.pointer = nil
         }
@@ -369,7 +392,7 @@ public final class WaylandHost: Chroma.Host {
               keyboard, &keyboardListener, Unmanaged.passUnretained(renderer).toOpaque())
           }
         } else if !hasKeyboard, let keyboard = renderer.wlKeyboard {
-          renderer.keyboard.focusLost()
+          renderer.pointerInput.dispatchOrdered { [weak renderer] in renderer?.keyboard.focusLost() }
           unsafe wl_keyboard_destroy(keyboard)
           renderer.wlKeyboard = nil
         }
@@ -395,7 +418,7 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.clipboard.latestInputSerial = serial
+        renderer.pointerInput.dispatchOrdered { [weak renderer] in renderer?.clipboard.latestInputSerial = serial }
       }
     },
     leave: { data, _, _, _ in
@@ -403,7 +426,7 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.keyboard.focusLost()
+        renderer.pointerInput.dispatchOrdered { [weak renderer] in renderer?.keyboard.focusLost() }
       }
     },
     key: { data, _, serial, _, key, state in
@@ -411,16 +434,19 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.clipboard.latestInputSerial = serial
-        if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
-          renderer.keyboard.keyPressed(
-            key,
-            editing: renderer.interaction.mode == .editing,
-            editingSession: renderer.interaction.editingSessionGeneration,
-            now: ProcessInfo.processInfo.systemUptime
-          )
-        } else {
-          renderer.keyboard.keyReleased(key)
+        renderer.pointerInput.dispatchOrdered { [weak renderer] in
+          guard let renderer else { return }
+          renderer.clipboard.latestInputSerial = serial
+          if state == WL_KEYBOARD_KEY_STATE_PRESSED.rawValue {
+            renderer.keyboard.keyPressed(
+              key,
+              editing: renderer.interaction.mode == .editing,
+              editingSession: renderer.interaction.editingSessionGeneration,
+              now: ProcessInfo.processInfo.systemUptime
+            )
+          } else {
+            renderer.keyboard.keyReleased(key)
+          }
         }
       }
     },
@@ -429,8 +455,10 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.keyboard.updateModifiers(
-          depressed: depressed, latched: latched, locked: locked, group: group)
+        renderer.pointerInput.dispatchOrdered { [weak renderer] in
+          renderer?.keyboard.updateModifiers(
+            depressed: depressed, latched: latched, locked: locked, group: group)
+        }
       }
     },
     repeat_info: { data, _, rate, delay in
@@ -438,7 +466,9 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.keyboard.updateRepeatInfo(rate: rate, delay: delay)
+        renderer.pointerInput.dispatchOrdered { [weak renderer] in
+          renderer?.keyboard.updateRepeatInfo(rate: rate, delay: delay)
+        }
       }
     }
   )
@@ -454,9 +484,10 @@ public final class WaylandHost: Chroma.Host {
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard eventSurface == renderer.surface else { return }
         if let pointer { renderer.cursor.apply(pointer: pointer, serial: serial) }
-        renderer.input.pointerEntered(
-          x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
-        renderer.receiveInput()
+        renderer.dispatchPointerInput { renderer in
+          renderer.input.pointerEntered(
+            x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+        }
       }
     }
 
@@ -469,8 +500,9 @@ public final class WaylandHost: Chroma.Host {
         guard let data, let eventSurface else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
         guard eventSurface == renderer.surface else { return }
-        renderer.input.pointerLeft()
-        renderer.receiveInput()
+        renderer.dispatchPointerInput { renderer in
+          renderer.input.pointerLeft()
+        }
       }
     }
 
@@ -481,9 +513,10 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.input.pointerMoved(
-          x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
-        renderer.receiveInput()
+        renderer.dispatchPointerInput { renderer in
+          renderer.input.pointerMoved(
+            x: fixedToFloat(surfaceX), y: fixedToFloat(surfaceY))
+        }
       }
     }
 
@@ -494,15 +527,16 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data, button == btnLeft else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.clipboard.latestInputSerial = serial
-        switch state {
-        case WL_POINTER_BUTTON_STATE_PRESSED.rawValue:
-          renderer.input.pointerPressed()
-        case WL_POINTER_BUTTON_STATE_RELEASED.rawValue:
-          renderer.input.pointerReleased()
-        default: break
+        renderer.dispatchPointerInput { renderer in
+          renderer.clipboard.latestInputSerial = serial
+          switch state {
+          case WL_POINTER_BUTTON_STATE_PRESSED.rawValue:
+            renderer.input.pointerPressed()
+          case WL_POINTER_BUTTON_STATE_RELEASED.rawValue:
+            renderer.input.pointerReleased()
+          default: break
+          }
         }
-        renderer.receiveInput()
       }
     }
 
@@ -516,12 +550,11 @@ public final class WaylandHost: Chroma.Host {
         let delta = -fixedToFloat(value)
         switch axis {
         case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
-          renderer.input.scrollBy(x: delta, y: 0, time: time)
+          renderer.pointerInput.scrollBy(horizontal: true, delta: delta, time: time)
         case WL_POINTER_AXIS_VERTICAL_SCROLL.rawValue:
-          renderer.input.scrollBy(x: 0, y: delta, time: time)
+          renderer.pointerInput.scrollBy(horizontal: false, delta: delta, time: time)
         default: break
         }
-        renderer.receiveInput()
       }
     }
 
@@ -531,13 +564,21 @@ public final class WaylandHost: Chroma.Host {
     motion: pointerMotion,
     button: pointerButton,
     axis: pointerAxis,
-    frame: { _, _ in },
+    frame: { data, _ in
+      nonisolated(unsafe) let data = data
+      MainActor.assumeIsolated {
+        guard let data else { return }
+        let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
+        renderer.pointerInput.finishFrame()
+        renderer.updateKeyboardRepeatTimer()
+      }
+    },
     axis_source: { data, _, source in
       nonisolated(unsafe) let data = data
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.input.scrollSource(isFinger: source == WL_POINTER_AXIS_SOURCE_FINGER.rawValue)
+        renderer.pointerInput.scrollSource(isFinger: source == WL_POINTER_AXIS_SOURCE_FINGER.rawValue)
       }
     },
     axis_stop: { data, _, time, axis in
@@ -545,9 +586,13 @@ public final class WaylandHost: Chroma.Host {
       MainActor.assumeIsolated {
         guard let data else { return }
         let renderer = unsafe Unmanaged<WaylandHost>.fromOpaque(data).takeUnretainedValue()
-        renderer.input.stopScroll(
-          horizontal: axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue, time: time)
-        renderer.receiveInput()
+        switch axis {
+        case WL_POINTER_AXIS_HORIZONTAL_SCROLL.rawValue:
+          renderer.pointerInput.stopScroll(horizontal: true, time: time)
+        case WL_POINTER_AXIS_VERTICAL_SCROLL.rawValue:
+          renderer.pointerInput.stopScroll(horizontal: false, time: time)
+        default: break
+        }
       }
     },
     axis_discrete: { _, _, _, _ in },
@@ -672,7 +717,7 @@ public final class WaylandHost: Chroma.Host {
     openGL.beginFrame(width: width, height: height, bufferScale: bufferScale)
 
     updateFrameRate()
-    if input.hasScrollMomentum { receiveInput() }
+    if input.hasScrollMomentum, !pointerInput.hasPendingFrame { receiveInput() }
     let viewport = Size(width: Float(width), height: Float(height))
     let drawList = runtime.renderScheduled(
       kind, viewport: viewport,
@@ -703,6 +748,7 @@ public final class WaylandHost: Chroma.Host {
 
   private func cleanup() {
     runtime.scheduler.isReady = false
+    pointerInput.reset()
     runtime.reset()
     interaction.onRedrawRequested = nil
     keyboardRepeatTimer?.cancel()
