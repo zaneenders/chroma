@@ -98,8 +98,10 @@ struct RenderBenchmark {
       }
       #if os(macOS)
       if let metal {
-        let timing = try metal.render(replay, viewport: viewport)
-        durations["metalEncode"] = timing.cpu
+        // The renderer owns culling, as in native presentation. The standalone
+        // cull sample above is independent and must not be added to this interval.
+        let timing = try metal.render(source, viewport: viewport)
+        durations["metalCullAndEncode"] = timing.cpu
         durations["gpu"] = timing.gpu
       }
       #elseif os(Linux)
@@ -132,7 +134,7 @@ struct RenderBenchmark {
     let renderWork: [String: Int]? = nil
     #endif
     let report = Report(
-      schemaVersion: 6, fixtureVersion: RenderFixture.version,
+      schemaVersion: 7, fixtureVersion: RenderFixture.version,
       sequenceFrames: sequence.count,
       commandCountMin: sequence.map { $0.commands.count }.min()!,
       commandCountMax: sequence.map { $0.commands.count }.max()!,

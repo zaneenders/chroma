@@ -8,9 +8,11 @@ func deterministicFixtures(scene: String) throws {
   #expect(fixture.list.commands == (try RenderFixture(name: scene, count: 256)).list.commands)
   let repeated = try RenderFixture(name: scene, count: 256)
   #expect(fixture.sequence.map(\.commands) == repeated.sequence.map(\.commands))
-  let culled = fixture.list.culled(to: fixture.viewport)
-  #expect(culled.commands == culled.culled(to: fixture.viewport).commands)
-  if scene == "clipped" { #expect(culled.commands.count < fixture.list.commands.count) }
+  for source in fixture.sequence {
+    let culled = source.culled(to: fixture.viewport)
+    #expect(culled.commands == culled.culled(to: fixture.viewport).commands)
+    if scene == "clipped" { #expect(culled.commands.count < source.commands.count) }
+  }
 }
 
 @Test(arguments: TranscriptReplay.names)
