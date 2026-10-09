@@ -1,6 +1,8 @@
 import BasicContainers
 
 /// A checked operation-local index. Persistent interaction state uses logical keys instead.
+/// A node has one placement in a registered graph. Emit distinct nodes to repeat content;
+/// sharing a handle between parents or sibling positions is unsupported.
 public struct LayoutNode: Hashable, Sendable {
   fileprivate let owner: UInt64
   fileprivate let generation: UInt64
@@ -28,7 +30,6 @@ public struct LayoutBuffer: ~Copyable {
     case decoration(LayoutNode, Decoration)
     case group(LayoutNode, String?)
     case command(LayoutNode, CommandOperation)
-    case focus(LayoutNode, FocusTarget)
     case animation(LayoutNode, ScalarAnimation)
     case trailing(LayoutNode, LayoutNode, Float)
     case scroll(Int)
@@ -213,7 +214,7 @@ public struct LayoutBuffer: ~Copyable {
     case .editor, .trailing, .marquee: value = horizontally
     case .layout(_, .sizing(let x, let y)): value = (horizontally ? x : y) == .grow
     case .layout(let child, _), .decoration(let child, _), .group(let child, _), .command(let child, _),
-      .focus(let child, _), .animation(let child, _):
+      .animation(let child, _):
       value = expands(child, horizontally: horizontally)
     case .stack(let stack): value = stackExpands(stack, horizontally: horizontally)
     case .overlay(let range, _):
@@ -262,7 +263,7 @@ public struct LayoutBuffer: ~Copyable {
       size = LayoutOperation.sizeThatFits(operation, proposal: proposal) {
         sizeThatFits(child, $0)
       }
-    case .decoration(let child, _), .group(let child, _), .command(let child, _), .focus(let child, _),
+    case .decoration(let child, _), .group(let child, _), .command(let child, _),
       .animation(let child, _):
       size = sizeThatFits(child, proposal)
     case .stack(let stack): (size, layout) = placeStack(stack, proposal: proposal)
@@ -345,9 +346,6 @@ public struct LayoutBuffer: ~Copyable {
       context.interaction.endGroup()
     case .command(let child, let operation):
       CommandOperation.withRegistration(operation, in: rect, context: context) { register(child, in: rect) }
-    case .focus(let child, let target):
-      _ = target.pendingEditing
-      register(child, in: rect)
     case .animation(let child, let state):
       context.interaction.animationKeys.insert(context.widgetID)
       context.interaction.animations[context.widgetID] = state
@@ -410,7 +408,7 @@ public struct LayoutBuffer: ~Copyable {
     case .custom(let leaf):
       leaf.paint(&list, rect)
       highlight = leaf.focusRule == .standard
-    case .layout(let child, let operation): paint(child, into: &list, in: LayoutOperation.placed(operation, in: rect))
+    case .layout(let child, _): paint(child, into: &list, in: nodes[child.index].registeredRect!)
     case .decoration(let child, let decoration):
       switch decoration {
       case .background(let background):
@@ -432,16 +430,16 @@ public struct LayoutBuffer: ~Copyable {
         list.popClip()
       }
     case .stack(let stack):
-      let range = stackPlacements(node, proposal: rect.size)
-      for (childIndex, placementIndex) in zip(stack.children, range) {
-        paint(children[childIndex].node, into: &list, in: placed(placements[placementIndex], in: rect))
+      for index in stack.children {
+        let child = children[index].node
+        paint(child, into: &list, in: nodes[child.index].registeredRect!)
       }
     case .overlay(let range, _):
       for index in range {
         let child = children[index].node
         paint(child, into: &list, in: nodes[child.index].registeredRect!)
       }
-    case .group(let child, _), .command(let child, _), .focus(let child, _), .animation(let child, _):
+    case .group(let child, _), .command(let child, _), .animation(let child, _):
       paint(child, into: &list, in: rect)
     case .trailing(let input, let controls, _):
       paint(input, into: &list, in: nodes[input.index].registeredRect!)
@@ -512,12 +510,11 @@ public struct LayoutBuffer: ~Copyable {
     var expanders = 0
     for (index, placement) in zip(stack.children, range) {
       let child = children[index]
-      var size = sizeThatFits(child.node, proposal)
-      if child.spacer { size[keyPath: cross] = 0 }
-      placements[placement].size = size
       if stack.axis == .horizontal ? expandsHorizontally(child.node) : expandsVertically(child.node) {
         expanders += 1
       } else {
+        let size = sizeThatFits(child.node, proposal)
+        placements[placement].size = size
         fixed += size[keyPath: main]
       }
     }

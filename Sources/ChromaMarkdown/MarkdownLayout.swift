@@ -33,14 +33,24 @@ struct VisualLine: Equatable {
   var trailingText: String = "\n"
 }
 
+/// Only the colors baked into visual runs participate in wrap-plan invalidation.
+struct MarkdownColors: Equatable {
+  let foreground: Color
+  let accent: Color
+  let positive: Color
+  let warning: Color
+
+  init(_ theme: ChromaTheme) {
+    foreground = theme.foreground
+    accent = theme.accent
+    positive = theme.positive
+    warning = theme.warning
+  }
+}
+
 func layoutMarkdown(
-  _ blocks: [MarkdownBlock],
-  columns: Int,
-  theme: ChromaTheme,
-  baseColor: Color,
-  parsedRuns: [[MarkdownRun]]? = nil
-) -> [VisualLine] {
-  precondition(parsedRuns == nil || parsedRuns!.count == blocks.count)
+  _ parsed: ParsedMarkdownBlock, columns: Int, colors: MarkdownColors
+) -> MarkdownLinePlan {
   let columns = max(1, columns)
   var lines: [VisualLine] = []
 
@@ -97,84 +107,72 @@ func layoutMarkdown(
     if line.columnCount > 0 || lines.isEmpty { emit() }
   }
 
-  var previousWasListItem = false
-  for (index, block) in blocks.enumerated() {
-    let isListItem: Bool
-    if case .listItem = block { isListItem = true } else { isListItem = false }
-    if index > 0 {
-      if !lines.isEmpty { lines[lines.count - 1].trailingText = "\n" }
-      if !(isListItem && previousWasListItem) {
-        lines.append(VisualLine(trailingText: "\n"))
+  switch parsed.block {
+  case .paragraph:
+    wrapRuns(
+      parsed.runs,
+      colorFor: { run in
+        run.code ? colors.warning : colors.foreground
+      }, kind: .plain)
+  case .heading(let level, _):
+    let prefix = String(repeating: "#", count: level) + " "
+    wrapRuns(
+      [MarkdownRun(text: prefix)]
+        + parsed.runs.map {
+          var run = $0
+          run.bold = true
+          return run
+        },
+      colorFor: { run in run.bold ? colors.accent : colors.positive }, kind: .heading)
+  case .listItem(let marker, _, let depth):
+    let indentation = String(repeating: "  ", count: min(depth, 4))
+    var runs = [MarkdownRun(text: indentation + marker + " ")]
+    runs.append(contentsOf: parsed.runs)
+    wrapRuns(
+      runs,
+      colorFor: { run in
+        if run.text == indentation + marker + " " { return colors.warning }
+        return run.code ? colors.warning : colors.foreground
+      }, kind: .plain)
+  case .quote:
+    var runs = [MarkdownRun(text: "| ")]
+    runs.append(contentsOf: parsed.runs)
+    wrapRuns(
+      runs,
+      colorFor: { run in
+        run.text == "| " ? colors.positive : run.code ? colors.warning : colors.foreground
+      }, kind: .plain)
+  case .code(_, let code):
+    let codeLines = code.split(separator: "\n", omittingEmptySubsequences: false)
+    if codeLines.isEmpty {
+      lines.append(VisualLine(kind: .code, runs: [VisualRun(text: "", color: colors.foreground)]))
+    }
+    for rawLine in codeLines {
+      var rest = String(rawLine)
+      if rest.isEmpty {
+        lines.append(VisualLine(kind: .code, runs: [VisualRun(text: "", color: colors.foreground)]))
+      }
+      while !rest.isEmpty {
+        let take = min(columns, rest.count)
+        let cut = rest.index(rest.startIndex, offsetBy: take)
+        let remainder = String(rest[cut...])
+        lines.append(
+          VisualLine(
+            kind: .code,
+            runs: [VisualRun(text: String(rest[..<cut]), color: colors.foreground)],
+            columnCount: take,
+            trailingText: remainder.isEmpty ? "\n" : ""))
+        rest = remainder
       }
     }
-
-    switch block {
-    case .paragraph(let text):
-      wrapRuns(
-        parsedRuns?[index] ?? inlineRuns(text),
-        colorFor: { run in
-          run.code ? theme.warning : run.bold ? theme.foreground : baseColor
-        }, kind: .plain)
-    case .heading(let level, let text):
-      let prefix = String(repeating: "#", count: level) + " "
-      wrapRuns(
-        [MarkdownRun(text: prefix)]
-          + (parsedRuns?[index] ?? inlineRuns(text)).map {
-            var run = $0
-            run.bold = true
-            return run
-          },
-        colorFor: { run in run.bold ? theme.accent : theme.positive }, kind: .heading)
-    case .listItem(let marker, let text, let depth):
-      let indentation = String(repeating: "  ", count: min(depth, 4))
-      var runs = [MarkdownRun(text: indentation + marker + " ")]
-      runs.append(contentsOf: parsedRuns?[index] ?? inlineRuns(text))
-      wrapRuns(
-        runs,
-        colorFor: { run in
-          if run.text == indentation + marker + " " { return theme.warning }
-          return run.code ? theme.warning : run.bold ? theme.foreground : baseColor
-        }, kind: .plain)
-    case .quote(let text):
-      var runs = [MarkdownRun(text: "| ")]
-      runs.append(contentsOf: parsedRuns?[index] ?? inlineRuns(text))
-      wrapRuns(
-        runs,
-        colorFor: { run in
-          run.text == "| " ? theme.positive : run.code ? theme.warning : run.bold ? theme.foreground : baseColor
-        }, kind: .plain)
-    case .code(_, let code):
-      let codeLines = code.split(separator: "\n", omittingEmptySubsequences: false)
-      if codeLines.isEmpty {
-        lines.append(VisualLine(kind: .code, runs: [VisualRun(text: "", color: theme.foreground)]))
-      }
-      for rawLine in codeLines {
-        var rest = String(rawLine)
-        if rest.isEmpty {
-          lines.append(VisualLine(kind: .code, runs: [VisualRun(text: "", color: theme.foreground)]))
-        }
-        while !rest.isEmpty {
-          let take = min(columns, rest.count)
-          let cut = rest.index(rest.startIndex, offsetBy: take)
-          let remainder = String(rest[cut...])
-          lines.append(
-            VisualLine(
-              kind: .code,
-              runs: [VisualRun(text: String(rest[..<cut]), color: theme.foreground)],
-              columnCount: take,
-              trailingText: remainder.isEmpty ? "\n" : ""))
-          rest = remainder
-        }
-      }
-    case .rule:
-      lines.append(
-        VisualLine(
-          kind: .plain,
-          runs: [VisualRun(text: String(repeating: "─", count: min(columns, 40)), color: theme.positive)],
-          columnCount: min(columns, 40)))
-    }
-    previousWasListItem = isListItem
+  case .rule:
+    lines.append(
+      VisualLine(
+        kind: .plain,
+        runs: [VisualRun(text: String(repeating: "─", count: min(columns, 40)), color: colors.positive)],
+        columnCount: min(columns, 40)))
   }
   while let last = lines.last, last.columnCount == 0, last.kind != .code { lines.removeLast() }
-  return lines
+  if parsed.hasLeadingGap { lines.insert(VisualLine(), at: 0) }
+  return MarkdownLinePlan(lines: lines, hasLeadingGap: parsed.hasLeadingGap)
 }

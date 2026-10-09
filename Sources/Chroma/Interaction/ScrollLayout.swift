@@ -30,7 +30,7 @@ extension Interaction {
 
     let pendingReveal = state.pendingReveal
     state.pendingReveal = nil
-    if !refreshingRegistrations, let request = controller?.request {
+    if commitIntent == .presentation, let request = controller?.request {
       var resolved = true
       switch request {
       case .top: offset.y = 0

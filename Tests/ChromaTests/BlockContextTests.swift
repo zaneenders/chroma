@@ -10,7 +10,6 @@ struct LayoutContextTests {
     let context = LayoutContext(interaction: interaction)
 
     #expect(context.interaction === interaction)
-    #expect(context.selection === interaction.textSelection)
     #expect(context.fontMetrics == interaction.fontMetrics)
   }
 
@@ -49,15 +48,15 @@ struct LayoutContextTests {
   @Test func interactionOwnsFreshContextState() {
     let interaction = Interaction()
     #expect(interaction.fontMetrics == FontMetrics())
-    #expect(interaction.textSelection.selectedText() == nil)
-    #expect(!interaction.textSelection.isSelecting)
+    #expect(interaction.copyText() == nil)
+    #expect(!interaction.isDragging)
   }
 
-  @Test func contextsOwnIndependentSelectionManagers() {
+  @Test func contextsOwnIndependentInteractionState() {
     let first = LayoutContext()
     let second = LayoutContext()
 
-    #expect(first.selection !== second.selection)
+    #expect(first.interaction !== second.interaction)
   }
 
   @Test func directLayoutForwardsExplicitContext() {
@@ -92,7 +91,6 @@ struct LayoutContextTests {
   @Test func rendererContextWrapsItsInteraction() {
     let renderer = FakeRenderer()
     #expect(renderer.context.interaction === renderer.interaction)
-    #expect(renderer.context.selection === renderer.interaction.textSelection)
   }
 
   @Test func redrawInvalidationIsCoalescedUntilConsumed() {

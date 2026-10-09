@@ -79,7 +79,7 @@ public final class WaylandHost: Chroma.Host {
   public init(size: Size = Size(width: 800, height: 600)) {
     width = max(1, Int32(size.width))
     height = max(1, Int32(size.height))
-    runtime.scheduler.onFrame = { [weak self] kind in self?.renderFrame(kind) }
+    runtime.scheduler.onFrame = { [weak self] in self?.renderFrame() }
     keyboard.dispatch = { [weak self] input, deliver in
       self?.runtime.handleKeyboardInput(input) { [weak self] resolved in
         guard let self else { return }
@@ -218,7 +218,7 @@ public final class WaylandHost: Chroma.Host {
     runtime.scheduler.scrollMomentumActive = input.hasScrollMomentum
   }
 
-  private func renderFrame(_ kind: FrameScheduler.FrameKind) {
+  private func renderFrame() {
     guard !framePending, running, configured, eglSurface != nil, let surface else { return }
     guard let callback = unsafe wl_surface_frame(surface) else {
       failEventLoop(WaylandError("could not create Wayland frame callback"))
@@ -229,7 +229,7 @@ public final class WaylandHost: Chroma.Host {
     runtime.scheduler.isReady = false
     unsafe wl_callback_add_listener(
       callback, &Self.frameListener, Unmanaged.passUnretained(self).toOpaque())
-    drawFrame(kind)
+    drawFrame()
     flushWayland()
   }
 
@@ -664,7 +664,7 @@ public final class WaylandHost: Chroma.Host {
     _ = unsafe eglSwapInterval(eglDisplay, 1)
   }
 
-  private func drawFrame(_ kind: FrameScheduler.FrameKind) {
+  private func drawFrame() {
     guard eglDisplay != nil, eglSurface != nil else { return }
     openGL.beginFrame(width: width, height: height, bufferScale: bufferScale)
 
@@ -672,7 +672,7 @@ public final class WaylandHost: Chroma.Host {
     if input.hasScrollMomentum { receiveInput() }
     let viewport = Size(width: Float(width), height: Float(height))
     let drawList = runtime.renderScheduled(
-      kind, viewport: viewport,
+      viewport: viewport,
       onChange: { [weak self] in self?.requestFrame() })
     runtime.observe(
       drawList, viewport: viewport, rasterScale: Point(x: Float(bufferScale), y: Float(bufferScale)))

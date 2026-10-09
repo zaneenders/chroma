@@ -10,11 +10,28 @@ extension Interaction {
     onTextEvent: ((TextEditEvent, String) -> String?)? = nil,
     pointerOffset: ((Point, Int?) -> Int)? = nil,
     verticalOffset: ((Int, Int) -> Int)? = nil,
-    readOnly: Bool = false, submitInsertsNewline: Bool = false
+    navigationIgnored: Bool = false, readOnly: Bool = false, submitInsertsNewline: Bool = false
   ) -> TextInputState {
     let selected = selectedLeafID == id
     let hovered = hoveredLeafID == id
     let held = pressedLeaf == id && input.pointerDown
+
+    if readOnly && navigationIgnored {
+      if isProcessingDrag, let origin = dragOrigin,
+        (pointerOnlySelection && documentAnchor?.id == id)
+          || (input.pointerPressed && documentAnchor == nil
+            && registrations.readOnlyTexts[id]?.hitRect.contains(origin) == true)
+      {
+        let count = text.count
+        let anchor = textDragAnchor ?? max(0, min(count, pointerOffset?(origin, nil) ?? 0))
+        textDragAnchor = anchor
+        documentAnchor = TextEndpoint(id: id, offset: anchor)
+        documentEnd = TextEndpoint(id: id, offset: max(0, min(count, pointerOffset?(dragCurrent, nil) ?? 0)))
+      }
+      return TextInputState(
+        hovered: hovered, focused: false, held: held, editing: false, caretOffset: nil,
+        selectionRange: documentRange(for: id))
+    }
 
     if selected && activatePending {
       activatePending = false
@@ -36,7 +53,8 @@ extension Interaction {
       }
     }
 
-    if selected, editingLeaf != id, isProcessingDrag, let origin = dragOrigin, rect.contains(origin) {
+    if selected, editingLeaf != id, pressedLeaf == id, isProcessingDrag, let origin = dragOrigin, rect.contains(origin)
+    {
       let offset = pointerOffset?(origin, nil) ?? text.count
       beginEditing(id, caretOffset: max(0, min(text.count, offset)))
     }
@@ -212,14 +230,20 @@ extension Interaction {
     verticalOffset: (@MainActor (Int, Int) -> Int)? = nil,
     navigationIgnored: Bool = false, readOnly: Bool = false, submitInsertsNewline: Bool = false
   ) -> TextInputState {
-    registerLeaf(id: id, rect: rect, navigationIgnored: navigationIgnored)
-    if readOnly { building.readOnlyTexts[id] = text }
+    if !readOnly || !navigationIgnored {
+      registerLeaf(id: id, rect: rect, navigationIgnored: navigationIgnored)
+    }
+    if readOnly {
+      building.readOnlyTexts[id] = ReadOnlyTextRegistration(
+        text: text, navigationIgnored: navigationIgnored, hitRect: clippedRect(rect))
+    }
     building.inputHandlers[id] = { [weak self] in
       guard let self else { return }
       _ = self.updateTextInput(
         id: id, rect: rect, text: text(), onChange: onChange, onSubmit: onSubmit,
         onEndEditing: onEndEditing, onTextEvent: onTextEvent,
-        pointerOffset: pointerOffset, verticalOffset: verticalOffset, readOnly: readOnly,
+        pointerOffset: pointerOffset, verticalOffset: verticalOffset,
+        navigationIgnored: navigationIgnored, readOnly: readOnly,
         submitInsertsNewline: submitInsertsNewline)
     }
     let editing = editingLeaf == id

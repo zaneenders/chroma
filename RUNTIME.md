@@ -23,6 +23,7 @@ Duplicate interaction leaf IDs fail early instead of silently sharing callbacks.
 
 `WindowRuntime` alone dispatches input. Every actionable event first commits current
 callbacks and geometry; raw key resolution and delivery share that preparation.
+`HeadlessHost.sendKeyboardInput` uses the same atomic raw-key dispatch as native hosts.
 Input is applied once through a FIFO, including input queued before the first frame
 and input sent from another event's callback. Both explicit and scheduled frames
 drain pending events first. `HeadlessHost.render()` takes a snapshot; supplying its
@@ -32,19 +33,28 @@ action may replace it synchronously. Hover may use last-presented geometry.
 
 Within the internal runtime/test lifecycle, construction and measurement precede
 registration, then painting at the same rectangle. Hosts own that lifecycle. Drawing does not build nodes or replay input. `LayoutNode` is a checked
-owner/generation/index handle, never persistent identity. Reset destroys captures
+owner/generation/index handle, never persistent identity. Each node supports one
+placement in the registered graph: emit distinct nodes for repeated content rather
+than sharing a handle between parents or sibling positions. Reset destroys captures
 and retains capacity. Committed interaction rows survive temporary layout storage;
-render and navigation views link the same rows. Keys preserve focus/editing across
+render and navigation views link the same rows. Interaction selection and command scopes
+retain ordinal paths. Keys preserve focus/editing across
 reordering of realized content. Virtualizing an editor out of view ends its editing
 session and clears selection; scrolling it back does not resume editing. Scroll
 focus memory is retained separately.
+
+Selectable text uses one read-only input/document selection path, including pointer-only
+selection for navigation-ignored text. `TextSelectionManager` and `LayoutContext.selection`
+are removed. Custom selectable leaves register with `textSelectionState` and paint with
+`textInputVisualState`. Copy/select-all providers belong to the current registration and
+must be installed by current content; removing that content removes its callbacks.
 
 ## Retained work
 
 - Plain text caches exact UTF-8/wrapping results, capped at 512 entries and 4 MiB
   estimated storage. Oversized entries bypass retention.
-- Keep `MarkdownDocument` in the model to reuse parsing and revision-keyed wrapping.
-  Two width/style slots retain per-block plans. Placement stays fresh. Markdown
+- Keep `MarkdownDocument` in the model to reuse parsing and width/style-keyed wrapping.
+  Two width/style slots retain per-block lines, copied text, and character offsets. Placement stays fresh. Markdown
   still emits all paragraph handles; it does not virtualize paragraphs.
 - Uniform lists accept `identityRevision`; change it on every ID/order change,
   including same-count changes. Nil scans IDs. Row values and callbacks stay fresh.

@@ -68,14 +68,13 @@ package final class FrameProducer {
   /// Input refresh and presentation share this commit path and this buffer owner.
   private func commit(
     _ build: LayoutBuilder?, viewport: Size, context: LayoutContext,
-    input: InputState, refreshing: Bool, drawing: Bool
+    input: InputState, intent: Interaction.CommitIntent
   ) {
     let interaction = context.interaction
     self.interaction = interaction
     interaction.animationTime = clock()
-    interaction.refreshingRegistrations = refreshing
+    interaction.commitIntent = intent
     interaction.beginFrame(input: input)
-    defer { interaction.refreshingRegistrations = false }
     layout.reset()
     defer { layout.reset() }
     let root: LayoutNode?
@@ -83,7 +82,7 @@ package final class FrameProducer {
     let rect = Rect(origin: .zero, size: viewport)
     if let root { layout.register(root, in: rect) }
     interaction.endFrame()
-    if drawing, let root { layout.paint(root, into: &drawBuffer, in: rect) }
+    if intent == .presentation, let root { layout.paint(root, into: &drawBuffer, in: rect) }
   }
 
   package func render(
@@ -103,7 +102,7 @@ package final class FrameProducer {
       drawBuffer.removeAll()
       commit(
         build, viewport: viewport, context: context, input: input,
-        refreshing: false, drawing: true)
+        intent: .presentation)
     } onChange: { [weak self, weak subscription] event in
       event.cancel()
       guard let onChange = subscription?.takeCallback() else { return }
@@ -126,6 +125,6 @@ package final class FrameProducer {
     context.keyboardNavigationOverscan = keyboardNavigationOverscan
     commit(
       build, viewport: viewport, context: context, input: InputState(commands: commands),
-      refreshing: true, drawing: false)
+      intent: .registration)
   }
 }

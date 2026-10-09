@@ -111,17 +111,17 @@ struct StructuralInteractionTests {
       }
     }
     harness.render(content(1))
-    harness.context.selection.selectAll(at: Point(x: 1, y: 1))
+    harness.context.interaction.selectAll(at: Point(x: 1, y: 1))
     controller.scroll(to: 30)
     harness.render(content(1))
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
-    #expect(harness.context.selection.selectedText() != nil)
+    #expect(harness.context.interaction.copyText() != nil)
     harness.render(content(2))
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.allSatisfy { $0 == 0 })
-    #expect(harness.context.selection.selectedText() == nil)
+    #expect(harness.context.interaction.copyText() == nil)
     harness.render(content(1))
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.allSatisfy { $0 == 0 })
-    #expect(harness.context.selection.selectedText() == nil)
+    #expect(harness.context.interaction.copyText() == nil)
   }
 
   @Test func focusQueriesObserveResolvedStateAndRemoval() {
@@ -486,14 +486,14 @@ struct StructuralInteractionTests {
       }
     }
     harness.render(content(true))
-    let selection = harness.context.selection
-    let original = selection.layoutRegistry.entry(at: Point(x: 1, y: 1))!.0
-    selection.selectAll(at: Point(x: 1, y: 1))
-    #expect(selection.selection(for: original) != nil)
+    let interaction = harness.context.interaction
+    let original = interaction.tree!.node(at: interaction.tree!.hitTest(Point(x: 1, y: 1))!)!.leafID!
+    interaction.selectAll(at: Point(x: 1, y: 1))
+    #expect(interaction.documentRange(for: original) != nil)
     harness.render(content(false))
-    let replacement = selection.layoutRegistry.entry(at: Point(x: 1, y: 1))!.0
+    let replacement = interaction.tree!.node(at: interaction.tree!.hitTest(Point(x: 1, y: 1))!)!.leafID!
     #expect(original != replacement)
-    #expect(selection.selection(for: replacement) == nil)
+    #expect(interaction.documentRange(for: replacement) == nil)
   }
 
   @Test func focusRequestBeforeTraversalBindsWithoutChangingIdentity() {
@@ -617,7 +617,7 @@ struct StructuralInteractionTests {
       }
     }
     harness.render(content())
-    harness.context.selection.selectAll(at: Point(x: 1, y: 1))
+    harness.context.interaction.selectAll(at: Point(x: 1, y: 1))
     controller.scroll(to: 30)
     harness.render(content())
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
@@ -625,10 +625,10 @@ struct StructuralInteractionTests {
       return buffer.empty(context: context)
     })
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.isEmpty)
-    #expect(harness.context.selection.selectedText() == nil)
+    #expect(harness.context.interaction.copyText() == nil)
     harness.render(content())
     #expect(harness.context.interaction.scrollStates.mapValues { $0.offset.y }.values.contains(30))
-    #expect(harness.context.selection.selectedText() == nil)
+    #expect(harness.context.interaction.copyText() == nil)
   }
 
   @Test func virtualizedPressDoesNotReviveWhenRowReturns() {

@@ -11,15 +11,27 @@ struct TextSelectionTests {
 
   private var layout: PlainTextLayout {
     PlainTextLayout(
-      text: text,
       rect: Rect(
-        x: 20, y: 20, width: cellWidth * Float(text.utf8.count), height: lineHeight),
-      cellWidth: cellWidth, lineHeight: lineHeight, scale: 1)
+        x: 20, y: 20, width: cellWidth * Float(text.count), height: lineHeight),
+      cellWidth: cellWidth, lineHeight: lineHeight, snapshot: TextLayoutSnapshot(text, columns: nil))
   }
 
   private func frame(_ ctx: Interaction, id: WidgetID, input: InputState) {
+    func register() {
+      let layout = layout
+      _ = ctx.registerTextInput(
+        id: id, rect: layout.rect, text: { text }, onChange: { _ in },
+        pointerOffset: { point, _ in layout.selectionOffset(at: point) },
+        verticalOffset: { layout.verticalOffset($0, direction: $1) },
+        navigationIgnored: true, readOnly: true)
+    }
+    if ctx.tree == nil {
+      ctx.beginFrame(input: InputState())
+      register()
+      ctx.endFrame()
+    }
     beginTestFrame(ctx, input: input)
-    ctx.textSelection.layoutRegistry.register(id, layout: layout)
+    register()
     ctx.endFrame()
   }
 
@@ -58,7 +70,7 @@ struct TextSelectionTests {
     ctx.selectAll(at: Point(x: 21, y: 21))
     #expect(ctx.copyText() == text)
     ctx.beginEditing(WidgetID("field"), caretOffset: 0)
-    #expect(ctx.textSelection.selectedText() == nil)
+    #expect(ctx.copyText() == nil)
   }
 
   @Test func hitTestSnapsToNearestBoundary() {
@@ -88,7 +100,7 @@ struct TextSelectionTests {
     frame(ctx, id: id, input: move)
     frame(ctx, id: id, input: move)
 
-    #expect(ctx.textSelection.selectedText() == text)
+    #expect(ctx.copyText() == text)
   }
 
   @Test func dragPastEndSelectsEntireText() {
@@ -108,7 +120,7 @@ struct TextSelectionTests {
     frame(ctx, id: id, input: move)
     frame(ctx, id: id, input: move)
 
-    #expect(ctx.textSelection.selectedText() == text)
+    #expect(ctx.copyText() == text)
   }
 
   @Test func dragBelowLineSelectsToEnd() {
@@ -128,7 +140,7 @@ struct TextSelectionTests {
     frame(ctx, id: id, input: move)
     frame(ctx, id: id, input: move)
 
-    #expect(ctx.textSelection.selectedText() == text)
+    #expect(ctx.copyText() == text)
   }
 
   @Test func partialDragSelectsPartialText() {
@@ -148,22 +160,19 @@ struct TextSelectionTests {
     frame(ctx, id: id, input: move)
     frame(ctx, id: id, input: move)
 
-    #expect(ctx.textSelection.selectedText() == "Ses")
+    #expect(ctx.copyText() == "Ses")
   }
 
   @Test func unicodeLayoutUsesGraphemeBoundaries() {
     let unicode = "A👨‍👩‍👧‍👦e\u{301}🇺🇸"
     let l = PlainTextLayout(
-      text: unicode,
       rect: Rect(x: 0, y: 0, width: cellWidth * Float(unicode.count), height: lineHeight),
-      cellWidth: cellWidth, lineHeight: lineHeight, scale: 1)
+      cellWidth: cellWidth, lineHeight: lineHeight, snapshot: TextLayoutSnapshot(unicode, columns: nil))
 
     #expect(unicode.count == 4)
     #expect(l.hitTest(point: Point(x: cellWidth * 2, y: 1)) == 2)
-    #expect(l.textInRange(from: 1, to: 2) == "👨‍👩‍👧‍👦")
-    #expect(l.textInRange(from: 2, to: 3) == "e\u{301}")
-    #expect(l.textInRange(from: 3, to: 4) == "🇺🇸")
-    #expect(l.textInRange(from: -10, to: 100) == unicode)
+    #expect(l.selectionOffset(at: Point(x: 100, y: 1)) == 4)
+    #expect(l.selectionOffset(at: Point(x: -10, y: 1)) == 0)
   }
 
   @Test func fontMetricsMeasureRenderedCharactersNotUTF8Bytes() {
@@ -176,8 +185,8 @@ struct TextSelectionTests {
   @Test func invalidCellWidthsDoNotTrapDuringHitTesting() {
     for width in [Float.zero, -Float.infinity, Float.infinity, Float.nan] {
       let l = PlainTextLayout(
-        text: "abc", rect: Rect(x: 0, y: 0, width: 20, height: 20),
-        cellWidth: width, lineHeight: 20, scale: 1)
+        rect: Rect(x: 0, y: 0, width: 20, height: 20),
+        cellWidth: width, lineHeight: 20, snapshot: TextLayoutSnapshot("abc", columns: nil))
       #expect(l.hitTest(point: Point(x: 1, y: 1)) == nil)
     }
   }
@@ -219,36 +228,31 @@ struct TextSelectionTests {
     frame(ctx, id: id, input: move)
     frame(ctx, id: id, input: move)
 
-    ctx.textSelection.selectAll()
+    ctx.selectAll(at: .zero)
 
     #expect(ctx.copyText() == text)
   }
 
-  @Test func customCopyProviderTakesPrecedenceOverSelectableText() {
-    let ctx = Interaction()
-    ctx.onCopy = { "custom copy" }
-
-    #expect(ctx.copyText() == "custom copy")
-  }
-
-  @Test func blockContextCanInstallCustomCopyProvider() {
-    let ctx = LayoutContext()
-    ctx.setCopyTextProvider { "custom copy" }
-
-    #expect(ctx.interaction.copyText() == "custom copy")
-  }
-
-  @Test func customSelectAllHandlerPrecedesBuiltInSelection() {
-    let ctx = LayoutContext()
-    var handled = false
-    ctx.setSelectAllHandler {
-      handled = true
-      return true
+  @Test func registeredProvidersReplacePriorValuesAndDisappearOnRemoval() {
+    let context = LayoutContext()
+    var handled: [String] = []
+    for value in ["first", "second"] {
+      context.interaction.beginFrame(input: InputState())
+      context.setCopyTextProvider { value }
+      context.setSelectAllHandler {
+        handled.append(value)
+        return true
+      }
+      context.interaction.endFrame()
+      #expect(context.interaction.copyText() == value)
+      context.interaction.selectAll(at: .zero)
     }
-
-    ctx.interaction.selectAll(at: .zero)
-
-    #expect(handled)
+    #expect(handled == ["first", "second"])
+    context.interaction.beginFrame(input: InputState())
+    context.interaction.endFrame()
+    #expect(context.interaction.copyText() == nil)
+    context.interaction.selectAll(at: .zero)
+    #expect(handled == ["first", "second"])
   }
 
   @Test func contextsTrackSelectionsIndependently() {
@@ -269,9 +273,9 @@ struct TextSelectionTests {
     frame(a, id: id, input: move)
     frame(a, id: id, input: move)
 
-    #expect(a.textSelection.selectedText() == text)
-    #expect(b.textSelection.selectedText() == nil)
-    #expect(a.textSelection.isSelecting)
-    #expect(!b.textSelection.isSelecting)
+    #expect(a.copyText() == text)
+    #expect(b.copyText() == nil)
+    #expect(a.isDragging)
+    #expect(!b.isDragging)
   }
 }

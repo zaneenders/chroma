@@ -109,9 +109,9 @@ struct RawKeyboardFreshnessTests {
     send(KeyboardInput(chord: KeyChord("d"), text: "d"), to: runtime)
     #expect(runtime.interaction.tree == nil)
     #expect(text.isEmpty)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(text == "abcd")
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(text == "abcd")
   }
 
@@ -141,7 +141,7 @@ struct RawKeyboardFreshnessTests {
     }
     runtime.handleInput(InputState(commands: [.application("replace")]))
     send(KeyboardInput(chord: KeyChord("b"), text: "b"), to: runtime)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(replacements == 1)
     #expect(text == "bc")
   }

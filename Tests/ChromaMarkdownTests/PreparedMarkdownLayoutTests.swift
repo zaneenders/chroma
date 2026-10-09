@@ -6,14 +6,15 @@ import Testing
 @MainActor
 struct PreparedMarkdownLayoutTests {
   private let rect = Rect(x: 20, y: 30, width: 72, height: 200)
-  private let leaf = MarkdownLeaf(block: .paragraph("**café** 👨‍👩‍👧‍👦 tea"), scale: 1, lineSpacing: 4)
+  private var leaf: MarkdownLeaf {
+    markdownLeaf(MarkdownDocument("**café** 👨‍👩‍👧‍👦 tea"))
+  }
 
   @Test func measurementRegistrationAndPaintingShareOneLayout() {
     let context = LayoutContext()
-    let preparation = MarkdownLayoutPreparation()
+    let current = leaf
+    let preparation = current.preparation
     var buffer = LayoutBuffer()
-    var current = leaf
-    current.preparation = preparation
     let resolved = current.build(into: &buffer, context: context)
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
@@ -51,20 +52,19 @@ struct PreparedMarkdownLayoutTests {
   func preparedCommandsMatchUncachedLayout(source: String, width: Float) {
     let context = LayoutContext(textScale: 1.5)
     let bounds = Rect(x: 37, y: 41, width: width, height: 500)
-    for block in segmentMarkdown(source) {
-      let current = MarkdownLeaf(block: block, scale: 2, lineSpacing: 3, hasLeadingGap: true)
+    let document = MarkdownDocument(source)
+    for index in document.blocks.indices {
+      let current = markdownLeaf(document, at: index, scale: 2, lineSpacing: 3)
       var buffer = LayoutBuffer()
       let resolved = current.build(into: &buffer, context: context)
       let scale = current.scale * context.textScale
       let cellWidth = context.fontMetrics.cellAdvance * scale
-      var lines = layoutMarkdown(
-        [block], columns: max(1, Int(width / cellWidth)),
-        theme: context.theme, baseColor: context.theme.foreground)
-      lines.insert(VisualLine(), at: 0)
+      let plan = layoutMarkdown(
+        current.block, columns: max(1, Int(width / cellWidth)), colors: MarkdownColors(context.theme))
       let expected = MarkdownLayout(
-        lines: lines, lineHeight: context.fontMetrics.lineAdvance * scale + current.lineSpacing,
-        cellWidth: cellWidth, scale: scale, hasLeadingGap: true, rect: bounds)
-      #expect(buffer.sizeThatFits(resolved, bounds.size).height == Float(lines.count) * expected.lineHeight)
+        plan: plan, lineHeight: context.fontMetrics.lineAdvance * scale + current.lineSpacing,
+        cellWidth: cellWidth, scale: scale, rect: bounds)
+      #expect(buffer.sizeThatFits(resolved, bounds.size).height == Float(plan.lines.count) * expected.lineHeight)
       context.interaction.beginFrame(input: InputState())
       buffer.register(resolved, in: bounds)
       context.interaction.endFrame()
@@ -98,62 +98,6 @@ struct PreparedMarkdownLayoutTests {
     #expect(context.interaction.editingLeaf == nil)
   }
 
-  @Test func changedInputsReplaceTheSingleEntry() {
-    var context = LayoutContext()
-    let preparation = MarkdownLayoutPreparation()
-    var current = leaf
-    var bounds = rect
-    func resolve() -> MarkdownLayout { preparation.resolve(current, in: bounds, context: context) }
-    let original = resolve()
-    #expect(preparation.layoutsBuilt == 1)
-    #expect(resolve().lines == original.lines)
-    #expect(preparation.layoutsBuilt == 1)
-    current = MarkdownLeaf(block: .paragraph("replacement"), scale: 1, lineSpacing: 4)
-    #expect(resolve().text == "replacement")
-    #expect(preparation.layoutsBuilt == 2)
-    bounds.size.width = 24
-    #expect(resolve().lines.count > original.lines.count)
-    #expect(preparation.layoutsBuilt == 3)
-    context.theme.foreground = .black
-    #expect(resolve().lines.flatMap(\.runs).allSatisfy { $0.color == .black })
-    #expect(preparation.layoutsBuilt == 4)
-    context.textScale = 2
-    #expect(resolve().cellWidth == 24)
-    #expect(preparation.layoutsBuilt == 5)
-    context.fontMetrics.lineAdvance = 50
-    #expect(resolve().lineHeight == 104)
-    #expect(preparation.layoutsBuilt == 6)
-    context.fontMetrics.cellAdvance = 8
-    #expect(resolve().cellWidth == 16)
-    #expect(preparation.layoutsBuilt == 7)
-    current = MarkdownLeaf(block: current.block, scale: 1, lineSpacing: 8)
-    #expect(resolve().lineHeight == 108)
-    #expect(preparation.layoutsBuilt == 8)
-    current.hasLeadingGap = true
-    #expect(resolve().lines.first == VisualLine())
-    #expect(resolve().text == "replacement")
-    #expect(preparation.layoutsBuilt == 9)
-    current = leaf
-    context = LayoutContext()
-    bounds = rect
-    #expect(resolve().lines == original.lines)
-    #expect(preparation.layoutsBuilt == 10)  // Older keys are not retained.
-  }
-
-  @Test func originAndSameColumnWidthReuseShapingButRefreshGeometry() {
-    let context = LayoutContext()
-    let preparation = MarkdownLayoutPreparation()
-    let original = preparation.resolve(leaf, in: rect, context: context)
-    let moved = Rect(x: 140, y: 230, width: 73, height: 250)
-    let changed = preparation.resolve(leaf, in: moved, context: context)
-    #expect(preparation.layoutsBuilt == 1)
-    #expect(changed.rect == moved)
-    #expect(original.rect == rect)
-    #expect(changed.hitTest(Point(x: 152, y: 231)) == 1)
-    #expect(original.hitTest(Point(x: 32, y: 31)) == 1)
-    #expect(changed.verticalOffset(1, direction: 1) == original.verticalOffset(1, direction: 1))
-  }
-
   @Test func newOperationsInstallFreshTextAndGeometry() {
     let context = LayoutContext()
     func register(_ text: String, width: Float) {
@@ -178,17 +122,15 @@ struct PreparedMarkdownLayoutTests {
     weak var weakPreparation: MarkdownLayoutPreparation?
     context.interaction.beginFrame(input: InputState())
     do {
-      let preparation = MarkdownLayoutPreparation()
-      weakPreparation = preparation
+      let document = MarkdownDocument("**café** 👨‍👩‍👧‍👦 tea")
+      let current = markdownLeaf(document)
+      weakPreparation = document.layoutPreparation
       var buffer = LayoutBuffer()
-      var current = leaf
-      current.preparation = preparation
       let resolved = current.build(into: &buffer, context: context)
       buffer.register(resolved, in: rect)
-      // Replacing the cache cannot change text captured by registered callbacks.
-      _ = preparation.resolve(
-        MarkdownLeaf(block: .paragraph("new value"), scale: 1, lineSpacing: 4),
-        in: rect, context: context)
+      // Changing the document cannot change text captured by registered callbacks.
+      document.markdown = "new value"
+      _ = document.layoutPreparation.resolve(markdownLeaf(document), in: rect, context: context)
     }
     #expect(weakPreparation == nil)
     context.interaction.endFrame()

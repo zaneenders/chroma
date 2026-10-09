@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct StackPlacementTests {
-  @Test func growRemeasuresAtRemainingWidthAndBottomAligns() {
+  @Test func growMeasuresAtRemainingWidthAndBottomAligns() {
     let row: LayoutBuilder = { buffer, context in
       let firstContext = context.childScope(0)
       let first = buffer.customLeaf(
@@ -33,6 +33,52 @@ struct StackPlacementTests {
       return nil
     }
     #expect(rects == [Rect(x: 10, y: 40, width: 62, height: 40), Rect(x: 80, y: 70, width: 30, height: 10)])
+  }
+
+  @Test func growSkipsDiscardedProposalAndPaintingOnlyUsesRegisteredRectangles() {
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    var proposals: [Size] = []
+    var registered: [Rect] = []
+    var painted: [Rect] = []
+    let grow = buffer.customLeaf(
+      context: context.childScope(0), focusRule: .decorative, expandsHorizontally: true,
+      measure: {
+        proposals.append($0)
+        return Size(width: $0.width, height: 12)
+      },
+      register: { registered.append($0) }, paint: { _, rect in painted.append(rect) })
+    let fixed = buffer.sizing(buffer.empty(context: context.childScope(1)), x: .fixed(20), context: context)
+    let root = buffer.stack([grow, fixed], axis: .horizontal, spacing: 5, context: context)
+    let rect = Rect(x: 20, y: 30, width: 100, height: 60)
+    beginTestFrame(context.interaction, input: InputState())
+    buffer.register(root, in: rect)
+    context.interaction.endFrame()
+    #expect(proposals == [Size(width: 75, height: 60)])
+    PipelineMetrics.isEnabled = true
+    defer { PipelineMetrics.isEnabled = false }
+    var list = DrawList()
+    buffer.paint(root, into: &list, in: rect)
+    #expect(painted == registered)
+    #expect(painted == [Rect(x: 20, y: 30, width: 75, height: 12)])
+    #expect(PipelineMetrics.snapshot.measurements == 0)
+  }
+
+  @Test(arguments: [false, true])
+  func focusDoesNotChangeSpacerCrossAxis(horizontal: Bool) {
+    let target = FocusTarget()
+    let context = LayoutContext()
+    var buffer = LayoutBuffer()
+    let spacer = buffer.focus(target, context: context.childScope(0)) { buffer, context in
+      buffer.spacer(context: context)
+    }
+    #expect(buffer.count == 1)
+    let fixed = buffer.sizing(
+      buffer.empty(context: context.childScope(1)), x: .fixed(20), y: .fixed(12), context: context)
+    let root = buffer.stack([spacer, fixed], axis: horizontal ? .horizontal : .vertical, context: context)
+    #expect(
+      buffer.sizeThatFits(root, Size(width: 100, height: 60))
+        == (horizontal ? Size(width: 100, height: 12) : Size(width: 20, height: 60)))
   }
 
   @Test(arguments: [false, true], [false, true])

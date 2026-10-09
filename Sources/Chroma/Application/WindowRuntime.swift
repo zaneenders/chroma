@@ -165,7 +165,6 @@ package final class WindowRuntime {
   }
 
   package func renderScheduled(
-    _ kind: FrameScheduler.FrameKind,
     viewport: Size,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {

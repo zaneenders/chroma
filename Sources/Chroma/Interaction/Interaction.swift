@@ -20,7 +20,6 @@ package final class Interaction {
   var documentAnchor: TextEndpoint?
   var documentEnd: TextEndpoint?
 
-  package let textSelection = TextSelectionManager()
   @ObservationIgnored let textLayouts = TextLayoutPreparation()
 
   package var fontMetrics = FontMetrics()
@@ -98,9 +97,6 @@ package final class Interaction {
       height: abs(dragCurrent.y - origin.y))
   }
 
-  @ObservationIgnored package var onCopy: (() -> String?)?
-  @ObservationIgnored package var onSelectAll: (() -> Bool)?
-
   package func editableSelectionText() -> String? {
     guard editingLeaf != nil, let range = textSelectionRange, let editingText else { return nil }
     let characters = Array(editingText)
@@ -109,10 +105,10 @@ package final class Interaction {
   }
 
   package func copyText() -> String? {
-    if let text = documentCopyText() { return text }
+    if !pointerOnlySelection, let text = documentCopyText() { return text }
     if let text = editableSelectionText() { return text }
-    if let text = (registrations.copyProvider ?? onCopy)?(), !text.isEmpty { return text }
-    return textSelection.selectedText()
+    if let text = registrations.copyProvider?(), !text.isEmpty { return text }
+    return documentCopyText()
   }
 
   package func selectAll(at point: Point) {
@@ -124,8 +120,8 @@ package final class Interaction {
       return
     }
     if selectTextScope() { return }
-    if (registrations.selectAll ?? onSelectAll)?() == true { return }
-    textSelection.selectAll(at: point)
+    if registrations.selectAll?() == true { return }
+    selectPointerText(at: point)
   }
 
   struct PendingFocus: Equatable {
@@ -282,7 +278,7 @@ package final class Interaction {
     var keyBindingScopes: [ScopedKeyBindings] = []
     var actionRoles: [ScopedActionRole] = []
     var inputObservers: [@MainActor (InputState) -> Void] = []
-    var readOnlyTexts: [WidgetID: @MainActor () -> String] = [:]
+    var readOnlyTexts: [WidgetID: ReadOnlyTextRegistration] = [:]
     var inputHandlers: [WidgetID: @MainActor () -> Void] = [:]
     var buttonActions: [WidgetID: @MainActor () -> Void] = [:]
     var focusTargets: [ObjectIdentifier: (target: FocusTarget, id: WidgetID)] = [:]
@@ -303,12 +299,8 @@ package final class Interaction {
 
     registrations = FrameRegistrations()
     building = FrameRegistrations()
-    onCopy = nil
-    onSelectAll = nil
-    textSelection.clear()
     documentAnchor = nil
     documentEnd = nil
-    textSelection.layoutRegistry.clear()
     textLayouts.clear()
     animations.removeAll()
     animationKeys.removeAll()
@@ -332,7 +324,10 @@ package final class Interaction {
   }
 
   func beginEditing(_ id: WidgetID, caretOffset: Int) {
-    textSelection.clear()
+    if pointerOnlySelection {
+      documentAnchor = nil
+      documentEnd = nil
+    }
     editingReadOnly = false
     editingSessionGeneration &+= 1
     editingLeaf = id
@@ -352,8 +347,10 @@ package final class Interaction {
   }
 
   func endEditing() {
-    documentAnchor = nil
-    documentEnd = nil
+    if !pointerOnlySelection {
+      documentAnchor = nil
+      documentEnd = nil
+    }
     if editingLeaf != nil { editingSessionGeneration &+= 1 }
     editingLeaf = nil
     editingReadOnly = false
@@ -375,7 +372,8 @@ package final class Interaction {
     return redrawRequested
   }
 
-  @ObservationIgnored var refreshingRegistrations = false
+  enum CommitIntent { case registration, presentation }
+  @ObservationIgnored var commitIntent: CommitIntent = .presentation
 
   func restoreInputAfterRegistration(_ input: InputState) {
     self.input = input
@@ -394,7 +392,6 @@ package final class Interaction {
     builderStack.append(buildingTree.root)
     builderPath.removeAll(keepingCapacity: true)
     clipStack = []
-    textSelection.layoutRegistry.clear()
   }
 
   package func processInput(_ input: InputState, notifyingObservers: Bool = true) {
@@ -402,18 +399,15 @@ package final class Interaction {
     activatePending = false
     enterTextPending = false
     movementTextEvents = []
-    if !refreshingRegistrations { routeCommands(input.commands) }
+    routeCommands(input.commands)
 
     activatedLeaf = nil
-
-    if refreshingRegistrations { return }
 
     if input.pointerPressed {
       dragOrigin = input.pointerPressPosition
       dragCurrent = input.pointerPosition
       textDragAnchor = nil
       textDragViewportRow = nil
-      textSelection.clear()
       documentAnchor = nil
       documentEnd = nil
     } else if input.pointerReleased {
@@ -421,7 +415,6 @@ package final class Interaction {
     } else if isDragging {
       dragCurrent = input.pointerPosition
     }
-    textSelection.updateFromDrag(interaction: self)
 
     defer {
       selectedLeafID = selection.flatMap { tree?.node(at: $0)?.leafID }
@@ -482,7 +475,6 @@ package final class Interaction {
     if let editingLeaf, newTree.findLeaf(editingLeaf) == nil { endEditing() }
     if let pressedLeaf, newTree.findLeaf(pressedLeaf) == nil { self.pressedLeaf = nil }
     scrollStates = scrollStates.filter { building.inputHandlers[$0.key] != nil }
-    textSelection.reconcile()
     tree = newTree
     if let anchor = documentAnchor, let end = documentEnd,
       building.readOnlyTexts[anchor.id] == nil || building.readOnlyTexts[end.id] == nil

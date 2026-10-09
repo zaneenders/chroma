@@ -12,10 +12,12 @@ struct TextInputTests {
     text: inout String,
     includeField: Bool = true,
     pointerOffset: ((Point, Int?) -> Int)? = nil,
-    verticalOffset: ((Int, Int) -> Int)? = nil
+    verticalOffset: ((Int, Int) -> Int)? = nil,
+    copyProvider: (@MainActor () -> String?)? = nil
   ) -> TextInputState {
     let isInitialFrame = ctx.tree == nil
     beginTestFrame(ctx, input: input)
+    ctx.building.copyProvider = copyProvider
     var result = TextInputState(hovered: false, held: false, editing: false, caretOffset: nil)
     ctx.beginGroup(rect: Rect(x: 0, y: 0, width: 100, height: 40))
     if includeField {
@@ -401,9 +403,9 @@ struct TextInputTests {
 
   @Test func customCopyProviderDoesNotCreateAnEditableSelectionForCut() {
     let ctx = Interaction()
-    ctx.onCopy = { "custom selection" }
     var text = "hello"
     enterInsertMode(ctx, text: &text)
+    frame(ctx, text: &text, copyProvider: { "custom selection" })
 
     #expect(ctx.copyText() == "custom selection")
     #expect(ctx.editableSelectionText() == nil)
@@ -411,11 +413,11 @@ struct TextInputTests {
 
   @Test func activeTextSelectionTakesPrecedenceOverCustomCopyProvider() {
     let ctx = Interaction()
-    ctx.onCopy = { "custom selection" }
     var text = "hello"
     enterInsertMode(ctx, text: &text)
+    frame(ctx, text: &text, copyProvider: { "custom selection" })
 
-    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text)
+    _ = frame(ctx, input: InputState(textEvents: [.selectAll]), text: &text, copyProvider: { "custom selection" })
 
     #expect(ctx.copyText() == "hello")
   }

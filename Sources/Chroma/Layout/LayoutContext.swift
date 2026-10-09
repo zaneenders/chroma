@@ -58,22 +58,14 @@ public struct LayoutContext {
   }
   public var textScale: Float
 
-  public var selection: TextSelectionManager { interaction.textSelection }
-
+  /// Installs a provider for the current registration; omitted providers expire on the next update.
   public func setCopyTextProvider(_ provider: (@MainActor () -> String?)?) {
-    if interaction.builderRoot != nil {
-      interaction.building.copyProvider = provider
-    } else {
-      interaction.onCopy = provider
-    }
+    interaction.building.copyProvider = provider
   }
 
+  /// Installs a handler for the current registration; omitted handlers expire on the next update.
   public func setSelectAllHandler(_ handler: (@MainActor () -> Bool)?) {
-    if interaction.builderRoot != nil {
-      interaction.building.selectAll = handler
-    } else {
-      interaction.onSelectAll = handler
-    }
+    interaction.building.selectAll = handler
   }
 
   public var navigationBreadcrumb: [String] {

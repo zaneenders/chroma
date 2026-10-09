@@ -22,39 +22,28 @@ public struct MarkdownText {
   @MainActor public func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
     let context = context.component(Self.self)
     let blocks = document.blocks
-    let revision = document.revision
     let preparation = document.layoutPreparation
     var children: [LayoutNode] = []
     children.reserveCapacity(blocks.count)
     for index in blocks.indices {
       let leaf = MarkdownLeaf(
-        block: blocks[index].block, scale: scale, lineSpacing: lineSpacing,
-        hasLeadingGap: hasGap(before: index, in: blocks), parsedRuns: blocks[index].runs,
-        preparation: preparation, source: (revision, index))
+        block: blocks[index], index: index, preparation: preparation,
+        scale: scale, lineSpacing: lineSpacing)
       children.append(leaf.build(into: &buffer, context: context.keyed(index)))
     }
     return buffer.stack(children, axis: .vertical, context: context)
   }
-
-  private func hasGap(before index: Int, in blocks: [ParsedMarkdownBlock]) -> Bool {
-    guard index > 0 else { return false }
-    if case .listItem = blocks[index].block, case .listItem = blocks[index - 1].block { return false }
-    return true
-  }
 }
 
 struct MarkdownLeaf {
-  let block: MarkdownBlock
+  let block: ParsedMarkdownBlock
+  let index: Int
+  let preparation: MarkdownLayoutPreparation
   let scale: Float
   let lineSpacing: Float
-  var hasLeadingGap = false
-  var parsedRuns: [MarkdownRun]?
-  var preparation: MarkdownLayoutPreparation?
-  var source: (revision: UInt64, index: Int)?
 
   @MainActor func build(into buffer: inout LayoutBuffer, context: LayoutContext) -> LayoutNode {
     let context = context.component(Self.self)
-    let preparation = preparation ?? MarkdownLayoutPreparation()
     return buffer.customLeaf(
       context: context, focusRule: .standard,
       expandsHorizontally: false, expandsVertically: false,

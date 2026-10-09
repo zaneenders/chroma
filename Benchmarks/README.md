@@ -118,7 +118,8 @@ timings, native rendering, GPU measurements, or frame-rate guarantees. Run match
 builds serially on an idle machine; no wall-clock threshold is used in tests.
 Operation-local tests separately verify one leaf preparation for matching measurement,
 registration and painting, input invalidation, relocated geometry, and callback lifetime.
-The parsed document and offscreen traversal are still rebuilt for each operation.
+Documents retain parsed blocks and two bounded wrap-plan slots. Each operation
+still emits every paragraph handle, including offscreen content.
 
 See [the recorded comparison](MarkdownPreparationResults.md) for the initial matched results.
 

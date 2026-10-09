@@ -79,38 +79,22 @@ public struct Text {
     let metrics = context.fontMetrics
     let columns = columns(width: rect.size.width, context: context)
     return PlainTextLayout(
-      text: content, rect: rect, cellWidth: metrics.cellAdvance * effectiveScale,
-      lineHeight: metrics.lineAdvance * effectiveScale, scale: effectiveScale, columns: columns,
+      rect: rect, cellWidth: metrics.cellAdvance * effectiveScale,
+      lineHeight: metrics.lineAdvance * effectiveScale,
       snapshot: preparation.resolve(content, columns: columns))
   }
 
   @MainActor private func registerSelection(_ layout: PlainTextLayout, context: LayoutContext) {
     let id = selectionID ?? context.widgetID
     let interaction = context.interaction
-    interaction.textSelection.layoutRegistry.register(id, layout: layout)
     if !context.navigationIgnored {
       interaction.registerFocusTargets(context.focusTargets, id: id)
-      _ = interaction.registerTextInput(
-        id: id, rect: layout.rect, text: { content }, onChange: { _ in },
-        pointerOffset: { point, _ in layout.hitTest(point: point) ?? 0 },
-        verticalOffset: { layout.verticalOffset($0, direction: $1) }, readOnly: true)
     }
-  }
-
-  @MainActor private func selectionVisualState(context: LayoutContext) -> (range: Range<Int>?, caret: Int?) {
-    let id = selectionID ?? context.widgetID
-    var range: Range<Int>?
-    var caret: Int?
-    if !context.navigationIgnored {
-      let state = context.textInputVisualState(id: id)
-      range = state.selectionRange
-      caret = state.caretOffset
-    }
-    if let document = context.interaction.documentRange(for: id) { range = document }
-    if range == nil, let selection = context.interaction.textSelection.selection(for: id) {
-      range = selection.from..<selection.to
-    }
-    return (range, caret)
+    _ = interaction.registerTextInput(
+      id: id, rect: layout.rect, text: { content }, onChange: { _ in },
+      pointerOffset: { point, _ in layout.selectionOffset(at: point) },
+      verticalOffset: { layout.verticalOffset($0, direction: $1) },
+      navigationIgnored: context.navigationIgnored, readOnly: true)
   }
 
   @MainActor func paint(into drawList: inout DrawList, in rect: Rect, context: LayoutContext) {
@@ -138,7 +122,9 @@ public struct Text {
     if isSelectable {
       let cellWidth = layout.cellWidth
       let lineHeight = layout.lineHeight
-      let (range, caret) = selectionVisualState(context: context)
+      let state = context.textInputVisualState(id: selectionID ?? context.widgetID)
+      let range = state.selectionRange
+      let caret = context.navigationIgnored ? nil : state.caretOffset
       drawText(
         into: &drawList, in: rect, color: color, scale: effectiveScale, context: context, layout: layout.layout)
       if let range, !range.isEmpty {

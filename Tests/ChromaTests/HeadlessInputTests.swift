@@ -72,6 +72,67 @@ struct HeadlessInputTests {
     #expect(received == [press, release])
   }
 
+  @Test(arguments: [false, true])
+  func queuedPointerSelectionWorksBeforeFirstPresentation(ignored: Bool) {
+    let host = HeadlessHost(size: Size(width: 200, height: 80))
+    defer { host.close() }
+    host.build = { buffer, context in
+      var context = context
+      context.navigationIgnored = ignored
+      return buffer.text(Text("abcdef").selectable(), context: context)
+    }
+    let start = Point(x: 0, y: 1)
+    let end = Point(x: host.runtime.context.fontMetrics.cellAdvance * 3, y: 1)
+    host.sendInput(InputState(pointerPosition: start, pointerDown: true, pointerPressed: true))
+    host.sendInput(InputState(pointerPosition: end, pointerDown: true))
+    host.sendInput(InputState(pointerPosition: end, pointerReleased: true))
+    #expect(host.lastFrame == nil)
+    let frame = host.render()
+    #expect(host.runtime.interaction.copyText() == "abc")
+    #expect(
+      frame.paintSnapshot.contains {
+        if case .fillRect(_, let color) = $0 { return color == host.runtime.context.theme.focus.selectionBackground }
+        return false
+      })
+    #expect(host.runtime.interaction.dragOrigin == nil)
+    #expect((host.runtime.interaction.selectedLeafID == nil) == ignored)
+    host.render()
+    #expect(host.runtime.interaction.copyText() == "abc")
+  }
+
+  @Test func rawKeysUseOneFreshRegistrationAndPreserveReentrantOrder() {
+    let host = HeadlessHost()
+    defer { host.close() }
+    let key = KeyboardInput(chord: KeyChord("x"), text: "x")
+    var builds = 0
+    var revision = 0
+    var seen: [Int] = []
+    host.build = { buffer, context in
+      builds += 1
+      let current = revision
+      let child = buffer.button(Button("Target") {}, context: context)
+      let scoped = buffer.keyBindings(child, KeyBindings { bind("x", to: .application("run")) }, context: context)
+      return buffer.onCommand(scoped, .application("run"), context: context) {
+        seen.append(current)
+        revision += 1
+        if current == 0 { host.sendKeyboardInput(key) }
+        return .handled
+      }
+    }
+    host.render()
+    host.sendInput(InputState(commands: [.navigation(.nextFocus)]))
+    builds = 0
+    PipelineMetrics.isEnabled = true
+    defer { PipelineMetrics.isEnabled = false }
+    host.sendKeyboardInput(key)
+    #expect(seen == [0, 1])
+    #expect(builds == 2)
+    #expect(PipelineMetrics.snapshot.paints == 0)
+    host.render()
+    #expect(seen == [0, 1])
+    #expect(builds == 3)
+  }
+
   @Test func explicitRenderConsumesThePendingRequest() async {
     let host = HeadlessHost()
     defer { host.close() }

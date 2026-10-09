@@ -74,8 +74,7 @@ extension LayoutBuffer {
   ) -> LayoutNode {
     var context = context
     context.focusTargets.append(target)
-    let child = content(&self, context)
-    return node(.focus(child, target), context: context)
+    return content(&self, context)
   }
 
   public mutating func animatedValue(

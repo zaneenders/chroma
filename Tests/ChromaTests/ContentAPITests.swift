@@ -32,11 +32,10 @@ struct ContentAPITests {
     }
     #expect(strings == ["ab", "cd"])
     let layout = PlainTextLayout(
-      text: "abcd", rect: Rect(origin: .zero, size: size), cellWidth: metrics.cellAdvance,
-      lineHeight: metrics.lineAdvance, scale: 1, columns: 2)
+      rect: Rect(origin: .zero, size: size), cellWidth: metrics.cellAdvance,
+      lineHeight: metrics.lineAdvance, snapshot: TextLayoutSnapshot("abcd", columns: 2))
     #expect(layout.position(at: 2) == Point(x: 0, y: metrics.lineAdvance))
     #expect(layout.hitTest(point: Point(x: metrics.cellAdvance, y: metrics.lineAdvance)) == 3)
-    #expect(layout.textInRange(from: 1, to: 3) == "bc")
   }
 
   @Test func editorInsertsNewlineAtCaretAndReplacesSelection() {

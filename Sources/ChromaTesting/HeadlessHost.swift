@@ -66,15 +66,27 @@ public final class HeadlessHost: Host {
     runtime.handleInput(input)
   }
 
+  /// Resolves and delivers a raw key against one fresh registration, preserving FIFO order.
+  public func sendKeyboardInput(_ input: KeyboardInput, state: InputState = InputState()) {
+    runtime.handleKeyboardInput(input) { [weak self] resolved in
+      var state = state
+      switch resolved {
+      case .command(let command): state.commands = [command]
+      case .text(let event): state.textEvents = [event]
+      }
+      self?.runtime.handleInput(state)
+    }
+  }
+
   /// Presents pending work immediately, ignoring the native frame deadline.
   /// Returns nil when idle, making coalesced input and scheduling testable without
   /// a native event loop or artificial sleeps.
   @discardableResult
   public func renderIfNeeded() -> HeadlessFrame? {
-    guard let scheduled = runtime.scheduler.nextFrame else { return nil }
+    guard case .some = runtime.scheduler.nextFrame else { return nil }
     runtime.scheduler.recordProducedFrame()
     let drawList = runtime.renderScheduled(
-      scheduled.kind, viewport: viewport,
+      viewport: viewport,
       onChange: { [weak self] in self?.requestRedraw() })
     _ = interaction.consumeRedrawRequest()
     runtime.observe(drawList, viewport: viewport)
@@ -85,10 +97,10 @@ public final class HeadlessHost: Host {
 
   /// Presents changes using the same refresh-rate scheduler as native hosts.
   public func startPresenting(onlyChanges: Bool = true, _ present: @escaping @MainActor (HeadlessFrame) -> Void) {
-    runtime.scheduler.onFrame = { [weak self] kind in
+    runtime.scheduler.onFrame = { [weak self] in
       guard let self else { return }
       let drawList = runtime.renderScheduled(
-        kind, viewport: viewport,
+        viewport: viewport,
         onChange: { [weak self] in self?.requestRedraw() })
       _ = interaction.consumeRedrawRequest()
       runtime.observe(drawList, viewport: viewport)

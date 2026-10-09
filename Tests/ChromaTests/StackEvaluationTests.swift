@@ -192,16 +192,16 @@ struct StackEvaluationTests {
     resolvedBuffer.register(resolved, in: Rect(origin: .zero, size: proposal))
     resolvedBuffer.paint(resolved, into: &list, in: Rect(origin: .zero, size: proposal))
     context.interaction.endFrame()
-    #expect(measurements.proposals == [proposal, Size(width: 100, height: 100)])
+    #expect(measurements.proposals == [Size(width: 100, height: 100)])
 
     let narrower = Size(width: 120, height: 100)
     #expect(resolvedBuffer.sizeThatFits(resolved, narrower) == Size(width: 120, height: 12))
-    #expect(measurements.proposals.suffix(2) == [narrower, Size(width: 60, height: 100)])
+    #expect(measurements.proposals == [Size(width: 100, height: 100), Size(width: 60, height: 100)])
 
     measurements.height = 30
     measurements.proposals = []
     #expect(measureLayout(block, proposal: proposal, context: context) == Size(width: 200, height: 30))
-    #expect(measurements.proposals == [proposal, Size(width: 100, height: 100)])
+    #expect(measurements.proposals == [Size(width: 100, height: 100)])
   }
 
   @Test func interactiveMeasurementSharesItsIdleBodyAcrossLayoutQueries() {

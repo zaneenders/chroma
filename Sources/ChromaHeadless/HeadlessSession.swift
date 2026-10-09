@@ -53,14 +53,8 @@ public final class HeadlessSession {
         let modifiers = Self.modifiers(request.modifiers ?? [])
         let key = request.key.map(Self.key)
         guard key != nil || request.text != nil else { throw HeadlessError.invalidRequest }
-        let resolved = host.resolve(
-          KeyboardInput(chord: key.map { KeyChord($0, modifiers: modifiers) }, text: request.text))
-        switch resolved {
-        case .command(let command): input.commands = [command]
-        case .text(let event): input.textEvents = [event]
-        case nil: break
-        }
-        host.sendInput(input)
+        host.sendKeyboardInput(
+          KeyboardInput(chord: key.map { KeyChord($0, modifiers: modifiers) }, text: request.text), state: input)
       case .pointer:
         guard let x = request.x, let y = request.y,
           Self.validCoordinate(x), Self.validCoordinate(y), let phase = request.phase

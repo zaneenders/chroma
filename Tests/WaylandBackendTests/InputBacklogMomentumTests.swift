@@ -16,7 +16,7 @@ struct InputBacklogMomentumTests {
     defer { scheduler.reset() }
     scheduler.setRefreshRates(minimum: 30, maximum: 60)
     scheduler.requestContent()
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     var vertical = ScrollMomentum()
     var horizontal = ScrollMomentum()
     for index in 0..<180 {
@@ -32,16 +32,16 @@ struct InputBacklogMomentumTests {
     if diagonal { horizontal.stop(time: 3_000, now: clock.now) }
     scheduler.scrollMomentumActive = vertical.isActive || horizontal.isActive
     #expect(scheduler.scrollMomentumActive)
-    #expect(scheduler.takeFrame() == .content)
+    #expect(scheduler.takeFrame())
     var frames = 0
     var distance = Point.zero
     for _ in 0..<200 {
       guard let next = scheduler.nextFrame else { break }
       let previousStart = try #require(scheduler.lastFrameTime)
       #expect(next.deadline == previousStart + 1.0 / 30)
-      #expect(scheduler.takeFrame() == nil)
+      #expect(!scheduler.takeFrame())
       clock.now = next.deadline
-      #expect(scheduler.takeFrame() == .content)
+      #expect(scheduler.takeFrame())
       distance.y += vertical.advance(now: clock.now)
       distance.x += horizontal.advance(now: clock.now)
       scheduler.scrollMomentumActive = vertical.isActive || horizontal.isActive
@@ -53,6 +53,6 @@ struct InputBacklogMomentumTests {
     #expect(!scheduler.scrollMomentumActive)
     #expect(scheduler.nextFrame == nil)
     clock.now += 10
-    #expect(scheduler.takeFrame() == nil)
+    #expect(!scheduler.takeFrame())
   }
 }

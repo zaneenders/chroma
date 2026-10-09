@@ -142,7 +142,7 @@ struct InputUpdatePhaseTests {
       content, viewport: Size(width: 20, height: 20),
       context: context)
     #expect(context.interaction.copyText() == nil)
-    #expect(context.interaction.onSelectAll == nil)
+    #expect(context.interaction.registrations.selectAll == nil)
   }
 
   @Test func opaquePaintingDoesNotConstructItsChildAgain() {

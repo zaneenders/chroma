@@ -159,75 +159,24 @@ public struct ScrollView {
         }, controller))
   }
 
-  struct ScrollGeometry {
-    let id: WidgetID
-    let contentSize: Size
-    let horizontal: Bool
-    let offsets: Point
-    let resolvedContent: LayoutNode?
-  }
-
-  /// Placement events are shared by registration and presentation. No event requires painting.
-  enum Placement {
+  /// Ordered drawing retained by the current operation, after direct registration.
+  enum PaintItem {
     case content(LayoutNode, Rect)
     case rowFocus(LayoutContext, Rect)
   }
 
-  /// The resolved operation owns this snapshot. It is never stored on the controller or
-  /// reused by a later update, so painting keeps the exact visible rows and geometry that
-  /// registration prepared without measuring, rebuilding rows, or changing scroll state.
+  /// Never stored on the controller or reused by a later update. Painting consumes
+  /// only the registered rows and indicator geometry, without preparing scroll state.
   struct PreparedScroll {
     let rect: Rect
-    let geometry: ScrollGeometry
-    let placements: [Placement]
+    let contentSize: Size
+    let horizontal: Bool
+    let offsets: Point
+    let items: [PaintItem]
   }
 
   @MainActor func registerContent(in rect: Rect, context: LayoutContext, buffer: inout LayoutBuffer)
     -> PreparedScroll
-  {
-    let geometry = prepareScroll(in: rect, context: context, buffer: &buffer)
-    var placements: [Placement] = []
-    placeContent(in: rect, context: context, geometry: geometry, buffer: &buffer) { buffer, placement in
-      placements.append(placement)
-      switch placement {
-      case .content(let resolved, let rect): buffer.register(resolved, in: rect)
-      case .rowFocus(let context, let rect): context.registerFocusable(in: rect)
-      }
-    }
-    return PreparedScroll(rect: rect, geometry: geometry, placements: placements)
-  }
-
-  @MainActor func paint(
-    _ prepared: PreparedScroll, into drawList: inout DrawList, context: LayoutContext, buffer: inout LayoutBuffer
-  ) {
-    drawList.pushClip(prepared.rect)
-    for placement in prepared.placements {
-      switch placement {
-      case .content(let resolved, let rect): buffer.paint(resolved, into: &drawList, in: rect)
-      case .rowFocus(let context, let rect): context.paintFocusHighlight(in: rect, into: &drawList)
-      }
-    }
-    paintIndicators(into: &drawList, in: prepared.rect, geometry: prepared.geometry, context: context)
-    drawList.popClip()
-  }
-
-  @MainActor private func paintIndicators(
-    into drawList: inout DrawList, in rect: Rect, geometry: ScrollGeometry, context: LayoutContext
-  ) {
-    if showsIndicator {
-      drawIndicator(
-        into: &drawList, in: rect, extent: geometry.contentSize.height, offset: geometry.offsets.y,
-        horizontal: false, style: context.theme.scrollView)
-      if geometry.horizontal {
-        drawIndicator(
-          into: &drawList, in: rect, extent: geometry.contentSize.width, offset: geometry.offsets.x,
-          horizontal: true, style: context.theme.scrollView)
-      }
-    }
-  }
-
-  @MainActor private func prepareScroll(in rect: Rect, context: LayoutContext, buffer: inout LayoutBuffer)
-    -> ScrollGeometry
   {
     let id = context.widgetID
     let interaction = context.interaction
@@ -276,34 +225,46 @@ public struct ScrollView {
     let offsets = interaction.resolveScroll(
       id: id, viewport: rect, contentSize: contentSize, controller: controller,
       sticksToBottom: sticksToBottom, horizontal: horizontal)
-    return ScrollGeometry(
-      id: id, contentSize: contentSize, horizontal: horizontal, offsets: offsets,
-      resolvedContent: resolvedContent)
-  }
-
-  @MainActor private func placeContent(
-    in rect: Rect, context: LayoutContext, geometry: ScrollGeometry, buffer: inout LayoutBuffer,
-    visit: (inout LayoutBuffer, Placement) -> Void
-  ) {
-    let interaction = context.interaction
+    var items: [PaintItem] = []
     interaction.pushClip(rect)
     interaction.beginGroup(
-      rect: rect, axis: geometry.horizontal ? nil : .vertical,
-      scrollID: geometry.id, navigationID: geometry.id, navigationName: name)
-    switch content {
-    case .layout:
-      visit(
-        &buffer,
-        .content(
-          geometry.resolvedContent!,
-          Rect(
-            x: rect.minX - geometry.offsets.x, y: rect.minY - geometry.offsets.y,
-            width: geometry.contentSize.width, height: geometry.contentSize.height)))
-    case .rows, .uniform:
-      placeRows(in: rect, context: context, id: geometry.id, offset: geometry.offsets.y, buffer: &buffer, visit: visit)
+      rect: rect, axis: horizontal ? nil : .vertical,
+      scrollID: id, navigationID: id, navigationName: name)
+    if let resolvedContent {
+      let contentRect = Rect(
+        x: rect.minX - offsets.x, y: rect.minY - offsets.y,
+        width: contentSize.width, height: contentSize.height)
+      buffer.register(resolvedContent, in: contentRect)
+      items.append(.content(resolvedContent, contentRect))
+    } else {
+      registerRows(in: rect, context: context, id: id, offset: offsets.y, buffer: &buffer, items: &items)
     }
     interaction.endGroup()
     interaction.popClip()
+    return PreparedScroll(rect: rect, contentSize: contentSize, horizontal: horizontal, offsets: offsets, items: items)
+  }
+
+  @MainActor func paint(
+    _ prepared: PreparedScroll, into drawList: inout DrawList, context: LayoutContext, buffer: inout LayoutBuffer
+  ) {
+    drawList.pushClip(prepared.rect)
+    for item in prepared.items {
+      switch item {
+      case .content(let resolved, let rect): buffer.paint(resolved, into: &drawList, in: rect)
+      case .rowFocus(let context, let rect): context.paintFocusHighlight(in: rect, into: &drawList)
+      }
+    }
+    if showsIndicator {
+      drawIndicator(
+        into: &drawList, in: prepared.rect, extent: prepared.contentSize.height, offset: prepared.offsets.y,
+        horizontal: false, style: context.theme.scrollView)
+      if prepared.horizontal {
+        drawIndicator(
+          into: &drawList, in: prepared.rect, extent: prepared.contentSize.width, offset: prepared.offsets.x,
+          horizontal: true, style: context.theme.scrollView)
+      }
+    }
+    drawList.popClip()
   }
 
   private func drawIndicator(
@@ -326,9 +287,9 @@ public struct ScrollView {
     drawList.fillRect(thumb, color: style.indicator)
   }
 
-  @MainActor private func placeRows(
+  @MainActor private func registerRows(
     in rect: Rect, context: LayoutContext, id: WidgetID, offset: Float, buffer: inout LayoutBuffer,
-    visit: (inout LayoutBuffer, Placement) -> Void
+    items: inout [PaintItem]
   ) {
     let interaction = context.interaction
     let visibleTop = offset
@@ -354,14 +315,14 @@ public struct ScrollView {
       let end = min(uniformRows.count, visibleEnd + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
-          placeRow(
+          registerRow(
             { buffer, context in uniformRows.build(&buffer, context, index) },
             in: Rect(
               x: rect.minX, y: rect.minY + Float(index) * stride - offset,
               width: rect.size.width, height: uniformRows.height),
             context: uniformRows.keys.map { context.scoped([.key($0.keys[index])]) } ?? context.childScope(index),
             interaction: interaction, offset: offset, scrollID: id,
-            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index), buffer: &buffer, visit: visit)
+            rowKey: uniformRows.keys?.keys[index] ?? StructuralKey(index), buffer: &buffer, items: &items)
         }
       }
     case .rows(let rows, let controller):
@@ -372,34 +333,36 @@ public struct ScrollView {
       let end = min(rows.count, positions.firstRow(startingAfter: visibleBottom) + after)
       if rect.size.height > 0 && first < end {
         for index in first..<end {
-          placeRow(
+          registerRow(
             rows[index].build,
             in: Rect(
               x: rect.minX, y: rect.minY + positions.starts[index] - offset,
               width: rect.size.width, height: positions.heights[index]),
             context: context.scoped([.key(rows[index].key)]),
             interaction: interaction, offset: offset, scrollID: id, rowKey: rows[index].key, buffer: &buffer,
-            visit: visit)
+            items: &items)
         }
       }
     }
   }
 
-  @MainActor private func placeRow(
+  @MainActor private func registerRow(
     _ build: LayoutBuilder, in rect: Rect,
     context rowContext: LayoutContext, interaction: Interaction, offset: Float, scrollID: WidgetID,
-    rowKey: StructuralKey, buffer: inout LayoutBuffer, visit: (inout LayoutBuffer, Placement) -> Void
+    rowKey: StructuralKey, buffer: inout LayoutBuffer, items: inout [PaintItem]
   ) {
     guard let group = interaction.builderStack.last else {
-      preconditionFailure("placeRow outside of a frame; call beginFrame first")
+      preconditionFailure("registerRow outside of a frame; call beginFrame first")
     }
     let children = group.children.count
     var rowContext = rowContext
     rowContext.focusLeafClaimed = true
     let node = build(&buffer, rowContext)
-    visit(&buffer, .content(node, rect))
+    buffer.register(node, in: rect)
+    items.append(.content(node, rect))
     if group.children.count == children {
-      visit(&buffer, .rowFocus(rowContext, rect))
+      rowContext.registerFocusable(in: rect)
+      items.append(.rowFocus(rowContext, rect))
     }
     interaction.recordScrollRows(
       in: group, fromChild: children, offset: offset, scrollID: scrollID,

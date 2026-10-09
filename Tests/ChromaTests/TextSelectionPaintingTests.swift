@@ -52,7 +52,7 @@ struct TextSelectionPaintingTests {
     #expect(context.interaction.caretOffset == selection.upperBound)
     #expect(context.interaction.editingSessionGeneration == generation)
     #expect(context.interaction.tree == nil)
-    #expect(context.interaction.textSelection.layoutRegistry.entry(at: rect.origin) != nil)
+    #expect(context.interaction.building.readOnlyTexts[context.widgetID] != nil)
     context.interaction.endFrame()
   }
 

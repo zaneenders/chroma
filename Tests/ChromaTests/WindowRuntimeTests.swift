@@ -66,12 +66,12 @@ struct WindowRuntimeTests {
       runtime.handleInput(InputState(textEvents: [event]))
     }
     #expect(model.text == "ac")
-    #expect(runtime.scheduler.nextFrame?.kind == .content)
+    #expect(runtime.scheduler.nextFrame != nil)
     runtime.context.focus(try #require(button.boundID))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     #expect(model.actions == 2)
-    let list = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    let list = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(model.actions == 2)
     #expect(model.text == "ac")
     #expect(
@@ -88,7 +88,7 @@ struct WindowRuntimeTests {
       runtime.handleInput(InputState(pointerPosition: point, pointerReleased: true))
     }
     #expect(model.actions == 4)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(model.actions == 4)
     runtime.reset()
   }
@@ -110,7 +110,7 @@ struct WindowRuntimeTests {
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     if !beforeInitialFrame { #expect(model.actions == 2) }
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(model.actions == 2)
   }
 
@@ -137,7 +137,7 @@ struct WindowRuntimeTests {
     runtime.handleInput(InputState(textEvents: [.moveCaretUp]))
     #expect(model.text == "a\nb")
     #expect(runtime.interaction.caretOffset == 1)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(runtime.interaction.caretOffset == 1)
   }
 
@@ -157,7 +157,7 @@ struct WindowRuntimeTests {
     runtime.dispatchInput { model.text += "b" }
     let list =
       scheduled
-      ? runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+      ? runtime.renderScheduled(viewport: viewport, onChange: {})
       : runtime.render(viewport: viewport, input: InputState(), onChange: {})
     #expect(model.text == "ab")
     #expect(
@@ -198,7 +198,7 @@ struct WindowRuntimeTests {
     runtime.build = { buffer, context in
       return Probe(counter: counter).build(into: &buffer, context: context)
     }
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     counter.draws = 0
     for x in 1...100 {
       runtime.handleInput(InputState(pointerPosition: Point(x: Float(x), y: 10)))
@@ -206,7 +206,7 @@ struct WindowRuntimeTests {
     #expect(counter.draws == 0)
     #expect(runtime.interaction.hoveredLeafID != nil)
     #expect(runtime.interaction.input.pointerPosition == Point(x: 100, y: 10))
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(counter.draws == 1)
     #expect(runtime.scheduler.nextFrame == nil)
   }
@@ -226,13 +226,13 @@ struct WindowRuntimeTests {
       return buffer.stack([node397, node398, node400], axis: .vertical, context: context)
     }
     let viewport = Size(width: 100, height: 100)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    _ = runtime.renderScheduled(viewport: viewport, onChange: {})
     runtime.context.focus(try #require(target.boundID), editing: true)
-    let first = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    let first = runtime.renderScheduled(viewport: viewport, onChange: {})
     runtime.scheduler.recordProducedFrame()
     #expect(runtime.scheduler.nextFrame == nil)
     clock.now += 10
-    let second = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    let second = runtime.renderScheduled(viewport: viewport, onChange: {})
     #expect(first.paintSnapshot == second.paintSnapshot)
     #expect(runtime.scheduler.nextFrame == nil)
     runtime.reset()
@@ -254,7 +254,7 @@ struct WindowRuntimeTests {
       return node403
     }
     let onChange: @MainActor @Sendable () -> Void = { runtime.scheduler.requestContent() }
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: onChange)
+    _ = runtime.renderScheduled(viewport: viewport, onChange: onChange)
     await drainObservationChanges()
     #expect(runtime.scheduler.nextFrame == nil)
     for input in [
@@ -262,7 +262,7 @@ struct WindowRuntimeTests {
       InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -20)),
     ] {
       runtime.handleInput(input)
-      _ = runtime.renderScheduled(.content, viewport: viewport, onChange: onChange)
+      _ = runtime.renderScheduled(viewport: viewport, onChange: onChange)
       await drainObservationChanges()
       #expect(runtime.scheduler.nextFrame == nil)
     }
@@ -278,7 +278,7 @@ struct WindowRuntimeTests {
     runtime.handleInput(InputState(commands: [.navigation(.nextFocus)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
     runtime.handleInput(InputState(commands: [.action(.activate)]))
-    _ = runtime.renderScheduled(.content, viewport: Size(width: 200, height: 100), onChange: {})
+    _ = runtime.renderScheduled(viewport: Size(width: 200, height: 100), onChange: {})
     #expect(model.actions == 2)
     runtime.reset()
   }
@@ -292,16 +292,16 @@ struct WindowRuntimeTests {
     runtime.build = { buffer, context in
       return buffer.text(Text(model.text), context: context)
     }
-    #expect(runtime.scheduler.takeFrame() == .content)
-    _ = runtime.renderScheduled(.content, viewport: viewport, onChange: { runtime.scheduler.requestContent() })
+    #expect(runtime.scheduler.takeFrame())
+    _ = runtime.renderScheduled(viewport: viewport, onChange: { runtime.scheduler.requestContent() })
     model.text = "one"
     model.text = "two"
     await drainObservationChanges()
     #expect(runtime.scheduler.nextFrame?.deadline == 100 + 1.0 / 60)
-    #expect(runtime.scheduler.takeFrame() == nil)
+    #expect(!runtime.scheduler.takeFrame())
     clock.now = try #require(runtime.scheduler.nextFrame).deadline
-    #expect(runtime.scheduler.takeFrame() == .content)
-    let list = runtime.renderScheduled(.content, viewport: viewport, onChange: { runtime.scheduler.requestContent() })
+    #expect(runtime.scheduler.takeFrame())
+    let list = runtime.renderScheduled(viewport: viewport, onChange: { runtime.scheduler.requestContent() })
     #expect(
       list.paintSnapshot.contains {
         if case .text(_, "two", _, _) = $0 { return true }
@@ -312,7 +312,7 @@ struct WindowRuntimeTests {
       return buffer.progressIndicator(ProgressIndicator(), context: context)
     }
     #expect(runtime.scheduler.nextFrame?.deadline == clock.now + 1.0 / 60)
-    #expect(runtime.scheduler.takeFrame() == nil)
+    #expect(!runtime.scheduler.takeFrame())
     runtime.reset()
   }
 

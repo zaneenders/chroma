@@ -57,17 +57,13 @@ struct MarkdownDocumentTests {
     #expect(changed.withLock { $0 })
   }
 
-  @Test(arguments: [Float(12), 72, 500])
-  func preparedInlineRunsMatchOrdinaryRendering(width: Float) {
-    let source = "# **Heading**\n\n**café** and `code`\n\n- first\n- second\n\n> quote\n\n---\n\n```\n**literal**\n```"
-    let document = MarkdownDocument(source)
-    let columns = max(1, Int(width / 12))
-    let blocks = document.blocks.map(\.block)
-    #expect(
-      layoutMarkdown(blocks, columns: columns, theme: .dark, baseColor: .white)
-        == layoutMarkdown(
-          blocks, columns: columns, theme: .dark, baseColor: .white,
-          parsedRuns: document.blocks.map(\.runs)))
+  @Test func parsingRetainsSemanticGapsWithTheBlockSnapshot() {
+    let document = MarkdownDocument("# Heading\n\n- first\n- second\n\nParagraph")
+    let original = document.blocks
+    #expect(original.map(\.hasLeadingGap) == [false, true, false, true])
+    document.markdown = "first\n\nsecond"
+    #expect(document.blocks.map(\.hasLeadingGap) == [false, true])
+    #expect(original.map(\.hasLeadingGap) == [false, true, false, true])
   }
 
   @Test func retainedRendererReadsCurrentDocumentAfterMutation() {

@@ -123,6 +123,7 @@ struct RenderingCommandTests {
     let press = Point(x: 19, y: 6)
     let drag = Point(x: 35, y: 6)
 
+    _ = render({ buffer, context in buffer.text(text, context: context) }, in: rect, context: context)
     _ = render(
       { buffer, context in buffer.text(text, context: context) }, in: rect, context: context,
       input: InputState(
@@ -137,7 +138,7 @@ struct RenderingCommandTests {
 
     #expect(
       list.paintSnapshot == [
-        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark, pressed: true)),
         .text(position: Point(x: 10, y: 5), text: "ABCD", color: textColor, scale: 1),
         .fillRect(rect: Rect(x: 18, y: 5, width: 16, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
         .pushClip(Rect(x: 18, y: 5, width: 16, height: 16)),
@@ -165,6 +166,7 @@ struct RenderingCommandTests {
 
     let press = Point(x: 11, y: 6)
     let drag = Point(x: 17, y: 6)
+    _ = render({ buffer, context in buffer.text(text, context: context) }, in: rect, context: context)
     _ = render(
       { buffer, context in buffer.text(text, context: context) }, in: rect, context: context,
       input: InputState(
@@ -179,7 +181,7 @@ struct RenderingCommandTests {
 
     #expect(
       list.paintSnapshot == [
-        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark)),
+        .fillRect(rect: rect, color: HoverStyle.standardTint(in: .dark, pressed: true)),
         .text(position: Point(x: 4, y: 5), text: "ABC", color: .white, scale: 1),
         .fillRect(rect: Rect(x: 10, y: 5, width: 6, height: 16), color: ChromaTheme.dark.focus.selectionBackground),
         .pushClip(Rect(x: 10, y: 5, width: 6, height: 16)),

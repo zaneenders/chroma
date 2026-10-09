@@ -35,11 +35,7 @@ public final class NavigationTestHost {
 
   public func press(_ inputs: KeyboardInput...) {
     for input in inputs {
-      guard let resolved = host.resolve(input) else { continue }
-      switch resolved {
-      case .command(let command): host.render(input: InputState(commands: [command]))
-      case .text(let event): host.render(input: InputState(textEvents: [event]))
-      }
+      host.sendKeyboardInput(input)
       host.render()
     }
   }
