@@ -251,13 +251,14 @@ func runSession(
   _ name: String = "ChromaHeadlessDemo",
   arguments: Arguments = ["--viewport", "800x600"],
   environment: Environment = .inherit,
+  timeout: Duration = .seconds(10),
   body: @escaping @Sendable (ProcessClient) async throws -> Void
 ) async throws -> ProcessOutcome {
   let program = try executable(name)
   let responses = Responses()
   let frames = Responses()
   let diagnostics = Diagnostics()
-  return try await withDeadline("\(name) session") {
+  return try await withDeadline("\(name) session", after: timeout) {
     let result = try await Subprocess.run(
       program, arguments: arguments, environment: environment,
       input: .inputWriter, output: .sequence, error: .sequence
