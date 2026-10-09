@@ -2,7 +2,7 @@
 # Ubuntu 24.04's Wayland headers predate wl_pointer_listener.warp.
 # Install this pinned upstream release into an isolated, caller-owned prefix.
 set -euo pipefail
-prefix=${1:?usage: build-ci-wayland.sh ABSOLUTE_PREFIX}
+prefix=${1:?usage: build-wayland.sh ABSOLUTE_PREFIX}
 case "$prefix" in /*) ;; *) echo 'Prefix must be absolute.' >&2; exit 2;; esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

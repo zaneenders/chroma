@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The same checks run locally and in CI. No resolution updates or stderr filtering.
+# Explicitly invoked local checks. No resolution updates or stderr filtering.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

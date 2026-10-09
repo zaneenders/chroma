@@ -21,7 +21,7 @@ add `--without-profiling` to omit debug info. See [Install](INSTALLING.md).
 
 ## Development checks
 
-See [Validation](VALIDATION.md) for supported toolchains, local commands, CI coverage,
+See [Validation](VALIDATION.md) for supported toolchains, local commands, platform coverage,
 and the native smoke checklist.
 
 ## Inspired by
