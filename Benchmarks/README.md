@@ -56,6 +56,13 @@ Measures the headless rendering path through `ChromaTesting.HeadlessHost` for sc
 
 These timings exclude native input dispatch, scheduler waits, Metal encoding, and GPU execution. They are not consumed by `CompareBenchmarks`.
 
+## Sustained input backlog investigation
+
+See [the deterministic backlog experiment](INPUT_BACKLOG.md) for runtime recovery
+regressions and a configurable queueing model. It separates CPU saturation,
+completed dispatch opportunities and compositor readiness without claiming native
+latency measurements or changing input scheduling.
+
 ## Nested layout
 
 ```sh
