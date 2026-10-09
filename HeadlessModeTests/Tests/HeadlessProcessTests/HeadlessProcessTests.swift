@@ -245,7 +245,10 @@ struct HeadlessProcessTests {
 
   @Test func stdoutBurstDrainsBeforeResponsesAreConsumed() async throws {
     let count = 256
-    let outcome = try await runSession("HeadlessProcessFixture") { client in
+    // This checks pipe draining and ordering, not rendering throughput. Debug full-frame
+    // encoding/decoding can exceed the ordinary watchdog on a shared or slower host.
+    // Keep a finite hang guard without weakening the burst size or response assertions.
+    let outcome = try await runSession("HeadlessProcessFixture", timeout: .seconds(30)) { client in
       let requests = (0..<count).map { HeadlessRequest(id: "burst-\($0)", op: .frame) }
       try await client.send(requests)
       try await client.input.finish()
@@ -304,6 +307,24 @@ struct HeadlessProcessTests {
     }
     let start = try #require(await deadline.startedAt)
     #expect(start.duration(to: .now) < .seconds(3), "The outer session deadline must not mask a stuck reader")
+    try requireReaped(try #require(await deadline.pid))
+  }
+
+  @Test func customSessionDeadlineCancelsAndReapsChild() async throws {
+    let start = ContinuousClock.now
+    let deadline = DeadlineProbe()
+    do {
+      _ = try await runSession("HeadlessProcessFixture", timeout: .seconds(1)) { client in
+        await deadline.begin(client.pid)
+        // Initial frames use a separate mailbox. No correlated response can arrive
+        // without a request, so only the session watchdog can end this wait.
+        _ = try await client.receive()
+      }
+      Issue.record("Expected the custom session deadline to expire")
+    } catch let error as DeadlineExceeded {
+      #expect(error.description == "Deadline exceeded: HeadlessProcessFixture session")
+    }
+    #expect(start.duration(to: .now) < .seconds(8), "The default 10-second deadline must not mask an ignored override")
     try requireReaped(try #require(await deadline.pid))
   }
 

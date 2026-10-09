@@ -38,10 +38,29 @@ Handshake results are more scheduler-sensitive than burst throughput.
 ## Correctness validation
 
 - All 555 root Swift tests passed, including seven new bounded-reader tests.
-- All 17 headless child-process tests passed, including two new transport tests.
+- All 18 headless child-process tests passed, including two new transport tests.
 - Open-stdin delivery, incomplete lines, split UTF-8, limits, burst ordering,
   oversized/invalid-UTF8 recovery, EOF, cancellation and child reaping are covered.
 - Strict formatting, shell syntax and whitespace checks passed.
 - Two independent static reviews found no production blockers.
 - Linux only; macOS execution was not available. EINTR retry is source-reviewed,
   while the new deterministic error-path test checks EBADF rather than injecting signals.
+
+## Integration watchdog follow-up
+
+The local combined follow-on tree (`2088aa9be0a6ef28d1fc0e38890c18ba585de357`)'s
+existing 256-response debug pipe-draining test reached
+the original 10-second session deadline. A diagnostic 30-second guard let it finish
+with every functional assertion passing in 10.056 seconds. Restoring the previous
+font diagnostics and byte-at-a-time reader from `a8ab7bd` in that same combined
+fixture (only `HighResolutionFontAtlas.swift`, `MissingGlyphWarnings.swift` and
+`BoundedLineReader.swift` restored) yielded
+9.875 seconds, also close to the cutoff. These single shared-host samples establish
+an inadequate watchdog margin, not a production speedup or non-regression claim.
+
+Only that functional burst test now opts into a 30-second finite session watchdog;
+other session defaults remain 10 seconds. No burst-size, ordering, EOF or response
+assertions were removed. A new one-second custom-session timeout regression checks
+cancellation and child reaping, with an eight-second outer assertion that detects an
+ignored override without imposing a tight cleanup-performance budget. This test-only
+follow-up does not change the reader or the transport benchmark samples above.
