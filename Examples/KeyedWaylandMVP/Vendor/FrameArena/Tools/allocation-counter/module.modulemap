@@ -1,0 +1,4 @@
+module AllocationCounter {
+    header "allocation_counter.h"
+    export *
+}

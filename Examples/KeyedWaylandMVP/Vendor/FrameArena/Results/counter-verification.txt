@@ -1,0 +1,7 @@
+C routes: malloc=1 calloc=1 realloc=1 aligned_alloc=1 posix_memalign=1 free=4
+C gate/reset/thread-isolation checks passed
+Swift prewarmed UniqueArray<Int>: malloc=0 calloc=0 realloc=0 aligned_alloc=0 posix_memalign=0 free=0; checksum=1035788800
+Swift positive control: malloc=0 calloc=0 realloc=0 aligned_alloc=0 posix_memalign=1 free=0; value=41
+Swift dlsym probe: counts unavailable (no preload)
+Swift dlsym probe: all six counts zero; checksum=1035788800
+Swift dlsym positive control: allocation calls=1; value=41
