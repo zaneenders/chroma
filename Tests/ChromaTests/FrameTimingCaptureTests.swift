@@ -31,6 +31,20 @@ struct FrameTimingCaptureTests {
     #expect(try JSONDecoder().decode(FrameTimingCapture.Snapshot.self, from: encoded).events.count == 6)
   }
 
+  @Test func pointerBoundariesRoundTripWithoutAdvancingRenderFrames() throws {
+    let capture = FrameTimingCapture()
+    capture.record(.scrollVertical)
+    capture.record(.fingerSource)
+    capture.record(.pointerFrame)
+    capture.record(.scrollHorizontal)
+    capture.record(.pointerFrame)
+    let encoded = try JSONEncoder().encode(capture.snapshot)
+    let events = try JSONDecoder().decode(FrameTimingCapture.Snapshot.self, from: encoded).events
+    #expect(events.map(\.phase) == [.scrollVertical, .fingerSource, .pointerFrame, .scrollHorizontal, .pointerFrame])
+    #expect(events.map(\.frame) == [1, 1, 1, 1, 1])
+    #expect(capture.lastFrame == 0)
+  }
+
   @Test func inputsAfterDrawListProductionBelongToTheFollowingFrame() {
     let capture = FrameTimingCapture()
     let frame = capture.startFrame()
