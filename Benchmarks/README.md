@@ -101,7 +101,14 @@ swift test --filter 'FramePacingTests|WindowRuntimeTests|FrameSchedulerTests'
 swift run --package-path Benchmarks -c release RenderBenchmark --scene scrolling --stage cull
 ```
 
-Measures draw-command culling using render fixtures, not end-to-end view rendering. On macOS, `--stage metal` also measures CPU Metal encoding and GPU execution. Reports JSON with cold timings and warm timing distributions.
+Measures draw-command culling using render fixtures, not end-to-end view rendering. On macOS, `--stage metal` also measures CPU Metal frame preparation and GPU execution. Reports JSON with cold timings and warm timing distributions.
+
+`cull` measures a standalone culling pass. For Metal, `metalCullAndEncode` passes the original
+draw list to the renderer and measures command creation, the renderer-owned cull, resource preparation,
+uploads, and encoding. It replaces the misleading `metalEncode` key in report schema version 7.
+The standalone `cull` sample is independent; do not add it to `metalCullAndEncode` to estimate a frame.
+`gpu` measures command-buffer GPU execution after submission, outside the CPU preparation interval.
+These phases exclude native input, layout, frame observation, and presentation/display latency.
 
 On Linux, replay the same fixtures through the real GLES driver with a surfaceless EGL pbuffer:
 

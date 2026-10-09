@@ -102,6 +102,8 @@ public final class MetalDisplayListRenderer {
     var clip: Rect
   }
 
+  /// Prepares an original draw list, including viewport and nested-clip culling.
+  /// Callers do not need to cull the list before passing it to the renderer.
   public func prepareFrame(
     _ drawList: DrawList, viewport: Size, rasterScale: Point,
     queue: MTLCommandQueue, renderPass: MTLRenderPassDescriptor

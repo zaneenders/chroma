@@ -176,7 +176,7 @@ public final class MacOSHost: NSObject, Chroma.Host, MTKViewDelegate, NSWindowDe
     do {
       guard
         let frame = try displayRenderer.prepareFrame(
-          list.culled(to: viewport), viewport: viewport, rasterScale: scale, queue: queue, renderPass: pass)
+          list, viewport: viewport, rasterScale: scale, queue: queue, renderPass: pass)
       else {
         runtime.scheduler.requestContent()
         return
