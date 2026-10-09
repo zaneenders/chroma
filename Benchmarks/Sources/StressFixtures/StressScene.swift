@@ -24,11 +24,13 @@ public final class StressScene {
   public private(set) var actions = 0
   @ObservationIgnored public private(set) var rowConstructions = 0
   @ObservationIgnored private let items: [Item]
+  @ObservationIgnored private let identifiedRows: Bool
   @ObservationIgnored private let controllers: [ScrollViewController]
 
   private struct Item: Identifiable { let id: Int }
 
-  public init(configuration: StressConfiguration = StressConfiguration()) {
+  public init(configuration: StressConfiguration = StressConfiguration(), identifiedRows: Bool = true) {
+    self.identifiedRows = identifiedRows
     self.configuration = configuration
     items = (0..<configuration.rows).map { Item(id: $0) }
     controllers = (0..<configuration.panes).map { _ in ScrollViewController() }
@@ -40,17 +42,29 @@ public final class StressScene {
       Button("Update all panes (\(capturedActions))") { [weak self] in
         self?.actions = capturedActions + 1
       }
-      Text("\(configuration.panes) panes × \(configuration.rows) identified rows • depth \(configuration.depth)")
+      Text(
+        "\(configuration.panes) panes × \(configuration.rows) \(identifiedRows ? "identified" : "index-based") rows • depth \(configuration.depth)"
+      )
       HStack(spacing: 8) {
         for pane in 0..<configuration.panes {
-          ScrollView(data: items, rowHeight: 100, spacing: 2, controller: controllers[pane]) { [weak self] item in
-            self?.rowConstructions += 1
-            return StressRow(
-              index: item.id, pane: pane, revision: capturedActions, depth: self?.configuration.depth ?? 0)
-          }.sizing(x: .grow, y: .grow)
+          if identifiedRows {
+            ScrollView(data: items, rowHeight: 100, spacing: 2, controller: controllers[pane]) { [weak self] item in
+              if let self { makeRow(index: item.id, pane: pane, revision: capturedActions) }
+            }.sizing(x: .grow, y: .grow)
+          } else {
+            ScrollView(data: 0..<configuration.rows, rowHeight: 100, spacing: 2, controller: controllers[pane]) {
+              [weak self] index in
+              if let self { makeRow(index: index, pane: pane, revision: capturedActions) }
+            }.sizing(x: .grow, y: .grow)
+          }
         }
       }.sizing(y: .grow)
     }.padding(8)
+  }
+
+  private func makeRow(index: Int, pane: Int, revision: Int) -> StressRow {
+    rowConstructions += 1
+    return StressRow(index: index, pane: pane, revision: revision, depth: configuration.depth)
   }
 
   public func scrollInput(event: Int) -> InputState {

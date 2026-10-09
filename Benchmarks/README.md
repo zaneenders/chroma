@@ -43,6 +43,19 @@ Use the native example for manual profiling, not as evidence of frame-rate guara
 
 `PipelineMetrics.isEnabled = true` starts an opt-in capture. `PipelineMetrics.reset()` clears work counters and resets peaks without hiding currently live objects; `PipelineMetrics.snapshot` reads results. Disabling avoids recording and lifetime-token allocations. Resolved block values and their ordinary proposal caches remain **traversal-scoped**. No cross-frame subtree geometry cache is retained. `drawingCommands` counts engine/frame entry points, not unrelated direct `DrawList` construction, and `measurements` includes cache hits. `placements` counts resolved-node visits with an assigned rectangle rather than distinct constraint-solver operations. Run release timings only when other builds, tests, and profiling processes are idle.
 
+## Native Linux scrolling
+
+[Native scrolling capture](NativeScrolling.md) records bounded, opt-in input/layout/paint,
+OpenGL/EGL, scheduler and compositor timing. Includes a release-symbol `StressExample`,
+identified/plain/long-Markdown variants, capture metadata and p50/p95 reporting.
+Native results require a real desktop run; callback readiness is not presentation.
+`NativeTrace` summarizes captures and verifies local Chroma dependency paths without Python:
+
+```sh
+swift run --package-path Benchmarks -c release NativeTrace PATH/trace.json --refresh-hz 60
+swift test --package-path Benchmarks --filter NativeTrace
+```
+
 ## Input frames
 
 ```sh

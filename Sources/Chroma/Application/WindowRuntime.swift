@@ -27,6 +27,12 @@ package final class WindowRuntime {
       scheduler.requestContent()
     }
   }
+  package var timingCapture: FrameTimingCapture? {
+    didSet {
+      producer.timingCapture = timingCapture
+      scheduler.timingCapture = timingCapture
+    }
+  }
   package var keyBindings = KeyBindings()
   package var frameObserver: FrameObserver?
   package var context: BlockContext { BlockContext(interaction: interaction) }
@@ -97,7 +103,9 @@ package final class WindowRuntime {
     scheduler.inputPending = false
   }
 
-  package func handleInput(_ input: InputState) {
+  package func handleInput(_ input: InputState, timingPhase: FrameTimingCapture.Phase = .input) {
+    let span = timingCapture?.begin(timingPhase, countsWork: true)
+    defer { timingCapture?.end(span) }
     let refresh = !preparedKeyboardInput
     preparedKeyboardInput = false
     if interaction.tree == nil {

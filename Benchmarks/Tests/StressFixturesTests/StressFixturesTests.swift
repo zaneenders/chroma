@@ -14,10 +14,12 @@ struct StressFixturesTests {
     #expect(options.warmup == 0)
   }
 
-  @Test func burstIsFreshVirtualizedPaintFreeAndReturnsToIdle() {
+  @Test(arguments: [true, false])
+  func burstIsFreshVirtualizedPaintFreeAndReturnsToIdle(identifiedRows: Bool) {
     PipelineMetrics.isEnabled = true
     defer { PipelineMetrics.isEnabled = false }
-    let scene = StressScene(configuration: StressConfiguration(rows: 10_000, panes: 3, depth: 4, events: 12))
+    let scene = StressScene(
+      configuration: StressConfiguration(rows: 10_000, panes: 3, depth: 4, events: 12), identifiedRows: identifiedRows)
     let host = HeadlessHost(size: StressConfiguration.viewport)
     host.content = DeferredBlock { scene.content }
     #expect(!host.render().commands.isEmpty)

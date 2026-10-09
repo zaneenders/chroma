@@ -1,6 +1,7 @@
 #ifndef CHROMA_WAYLAND_SUPPORT_H
 #define CHROMA_WAYLAND_SUPPORT_H
 
+#include "presentation-time-client-protocol.h"
 #include <stddef.h>
 #include <sys/types.h>
 

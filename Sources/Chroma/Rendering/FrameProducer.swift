@@ -35,6 +35,7 @@ final class FrameTrackingSubscription: Observable, Sendable {
 
 @MainActor
 package final class FrameProducer {
+  package var timingCapture: FrameTimingCapture?
   private var generation: UInt64 = 0
   private var subscription: FrameTrackingSubscription?
   private weak var interaction: Interaction?
@@ -63,6 +64,8 @@ package final class FrameProducer {
     processingInput: Bool = true,
     onChange: @escaping @MainActor @Sendable () -> Void
   ) -> DrawList {
+    let span = timingCapture?.begin(.frameProduction, countsWork: true)
+    defer { timingCapture?.end(span) }
     resetTracking()
     self.interaction = context.interaction
     let generation = generation
@@ -95,10 +98,16 @@ package final class FrameProducer {
       var drawList = DrawList()
 
       if let content {
+        let resolveSpan = timingCapture?.begin(.reconciliation)
         let resolved = BlockEngine.resolve(content, context: context)
+        timingCapture?.end(resolveSpan)
         let rect = Rect(origin: .zero, size: viewport)
+        let layoutSpan = timingCapture?.begin(.layoutRegistration)
         resolved.register(in: rect)
+        timingCapture?.end(layoutSpan)
+        let paintSpan = timingCapture?.begin(.painting)
         resolved.paint(into: &drawList, in: rect)
+        timingCapture?.end(paintSpan)
       }
       return drawList
     } onChange: { [weak self, weak subscription] event in
@@ -121,6 +130,8 @@ package final class FrameProducer {
     _ content: (any Block)?, viewport: Size, context: BlockContext, commands: [Command] = [],
     keyboardNavigationOverscan: Bool = false
   ) {
+    let span = timingCapture?.begin(.registrationRefresh, countsWork: true)
+    defer { timingCapture?.end(span) }
     var context = context
     context.keyboardNavigationOverscan = keyboardNavigationOverscan
 
@@ -130,7 +141,12 @@ package final class FrameProducer {
     interaction.refreshingRegistrations = true
     defer { interaction.refreshingRegistrations = false }
     if let content {
-      BlockEngine.register(content, in: Rect(origin: .zero, size: viewport), context: context)
+      let resolveSpan = timingCapture?.begin(.reconciliation)
+      let resolved = BlockEngine.resolve(content, context: context)
+      timingCapture?.end(resolveSpan)
+      let layoutSpan = timingCapture?.begin(.layoutRegistration)
+      resolved.register(in: Rect(origin: .zero, size: viewport))
+      timingCapture?.end(layoutSpan)
     }
     interaction.endFrame()
   }

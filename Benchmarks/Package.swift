@@ -21,6 +21,12 @@ let package = Package(
   targets: [
     .target(name: "StressFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
     .executableTarget(
+      name: "StressExample",
+      dependencies: [
+        "StressFixtures", .product(name: "ChromaApp", package: "chroma"),
+        .product(name: "ChromaMarkdown", package: "chroma"),
+      ]),
+    .executableTarget(
       name: "StressBenchmark",
       dependencies: [
         "StressFixtures", .product(name: "ChromaTesting", package: "chroma"),
@@ -42,6 +48,8 @@ let package = Package(
         .product(name: "Chroma", package: "chroma"),
         .product(name: "ChromaTesting", package: "chroma"),
       ]),
+    .executableTarget(name: "NativeTrace"),
+    .testTarget(name: "NativeTraceTests", dependencies: ["NativeTrace"]),
     .executableTarget(name: "CompareBenchmarks"),
     .testTarget(name: "CompareBenchmarksTests", dependencies: ["CompareBenchmarks"]),
     .target(name: "RenderFixtures", dependencies: [.product(name: "Chroma", package: "chroma")]),
