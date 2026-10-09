@@ -84,3 +84,21 @@ any queue/scheduling patch. A physical Hyprland/ShapeTree check remains #111 wor
 
 No event dropping, stale registration reuse, arbitrary coalescing, cap/vsync change
 or production scheduler modification was introduced by #117's diagnostic PR.
+
+## Native follow-up feasibility: blocked by the execution context
+
+A bounded follow-up staged authenticated Debian packages for Sway 1.10.1 and
+wlroots 0.18.2 separately from the existing SDK. Sway initialized its headless
+backend, pixman software renderer and shared-memory allocator, then failed to
+create the Wayland display socket. A minimal
+`socket(AF_UNIX, SOCK_STREAM)` probe failed **before bind** with
+`EPERM / Operation not permitted`; one supported permission retry returned the
+same result.
+
+No compositor socket, successful client connection or native input capture was
+obtained. This is an IPC restriction of the current execution context, not evidence
+of a Chroma defect or a need for a physical GPU. The runtime attempts stopped at
+that restriction, with the OS and existing SDK unchanged. The next native replay
+requires a supported execution environment that permits local Wayland Unix-domain
+sockets. The completed real-runtime/headless results above remain valid within
+their stated scope; native dispatch and physical-display conclusions remain open.
