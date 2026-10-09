@@ -3,14 +3,17 @@ import ChromaTesting
 import Foundation
 
 @MainActor
-func benchmark(count: Int, identified: Bool, rebuildContent: Bool) {
+func benchmark(count: Int, identified: Bool, rebuildContent: Bool, explicitRevision: Bool = false) {
   let controller = ScrollViewController()
   let host = HeadlessHost(size: Size(width: 200, height: 200))
   let data = 0..<count
   let items = identified ? data.map { Item(id: $0) } : []
   let makeView: () -> ScrollView = {
     if identified {
-      return ScrollView(data: items, rowHeight: 20, controller: controller) { _ in
+      return ScrollView(
+        data: items, rowHeight: 20, controller: controller,
+        identityRevision: explicitRevision ? .init(source: "items", revision: 0) : nil
+      ) { _ in
         Color.white
       }
     }
@@ -26,7 +29,7 @@ func benchmark(count: Int, identified: Bool, rebuildContent: Bool) {
       input: InputState(pointerPosition: Point(x: 10, y: 10), scrollDelta: Point(x: 0, y: -1)))
     let end = ProcessInfo.processInfo.systemUptime
     print(
-      "\(count) \(identified ? "identified" : "unkeyed") \(rebuildContent ? "deferred-root" : "replace-root") "
+      "\(count) \(explicitRevision ? "revisioned" : identified ? "identified" : "unkeyed") \(rebuildContent ? "deferred-root" : "replace-root") "
         + "\(iteration == 0 ? "cold" : "warm") total=\((end - start) * 1000) ms "
         + "setup=\((renderStart - start) * 1000) ms render=\((end - renderStart) * 1000) ms "
         + "\(list.commands.count) commands"
@@ -46,6 +49,7 @@ struct InputFrameBenchmark {
       for rebuildContent in [false, true] {
         benchmark(count: count, identified: false, rebuildContent: rebuildContent)
         benchmark(count: count, identified: true, rebuildContent: rebuildContent)
+        benchmark(count: count, identified: true, rebuildContent: rebuildContent, explicitRevision: true)
       }
     }
   }

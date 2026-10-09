@@ -103,6 +103,42 @@ struct WindowRuntimeTests {
     #expect(model.actions == 2)
   }
 
+  @Test func explicitIdentityRevisionKeepsContentAndCallbacksFreshBetweenEvents() throws {
+    struct Item: Identifiable {
+      let id: Int
+      let value: Int
+    }
+    let runtime = WindowRuntime()
+    defer { runtime.reset() }
+    let model = InputModel()
+    let controller = ScrollViewController()
+    let target = FocusTarget()
+    let viewport = Size(width: 200, height: 100)
+    runtime.content = DeferredBlock {
+      let count = model.actions
+      return ScrollView(
+        data: [Item(id: 1, value: count)], rowHeight: 20, controller: controller,
+        identityRevision: .init(source: "items", revision: 0)
+      ) { item in
+        Button("Count \(item.value)") { model.actions = item.value + 1 }.focusTarget(target)
+      }
+    }
+    _ = runtime.render(viewport: viewport, input: InputState(), onChange: {})
+    let identity = controller.uniformRowIdentity
+    runtime.context.focus(try #require(target.boundID))
+    runtime.handleInput(InputState(commands: [.action(.activate)]))
+    runtime.handleInput(InputState(commands: [.action(.activate)]))
+    #expect(model.actions == 2)
+    let list = runtime.renderScheduled(.content, viewport: viewport, onChange: {})
+    #expect(model.actions == 2)
+    #expect(controller.uniformRowIdentity === identity)
+    #expect(
+      list.paintSnapshot.contains {
+        if case .text(_, "Count 2", _, _) = $0 { return true }
+        return false
+      })
+  }
+
   @Test func coalescedVerticalMovementUsesUpdatedTextLayout() throws {
     let runtime = WindowRuntime()
     defer { runtime.reset() }

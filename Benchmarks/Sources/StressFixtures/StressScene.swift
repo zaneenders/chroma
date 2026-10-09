@@ -6,13 +6,17 @@ public struct StressConfiguration: Codable, Sendable {
   public let panes: Int
   public let depth: Int
   public let events: Int
+  public let identityRevisions: Bool
 
-  public init(rows: Int = 100_000, panes: Int = 3, depth: Int = 8, events: Int = 12) {
+  public init(
+    rows: Int = 100_000, panes: Int = 3, depth: Int = 8, events: Int = 12, identityRevisions: Bool = false
+  ) {
     precondition(rows > 0 && panes > 0 && depth >= 0 && events > 0)
     self.rows = rows
     self.panes = panes
     self.depth = depth
     self.events = events
+    self.identityRevisions = identityRevisions
   }
 
   public static let viewport = Size(width: 1440, height: 900)
@@ -43,7 +47,12 @@ public final class StressScene {
       Text("\(configuration.panes) panes × \(configuration.rows) identified rows • depth \(configuration.depth)")
       HStack(spacing: 8) {
         for pane in 0..<configuration.panes {
-          ScrollView(data: items, rowHeight: 100, spacing: 2, controller: controllers[pane]) { [weak self] item in
+          ScrollView(
+            data: items, rowHeight: 100, spacing: 2, controller: controllers[pane],
+            // Each scene owns immutable items. Content revisions do not change their IDs.
+            identityRevision: configuration.identityRevisions
+              ? .init(source: ObjectIdentifier(self), revision: 0) : nil
+          ) { [weak self] item in
             self?.rowConstructions += 1
             return StressRow(
               index: item.id, pane: pane, revision: capturedActions, depth: self?.configuration.depth ?? 0)

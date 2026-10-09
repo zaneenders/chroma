@@ -51,6 +51,18 @@ struct IdentityDiagnosticsTests {
     #expect(diagnostic.contains("Duplicate lazy collection element ID"))
   }
 
+  @Test func duplicateIDsInANewRevisionFail() async {
+    let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
+      await MainActor.run {
+        let controller = ScrollViewController()
+        _ = controller.rowIdentity(for: [Item(id: 1), Item(id: 2)], revision: .init(source: "items", revision: 0))
+        _ = controller.rowIdentity(for: [Item(id: 1), Item(id: 1)], revision: .init(source: "items", revision: 1))
+      }
+    }
+    let diagnostic = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+    #expect(diagnostic.contains("Duplicate lazy collection element ID"))
+  }
+
   @Test func distinctLazyRowKeyTypesSucceed() async {
     await #expect(processExitsWith: .success) {
       await MainActor.run {

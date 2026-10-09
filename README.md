@@ -19,6 +19,10 @@ The runnable demos in the [chroma-examples](https://github.com/zaneenders/chroma
 Run `swift package chroma-install` from the app package. Builds release with symbols;
 add `--without-profiling` to omit debug info. See [Install](INSTALLING.md).
 
+## Large identified lists
+
+See [collection identity revisions](docs/collection-identity.md) to avoid repeated ID scans when your model tracks structural changes.
+
 ## Inspired by
 
 - Immediate mode UI
