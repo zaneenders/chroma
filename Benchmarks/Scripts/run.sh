@@ -24,7 +24,18 @@ fi
 if [ "$(uname -s)" = Darwin ]; then
   { uname -m; sysctl -n hw.model; sysctl -n machdep.cpu.brand_string; } > "$out/hardware.txt"
 else
-  { uname -m; lscpu | grep -E 'Architecture:|Model name:|CPU\(s\):'; } > "$out/hardware.txt"
+  {
+    uname -m
+    if cpu_info=$(LC_ALL=C lscpu 2>&1); then
+      printf '%s\n' "$cpu_info" | grep -E 'Architecture:|Model name:|CPU\(s\):'
+    else
+      # Restricted containers may not expose the sysfs topology used by lscpu.
+      printf 'lscpu unavailable: %s\n' "$cpu_info"
+      printf 'Online CPUs: '
+      getconf _NPROCESSORS_ONLN
+      grep -m 1 -E 'model name|Hardware' /proc/cpuinfo || echo 'CPU model unavailable'
+    fi
+  } > "$out/hardware.txt"
 fi
 for scene in ${SCENES:-shapes text clipped images transcript streaming scrolling selection composer}; do
   "$bin" --scene "$scene" --stage cull > "$out/$scene-cull.json"

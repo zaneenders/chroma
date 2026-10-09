@@ -81,7 +81,7 @@ jobs:
         run: bash Scripts/validate.sh lockfiles
       - name: Collect informational benchmark report
         shell: bash
-        run: OPENGL=1 bash Benchmarks/Scripts/run.sh validation-results/benchmarks
+        run: OPENGL=1 bash Benchmarks/Scripts/run.sh validation-results/benchmarks 2>&1 | tee validation-results/benchmark-report.log
       - name: Retain logs and benchmark metadata
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -146,7 +146,7 @@ jobs:
         run: bash Scripts/validate.sh lockfiles
       - name: Collect informational benchmark report
         shell: bash
-        run: METAL=1 bash Benchmarks/Scripts/run.sh validation-results/benchmarks
+        run: METAL=1 bash Benchmarks/Scripts/run.sh validation-results/benchmarks 2>&1 | tee validation-results/benchmark-report.log
       - name: Retain logs and benchmark metadata
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
