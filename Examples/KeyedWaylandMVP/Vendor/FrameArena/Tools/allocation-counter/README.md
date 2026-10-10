@@ -10,8 +10,8 @@ on the calling thread. It is for allocation diagnostics, not timing runs.
 bash Tools/allocation-counter/verify.sh
 ```
 
-The script defaults to the supplied Swift 6.4 toolchain. Override `SWIFTC` to use
-another compatible compiler. Swift's module cache is under `/tmp`.
+The script uses `swiftc` from PATH. Override `SWIFTC` to select a compatible
+Swift 6.4 compiler. Its module cache is under the local `build` directory.
 
 Verified on Linux x86_64, glibc, GCC 14.2, and Swift 6.4:
 

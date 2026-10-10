@@ -32,10 +32,19 @@ typedef void (*WBFrameCallback)(void *context, const WBInput *input);
  * A single window and renderer is supported at a time. */
 int32_t wb_run(const WBConfig *config, WBFrameCallback frame, void *context);
 
+/* Test-only: same shader/VBO/readback path in an EGL pbuffer, without a Wayland
+ * connection or presentation. Requires max_frames > 0. */
+int32_t wb_run_surfaceless(const WBConfig *config, WBFrameCallback frame, void *context);
+
 /* Only valid inside the frame callback. All values are synchronously copied
- * to GL uniforms; the bridge never retains a Swift draw-record pointer. */
+ * into bounded C-owned staging memory; the bridge never retains a Swift draw-record pointer. */
 void wb_draw_rect(float x, float y, float width, float height,
                   float r, float g, float b, float a, float radius);
+
+/* Flushes staged values to GL synchronously. Call at the end of a Swift borrowed
+ * draw-span scope to guarantee GPU upload before that borrow ends. The host also
+ * flushes automatically after each callback. */
+void wb_flush(void);
 
 /* Reports whether this build contains the native Wayland renderer. */
 int32_t wb_native_available(void);

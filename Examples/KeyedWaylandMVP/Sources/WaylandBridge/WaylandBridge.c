@@ -6,6 +6,7 @@
 #include <wayland-client.h>
 #include <wayland-egl.h>
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 #include <errno.h>
 #include <math.h>
@@ -16,6 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 
+enum { WB_BATCH_RECTS = 1024, WB_VERTEX_FLOATS = 11 };
 struct Host {
     struct wl_display *display;
     struct wl_registry *registry;
@@ -33,7 +35,10 @@ struct Host {
     EGLContext egl_context;
     EGLSurface egl_surface;
     GLuint program, vertex_buffer;
-    GLint resolution_location, rect_location, color_location, radius_location;
+    GLint resolution_location;
+    /* C-owned bounded staging memory; no reference into a Swift frame survives a call. */
+    GLfloat vertices[WB_BATCH_RECTS * 6 * WB_VERTEX_FLOATS];
+    size_t staged_rects;
     WBInput input;
     int running, configured, frame_ready, render_active;
 };
@@ -147,9 +152,14 @@ static void keyboard_modifiers(void *data, struct wl_keyboard *keyboard,
     (void)data; (void)keyboard; (void)serial; (void)depressed;
     (void)latched; (void)locked; (void)group;
 }
+static void keyboard_repeat_info(void *data, struct wl_keyboard *keyboard,
+                                  int32_t rate, int32_t delay) {
+    (void)data; (void)keyboard; (void)rate; (void)delay;
+    /* Activation is edge-triggered; no key-repeat timer in this MVP. */
+}
 static const struct wl_keyboard_listener keyboard_listener = {
     .keymap = keyboard_keymap, .enter = keyboard_enter, .leave = keyboard_leave,
-    .key = keyboard_key, .modifiers = keyboard_modifiers
+    .key = keyboard_key, .modifiers = keyboard_modifiers, .repeat_info = keyboard_repeat_info
 };
 static void seat_capabilities(void *data, struct wl_seat *seat, uint32_t capabilities) {
     struct Host *host = data;
@@ -205,20 +215,21 @@ static const struct wl_callback_listener frame_listener = { .done = frame_done }
 /* An intentionally narrow ES2 rectangle shader. Pixel-space mapping follows
  * the existing Wayland backend; no existing UI/runtime dependency is linked. */
 static const char *vertex_source =
-    "attribute vec2 corner; uniform vec2 resolution; uniform vec4 rect;"
-    "varying vec2 local; void main() { local = corner * rect.zw;"
-    "vec2 p = rect.xy + local;"
-    "gl_Position = vec4(p.x / resolution.x * 2.0 - 1.0,"
-    "1.0 - p.y / resolution.y * 2.0, 0.0, 1.0); }";
+    "attribute vec2 position; attribute vec2 localPosition; attribute vec2 size;"
+    "attribute vec4 color; attribute float radius; uniform vec2 resolution;"
+    "varying vec2 vLocal; varying vec2 vSize; varying vec4 vColor; varying float vRadius;"
+    "void main() { vLocal = localPosition; vSize = size; vColor = color; vRadius = radius;"
+    "gl_Position = vec4(position.x / resolution.x * 2.0 - 1.0,"
+    "1.0 - position.y / resolution.y * 2.0, 0.0, 1.0); }";
 static const char *fragment_source =
-    "precision highp float; uniform vec4 rect; uniform vec4 color;"
-    "uniform float radius; varying vec2 local; void main() {"
-    "vec2 halfSize = rect.zw * 0.5;"
-    "float r = min(max(radius, 0.0), min(halfSize.x, halfSize.y));"
-    "vec2 q = abs(local - halfSize) - halfSize + vec2(r);"
+    "precision highp float; varying vec2 vLocal; varying vec2 vSize;"
+    "varying vec4 vColor; varying float vRadius; void main() {"
+    "vec2 halfSize = vSize * 0.5;"
+    "float r = min(max(vRadius, 0.0), min(halfSize.x, halfSize.y));"
+    "vec2 q = abs(vLocal - halfSize) - halfSize + vec2(r);"
     "float distance = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;"
     "float coverage = 1.0 - smoothstep(-0.75, 0.75, distance);"
-    "gl_FragColor = vec4(color.rgb, color.a * coverage); }";
+    "gl_FragColor = vec4(vColor.rgb, vColor.a * coverage); }";
 static GLuint compile_shader(GLenum kind, const char *source) {
     GLuint shader = glCreateShader(kind);
     glShaderSource(shader, 1, &source, NULL); glCompileShader(shader);
@@ -230,12 +241,19 @@ static GLuint compile_shader(GLenum kind, const char *source) {
     }
     return shader;
 }
-static int setup_egl(struct Host *host) {
-    host->egl_display = eglGetDisplay((EGLNativeDisplayType)host->display);
+static int setup_egl(struct Host *host, int surfaceless) {
+    if (surfaceless) {
+        PFNEGLGETPLATFORMDISPLAYEXTPROC get_platform =
+            (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
+        if (!get_platform) return 0;
+        host->egl_display = get_platform(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, NULL);
+    } else {
+        host->egl_display = eglGetDisplay((EGLNativeDisplayType)host->display);
+    }
     if (host->egl_display == EGL_NO_DISPLAY || !eglInitialize(host->egl_display, NULL, NULL))
         return 0;
     if (!eglBindAPI(EGL_OPENGL_ES_API)) return 0;
-    const EGLint attributes[] = { EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+    const EGLint attributes[] = { EGL_SURFACE_TYPE, surfaceless ? EGL_PBUFFER_BIT : EGL_WINDOW_BIT,
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT, EGL_RED_SIZE, 8,
         EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_NONE };
     EGLConfig config; EGLint count = 0;
@@ -244,10 +262,17 @@ static int setup_egl(struct Host *host) {
     const EGLint context_attributes[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
     host->egl_context = eglCreateContext(host->egl_display, config, EGL_NO_CONTEXT, context_attributes);
     if (host->egl_context == EGL_NO_CONTEXT) return 0;
-    host->window = wl_egl_window_create(host->surface, host->input.width, host->input.height);
-    if (!host->window) return 0;
-    host->egl_surface = eglCreateWindowSurface(host->egl_display, config,
-                                              (EGLNativeWindowType)host->window, NULL);
+    if (surfaceless) {
+        const EGLint pbuffer_attributes[] = {
+            EGL_WIDTH, host->input.width, EGL_HEIGHT, host->input.height, EGL_NONE
+        };
+        host->egl_surface = eglCreatePbufferSurface(host->egl_display, config, pbuffer_attributes);
+    } else {
+        host->window = wl_egl_window_create(host->surface, host->input.width, host->input.height);
+        if (!host->window) return 0;
+        host->egl_surface = eglCreateWindowSurface(host->egl_display, config,
+                                                  (EGLNativeWindowType)host->window, NULL);
+    }
     if (host->egl_surface == EGL_NO_SURFACE ||
         !eglMakeCurrent(host->egl_display, host->egl_surface, host->egl_surface, host->egl_context))
         return 0;
@@ -261,7 +286,12 @@ static int setup_egl(struct Host *host) {
     }
     host->program = glCreateProgram();
     glAttachShader(host->program, vertex); glAttachShader(host->program, fragment);
-    glBindAttribLocation(host->program, 0, "corner"); glLinkProgram(host->program);
+    glBindAttribLocation(host->program, 0, "position");
+    glBindAttribLocation(host->program, 1, "localPosition");
+    glBindAttribLocation(host->program, 2, "size");
+    glBindAttribLocation(host->program, 3, "color");
+    glBindAttribLocation(host->program, 4, "radius");
+    glLinkProgram(host->program);
     glDeleteShader(vertex); glDeleteShader(fragment);
     GLint linked = 0; glGetProgramiv(host->program, GL_LINK_STATUS, &linked);
     if (!linked) {
@@ -269,28 +299,49 @@ static int setup_egl(struct Host *host) {
         fprintf(stderr, "Shader linking failed: %s\n", log); return 0;
     }
     host->resolution_location = glGetUniformLocation(host->program, "resolution");
-    host->rect_location = glGetUniformLocation(host->program, "rect");
-    host->color_location = glGetUniformLocation(host->program, "color");
-    host->radius_location = glGetUniformLocation(host->program, "radius");
-    const GLfloat vertices[] = {0,0, 1,0, 0,1, 0,1, 1,0, 1,1};
     glGenBuffers(1, &host->vertex_buffer); glBindBuffer(GL_ARRAY_BUFFER, host->vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glUseProgram(host->program); glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
-    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    fprintf(stderr, "Wayland EGL renderer: %s | %s\n", glGetString(GL_RENDERER), glGetString(GL_VERSION));
+    glBufferData(GL_ARRAY_BUFFER, sizeof(host->vertices), NULL, GL_STREAM_DRAW);
+    glUseProgram(host->program);
+    const int lengths[] = {2, 2, 2, 4, 1};
+    const size_t offsets[] = {0, 2, 4, 6, 10};
+    for (GLuint i = 0; i < 5; ++i) {
+        glEnableVertexAttribArray(i);
+        glVertexAttribPointer(i, lengths[i], GL_FLOAT, GL_FALSE,
+                              WB_VERTEX_FLOATS * sizeof(GLfloat),
+                              (const void *)(offsets[i] * sizeof(GLfloat)));
+    }
+    glEnable(GL_BLEND);
+    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    fprintf(stderr, "%s EGL renderer: %s | %s\n", surfaceless ? "Surfaceless" : "Wayland", glGetString(GL_RENDERER), glGetString(GL_VERSION));
     return glGetError() == GL_NO_ERROR;
 }
 
+static void flush_rects(struct Host *host) {
+    if (!host->staged_rects) return;
+    size_t vertex_count = host->staged_rects * 6;
+    glBufferData(GL_ARRAY_BUFFER, vertex_count * WB_VERTEX_FLOATS * sizeof(GLfloat),
+                 host->vertices, GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_count);
+    host->staged_rects = 0;
+}
 void wb_draw_rect(float x, float y, float width, float height,
                   float r, float g, float b, float a, float radius) {
     struct Host *host = active_host;
     if (!host || !host->render_active || width <= 0 || height <= 0 ||
-        !isfinite(x) || !isfinite(y) || !isfinite(width) || !isfinite(height)) return;
-    glUniform4f(host->rect_location, x, y, width, height);
-    glUniform4f(host->color_location, r, g, b, a);
-    glUniform1f(host->radius_location, radius);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+        !isfinite(x) || !isfinite(y) || !isfinite(width) || !isfinite(height) ||
+        !isfinite(r) || !isfinite(g) || !isfinite(b) || !isfinite(a) || !isfinite(radius)) return;
+    if (host->staged_rects == WB_BATCH_RECTS) flush_rects(host);
+    static const float corners[6][2] = {{0,0}, {1,0}, {0,1}, {0,1}, {1,0}, {1,1}};
+    GLfloat *vertex = host->vertices + host->staged_rects * 6 * WB_VERTEX_FLOATS;
+    for (int i = 0; i < 6; ++i) {
+        float lx = corners[i][0] * width, ly = corners[i][1] * height;
+        const GLfloat values[WB_VERTEX_FLOATS] = {x+lx, y+ly, lx, ly, width, height, r,g,b,a, radius};
+        memcpy(vertex, values, sizeof(values)); vertex += WB_VERTEX_FLOATS;
+    }
+    ++host->staged_rects;
+}
+void wb_flush(void) {
+    if (active_host && active_host->render_active) flush_rects(active_host);
 }
 
 static int screenshot(struct Host *host, const char *path) {
@@ -355,12 +406,12 @@ int32_t wb_run(const WBConfig *config, WBFrameCallback frame, void *context) {
     xdg_toplevel_add_listener(host.toplevel, &toplevel_listener, &host);
     xdg_toplevel_set_title(host.toplevel, config->title ? config->title : "Keyed UI Demo");
     xdg_toplevel_set_app_id(host.toplevel, "org.example.keyed-ui-demo");
-    xdg_toplevel_set_min_size(host.toplevel, 480, 360);
+    xdg_toplevel_set_min_size(host.toplevel, 760, 640);
     wl_surface_commit(host.surface);
     while (!host.configured && host.running)
         if (wl_display_dispatch(host.display) < 0) goto finish;
     if (!host.running) { result = 0; goto finish; }
-    if (!setup_egl(&host)) { fprintf(stderr, "EGL setup failed: 0x%x\n", eglGetError()); goto finish; }
+    if (!setup_egl(&host, 0)) { fprintf(stderr, "EGL setup failed: 0x%x\n", eglGetError()); goto finish; }
     active_host = &host;
     double started = monotonic_seconds();
     int frame_count = 0;
@@ -372,7 +423,9 @@ int32_t wb_run(const WBConfig *config, WBFrameCallback frame, void *context) {
             glUseProgram(host.program);
             glUniform2f(host.resolution_location, (float)host.input.width, (float)host.input.height);
             host.input.time_seconds = monotonic_seconds() - started;
-            host.render_active = 1; frame(context, &host.input); host.render_active = 0;
+            host.render_active = 1; frame(context, &host.input);
+            flush_rects(&host); host.render_active = 0;
+            if (host.input.escape_pressed) host.running = 0;
             ++frame_count;
             if (glGetError() != GL_NO_ERROR) { fprintf(stderr, "OpenGL rendering failed.\n"); goto finish; }
             int last_frame = config->max_frames > 0 && frame_count >= config->max_frames;
@@ -387,7 +440,7 @@ int32_t wb_run(const WBConfig *config, WBFrameCallback frame, void *context) {
             if (!eglSwapBuffers(host.egl_display, host.egl_surface)) {
                 fprintf(stderr, "eglSwapBuffers failed: 0x%x\n", eglGetError()); goto finish;
             }
-            if (last_frame) break;
+            if (last_frame || !host.running) break;
         }
         /* Dispatch both input and compositor frame callbacks without busy-spinning. */
         if (wl_display_dispatch(host.display) < 0) goto finish;
@@ -398,9 +451,47 @@ int32_t wb_run(const WBConfig *config, WBFrameCallback frame, void *context) {
 finish:
     active_host = NULL; cleanup(&host); return result;
 }
+int32_t wb_run_surfaceless(const WBConfig *config, WBFrameCallback frame, void *context) {
+    if (!config || !frame || active_host || config->max_frames < 1 ||
+        config->width <= 0 || config->height <= 0) return 2;
+    struct Host host = {0};
+    host.input.width = config->width; host.input.height = config->height;
+    host.egl_display = EGL_NO_DISPLAY; host.egl_context = EGL_NO_CONTEXT;
+    host.egl_surface = EGL_NO_SURFACE;
+    int result = 1;
+    if (!setup_egl(&host, 1)) {
+        fprintf(stderr, "Surfaceless EGL setup failed: 0x%x\n", eglGetError()); goto finish;
+    }
+    active_host = &host;
+    glViewport(0, 0, host.input.width, host.input.height);
+    glUniform2f(host.resolution_location, (float)host.input.width, (float)host.input.height);
+    for (int i = 0; i < config->max_frames; ++i) {
+        glClearColor(0.04f, 0.05f, 0.07f, 1.0f); glClear(GL_COLOR_BUFFER_BIT);
+        host.input.time_seconds = (double)i / 60.0;
+        host.render_active = 1; frame(context, &host.input);
+        flush_rects(&host); host.render_active = 0;
+        glFinish();
+        if (glGetError() != GL_NO_ERROR) {
+            fprintf(stderr, "Surfaceless OpenGL rendering failed.\n"); goto finish;
+        }
+    }
+    if (config->screenshot_path && !screenshot(&host, config->screenshot_path)) {
+        fprintf(stderr, "Surfaceless screenshot capture failed.\n"); goto finish;
+    }
+    fprintf(stderr, "Rendered %d EGL surfaceless frames at %dx%d (no Wayland presentation).\n",
+            config->max_frames, host.input.width, host.input.height);
+    result = 0;
+finish:
+    active_host = NULL; cleanup(&host); return result;
+}
+
 #else
 #include <stdio.h>
+int32_t wb_run_surfaceless(const WBConfig *config, WBFrameCallback frame, void *context) {
+    return wb_run(config, frame, context);
+}
 int32_t wb_native_available(void) { return 0; }
+void wb_flush(void) {}
 void wb_draw_rect(float x, float y, float width, float height,
                   float r, float g, float b, float a, float radius) {
     (void)x; (void)y; (void)width; (void)height; (void)r; (void)g; (void)b; (void)a; (void)radius;

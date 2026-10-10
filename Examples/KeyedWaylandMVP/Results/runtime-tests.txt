@@ -1,0 +1,45 @@
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+Building for debugging...
+[Computing dependencies]
+[3 / 20] FrameArena
+[9 / 25] FrameArena
+[9 / 25] KeyedUI
+[17 / 26] KeyedUI
+[19 / 26] keyed-demo-product
+[19 / 26] KeyedUITests-product
+[23 / 32] KeyedUITests-test-runner
+[26 / 31] keyed-demo-product
+[33 / 33] keyed-demo-product
+[33 / 33] KeyedUITests-test-runner
+Build complete! (5.46 secs)
+Test Suite 'All tests' started at 2026-10-09 18:08:54.016
+Test Suite 'Debug-linux-x86_64.xctest' started at 2026-10-09 18:08:54.032
+Test Suite 'Debug-linux-x86_64.xctest' passed at 2026-10-09 18:08:54.032
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+Test Suite 'All tests' passed at 2026-10-09 18:08:54.032
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+◇ Test run started.
+↳ Testing Library Version: 6.4 (efd8d65801f569d)
+↳ Target Platform: x86_64-unknown-linux-gnu
+◇ Test ownerChecksRejectOtherStores() started.
+◇ Test boundedDrawOverflowIsReported() started.
+◇ Test removalReleasesCapturingActions() started.
+◇ Test removedPressCannotActivateReplacement() started.
+◇ Test callbacksAreRefreshedBeforeRelease() started.
+◇ Test keyboardFocusCyclesInCurrentOrder() started.
+◇ Test stateFollowsKeyAcrossReorder() started.
+◇ Test removalInvalidatesHandlesAndReusesSlots() started.
+✔ Test removalInvalidatesHandlesAndReusesSlots() passed after 0.001 seconds.
+✔ Test removedPressCannotActivateReplacement() passed after 0.001 seconds.
+✔ Test callbacksAreRefreshedBeforeRelease() passed after 0.001 seconds.
+◇ Test repeatedFramesStayBoundedAndRender() started.
+✔ Test ownerChecksRejectOtherStores() passed after 0.001 seconds.
+◇ Test freshGeometryPreventsPreviousFrameHit() started.
+✔ Test removalReleasesCapturingActions() passed after 0.002 seconds.
+✔ Test boundedDrawOverflowIsReported() passed after 0.002 seconds.
+✔ Test stateFollowsKeyAcrossReorder() passed after 0.002 seconds.
+✔ Test keyboardFocusCyclesInCurrentOrder() passed after 0.003 seconds.
+✔ Test freshGeometryPreventsPreviousFrameHit() passed after 0.001 seconds.
+✔ Test repeatedFramesStayBoundedAndRender() passed after 0.006 seconds.
+✔ Test run with 10 tests in 0 suites passed after 0.008 seconds.

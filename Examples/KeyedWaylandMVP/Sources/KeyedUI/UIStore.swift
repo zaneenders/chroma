@@ -13,6 +13,7 @@ struct Node {
     var action: (() -> Void)?
     var interactive = false
     var clicks = 0
+    var showsClicks = false
     var hovered = false
     var hover: Float = 0
     var flash: Float = 0
@@ -60,7 +61,7 @@ struct Storage: ~Copyable {
         cursors[i].position += extent + cursor.gap
         return result
     }
-    mutating func declare(key: UInt64, title: String, rect: Rect, color: Color, scale: Float, interactive: Bool, action: (() -> Void)?) -> NodeHandle {
+    mutating func declare(key: UInt64, title: String, rect: Rect, color: Color, scale: Float, interactive: Bool, showsClicks: Bool = false, action: (() -> Void)?) -> NodeHandle {
         let index: Int
         if let old = keys[key] { index = old }
         else {
@@ -72,6 +73,7 @@ struct Storage: ~Copyable {
         nodes[index].seen = epoch
         // Always refresh configuration before input dispatch. Only deliberate state survives.
         nodes[index].rect = rect; nodes[index].title = title; nodes[index].color = color
+        nodes[index].showsClicks = showsClicks
         nodes[index].interactive = interactive; nodes[index].action = action; nodes[index].fontScale = scale
         order.append(index)
         return handle(index)
@@ -111,7 +113,8 @@ struct Storage: ~Copyable {
         if input.activate, let i = resolve(focused) { activated = i }
         if let i = activated {
             nodes[i].clicks += 1; nodes[i].flash = 1
-            // User callbacks cannot borrow/reenter this uniquely accessed store.
+            // Callbacks must not indirectly reenter the owner (runtime exclusivity).
+            // Capture a separate model or weak owner to avoid retaining an owner cycle.
             nodes[i].action?()
         }
         for i in order {
@@ -135,7 +138,7 @@ struct Storage: ~Copyable {
                 emit(DrawRect(Rect(node.rect.x - 2, node.rect.y - 2, node.rect.width + 4, node.rect.height + 4), .accent, radius: 9))
             }
             emit(DrawRect(node.rect, color, radius: 7))
-            drawText(node.title, x: node.rect.x + 12, y: node.rect.y + (node.rect.height - node.fontScale * 7) / 2, scale: node.fontScale, color: .text)
+            drawText(node.showsClicks ? "\(node.title) / CLICKS \(node.clicks)" : node.title, x: node.rect.x + 12, y: node.rect.y + (node.rect.height - node.fontScale * 7) / 2, scale: node.fontScale, color: .text)
         }
     }
     mutating func drawText(_ text: String, x: Float, y: Float, scale: Float, color: Color) {
@@ -205,8 +208,8 @@ public struct UIFrame: ~Copyable, ~Escapable {
         return storage.value.declare(key: key, title: title, rect: rect, color: color, scale: scale, interactive: false, action: nil)
     }
     @discardableResult
-    public mutating func button(key: UInt64, _ title: String, extent: Float = 44, color: Color = .panel, onClick: (() -> Void)? = nil) -> NodeHandle {
+    public mutating func button(key: UInt64, _ title: String, extent: Float = 44, color: Color = .panel, showClicks: Bool = false, onClick: (() -> Void)? = nil) -> NodeHandle {
         let rect = storage.value.place(extent)
-        return storage.value.declare(key: key, title: title, rect: rect, color: color, scale: 2, interactive: true, action: onClick)
+        return storage.value.declare(key: key, title: title, rect: rect, color: color, scale: 2, interactive: true, showsClicks: showClicks, action: onClick)
     }
 }

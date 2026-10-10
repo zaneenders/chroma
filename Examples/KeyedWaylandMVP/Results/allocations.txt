@@ -1,0 +1,4 @@
+workload=fixed-core frames=10000 elapsed=0.327700155 seconds cpu_seconds=0.327693756 checksum=8484000 nodes=12 slots=12 dropped=0
+malloc=0 calloc=0 realloc=0 aligned_alloc=0 posix_memalign=0 free=0
+workload=demo frames=10000 elapsed=1.336281851 seconds cpu_seconds=1.316515916 checksum=28694100 nodes=12 slots=12 dropped=0
+malloc=30000 calloc=0 realloc=0 aligned_alloc=0 posix_memalign=0 free=30000
