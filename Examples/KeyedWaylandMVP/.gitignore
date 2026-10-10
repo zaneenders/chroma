@@ -1,0 +1,3 @@
+.build*/
+*.ppm
+Vendor/FrameArena/Tools/allocation-counter/build/

@@ -1,0 +1,69 @@
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+Building for debugging...
+[Computing dependencies]
+[Constructing description]
+[Pre-planning 1 / 183]
+[Planning deferred tasks]
+[27 / 71] KeyedUITests-product
+[41 / 75] FrameArena
+[50 / 81] KeyedUI
+[52 / 81] KeyedUI
+[62 / 89] keyed-demo-product
+[63 / 89] KeyedUI
+[66 / 89] KeyedUI
+[66 / 89] KeyedUITests-product
+[67 / 89] KeyedUITests-product
+[70 / 89] keyed-demo-product
+[70 / 89] KeyedUI
+[70 / 89] keyed-demo-product
+[71 / 90] keyed-demo-product
+[73 / 90] FrameArena
+[74 / 92] FrameArena
+[76 / 92] FrameArena
+[77 / 92] KeyedUI
+[79 / 92] KeyedUI
+[81 / 92]
+[81 / 92] KeyedUITests-product
+[83 / 93] KeyedUITests-product
+[85 / 93] KeyedUITests-product
+[86 / 93] KeyedUITests-test-runner
+[86 / 93]
+[87 / 94] KeyedUITests-test-runner
+[89 / 96] KeyedUITests-test-runner
+[93 / 96] KeyedUITests-test-runner
+[94 / 97] KeyedUITests-test-runner
+[95 / 97] KeyedUITests-test-runner
+[96 / 97] KeyedUITests-test-runner
+[97 / 97] KeyedUITests-test-runner
+Build complete! (38.71 secs)
+Test Suite 'All tests' started at 2026-10-09 18:04:26.447
+Test Suite 'Debug-linux-x86_64.xctest' started at 2026-10-09 18:04:26.461
+Test Suite 'Debug-linux-x86_64.xctest' passed at 2026-10-09 18:04:26.461
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+Test Suite 'All tests' passed at 2026-10-09 18:04:26.461
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+◇ Test run started.
+↳ Testing Library Version: 6.4 (efd8d65801f569d)
+↳ Target Platform: x86_64-unknown-linux-gnu
+◇ Test removedPressCannotActivateReplacement() started.
+◇ Test boundedDrawOverflowIsReported() started.
+◇ Test removalInvalidatesHandlesAndReusesSlots() started.
+◇ Test keyboardFocusCyclesInCurrentOrder() started.
+◇ Test freshGeometryPreventsPreviousFrameHit() started.
+◇ Test ownerChecksRejectOtherStores() started.
+◇ Test stateFollowsKeyAcrossReorder() started.
+◇ Test repeatedFramesStayBoundedAndRender() started.
+◇ Test removalReleasesCapturingActions() started.
+◇ Test callbacksAreRefreshedBeforeRelease() started.
+✔ Test boundedDrawOverflowIsReported() passed after 0.035 seconds.
+✔ Test removalReleasesCapturingActions() passed after 0.029 seconds.
+✔ Test ownerChecksRejectOtherStores() passed after 0.032 seconds.
+✔ Test freshGeometryPreventsPreviousFrameHit() passed after 0.033 seconds.
+✔ Test removalInvalidatesHandlesAndReusesSlots() passed after 0.035 seconds.
+✔ Test removedPressCannotActivateReplacement() passed after 0.039 seconds.
+✔ Test keyboardFocusCyclesInCurrentOrder() passed after 0.035 seconds.
+✔ Test callbacksAreRefreshedBeforeRelease() passed after 0.038 seconds.
+✔ Test repeatedFramesStayBoundedAndRender() passed after 0.050 seconds.
+✔ Test stateFollowsKeyAcrossReorder() passed after 0.055 seconds.
+✔ Test run with 10 tests in 0 suites passed after 0.068 seconds.

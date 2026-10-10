@@ -1,0 +1,12 @@
+PASS (rejected): copy_owner
+PASS (rejected): copy_slab
+PASS (rejected): slab_closure
+PASS (rejected): slab_string
+PASS (rejected): slab_view_after_reset
+PASS (rejected): slab_view_outlives_owner
+PASS (rejected): store_view
+PASS (rejected): view_after_append
+PASS (rejected): view_after_replace
+PASS (rejected): view_after_reserve
+PASS (rejected): view_after_reset
+PASS (rejected): view_outlives_owner

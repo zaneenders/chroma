@@ -1,0 +1,74 @@
+=== Final native Swift 6.4 release build ===
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+Building for production...
+[Computing dependencies]
+[Using on-disk description]
+[1 / 2] WaylandBridge
+[2 / 3] WaylandBridge
+[3 / 3] keyed-demo-product
+Build complete! (2.49 secs)
+
+=== Actual renderer-only smoke (not Wayland presentation) ===
+Surfaceless EGL renderer: llvmpipe (LLVM 19.1.7, 256 bits) | OpenGL ES 3.2 Mesa 25.0.7-2+deb13u1
+Rendered 12 EGL surfaceless frames at 900x660 (no Wayland presentation).
+
+=== Reproducible --egl smoke script ===
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+Building for production...
+[Computing dependencies]
+[Using on-disk description]
+[1 / 2] WaylandBridge
+[2 / 3] WaylandBridge
+[3 / 3] keyed-demo-product
+Build complete! (2.49 secs)
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+Surfaceless EGL renderer: llvmpipe (LLVM 19.1.7, 256 bits) | OpenGL ES 3.2 Mesa 25.0.7-2+deb13u1
+Rendered 12 EGL surfaceless frames at 900x660 (no Wayland presentation).
+EGL surfaceless smoke passed: 900x660; no Wayland presentation
+Screenshot: /workspace/shared/wayland-mvp-deps/script-egl-smoke/egl.ppm
+
+=== Synthetic listener unit tests ===
+Bridge input handler tests passed (synthetic listener calls; no Wayland delivery).
+
+=== Actual EGL alpha and fixed-batch regression test ===
+Surfaceless EGL renderer: llvmpipe (LLVM 19.1.7, 256 bits) | OpenGL ES 3.2 Mesa 25.0.7-2+deb13u1
+EGL renderer assertions passed: half-alpha composition, opaque AA edges, and 1025-quad batch rollover.
+
+=== Attempted actual Wayland compositor smoke ===
+Date: 2026-10-09 MDT
+[18:03:19.307] weston 14.0.2
+               https://wayland.freedesktop.org
+               Bug reports to: https://gitlab.freedesktop.org/wayland/weston/issues/
+               Build: 14.0.2
+[18:03:19.307] Command line: /workspace/shared/wayland-mvp-deps/root/usr/bin/weston --backend=headless --renderer=pixman --shell=kiosk --socket=wayland-mvp-smoke --width=900 --height=660 --idle-time=0 --no-config --log=/workspace/shared/wayland-mvp-deps/weston-native.log
+[18:03:19.307] OS: Linux, 6.18.44, #1 SMP Sat Sep 26 20:02:31 UTC 2026, x86_64
+[18:03:19.307] Flight recorder: enabled
+[18:03:19.307] Starting with no config file.
+[18:03:19.308] Output repaint window is 7 ms maximum.
+[18:03:19.308] Loading module '/workspace/shared/wayland-mvp-deps/root/usr/lib/x86_64-linux-gnu/libweston-14/headless-backend.so'
+[18:03:19.318] Using Pixman renderer
+[18:03:19.318] Registered plugin API 'weston_windowed_output_api_headless_v2' of size 16
+[18:03:19.318] Color manager: no-op
+                 protocol support: no
+[18:03:19.318] Output 'headless' attempts EOTF mode SDR and colorimetry mode default.
+[18:03:19.318] Output 'headless' using color profile: stock sRGB color profile
+[18:03:19.318] Output 'headless' enabled with head(s) headless
+[18:03:19.318] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: no
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: no
+               color operations: no
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[18:03:19.318] fatal: failed to add socket: No such file or directory
+
+=== Isolated socket diagnostic ===
+socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+PermissionError: [Errno 1] Operation not permitted
+This failure also occurred through the available execution escalation flow.

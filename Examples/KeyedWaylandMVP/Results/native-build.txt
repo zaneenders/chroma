@@ -1,0 +1,9 @@
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+Building for production...
+[Computing dependencies]
+[Using on-disk description]
+[1 / 2] WaylandBridge
+[2 / 3] WaylandBridge
+[3 / 3] keyed-demo-product
+Build complete! (2.49 secs)

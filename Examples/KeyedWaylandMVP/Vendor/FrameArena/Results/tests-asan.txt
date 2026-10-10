@@ -1,0 +1,59 @@
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.cache/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'swift-frame-arena-prototype': failed loading cached manifest for 'swift-frame-arena-prototype': encountered an I/O error (code: 30) while reading /home/agent/.cache/org.swift.swiftpm/manifests
+warning: 'swift-frame-arena-prototype': failed storing manifest for 'swift-frame-arena-prototype' in cache: encountered an I/O error (code: 30) while reading /home/agent/.cache/org.swift.swiftpm/manifests
+warning: 'swift-frame-arena-prototype': failed closing manifest db cache: encountered an I/O error (code: 30) while reading /home/agent/.cache/org.swift.swiftpm/manifests
+Building for debugging...
+[Computing dependencies]
+[Pre-planning 1 / 153]
+[Planning deferred tasks]
+[6 / 58] AllIncludingTests
+[32 / 59] FrameArena
+[35 / 62] FrameArena
+[47 / 69] arena-benchmarks-product
+[48 / 69] FrameArenaTests-product
+[52 / 69] FrameArenaTests-product
+[52 / 69] FrameArena
+[52 / 69] arena-benchmarks-product
+[53 / 70] arena-benchmarks-product
+[59 / 72] FrameArena
+[64 / 72] arena-benchmarks-product
+[68 / 75] FrameArenaTests-test-runner
+[72 / 75] FrameArenaTests-test-runner
+[73 / 76] FrameArenaTests-test-runner
+[76 / 76] FrameArenaTests-test-runner
+Build complete! (14.66 secs)
+Test Suite 'All tests' started at 2026-10-09 17:43:48.022
+Test Suite 'Debug-linux-x86_64.xctest' started at 2026-10-09 17:43:48.031
+Test Suite 'Debug-linux-x86_64.xctest' passed at 2026-10-09 17:43:48.031
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+Test Suite 'All tests' passed at 2026-10-09 17:43:48.031
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+==282==LeakSanitizer has encountered a fatal error.
+==282==HINT: For debugging, try setting environment variable LSAN_OPTIONS=verbosity=1:log_threads=1
+==282==HINT: LeakSanitizer does not work under ptrace (strace, gdb, etc)
+◇ Test run started.
+↳ Testing Library Version: 6.4 (efd8d65801f569d)
+↳ Target Platform: x86_64-unknown-linux-gnu
+◇ Test emptyGrowthAndReuse() started.
+◇ Test slabEmptyCapacityAndOverflowRejection() started.
+◇ Test owningSnapshotSurvivesReset() started.
+◇ Test slabPreservesAlignmentAndWarmAddress() started.
+◇ Test replacementAndRejectedReplacementDestroyTheirInputs() started.
+◇ Test handlesRejectResetForeignOwnerAndOwnerReuse() started.
+◇ Test resetAndOwnerDestructionReleaseNontrivialPayloads() started.
+✔ Test owningSnapshotSurvivesReset() passed after 0.018 seconds.
+✔ Test replacementAndRejectedReplacementDestroyTheirInputs() passed after 0.021 seconds.
+✔ Test slabEmptyCapacityAndOverflowRejection() passed after 0.019 seconds.
+✔ Test handlesRejectResetForeignOwnerAndOwnerReuse() passed after 0.023 seconds.
+✔ Test resetAndOwnerDestructionReleaseNontrivialPayloads() passed after 0.018 seconds.
+✔ Test emptyGrowthAndReuse() passed after 0.025 seconds.
+✔ Test slabPreservesAlignmentAndWarmAddress() passed after 0.042 seconds.
+✔ Test run with 7 tests in 0 suites passed after 0.044 seconds.
+==286==LeakSanitizer has encountered a fatal error.
+==286==HINT: For debugging, try setting environment variable LSAN_OPTIONS=verbosity=1:log_threads=1
+==286==HINT: LeakSanitizer does not work under ptrace (strace, gdb, etc)
+Note: Some test targets reported failures:
+  - FrameArenaTests (XCTest)
+  - FrameArenaTests (Swift Testing)

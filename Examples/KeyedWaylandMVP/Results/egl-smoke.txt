@@ -1,0 +1,2 @@
+Surfaceless EGL renderer: llvmpipe (LLVM 19.1.7, 256 bits) | OpenGL ES 3.2 Mesa 25.0.7-2+deb13u1
+Rendered 12 EGL surfaceless frames at 900x660 (no Wayland presentation).

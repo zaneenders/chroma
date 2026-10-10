@@ -1,0 +1,14 @@
+Tools/trap-tests.sh: line 28:   104 Illegal instruction     "$OUT/trap-tests" "$test" > "$OUT/$test.log" 2>&1
+PASS (trapped): negative-slab
+Tools/trap-tests.sh: line 28:   108 Illegal instruction     "$OUT/trap-tests" "$test" > "$OUT/$test.log" 2>&1
+PASS (trapped): byte-overflow
+Tools/trap-tests.sh: line 28:   112 Illegal instruction     "$OUT/trap-tests" "$test" > "$OUT/$test.log" 2>&1
+PASS (trapped): negative-arena
+Tools/trap-tests.sh: line 28:   116 Illegal instruction     "$OUT/trap-tests" "$test" > "$OUT/$test.log" 2>&1
+PASS (trapped): negative-reserve
+Tools/trap-tests.sh: line 28:   120 Illegal instruction     "$OUT/trap-tests" "$test" > "$OUT/$test.log" 2>&1
+PASS (trapped): generation-overflow
+Tools/trap-tests.sh: line 28:   124 Illegal instruction     "$OUT/trap-tests" "$test" > "$OUT/$test.log" 2>&1
+PASS (trapped): span-bounds
+Tools/trap-tests.sh: line 28:   128 Illegal instruction     "$OUT/trap-tests" "$test" > "$OUT/$test.log" 2>&1
+PASS (trapped): slab-span-bounds

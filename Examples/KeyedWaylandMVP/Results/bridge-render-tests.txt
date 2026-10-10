@@ -1,0 +1,2 @@
+Surfaceless EGL renderer: llvmpipe (LLVM 19.1.7, 256 bits) | OpenGL ES 3.2 Mesa 25.0.7-2+deb13u1
+EGL renderer assertions passed: half-alpha composition, opaque AA edges, and 1025-quad batch rollover.

@@ -1,0 +1,29 @@
+Date: 2026-10-09 MDT
+[18:03:19.307] weston 14.0.2
+               https://wayland.freedesktop.org
+               Bug reports to: https://gitlab.freedesktop.org/wayland/weston/issues/
+               Build: 14.0.2
+[18:03:19.307] Command line: /workspace/shared/wayland-mvp-deps/root/usr/bin/weston --backend=headless --renderer=pixman --shell=kiosk --socket=wayland-mvp-smoke --width=900 --height=660 --idle-time=0 --no-config --log=/workspace/shared/wayland-mvp-deps/weston-native.log
+[18:03:19.307] OS: Linux, 6.18.44, #1 SMP Sat Sep 26 20:02:31 UTC 2026, x86_64
+[18:03:19.307] Flight recorder: enabled
+[18:03:19.307] Starting with no config file.
+[18:03:19.308] Output repaint window is 7 ms maximum.
+[18:03:19.308] Loading module '/workspace/shared/wayland-mvp-deps/root/usr/lib/x86_64-linux-gnu/libweston-14/headless-backend.so'
+[18:03:19.318] Using Pixman renderer
+[18:03:19.318] Registered plugin API 'weston_windowed_output_api_headless_v2' of size 16
+[18:03:19.318] Color manager: no-op
+                 protocol support: no
+[18:03:19.318] Output 'headless' attempts EOTF mode SDR and colorimetry mode default.
+[18:03:19.318] Output 'headless' using color profile: stock sRGB color profile
+[18:03:19.318] Output 'headless' enabled with head(s) headless
+[18:03:19.318] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: no
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: no
+               color operations: no
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[18:03:19.318] fatal: failed to add socket: No such file or directory

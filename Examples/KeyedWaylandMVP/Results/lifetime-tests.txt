@@ -1,0 +1,2 @@
+PASS (rejected): frame-escape
+PASS (rejected): span-escape

@@ -1,0 +1,34 @@
+warning: /home/agent/.config/swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.config/swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /home/agent/.cache/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'swift-frame-arena-prototype': failed loading cached manifest for 'swift-frame-arena-prototype': encountered an I/O error (code: 30) while reading /home/agent/.cache/org.swift.swiftpm/manifests
+warning: 'swift-frame-arena-prototype': failed storing manifest for 'swift-frame-arena-prototype' in cache: encountered an I/O error (code: 30) while reading /home/agent/.cache/org.swift.swiftpm/manifests
+warning: 'swift-frame-arena-prototype': failed closing manifest db cache: encountered an I/O error (code: 30) while reading /home/agent/.cache/org.swift.swiftpm/manifests
+Building for debugging...
+[Computing dependencies]
+[Using on-disk description]
+Build complete! (1.19 secs)
+Test Suite 'All tests' started at 2026-10-09 17:57:46.012
+Test Suite 'Debug-linux-x86_64.xctest' started at 2026-10-09 17:57:46.052
+Test Suite 'Debug-linux-x86_64.xctest' passed at 2026-10-09 17:57:46.052
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+Test Suite 'All tests' passed at 2026-10-09 17:57:46.054
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+◇ Test run started.
+↳ Testing Library Version: 6.4 (efd8d65801f569d)
+↳ Target Platform: x86_64-unknown-linux-gnu
+◇ Test replacementAndRejectedReplacementDestroyTheirInputs() started.
+◇ Test owningSnapshotSurvivesReset() started.
+◇ Test slabEmptyCapacityAndOverflowRejection() started.
+◇ Test emptyGrowthAndReuse() started.
+◇ Test resetAndOwnerDestructionReleaseNontrivialPayloads() started.
+◇ Test handlesRejectResetForeignOwnerAndOwnerReuse() started.
+◇ Test slabPreservesAlignmentAndWarmAddress() started.
+✔ Test slabEmptyCapacityAndOverflowRejection() passed after 0.006 seconds.
+✔ Test replacementAndRejectedReplacementDestroyTheirInputs() passed after 0.008 seconds.
+✔ Test emptyGrowthAndReuse() passed after 0.009 seconds.
+✔ Test owningSnapshotSurvivesReset() passed after 0.010 seconds.
+✔ Test resetAndOwnerDestructionReleaseNontrivialPayloads() passed after 0.008 seconds.
+✔ Test handlesRejectResetForeignOwnerAndOwnerReuse() passed after 0.009 seconds.
+✔ Test slabPreservesAlignmentAndWarmAddress() passed after 0.056 seconds.
+✔ Test run with 7 tests in 0 suites passed after 0.063 seconds.
